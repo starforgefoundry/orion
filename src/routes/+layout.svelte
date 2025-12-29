@@ -1,6 +1,6 @@
 <script lang="ts">
-  import favicon from '$lib/assets/favicon.svg';
-  import { initializeTheme } from '@immich/ui';
+  import favicon from '$lib/assets/logo.png';
+  import { initializeTheme, TooltipProvider } from '@immich/ui';
   import '../app.css';
 
   let { children } = $props();
@@ -11,4 +11,6 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-{@render children()}
+<TooltipProvider>
+  {@render children()}
+</TooltipProvider>

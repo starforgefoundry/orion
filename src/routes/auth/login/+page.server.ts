@@ -7,7 +7,7 @@ export async function load(event: RequestEvent) {
 
   // If the user is already logged in, redirect to staff main page
   if (session?.user) {
-    redirect(302, '/main');
+    redirect(302, '/staff');
   }
 
   return {};

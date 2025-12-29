@@ -1,5 +1,5 @@
 {
-  "name": "polaris",
+  "name": "orion",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -16,6 +16,7 @@
     "lint": "prettier --check . && eslint .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:prod": "wrangler d1 migrations apply orion-prod --remote",
     "db:studio": "drizzle-kit studio",
     "deploy": "pnpm run build && wrangler deploy",
     "cf-typegen": "wrangler types ./src/worker-configuration.d.ts"

@@ -6,7 +6,7 @@
   "printWidth": 100,
   "semi": true,
   "plugins": ["prettier-plugin-svelte", "prettier-plugin-tailwindcss"],
-  "tailwindStylesheet": "./src/routes/layout.css",
+  "tailwindStylesheet": "./src/app.css",
   "overrides": [
     {
       "files": "*.svelte",

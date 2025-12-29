@@ -6,7 +6,7 @@
 
 <div class="flex justify-center">
   <div class="align-center mx-5 my-3 size-fit">
-    <img class="mx-auto mt-10 mb-6 w-20" src={logo} alt="Polaris" />
+    <img class="mx-auto mt-10 mb-6 w-20" src={logo} alt="Orion" />
     <Card>
       <CardHeader>
         <CardTitle>Login</CardTitle>

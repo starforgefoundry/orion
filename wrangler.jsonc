@@ -4,7 +4,7 @@
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "polaris",
+  "name": "orion",
   "main": ".svelte-kit/cloudflare/_worker.js",
   "compatibility_date": "2025-12-29",
   "compatibility_flags": ["nodejs_als"],
@@ -18,9 +18,9 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "polaris-prod-db",
-      "database_id": "a981033f-a744-4199-a99c-50946fec97ee",
-      "migrations_dir": "./src/lib/server/db/migrations",
+      "database_name": "orion-prod",
+      "database_id": "407a23f2-d798-4dd5-add6-4a2c9981ac90",
+      "migrations_dir": "./src/lib/db/migrations",
     },
   ],
 

@@ -10,15 +10,19 @@
 
   if (error === 'AccessDenied') {
     errorTitle = 'Access Denied';
-    errorMessage = 'You are not authorized to access Polaris.';
+    errorMessage = 'You are not authorized to access Orion.';
   } else if (error) {
     errorMessage = `An error occurred during authentication. Code: ${error}`;
   }
 </script>
 
+<svelte:head>
+    <title>Unauthorized | Orion</title>
+</svelte:head>
+
 <div class="flex justify-center">
   <div class="align-center mx-5 my-3 size-fit">
-    <img class="mx-auto mt-10 mb-6 w-20" src={logo} alt="Polaris" />
+    <img class="mx-auto mt-10 mb-6 w-20" src={logo} alt="Orion" />
     <Card>
       <CardHeader>
         <CardTitle>Login Failed</CardTitle>

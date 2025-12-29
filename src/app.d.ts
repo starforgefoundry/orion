@@ -10,6 +10,9 @@ declare global {
       cf: CfProperties;
       ctx: ExecutionContext;
     }
+    interface PageData {
+      user?: User;
+    }
     interface Locals {
       user?: User;
     }
@@ -28,4 +31,5 @@ declare module '@auth/core/jwt' {
   }
 }
 
-export {};
+export { };
+

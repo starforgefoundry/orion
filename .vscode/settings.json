@@ -8,5 +8,6 @@
     "**/.svelte-kit": true,
     "**/node_modules": true,
     "**/.wrangler": true
-  }
+  },
+  "editor.formatOnSave": true
 }
