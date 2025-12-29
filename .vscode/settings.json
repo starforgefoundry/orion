@@ -1,5 +1,12 @@
 {
   "files.associations": {
     "*.css": "tailwindcss"
+  },
+  "editor.tabSize": 2,
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+  "files.exclude": {
+    "**/.svelte-kit": true,
+    "**/node_modules": true,
+    "**/.wrangler": true
   }
 }
