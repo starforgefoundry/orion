@@ -1,4 +1,4 @@
-import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from '$env/static/private';
+import { AUTH_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from '$env/static/private';
 import { SvelteKitAuth } from '@auth/sveltekit';
 import Google from '@auth/sveltekit/providers/google';
 import { eq } from 'drizzle-orm';
@@ -19,7 +19,7 @@ export const { handle, signIn, signOut } = SvelteKitAuth({
   session: {
     strategy: 'jwt',
   },
-  secret: process.env.AUTH_SECRET,
+  secret: AUTH_SECRET,
   callbacks: {
     async signIn({ profile }) {
       if (!profile) return false;
