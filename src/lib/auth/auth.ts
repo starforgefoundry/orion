@@ -1,16 +1,15 @@
-import { AUTH_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } from '$env/static/private';
+import { env } from '$env/dynamic/private';
+import * as schema from '$lib/server/db/schema';
 import { SvelteKitAuth } from '@auth/sveltekit';
 import Google from '@auth/sveltekit/providers/google';
 import { eq } from 'drizzle-orm';
-import { getDB } from '../db';
-
-import * as schema from '$lib/db/schema';
+import { getDB } from '../server/db';
 
 export const { handle, signIn, signOut } = SvelteKitAuth({
   providers: [
     Google({
-      clientId: GOOGLE_CLIENT_ID,
-      clientSecret: GOOGLE_CLIENT_SECRET,
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
       authorization: {
         url: `https://accounts.google.com/o/oauth2/auth/authorize?response_type=code&prompt=login`,
       },
@@ -19,7 +18,7 @@ export const { handle, signIn, signOut } = SvelteKitAuth({
   session: {
     strategy: 'jwt',
   },
-  secret: AUTH_SECRET,
+  secret: env.AUTH_SECRET,
   trustHost: true,
   callbacks: {
     async signIn({ profile }) {

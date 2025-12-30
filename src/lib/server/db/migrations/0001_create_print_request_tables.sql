@@ -1,8 +1,9 @@
 CREATE TABLE `print_material` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
-	`cost_per_gram_cents` integer NOT NULL,
-	`is_available` integer DEFAULT true NOT NULL
+	`cost` real NOT NULL,
+	`available` integer DEFAULT true NOT NULL,
+	`archived` integer DEFAULT false NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `print_request` (

@@ -1,11 +1,8 @@
 <script lang="ts">
   import { currentUser } from '$lib/auth/user.svelte';
+  import type { ModalProps } from '$lib/components/utils';
   import { signOut } from '@auth/sveltekit/client';
   import { Button, Modal, ModalBody } from '@immich/ui';
-
-  interface ModalProps {
-    onClose: () => void;
-  }
 
   let { onClose }: ModalProps = $props();
   let user = currentUser();

@@ -2,11 +2,11 @@
   import { Icon, Text } from '@immich/ui';
   import { mdiFilePlus } from '@mdi/js';
 
-  interface Props {
+  type Props = {
     onUpload: (file: File) => void;
     onUnsupported: (file: File) => void;
     supportedExtensions?: string[];
-  }
+  };
 
   let { onUpload, onUnsupported, supportedExtensions }: Props = $props();
 

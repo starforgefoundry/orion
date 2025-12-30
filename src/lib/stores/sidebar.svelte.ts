@@ -6,16 +6,6 @@ class SidebarManager {
   collapsedSidebar = $derived.by(() => sidebar.current);
   isOpen = $derived.by(() => sidebar.current);
 
-  /**
-   * Reset the sidebar visibility to the default, based on the current screen width.
-   */
-  reset() {
-    this.isOpen = sidebar.current;
-  }
-
-  /**
-   * Toggles the sidebar visibility, if available at the current screen width.
-   */
   toggle() {
     this.isOpen = sidebar.current ? true : !this.isOpen;
   }

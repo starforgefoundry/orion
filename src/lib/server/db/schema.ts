@@ -1,5 +1,5 @@
-import type { InferSelectModel } from 'drizzle-orm';
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { type InferSelectModel } from 'drizzle-orm';
+import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { DateTime } from 'luxon';
 import { luxonTimestamp } from './custom/luxon';
 
@@ -22,7 +22,7 @@ export const printRequest = sqliteTable('print_request', {
     .$defaultFn(() => DateTime.now()),
 
   status: text('status', {
-    enum: ['ready_to_print', 'printing', 'done', 'picked_up', 'cancelled'],
+    enum: ['in_queue', 'printing', 'done', 'picked_up', 'cancelled'],
   }).notNull(),
 
   isQuote: integer('is_quote', { mode: 'boolean' }).notNull().default(false),
@@ -83,6 +83,16 @@ export const printMaterial = sqliteTable('print_material', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
-  costPerGramCents: integer('cost_per_gram_cents').notNull(),
-  isAvailable: integer('is_available', { mode: 'boolean' }).notNull().default(true),
+  cost: real('cost').notNull(),
+  available: integer('available', { mode: 'boolean' }).notNull().default(true),
+  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
 });
+
+export const schema = {
+  user,
+  printRequest,
+  printRequestCustomer,
+  printRequestFile,
+  printRequestInvoice,
+  printMaterial,
+};

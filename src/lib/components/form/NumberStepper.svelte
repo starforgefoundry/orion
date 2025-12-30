@@ -2,13 +2,13 @@
   import { HStack, IconButton, Text } from '@immich/ui';
   import { mdiMinus, mdiPlus } from '@mdi/js';
 
-  interface Props {
+  type Props = {
     value: number;
     min?: number;
     max?: number;
     step?: number;
     onChange?: (newValue: number) => void;
-  }
+  };
 
   let {
     value = $bindable(0),

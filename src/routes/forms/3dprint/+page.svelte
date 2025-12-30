@@ -1,6 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { getPrintMaterials, submitPrintRequestForm } from '$lib/api/3dprint.remote';
+  import type { PrintRequestFileDto } from '$lib/api/dtos/print_request.dto';
+  import { getAvailableMaterials } from '$lib/api/endpoints/print_materials.remote';
+  import { submitPrintRequestForm } from '$lib/api/endpoints/print_request.remote';
   import banner from '$lib/assets/3dp-banner.jpeg';
   import logo from '$lib/assets/logo.png';
   import FileUpload from '$lib/components/FileUpload.svelte';
@@ -23,7 +25,7 @@
   } from '@immich/ui';
   import { mdiTrashCan } from '@mdi/js';
 
-  let materials = await getPrintMaterials();
+  let materials = await getAvailableMaterials();
   let materialOptions: SelectItem[] = $derived(
     materials.map((material) => ({
       label: material.name,
@@ -36,10 +38,7 @@
     submitPrintRequestForm.fields.isQuote.set(isQuote);
   });
 
-  let files = $state<ReturnType<typeof submitPrintRequestForm.fields.files.value>>([]);
-  $effect(() => {
-    submitPrintRequestForm.fields.files.set(files);
-  });
+  let files = $state<PrintRequestFileDto[]>([]);
 
   let selectedMaterial: SelectItem | undefined = $state(undefined);
   $effect(() => {
@@ -67,6 +66,12 @@
   function handleUnsupportedFile(file: File) {
     toastManager.danger(`Unsupported file type: ${file.name}`);
   }
+
+  function handleSubmit({
+    form,
+    data,
+    submit,
+  }: Parameters<Parameters<typeof submitPrintRequestForm.enhance>[0]>[0]) {}
 </script>
 
 <svelte:head>
@@ -79,7 +84,7 @@
 
 <div class="flex items-center justify-center p-4">
   <form
-    {...submitPrintRequestForm}
+    {...submitPrintRequestForm.enhance(handleSubmit)}
     class="flex w-full max-w-3xl flex-col items-center justify-center gap-4"
     enctype="multipart/form-data"
     onsubmit={() => goto('/forms/3dprint/success')}
@@ -89,14 +94,18 @@
     <Heading class="self-start" size="giant">Starforge 3D Print Request</Heading>
     <Text>
       Please place your 3D Printed files in the form below to request 3D Prints. Please refer to our
-      <a href="https://starforge.notion.site/Starforge-Wiki-d75b4653249d4599b3c44e953cda5c6e"
-        >3D Printing Guide</a
-      > for more information about our printers and suggestions on modeling.
+      <a
+        href="https://starforge.notion.site/Starforge-Wiki-d75b4653249d4599b3c44e953cda5c6e"
+        class="underline"
+      >
+        3D Printing Guide
+      </a>
+      for more information about our printers and suggestions on modeling.
     </Text>
 
     <Field label="Name" required="indicator">
       <TextInput
-        {...submitPrintRequestForm.fields.customerName.as('text')}
+        {...submitPrintRequestForm.fields.customer.name.as('text')}
         placeholder="John Doe"
         class="max-w-xs"
       />
@@ -104,7 +113,7 @@
 
     <Field label="Email" required="indicator">
       <TextInput
-        {...submitPrintRequestForm.fields.customerEmail.as('text')}
+        {...submitPrintRequestForm.fields.customer.email.as('text')}
         type="email"
         placeholder="john@example.com"
         class="max-w-xs"
@@ -189,9 +198,6 @@
                 }}
               />
             </div>
-            <input {...submitPrintRequestForm.fields.files[index].filename.as('text')} hidden />
-            <input {...submitPrintRequestForm.fields.files[index].quantity.as('number')} hidden />
-            <input {...submitPrintRequestForm.fields.files[index].file.as('file')} hidden />
           </div>
         {/each}
       </div>

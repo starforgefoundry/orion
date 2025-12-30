@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Textarea, type InputProps } from '@immich/ui';
+  import { Textarea, type TextareaProps } from '@immich/ui';
 
-  interface Props extends Omit<InputProps, 'value'> {
+  interface Props extends Omit<TextareaProps, 'value'> {
     value: string | number;
   }
 
