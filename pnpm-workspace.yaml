@@ -1,2 +1,5 @@
 onlyBuiltDependencies:
   - esbuild
+
+patchedDependencies:
+  '@immich/ui@0.50.1': patches/@immich__ui@0.50.1.patch

@@ -1,5 +1,7 @@
 import type { InferSelectModel } from 'drizzle-orm';
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { DateTime } from 'luxon';
+import { luxonTimestamp } from './custom/luxon';
 
 export const user = sqliteTable('user', {
   email: text('email').notNull().unique().primaryKey(),
@@ -8,3 +10,79 @@ export const user = sqliteTable('user', {
 });
 
 export type User = InferSelectModel<typeof user>;
+
+export const printRequest = sqliteTable('print_request', {
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+
+  submissionDate: luxonTimestamp()
+    .notNull()
+    .$defaultFn(() => DateTime.now()),
+
+  status: text('status', {
+    enum: ['ready_to_print', 'printing', 'done', 'picked_up', 'cancelled'],
+  }).notNull(),
+
+  isQuote: integer('is_quote', { mode: 'boolean' }).notNull().default(false),
+  projectName: text('project_name').notNull(),
+
+  material: text('material')
+    .notNull()
+    .references(() => printMaterial.id),
+
+  billingCode: text('billing_code'),
+
+  specialRequests: text('special_requests').notNull(),
+
+  customer: text('customer')
+    .notNull()
+    .references(() => printRequestCustomer.email),
+
+  invoiceId: text('invoice_id').references(() => printRequestInvoice.id),
+});
+
+export type PrintRequest = InferSelectModel<typeof printRequest>;
+
+export const printRequestCustomer = sqliteTable('print_request_customer', {
+  email: text('email').notNull().primaryKey(),
+  name: text('name').notNull(),
+  isMember: integer('is_member', { mode: 'boolean' }).notNull().default(false),
+});
+
+export type PrintRequestCustomer = InferSelectModel<typeof printRequestCustomer>;
+
+export const printRequestFile = sqliteTable('print_request_file', {
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  printRequestId: text('print_request_id')
+    .notNull()
+    .references(() => printRequest.id),
+  fileName: text('file_name').notNull(),
+  fileUrl: text('file_url').notNull(),
+  quantity: integer('quantity').notNull().default(1),
+});
+
+export type PrintRequestFile = InferSelectModel<typeof printRequestFile>;
+
+export const printRequestInvoice = sqliteTable('print_request_invoice', {
+  id: text('id').notNull().primaryKey(),
+  issuedDate: integer('issued_date', { mode: 'timestamp' }).notNull(),
+  status: text('status', { enum: ['pending'] }),
+  total: integer('total').notNull(), // in cents
+  buildplateCount: integer('buildplate_count').notNull().default(1),
+  materialUsageGrams: integer('material_usage_grams').notNull().default(0),
+});
+
+export const printMaterial = sqliteTable('print_material', {
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  costPerGramCents: integer('cost_per_gram_cents').notNull(),
+  isAvailable: integer('is_available', { mode: 'boolean' }).notNull().default(true),
+});

@@ -1,0 +1,42 @@
+diff --git a/dist/internal/Select.svelte b/dist/internal/Select.svelte
+index 7eba1cb4396d03cb60dc25aedfb4c4e605d5984f..03e13c4ab56aa09dd1059f5a73d71aa9caba4fbd 100644
+--- a/dist/internal/Select.svelte
++++ b/dist/internal/Select.svelte
+@@ -1,15 +1,16 @@
+ <script lang="ts">
++  import { mdiArrowDown, mdiArrowUp, mdiCheck, mdiUnfoldMoreHorizontal } from '@mdi/js';
++  import { Select } from 'bits-ui';
+   import { getFieldContext } from '../common/context.svelte.js';
+   import Field from '../components/Field/Field.svelte';
+   import Icon from '../components/Icon/Icon.svelte';
+   import IconButton from '../components/IconButton/IconButton.svelte';
+   import Input from '../components/Input/Input.svelte';
+   import Label from '../components/Label/Label.svelte';
++  import Text from '../components/Text/Text.svelte';
+   import { zIndex } from '../constants.js';
+   import type { SelectCommonProps, SelectItem } from '../types.js';
+   import { cleanClass, generateId } from '../utilities/internal.js';
+-  import { mdiArrowDown, mdiArrowUp, mdiCheck, mdiUnfoldMoreHorizontal } from '@mdi/js';
+-  import { Select } from 'bits-ui';
+ 
+   type T = SelectItem;
+ 
+@@ -45,7 +46,7 @@
+ 
+   const options = $derived(asOptions(data));
+ 
+-  const { readOnly, required, invalid, disabled, label, ...labelProps } = $derived(getFieldContext());
++  const { readOnly, required, invalid, disabled, label, description, ...labelProps } = $derived(getFieldContext());
+ 
+   const id = generateId();
+   const inputId = `input-${id}`;
+@@ -79,6 +80,9 @@
+ <div class={cleanClass('flex flex-col gap-1', className)} bind:this={ref}>
+   {#if label}
+     <Label id={labelId} for={inputId} {label} requiredIndicator={required === 'indicator'} {...labelProps} />
++    {#if description}
++      <Text color="muted" size="small" id={`${labelId}-description`}>{description}</Text>
++    {/if}
+   {/if}
+ 
+   <Select.Root type={multiple ? 'multiple' : 'single'} bind:value={internalValue as never} {onValueChange}>

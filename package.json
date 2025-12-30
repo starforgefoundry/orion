@@ -29,6 +29,7 @@
     "@sveltejs/kit": "^2.49.2",
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@tailwindcss/vite": "^4.1.18",
+    "@types/luxon": "^3.7.1",
     "@types/node": "^24.10.4",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
@@ -51,7 +52,11 @@
   "dependencies": {
     "@auth/core": "^0.41.1",
     "@auth/sveltekit": "^1.11.1",
-    "@immich/ui": "^0.51.0",
-    "@mdi/js": "^7.4.47"
+    "@immich/ui": "^0.50.1",
+    "@mdi/js": "^7.4.47",
+    "drizzle-valibot": "^0.4.2",
+    "luxon": "^3.7.2",
+    "square": "^43.2.1",
+    "valibot": "^1.2.0"
   }
 }
