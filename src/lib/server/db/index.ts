@@ -23,7 +23,7 @@ export function getDB() {
   if (!event.platform?.env.DB && !env.DATABASE_URL)
     throw new Error('No database found in environment');
 
-  return env.DATABASE_URL
-    ? createLibSqlClient(env.DATABASE_URL)
-    : createD1Client(event.platform!.env.DB);
+  return event.platform?.env.DB
+    ? createD1Client(event.platform.env.DB)
+    : createLibSqlClient(env.DATABASE_URL!);
 }

@@ -20,7 +20,7 @@
       "binding": "DB",
       "database_name": "orion-prod",
       "database_id": "407a23f2-d798-4dd5-add6-4a2c9981ac90",
-      "migrations_dir": "./src/lib/db/migrations",
+      "migrations_dir": "./src/lib/server/db/migrations",
     },
   ],
 

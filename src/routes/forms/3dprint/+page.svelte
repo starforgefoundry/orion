@@ -39,20 +39,18 @@
   });
 
   let files = $state<PrintRequestFileDto[]>([]);
+  $effect(() => {
+    submitPrintRequestForm.fields.files.set(files);
+  });
 
   let selectedMaterial: SelectItem | undefined = $state(undefined);
   $effect(() => {
-    if (selectedMaterial) {
-      submitPrintRequestForm.fields.material.set(selectedMaterial.value);
-    } else {
-      submitPrintRequestForm.fields.material.set('');
-    }
+    submitPrintRequestForm.fields.material.set(selectedMaterial?.value ?? '');
   });
 
   let FILE_SIZE_LIMIT_MB = 1000;
   let totalBytes = $derived(files.reduce((acc, file) => acc + file.file.size, 0));
   let exceedsFileSizeLimit = $derived(totalBytes > FILE_SIZE_LIMIT_MB * 1024 * 1024);
-
   let submitEnabled = $derived(files.length > 0 && !exceedsFileSizeLimit && selectedMaterial);
 
   function handleNewFile(file: File) {
@@ -67,11 +65,42 @@
     toastManager.danger(`Unsupported file type: ${file.name}`);
   }
 
-  function handleSubmit({
-    form,
-    data,
-    submit,
-  }: Parameters<Parameters<typeof submitPrintRequestForm.enhance>[0]>[0]) {}
+  let submitting = $state(false);
+  let progress = $state(0);
+  let submitButtonText = $derived(submitting ? `Submitting... (${progress}%)` : 'Submit Request');
+
+  type SubmitParameters = Parameters<Parameters<typeof submitPrintRequestForm.enhance>[0]>[0];
+  function handleSubmit({ form, data, submit }: SubmitParameters) {
+    console.log('Submitting 3D Print Request Form', { form, data });
+    submitting = true;
+    progress = 0;
+
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData(form);
+
+    xhr.open(form.method, form.action, true);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        progress = Math.round((event.loaded / event.total) * 100);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        progress = 100;
+        submitting = false;
+        goto('/forms/3dprint/success');
+      } else {
+        toastManager.danger('Failed to submit print request. Please try again later.');
+        submitting = false;
+        progress = 0;
+      }
+    };
+
+    xhr.setRequestHeader('Accept', 'text/html');
+    xhr.send(formData);
+  }
 </script>
 
 <svelte:head>
@@ -87,7 +116,6 @@
     {...submitPrintRequestForm.enhance(handleSubmit)}
     class="flex w-full max-w-3xl flex-col items-center justify-center gap-4"
     enctype="multipart/form-data"
-    onsubmit={() => goto('/forms/3dprint/success')}
   >
     <img src={logo} alt="Orion Logo" class="mt-6 h-16 w-16 self-start" />
 
@@ -152,11 +180,7 @@
       description={`If you would like to use a mix of materials, please indicate which parts in "Special Requests".`}
     >
       <Select data={materialOptions} bind:value={selectedMaterial} placeholder="Select Material" />
-      <input
-        hidden
-        {...submitPrintRequestForm.fields.material.as('text')}
-        value={selectedMaterial?.value}
-      />
+      <input hidden {...submitPrintRequestForm.fields.material.as('text')} />
     </Field>
 
     <!-- FILE UPLOAD -->
@@ -199,6 +223,9 @@
               />
             </div>
           </div>
+          <input {...submitPrintRequestForm.fields.files[index].filename.as('text')} hidden />
+          <input {...submitPrintRequestForm.fields.files[index].quantity.as('number')} hidden />
+          <input {...submitPrintRequestForm.fields.files[index].file.as('file')} hidden />
         {/each}
       </div>
     {/if}
@@ -209,6 +236,8 @@
       supportedExtensions={['stl', '3mf', 'step', 'stp']}
     />
 
-    <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled}>Submit Request</Button>
+    <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled} loading={submitting}>
+      {submitButtonText}
+    </Button>
   </form>
 </div>

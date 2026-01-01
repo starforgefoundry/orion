@@ -17,6 +17,10 @@ export const printRequest = sqliteTable('print_request', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
 
+  customer: text('customer')
+    .notNull()
+    .references(() => printRequestCustomer.id),
+
   submissionDate: luxonTimestamp()
     .notNull()
     .$defaultFn(() => DateTime.now()),
@@ -32,21 +36,20 @@ export const printRequest = sqliteTable('print_request', {
     .notNull()
     .references(() => printMaterial.id),
 
-  billingCode: text('billing_code'),
-
   specialRequests: text('special_requests').notNull(),
 
-  customer: text('customer')
-    .notNull()
-    .references(() => printRequestCustomer.email),
-
-  invoiceId: text('invoice_id').references(() => printRequestInvoice.id),
+  billingCode: text('billing_code'),
+  paymentId: text('payment_id').references(() => printRequestPayment.id),
 });
 
 export type PrintRequest = InferSelectModel<typeof printRequest>;
 
 export const printRequestCustomer = sqliteTable('print_request_customer', {
-  email: text('email').notNull().primaryKey(),
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  email: text('email').notNull(),
   name: text('name').notNull(),
   isMember: integer('is_member', { mode: 'boolean' }).notNull().default(false),
 });
@@ -68,10 +71,10 @@ export const printRequestFile = sqliteTable('print_request_file', {
 
 export type PrintRequestFile = InferSelectModel<typeof printRequestFile>;
 
-export const printRequestInvoice = sqliteTable('print_request_invoice', {
+export const printRequestPayment = sqliteTable('print_request_payment', {
   id: text('id').notNull().primaryKey(),
   issuedDate: integer('issued_date', { mode: 'timestamp' }).notNull(),
-  status: text('status', { enum: ['pending'] }),
+  status: text('status', { enum: ['quote', 'pending', 'paid', 'cancelled'] }),
   total: integer('total').notNull(), // in cents
   buildplateCount: integer('buildplate_count').notNull().default(1),
   materialUsageGrams: integer('material_usage_grams').notNull().default(0),
@@ -93,6 +96,6 @@ export const schema = {
   printRequest,
   printRequestCustomer,
   printRequestFile,
-  printRequestInvoice,
+  printRequestPayment,
   printMaterial,
 };

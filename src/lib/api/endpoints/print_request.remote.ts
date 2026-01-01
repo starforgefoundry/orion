@@ -1,4 +1,4 @@
-import { command, form, query } from '$app/server';
+import { command, form, getRequestEvent, query } from '$app/server';
 import { submitPrintRequestDto, updatePrintRequestDto } from '$lib/api/dtos/print_request.dto';
 import { verifyAuth } from '$lib/api/utils';
 import { printCustomerRepository } from '$lib/server/repositories/print_customer.repostiory';
@@ -7,8 +7,13 @@ import { printRequestRepository } from '$lib/server/repositories/print_request.r
 import * as v from 'valibot';
 
 export const submitPrintRequestForm = form(submitPrintRequestDto, async (dto) => {
-  await printCustomerRepository.upsert(dto.customer);
-  const printRequest = await printRequestRepository.submit(dto);
+  // TODO: check if customer is a member
+  const ctx = getRequestEvent().platform?.ctx;
+
+  const customer = await printCustomerRepository.create(dto.customer);
+  const printRequest = await printRequestRepository.submit(customer, dto);
+
+  ctx?.waitUntil(printFilesRepository.uploadFiles(printRequest.id, dto.files));
 
   return {
     status: 'success',

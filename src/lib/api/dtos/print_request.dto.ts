@@ -21,6 +21,7 @@ export const submitPrintRequestDto = v.object({
   isQuote: v.optional(v.boolean(), false),
   material: v.string(),
   billingCode: v.optional(v.string(), ''),
+  files: v.array(printRequestFileDto),
 });
 
 export type SubmitPrintRequestDto = v.InferInput<typeof submitPrintRequestDto>;

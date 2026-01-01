@@ -1,15 +1,18 @@
 import type { SubmitPrintRequestDto, UpdatePrintRequestDto } from '$lib/api/dtos/print_request.dto';
 import { getDB } from '$lib/server/db';
 import { schema } from '$lib/server/db/schema';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, type InferSelectModel } from 'drizzle-orm';
 
-async function submit(dto: SubmitPrintRequestDto) {
+async function submit(
+  customer: InferSelectModel<typeof schema.printRequestCustomer>,
+  dto: SubmitPrintRequestDto,
+) {
   const db = getDB();
 
   const result = await db
     .insert(schema.printRequest)
     .values({
-      customer: dto.customer.email,
+      customer: customer.id,
       projectName: dto.projectName,
       specialRequests: dto.specialRequests ?? '',
       isQuote: dto.isQuote,
@@ -30,7 +33,7 @@ async function getAll() {
     .from(schema.printRequest)
     .innerJoin(
       schema.printRequestCustomer,
-      eq(schema.printRequest.customer, schema.printRequestCustomer.email),
+      eq(schema.printRequest.customer, schema.printRequestCustomer.id),
     )
     .innerJoin(schema.printMaterial, eq(schema.printRequest.material, schema.printMaterial.id))
     .orderBy(desc(schema.printRequest.submissionDate))

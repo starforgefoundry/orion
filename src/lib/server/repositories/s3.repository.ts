@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import pRetry from 'p-retry';
 import S3mini from 's3mini';
 
 function getS3() {
@@ -12,11 +13,21 @@ function getS3() {
 async function uploadToS3(file: File, filename: string) {
   const s3 = getS3();
 
-  // Convert File to ArrayBuffer
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  // Convert File to buffer
+  const buffer = Buffer.from(await file.arrayBuffer());
 
-  await s3.putObject(filename, buffer);
+  await pRetry(
+    async () => {
+      await s3.putObject(filename, buffer);
+    },
+    {
+      onFailedAttempt(context) {
+        console.warn(
+          `Upload attempt (${context.attemptNumber}/${context.retriesLeft}) for ${filename} failed. Reason: ${context.error.message}`,
+        );
+      },
+    },
+  );
 
   return `https://${env.S3_ENDPOINT}/${filename}`;
 }
