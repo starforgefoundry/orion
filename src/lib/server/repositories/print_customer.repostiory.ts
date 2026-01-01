@@ -1,13 +1,9 @@
 import type { PrintRequestCustomerDto } from '$lib/api/dtos/print_customer.dto';
-import { getDB } from '$lib/server/db';
 import { schema } from '$lib/server/db/schema';
+import { BaseRepository } from '$lib/server/repositories/base.repository';
 
-async function create(dto: PrintRequestCustomerDto) {
-  const db = getDB();
-
-  return (await db.insert(schema.printRequestCustomer).values(dto).returning())[0];
+export class PrintCustomerRepository extends BaseRepository {
+  async create(dto: PrintRequestCustomerDto) {
+    return (await this.db.insert(schema.printRequestCustomer).values(dto).returning())[0];
+  }
 }
-
-export const printCustomerRepository = {
-  create,
-};

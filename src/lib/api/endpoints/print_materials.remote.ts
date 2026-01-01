@@ -1,26 +1,26 @@
 import { command, form, query } from '$app/server';
 import { createPrintMaterialDto, updatePrintMaterialDto } from '$lib/api/dtos/print_materials.dto';
 import { verifyAuth } from '$lib/api/utils';
-import { printMaterialsRepository } from '$lib/server/repositories/print_materials.repository';
+import { printMaterialsService } from '$lib/server/services/print_materials.service';
 
 export const getPrintMaterials = query(async () => {
   verifyAuth();
-  return await printMaterialsRepository.get();
+  return await printMaterialsService.getMaterials();
 });
 
 // Used for public material listing on upload form
 export const getAvailableMaterials = query(async () => {
-  return await printMaterialsRepository.get(true);
+  return await printMaterialsService.getMaterials(true);
 });
 
 export const createPrintMaterial = command(createPrintMaterialDto, async (data) => {
   verifyAuth();
-  return await printMaterialsRepository.create(data);
+  return await printMaterialsService.createMaterial(data);
 });
 
 export const createPrintMaterialForm = form(createPrintMaterialDto, async (data) => {
   verifyAuth();
-  return await printMaterialsRepository.create(data);
+  return await printMaterialsService.createMaterial(data);
 });
 
 export const updatePrintMaterial = command(updatePrintMaterialDto, async (dto) => {
@@ -28,8 +28,5 @@ export const updatePrintMaterial = command(updatePrintMaterialDto, async (dto) =
 
   const { id, ...updates } = dto;
 
-  const material = await printMaterialsRepository.update(id, updates);
-  await getPrintMaterials().refresh();
-
-  return material;
+  return await printMaterialsService.updateMaterial(id, updates);
 });

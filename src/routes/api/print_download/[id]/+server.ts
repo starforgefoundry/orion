@@ -1,4 +1,4 @@
-import { printFilesRepository } from '$lib/server/repositories/print_files.repository';
+import { printFilesService } from '$lib/server/services/print_files.service';
 import type { RequestHandler } from '@sveltejs/kit';
 
 // TODO: url.searchparams for auth
@@ -7,7 +7,7 @@ export const GET: RequestHandler = async ({ params }) => {
     return new Response('Print request ID is required', { status: 400 });
   }
 
-  const zip = await printFilesRepository.downloadRequestZIP(params.id);
+  const zip = await printFilesService.downloadRequestZIP(params.id);
 
   return new Response(zip, {
     headers: {

@@ -15,7 +15,7 @@
     "format": "prettier --write .",
     "lint": "prettier --check . && eslint .",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "wrangler d1 migrations apply orion-prod",
     "db:migrate:prod": "wrangler d1 migrations apply orion-prod --remote",
     "db:studio": "drizzle-kit studio",
     "deploy": "pnpm run build && wrangler deploy",

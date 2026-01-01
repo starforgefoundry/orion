@@ -1,9 +1,9 @@
 import { env } from '$env/dynamic/private';
+import { getDB } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 import { SvelteKitAuth } from '@auth/sveltekit';
 import Google from '@auth/sveltekit/providers/google';
 import { eq } from 'drizzle-orm';
-import { getDB } from '../server/db';
 
 export const { handle, signIn, signOut } = SvelteKitAuth({
   providers: [
