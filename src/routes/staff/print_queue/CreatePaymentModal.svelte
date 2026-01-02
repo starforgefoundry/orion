@@ -1,7 +1,8 @@
 <script lang="ts">
+  import PriceInput from '$lib/frontend/components/form/PriceInput.svelte';
+  import { initForm } from '$lib/frontend/components/form/utils.svelte';
   import type { PrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
-  import { createPrintMaterialForm } from '$lib/remotes/endpoints/print_materials.remote';
-  import { getPricingInfo } from '$lib/remotes/endpoints/print_payment.remote';
+  import { getPricingInfo, upsertPaymentForm } from '$lib/remotes/endpoints/print_payment.remote';
   import {
     Button,
     Field,
@@ -13,28 +14,59 @@
     NumberInput,
     Stack,
     Text,
+    toastManager,
   } from '@immich/ui';
   import { mdiCurrencyUsd } from '@mdi/js';
 
   interface Props {
     request: PrintRequestDto;
+    initialBuildPlates?: number;
+    initialMaterialCost?: number;
     onClose: (created?: boolean) => void;
   }
 
-  let { onClose, request }: Props = $props();
-  let pricingInfo = $derived(getPricingInfo(request.id));
+  let { onClose, request, initialBuildPlates = 1, initialMaterialCost = 300 }: Props = $props();
 
+  initForm(upsertPaymentForm, () => ({
+    requestId: request.id,
+    materialCost: initialMaterialCost,
+    buildPlates: initialBuildPlates,
+  }));
+
+  let materialCost = $derived(initialMaterialCost);
+  $effect(() => {
+    upsertPaymentForm.fields.materialCost.set(materialCost);
+  });
+  let buildPlates = $derived(initialBuildPlates);
+  $effect(() => {
+    upsertPaymentForm.fields.buildPlates.set(buildPlates);
+  });
+
+  // Cost Calculations
+  let pricingInfo = $derived(getPricingInfo(request.email));
   let buildPlateCost = $derived((pricingInfo.current?.additionalBuildPlateModifier ?? 0) / 100);
-  let materialCostPerGram = $derived(request.material.cost / 100);
-
-  let buildPlateCount = $state(1);
-  let materialGrams = $state(100);
-
-  let buildPlateSurcharge = $derived(
-    buildPlateCount > 1 ? (buildPlateCount - 1) * buildPlateCost : 0,
+  let buildPlateSurcharge = $derived(buildPlates > 1 ? (buildPlates - 1) * buildPlateCost : 0);
+  let subtotal = $derived(materialCost / 100 + buildPlateSurcharge);
+  let memberDiscount = $derived(
+    pricingInfo.current?.memberDiscountApplied
+      ? (subtotal * (pricingInfo.current?.memberPrintDiscount ?? 0)) / 100
+      : 0,
   );
-  let materialCost = $derived(materialGrams * materialCostPerGram);
-  let totalCost = $derived(materialCost + buildPlateSurcharge);
+  let totalCost = $derived(subtotal - memberDiscount);
+
+  let loading = $state(false);
+
+  async function handleSubmit(submit: () => Promise<void>) {
+    loading = true;
+    try {
+      await submit();
+      onClose(true);
+    } catch (error) {
+      toastManager.danger('Failed to create payment: ' + (error as Error).message);
+    } finally {
+      loading = false;
+    }
+  }
 </script>
 
 <Modal title="Create Payment" icon={mdiCurrencyUsd} {onClose}>
@@ -44,13 +76,17 @@
     {:else if pricingInfo.error}
       <Text color="danger">Error loading pricing info: {pricingInfo.error.message}</Text>
     {:else}
-      <form {...createPrintMaterialForm} onsubmit={() => onClose(true)}>
-        <Field label="Print Material (g)">
-          <NumberInput min="0" step="1" required bind:value={materialGrams} />
+      <form {...upsertPaymentForm.enhance(({ submit }) => handleSubmit(submit))}>
+        <input {...upsertPaymentForm.fields.requestId.as('text')} value={request.id} hidden />
+
+        <Field label="Print Material Cost">
+          <PriceInput bind:value={materialCost} multiplier={100} />
+          <input {...upsertPaymentForm.fields.materialCost.as('number')} hidden />
         </Field>
 
         <Field label="Build Plates" class="mt-4">
-          <NumberInput min="1" step="1" required bind:value={buildPlateCount} />
+          <NumberInput min="1" step="1" required bind:value={buildPlates} />
+          <input {...upsertPaymentForm.fields.buildPlates.as('number')} hidden />
         </Field>
 
         <Heading class="mt-4 mb-2">Summary</Heading>
@@ -58,11 +94,8 @@
           <HStack class="justify-between">
             <Stack gap={0}>
               <Text>Material Cost</Text>
-              <Text size="small" color="muted">
-                ${materialCostPerGram.toFixed(2)}/g
-              </Text>
             </Stack>
-            <Text>${materialCost.toFixed(2)}</Text>
+            <Text>${(materialCost / 100).toFixed(2)}</Text>
           </HStack>
           <HStack class="justify-between">
             <Stack gap={0}>
@@ -75,6 +108,21 @@
               ${buildPlateSurcharge.toFixed(2)}
             </Text>
           </HStack>
+
+          {#if pricingInfo.current?.memberDiscountApplied}
+            <HStack class="justify-between">
+              <Stack gap={0}>
+                <Text>Member Discount</Text>
+                <Text size="small" color="muted">
+                  {pricingInfo.current?.memberPrintDiscount}% off
+                </Text>
+              </Stack>
+              <Text>
+                ${memberDiscount.toFixed(2)}
+              </Text>
+            </HStack>
+          {/if}
+
           <hr class="mt-1 mb-2 w-1/3 self-end border-slate-700" />
 
           <HStack class="justify-between">
@@ -85,7 +133,14 @@
           </HStack>
         </Stack>
 
-        <Button type="submit" variant="filled" fullWidth class="mt-4" leadingIcon={mdiCurrencyUsd}>
+        <Button
+          type="submit"
+          variant="filled"
+          fullWidth
+          class="mt-4"
+          leadingIcon={mdiCurrencyUsd}
+          {loading}
+        >
           Create Payment
         </Button>
       </form>

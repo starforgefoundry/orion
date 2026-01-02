@@ -21,6 +21,10 @@ class PrintRequestService extends BaseService {
     return await this.printRequestRepository.getAll();
   }
 
+  async getPrintRequestById(id: string) {
+    return await this.printRequestRepository.getById(id);
+  }
+
   async updatePrintRequest(id: string, updates: Partial<SubmitPrintRequestDto>) {
     const updated = await this.printRequestRepository.update(id, updates);
     await getPrintRequests().refresh();

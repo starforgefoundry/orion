@@ -236,7 +236,7 @@
       onUnsupported={handleUnsupportedFile}
       supportedExtensions={printRequestSettings.allowedFileTypes
         .split(',')
-        .map((ext) => ext.trim())}
+        .map((ext) => ext.trim().replace(/^\./, ''))}
     />
 
     <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled} loading={submitting}>

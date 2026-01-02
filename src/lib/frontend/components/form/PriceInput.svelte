@@ -6,11 +6,17 @@
     value?: number;
     placeholder?: string;
     disabled?: boolean;
+    multiplier?: number;
   }
 
-  let { value = $bindable(0), placeholder = '0.00', disabled = false }: Props = $props();
+  let {
+    value = $bindable(0),
+    placeholder = '0.00',
+    disabled = false,
+    multiplier = 1,
+  }: Props = $props();
 
-  let displayValue = $state(value?.toFixed(2) ?? '0.00');
+  let displayValue = $derived((value / multiplier).toFixed(2) ?? '0.00');
 
   function handleKeydown(event: KeyboardEvent) {
     const input = event.target as HTMLInputElement;
@@ -62,12 +68,12 @@
   function handleInput(event: Event) {
     const input = event.target as HTMLInputElement;
     displayValue = input.value;
-    value = parseFloat(input.value) || 0;
+    value = parseFloat(input.value) * multiplier || 0;
   }
 
   function handleBlur() {
     // Format to 2 decimal places on blur
-    displayValue = value.toFixed(2);
+    displayValue = (value / multiplier).toFixed(2);
   }
 </script>
 

@@ -1,17 +1,8 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import type { SettingsMap } from '$lib/server/repositories/settings.repository';
-import { eq } from 'drizzle-orm';
-import type { CalculateOrderRequest, OrderLineItemDiscount, OrderLineItemModifier } from 'square';
-
-type SquareSettings = SettingsMap['printRequestSquare'];
-
-type PrintRequestInfo = {
-  materialAmount: number;
-  materialCost: number;
-  buildPlates: number;
-  memberPricing: boolean;
-};
+import { eq, type InferInsertModel } from 'drizzle-orm';
+import { DateTime } from 'luxon';
+import type { CalculateOrderRequest, CreateOrderRequest, Order } from 'square';
 
 export class PrintPaymentRepository extends BaseRepository {
   async getById(paymentId: string) {
@@ -22,62 +13,97 @@ export class PrintPaymentRepository extends BaseRepository {
       .get();
   }
 
-  async getCatalog(ids: string[]) {
-    return await this.square.catalog.batchGet({
-      objectIds: ids,
+  async upsertCustomer(name: string, email: string) {
+    const customerSearch = await this.square.customers.search({
+      query: {
+        filter: {
+          emailAddress: {
+            exact: email,
+          },
+        },
+      },
+    });
+
+    const customers = customerSearch.customers ?? [];
+    if (customers.length > 0) {
+      return customers[0];
+    }
+
+    const [firstName, ...lastNameParts] = name.split(' ');
+    const lastName = lastNameParts.join(' ');
+    const createdCustomer = await this.square.customers.create({
+      givenName: firstName,
+      familyName: lastName,
+      emailAddress: email,
+    });
+
+    if (!createdCustomer.customer) {
+      throw new Error('Failed to create customer in Square');
+    }
+
+    return createdCustomer.customer;
+  }
+
+  async createOrder(order: CreateOrderRequest) {
+    const created = await this.square.orders.create(order);
+    return created.order;
+  }
+
+  async createInvoice(order: Order) {
+    const created = await this.square.invoices.create({
+      invoice: {
+        locationId: order.locationId,
+        orderId: order.id!,
+        primaryRecipient: {
+          customerId: order.customerId!,
+        },
+        paymentRequests: [
+          {
+            requestType: 'BALANCE',
+            dueDate: DateTime.now().toFormat('yyyy-MM-dd'),
+          },
+        ],
+        acceptedPaymentMethods: {
+          card: true,
+          cashAppPay: true,
+        },
+        deliveryMethod: 'EMAIL',
+      },
+    });
+
+    return created.invoice;
+  }
+
+  async sendInvoice(invoiceId: string, invoiceVersion: number) {
+    await this.square.invoices.publish({
+      invoiceId,
+      version: invoiceVersion,
     });
   }
 
-  private buildOrder(
-    squareSettings: SquareSettings,
-    info: PrintRequestInfo,
-  ): CalculateOrderRequest {
-    const discounts: OrderLineItemDiscount[] = [];
-    const modifiers: OrderLineItemModifier[] = [];
-    const totalMaterialCost = Math.round(info.materialAmount * info.materialCost);
-    if (info.memberPricing) {
-      discounts.push({
-        catalogObjectId: squareSettings.memberPrintDiscountId,
-        scope: 'ORDER',
-      });
-    }
-
-    if (info.buildPlates > 1) {
-      modifiers.push({
-        catalogObjectId: squareSettings.additionalBuildPlateModifierId,
-        quantity: (info.buildPlates - 1).toString(),
-      });
-    }
-
-    return {
-      order: {
-        locationId: squareSettings.locationId,
-        lineItems: [
-          {
-            quantity: '1',
-            catalogObjectId: squareSettings.printRequestItemId,
-            basePriceMoney: {
-              amount: BigInt(totalMaterialCost),
-              currency: 'USD',
-            },
-            modifiers: modifiers,
-          },
-        ],
-        discounts: discounts,
-      },
-    };
+  async calculateCost(order: CalculateOrderRequest) {
+    const calculated = await this.square.orders.calculate(order);
+    return calculated.order?.netAmountDueMoney?.amount ?? BigInt(0);
   }
 
-  async createOrder(squareSettings: SquareSettings, info: PrintRequestInfo) {
-    const order = this.buildOrder(squareSettings, info);
-    const created = await this.square.orders.create(order);
+  async savePayment(
+    requestId: string,
+    payment: InferInsertModel<typeof schema.printRequestPayment>,
+  ) {
+    const result = await this.db
+      .insert(schema.printRequestPayment)
+      .values(payment)
+      .returning()
+      .get();
 
-    return created.order?.netAmountDueMoney?.amount ?? BigInt(0);
-  }
+    await this.db
+      .update(schema.printRequest)
+      .set({
+        paymentId: result.id,
+      })
+      .where(eq(schema.printRequest.id, requestId))
+      .execute();
 
-  async calculateCost(squareSettings: SquareSettings, info: PrintRequestInfo) {
-    const order = await this.square.orders.calculate(this.buildOrder(squareSettings, info));
-
-    return order.order?.netAmountDueMoney?.amount ?? BigInt(0);
+    return result;
   }
 }

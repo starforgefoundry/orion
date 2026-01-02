@@ -11,7 +11,7 @@ export type SettingsMap = {
     locationId: string;
     memberPrintDiscountId: string;
     printRequestItemId: string;
-    additionalBuildPlateModifierId: string;
+    additionalBuildPlateItemId: string;
   };
 };
 
@@ -24,7 +24,7 @@ const defaults: SettingsMap = {
     locationId: '',
     memberPrintDiscountId: '',
     printRequestItemId: '',
-    additionalBuildPlateModifierId: '',
+    additionalBuildPlateItemId: '',
   },
 };
 

@@ -70,24 +70,21 @@
   <Table>
     <TableHeader>
       <TableHeaderCell width="w-4/12">Name</TableHeaderCell>
-      <TableHeaderCell width="w-4/12">Cost</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Availability</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Actions</TableHeaderCell>
+      <TableHeaderCell width="w-3/12">Availability</TableHeaderCell>
+      <TableHeaderCell width="w-3/12">Actions</TableHeaderCell>
     </TableHeader>
     <TableBody>
       {#each searchedMaterials as material}
         <TableRow>
-          <TableCell width="w-4/12" align="left" class="pl-6">{material.name}</TableCell>
-          <TableCell width="w-4/12" align="left" class="flex justify-center">
-            ${material.cost / 100}/g
-          </TableCell>
-          <TableCell width="w-2/12" class="flex justify-center">
+          <TableCell width="w-6/12" align="left" class="pl-6">{material.name}</TableCell>
+
+          <TableCell width="w-3/12" class="flex justify-center">
             <Switch
               checked={material.available}
               onCheckedChange={(value) => updateMaterialAvailability(material.id, value)}
             />
           </TableCell>
-          <TableCell width="w-2/12" class="flex justify-center gap-2">
+          <TableCell width="w-3/12" class="flex justify-center gap-2">
             <IconButton
               icon={mdiTrashCan}
               aria-label="Delete Material"

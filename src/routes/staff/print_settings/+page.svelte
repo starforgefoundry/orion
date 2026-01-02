@@ -36,7 +36,7 @@
     locationId: squareSettings.locationId,
     memberPrintDiscountId: squareSettings.memberPrintDiscountId,
     printRequestItemId: squareSettings.printRequestItemId,
-    additionalBuildPlateModifierId: squareSettings.additionalBuildPlateModifierId,
+    additionalBuildPlateItemId: squareSettings.additionalBuildPlateItemId,
   }));
 
   let maxUpload = $state(printRequestSettings.maxUploadMB);
@@ -145,7 +145,7 @@
 
           <Field label="Additional Build Plate Modifier ID" required="indicator">
             <TextInput
-              {...printRequestSquareSettingsForm.fields.additionalBuildPlateModifierId.as('text')}
+              {...printRequestSquareSettingsForm.fields.additionalBuildPlateItemId.as('text')}
               placeholder="Modifier ID"
             />
           </Field>

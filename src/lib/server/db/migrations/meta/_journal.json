@@ -22,6 +22,20 @@
       "when": 1767313262018,
       "tag": "0002_eager_marvex",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1767379001292,
+      "tag": "0003_lonely_captain_cross",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1767394343335,
+      "tag": "0004_same_guardsmen",
+      "breakpoints": true
     }
   ]
 }

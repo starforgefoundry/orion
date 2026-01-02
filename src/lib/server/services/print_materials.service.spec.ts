@@ -155,7 +155,6 @@ describe('PrintMaterialsService', () => {
       // Arrange
       const dto: CreatePrintMaterialDto = {
         name: 'PETG',
-        cost: 0.07,
         available: true,
       };
 
@@ -172,7 +171,6 @@ describe('PrintMaterialsService', () => {
       // Arrange
       const dto: CreatePrintMaterialDto = {
         name: 'TPU',
-        cost: 0.12,
         available: false,
       };
 
@@ -192,7 +190,6 @@ describe('PrintMaterialsService', () => {
       const id = 'mat-123';
       const updates: Omit<UpdatePrintMaterialDto, 'id'> = {
         name: 'Updated PLA',
-        cost: 0.06,
       };
 
       const mockUpdatedMaterial = {
@@ -236,31 +233,6 @@ describe('PrintMaterialsService', () => {
       // Assert
       expect(mockMaterialsRepo.update).toHaveBeenCalledWith(id, updates);
       expect(result.available).toBe(false);
-    });
-
-    it('should update material price', async () => {
-      // Arrange
-      const id = 'mat-789';
-      const updates: Omit<UpdatePrintMaterialDto, 'id'> = {
-        cost: 0.15,
-      };
-
-      const mockUpdatedMaterial = {
-        id: 'mat-789',
-        name: 'Nylon',
-        cost: 0.15,
-        available: true,
-        archived: false,
-      };
-
-      vi.mocked(mockMaterialsRepo.update).mockResolvedValue(mockUpdatedMaterial);
-
-      // Act
-      const result = await printMaterialsService.updateMaterial(id, updates);
-
-      // Assert
-      expect(mockMaterialsRepo.update).toHaveBeenCalledWith(id, updates);
-      expect(result.cost).toBe(0.15);
     });
   });
 });

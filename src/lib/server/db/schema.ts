@@ -41,7 +41,7 @@ export const printRequest = sqliteTable('print_request', {
   paymentId: text('payment_id').references(() => printRequestPayment.id),
 
   buildplateCount: integer('buildplate_count').default(1),
-  materialUsageGrams: integer('material_usage_grams').default(0),
+  materialCost: integer('material_cost').default(0),
 });
 
 export type PrintRequest = InferSelectModel<typeof printRequest>;
@@ -62,11 +62,15 @@ export const printRequestFile = sqliteTable('print_request_file', {
 export type PrintRequestFile = InferSelectModel<typeof printRequestFile>;
 
 export const printRequestPayment = sqliteTable('print_request_payment', {
-  id: text('id').notNull().primaryKey(),
-  issuedDate: integer('issued_date', { mode: 'timestamp' }).notNull(),
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  issuedDate: luxonTimestamp('issued_date').notNull(),
   status: text('status', { enum: ['quote', 'pending', 'paid', 'canceled'] }).notNull(),
   total: integer('total').notNull(), // in cents
-  squareId: text('square_id').notNull(),
+  squareInvoiceId: text('square_invoice_id').notNull(),
+  squareOrderId: text('square_order_id').notNull(),
 });
 
 export const printMaterial = sqliteTable('print_material', {
@@ -75,7 +79,6 @@ export const printMaterial = sqliteTable('print_material', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
-  cost: integer('cost').notNull(),
   available: integer('available', { mode: 'boolean' }).notNull().default(true),
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
 });

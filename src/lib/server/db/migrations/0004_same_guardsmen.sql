@@ -1,0 +1,1 @@
+ALTER TABLE `print_request` RENAME COLUMN "material_usage_grams" TO "material_cost";

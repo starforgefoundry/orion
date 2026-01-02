@@ -35,11 +35,15 @@ export const updatePrintRequestDto = v.object({
       v.literal('canceled'),
     ]),
   ),
+  customerName: v.optional(v.string()),
+  email: v.optional(v.pipe(v.string(), v.email())),
   projectName: v.optional(v.string()),
   specialRequests: v.optional(v.string()),
   isQuote: v.optional(v.boolean()),
   material: v.optional(v.string()),
   billingCode: v.optional(v.string()),
+  buildplateCount: v.optional(v.number()),
+  materialCost: v.optional(v.number()),
 });
 
 export type UpdatePrintRequestDto = v.InferInput<typeof updatePrintRequestDto>;

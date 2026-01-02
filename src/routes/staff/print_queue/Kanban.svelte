@@ -44,7 +44,7 @@
   ];
 
   function handleCardClick(request: PrintRequestDto) {
-    modalManager.open(RequestDetailModal, { request: request });
+    modalManager.open(RequestDetailModal, { requestId: request.id });
   }
 
   function formatDate(date: DateTime): string {

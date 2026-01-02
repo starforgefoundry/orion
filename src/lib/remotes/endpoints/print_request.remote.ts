@@ -14,6 +14,11 @@ export const getPrintRequests = query(async () => {
   return await printRequestService.getPrintRequests();
 });
 
+export const getPrintRequestById = query(v.string(), async (id: string) => {
+  verifyAuth();
+  return await printRequestService.getPrintRequestById(id);
+});
+
 export const updatePrintRequest = command(
   v.intersect([updatePrintRequestDto, v.object({ id: v.string() })]),
   async (dto) => {

@@ -8,6 +8,16 @@ class SquareService extends BaseService {
   async getCatalog() {
     return await this.squareRepository.getCatalog();
   }
+
+  async checkActiveMember(customerEmail: string) {
+    const memberships = await this.squareRepository.getMembershipsByEmail(customerEmail);
+    if (!memberships || memberships.length === 0) {
+      return false;
+    }
+
+    const activeMemberships = memberships.filter((membership) => membership.status === 'ACTIVE');
+    return activeMemberships.length > 0;
+  }
 }
 
 export const squareService = new SquareService();

@@ -22,6 +22,18 @@
   - name: string
   - memberPricing: boolean (if true, members get discounted pricing)
 
+- MAIN BILLING TODO
+  - Handle editing a payment
+  - Handle creating a quote
+  - Handle editing a quote
+  - Handle cancelling a quote
+  - Handle cancelling a print request
+  - Handle payment webhooks from Square
+
+- OTHER
+  - Send payment pickup notification
+  - Allow editing of quantities in print request
+
 <!-- - Print Request Settings DONE
   - New table containing settings for print request system
   - Columns:
@@ -34,11 +46,4 @@
       - sqLocationId: string (references Square location ID for payments)
       - sqMemberDiscountId: string (references Square discount ID for members)
       - sqPrintRequestItemId: string (references Square item ID for print requests)
-      - sqAdditionalBuildPlateModifierId: string (references Square item ID for additional build plates) -->
-
-## Billing Flow
-
-1. User submits print request form
-2. Resolve billing config
-   a. If billing code provided, check if belongs to group with member pricing
-   b. If user belongs to group with member pricing, apply member discount
+      - sqadditionalBuildPlateItemId: string (references Square item ID for additional build plates) -->
