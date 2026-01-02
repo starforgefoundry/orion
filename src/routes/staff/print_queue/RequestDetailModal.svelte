@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { PrintRequestDto } from '$lib/api/dtos/print_request.dto';
-  import { getPrintRequestFiles } from '$lib/api/endpoints/print_request.remote';
-  import type { ModalProps } from '$lib/components/utils';
+  import type { ModalProps } from '$lib/frontend/components/utils';
+  import type { PrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
+  import { getPrintRequestFiles } from '$lib/remotes/endpoints/print_request.remote';
   import {
     Badge,
     Heading,
@@ -31,24 +31,19 @@
     <HStack gap={8} class="w-full items-start">
       <div class="flex flex-1 flex-col gap-4">
         <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-          <HStack class="justify-between">
-            <Heading size="medium">Customer Information</Heading>
-            <Badge color={request.customer.isMember ? 'success' : 'danger'} size="medium">
-              {request.customer.isMember ? 'Member' : 'Non-Member'}
-            </Badge>
-          </HStack>
+          <Heading size="medium">Customer Information</Heading>
           <HStack>
             <Icon icon={mdiAccount} size="24" />
-            <Text>{request.customer.name}</Text>
+            <Text>{request.customerName}</Text>
           </HStack>
           <HStack>
             <Icon icon={mdiEmail} size="24" />
-            <Text><a href={`mailto:${request.customer.email}`}>{request.customer.email}</a></Text>
+            <Text><a href={`mailto:${request.email}`}>{request.email}</a></Text>
           </HStack>
         </Stack>
         <Stack class="rounded-2xl border-2 border-slate-700 p-4">
           <Stack>
-            <div class="flex items-center justify-between gap-2">
+            <HStack class="justify-between">
               <Heading size="tiny">Status</Heading>
               <Badge
                 color={request.status === 'in_queue'
@@ -62,24 +57,26 @@
               >
                 {request.status.replace('_', ' ').toUpperCase()}
               </Badge>
-            </div>
-            <div class="flex items-center justify-between gap-2">
+            </HStack>
+            <HStack class="justify-between">
               <Heading size="tiny">Quote Requested</Heading>
               <Switch disabled checked={request.isQuote} />
-            </div>
-            <div class="flex items-center justify-between gap-2">
+            </HStack>
+            <HStack class="justify-between">
               <Heading size="tiny">Print Material</Heading>
               <Text>{request.material.name}</Text>
-            </div>
+            </HStack>
           </Stack>
         </Stack>
+        {#if request.specialRequests}
+          <Stack class="rounded-2xl border-2 border-slate-700 p-4">
+            <Heading size="small">Special Requests</Heading>
+            <Text>{request.specialRequests}</Text>
+          </Stack>
+        {/if}
+
         <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-          <Heading size="small">Special Requests</Heading>
-          <Text>{request.specialRequests || 'No additional notes provided.'}</Text>
-        </Stack>
-        <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-          <Heading size="small" class="mb-2">Billing Information</Heading>
-          <Text>{request.billingCode || 'No billing code provided.'}</Text>
+          <Heading size="small" class="mb-2">Payment Information</Heading>
         </Stack>
       </div>
       <div class="flex h-full flex-1 flex-col">

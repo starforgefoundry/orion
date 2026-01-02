@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { createPrintMaterialForm } from '$lib/api/endpoints/print_materials.remote';
-  import PriceInput from '$lib/components/form/PriceInput.svelte';
-  import TextInput from '$lib/components/form/TextInput.svelte';
-  import type { ModalProps } from '$lib/components/utils';
+  import PriceInput from '$lib/frontend/components/form/PriceInput.svelte';
+  import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import type { ModalProps } from '$lib/frontend/components/utils';
+  import { createPrintMaterialForm } from '$lib/remotes/endpoints/print_materials.remote';
   import { Button, Field, Modal, ModalBody, Stack, Switch } from '@immich/ui';
   import { mdiPaperRoll } from '@mdi/js';
 
@@ -33,7 +33,7 @@
           <PriceInput bind:value={cost} placeholder="0.02" />
           <input
             {...createPrintMaterialForm.fields.cost.as('number')}
-            value={cost}
+            value={Math.round(cost * 100)}
             step="0.01"
             hidden
           />

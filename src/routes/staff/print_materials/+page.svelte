@@ -1,16 +1,16 @@
 <script lang="ts">
   import {
-    getPrintMaterials,
-    updatePrintMaterial,
-  } from '$lib/api/endpoints/print_materials.remote';
-  import {
     Table,
     TableBody,
     TableCell,
     TableHeader,
     TableHeaderCell,
     TableRow,
-  } from '$lib/components/table';
+  } from '$lib/frontend/components/table';
+  import {
+    getPrintMaterials,
+    updatePrintMaterial,
+  } from '$lib/remotes/endpoints/print_materials.remote';
   import { Heading, IconButton, Input, LoadingSpinner, modalManager, Switch } from '@immich/ui';
   import { mdiChatQuestion, mdiMagnify, mdiPlus, mdiTrashCan } from '@mdi/js';
   import MaterialModal from './MaterialModal.svelte';
@@ -79,7 +79,7 @@
         <TableRow>
           <TableCell width="w-4/12" align="left" class="pl-6">{material.name}</TableCell>
           <TableCell width="w-4/12" align="left" class="flex justify-center">
-            ${material.cost}/g
+            ${material.cost / 100}/g
           </TableCell>
           <TableCell width="w-2/12" class="flex justify-center">
             <Switch

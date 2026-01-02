@@ -1,7 +1,7 @@
 import type {
   CreatePrintMaterialDto,
   UpdatePrintMaterialDto,
-} from '$lib/api/dtos/print_materials.dto';
+} from '$lib/remotes/dtos/print_materials.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { and, eq } from 'drizzle-orm';

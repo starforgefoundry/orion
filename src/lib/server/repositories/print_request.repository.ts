@@ -1,17 +1,18 @@
-import type { SubmitPrintRequestDto, UpdatePrintRequestDto } from '$lib/api/dtos/print_request.dto';
+import type {
+  SubmitPrintRequestDto,
+  UpdatePrintRequestDto,
+} from '$lib/remotes/dtos/print_request.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { desc, eq, type InferSelectModel } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 
 export class PrintRequestRepository extends BaseRepository {
-  async submit(
-    customer: InferSelectModel<typeof schema.printRequestCustomer>,
-    dto: SubmitPrintRequestDto,
-  ) {
+  async submit(dto: SubmitPrintRequestDto) {
     const result = await this.db
       .insert(schema.printRequest)
       .values({
-        customer: customer.id,
+        email: dto.customer.email,
+        customerName: dto.customer.name,
         projectName: dto.projectName,
         specialRequests: dto.specialRequests ?? '',
         isQuote: dto.isQuote,
@@ -28,17 +29,12 @@ export class PrintRequestRepository extends BaseRepository {
     const results = await this.db
       .select()
       .from(schema.printRequest)
-      .innerJoin(
-        schema.printRequestCustomer,
-        eq(schema.printRequest.customer, schema.printRequestCustomer.id),
-      )
       .innerJoin(schema.printMaterial, eq(schema.printRequest.material, schema.printMaterial.id))
       .orderBy(desc(schema.printRequest.submissionDate))
       .limit(100);
 
-    return results.map(({ print_request, print_request_customer, print_material }) => ({
+    return results.map(({ print_request, print_material }) => ({
       ...print_request,
-      customer: print_request_customer,
       material: print_material,
     }));
   }
@@ -47,10 +43,6 @@ export class PrintRequestRepository extends BaseRepository {
     const results = await this.db
       .select()
       .from(schema.printRequest)
-      .innerJoin(
-        schema.printRequestCustomer,
-        eq(schema.printRequest.customer, schema.printRequestCustomer.email),
-      )
       .innerJoin(schema.printMaterial, eq(schema.printRequest.material, schema.printMaterial.id))
       .orderBy(desc(schema.printRequest.submissionDate))
       .where(eq(schema.printRequest.id, id))
@@ -60,9 +52,8 @@ export class PrintRequestRepository extends BaseRepository {
       return null;
     }
 
-    return results.map(({ print_request, print_request_customer, print_material }) => ({
+    return results.map(({ print_request, print_material }) => ({
       ...print_request,
-      customer: print_request_customer,
       material: print_material,
     }))[0];
   }

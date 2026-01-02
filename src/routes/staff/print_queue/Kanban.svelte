@@ -1,6 +1,9 @@
 <script lang="ts">
-  import type { PrintRequestDto, PrintRequestStatus } from '$lib/api/dtos/print_request.dto';
-  import { getPrintRequests, updatePrintRequest } from '$lib/api/endpoints/print_request.remote';
+  import type { PrintRequestDto, PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
+  import {
+    getPrintRequests,
+    updatePrintRequest,
+  } from '$lib/remotes/endpoints/print_request.remote';
   import { Heading, modalManager, toastManager } from '@immich/ui';
   import type { DateTime } from 'luxon';
   import RequestDetailModal from './RequestDetailModal.svelte';
@@ -157,7 +160,7 @@
             tabindex="0"
           >
             <h3 class="mb-2 text-lg font-semibold">{job.projectName}</h3>
-            <p class="mb-1 text-sm">{job.customer.name}</p>
+            <p class="mb-1 text-sm">{job.customerName}</p>
             <p class="text-xs">{formatDate(job.submissionDate)}</p>
           </div>
         {/each}

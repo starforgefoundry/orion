@@ -1,11 +1,11 @@
 <script lang="ts">
   import logo from '$lib/assets/logo.png';
-  import SignInWithGoogle from '$lib/components/SignInWithGoogle.svelte';
+  import SignInWithGoogle from '$lib/frontend/components/SignInWithGoogle.svelte';
   import { Card, CardBody, CardHeader, CardTitle } from '@immich/ui';
 </script>
 
 <svelte:head>
-    <title>Login | Orion</title>
+  <title>Login | Orion</title>
 </svelte:head>
 
 <div class="flex justify-center">

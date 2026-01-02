@@ -1,6 +1,6 @@
 import { command, form, query } from '$app/server';
-import { submitPrintRequestDto, updatePrintRequestDto } from '$lib/api/dtos/print_request.dto';
-import { verifyAuth } from '$lib/api/utils';
+import { submitPrintRequestDto, updatePrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
+import { verifyAuth } from '$lib/remotes/utils';
 import { printFilesService } from '$lib/server/services/print_files.service';
 import { printRequestService } from '$lib/server/services/print_request.service';
 import * as v from 'valibot';

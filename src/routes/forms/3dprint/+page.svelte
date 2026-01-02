@@ -1,14 +1,15 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import type { PrintRequestFileDto } from '$lib/api/dtos/print_request.dto';
-  import { getAvailableMaterials } from '$lib/api/endpoints/print_materials.remote';
-  import { submitPrintRequestForm } from '$lib/api/endpoints/print_request.remote';
   import banner from '$lib/assets/3dp-banner.jpeg';
   import logo from '$lib/assets/logo.png';
-  import FileUpload from '$lib/components/FileUpload.svelte';
-  import NumberStepper from '$lib/components/form/NumberStepper.svelte';
-  import TextArea from '$lib/components/form/TextArea.svelte';
-  import TextInput from '$lib/components/form/TextInput.svelte';
+  import FileUpload from '$lib/frontend/components/FileUpload.svelte';
+  import NumberStepper from '$lib/frontend/components/form/NumberStepper.svelte';
+  import TextArea from '$lib/frontend/components/form/TextArea.svelte';
+  import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import type { PrintRequestFileDto } from '$lib/remotes/dtos/print_request.dto';
+  import { getAvailableMaterials } from '$lib/remotes/endpoints/print_materials.remote';
+  import { submitPrintRequestForm } from '$lib/remotes/endpoints/print_request.remote';
+  import { getPrintRequestSettings } from '$lib/remotes/endpoints/settings.remote';
   import {
     Alert,
     Button,
@@ -26,6 +27,8 @@
   import { mdiTrashCan } from '@mdi/js';
 
   let materials = await getAvailableMaterials();
+  let printRequestSettings = await getPrintRequestSettings();
+
   let materialOptions: SelectItem[] = $derived(
     materials.map((material) => ({
       label: material.name,
@@ -48,9 +51,8 @@
     submitPrintRequestForm.fields.material.set(selectedMaterial?.value ?? '');
   });
 
-  let FILE_SIZE_LIMIT_MB = 1000;
   let totalBytes = $derived(files.reduce((acc, file) => acc + file.file.size, 0));
-  let exceedsFileSizeLimit = $derived(totalBytes > FILE_SIZE_LIMIT_MB * 1024 * 1024);
+  let exceedsFileSizeLimit = $derived(totalBytes > printRequestSettings.maxUploadMB * 1024 * 1024);
   let submitEnabled = $derived(files.length > 0 && !exceedsFileSizeLimit && selectedMaterial);
 
   function handleNewFile(file: File) {
@@ -194,8 +196,8 @@
 
     {#if exceedsFileSizeLimit}
       <Alert color="danger" class="self-start">
-        Total file size exceeds {FILE_SIZE_LIMIT_MB} MB limit. Please simplify your models or remove them
-        from the request.
+        Total file size exceeds {printRequestSettings.maxUploadMB} MB limit. Please simplify your models
+        or remove them from the request.
       </Alert>
     {/if}
 
@@ -233,7 +235,9 @@
     <FileUpload
       onUpload={handleNewFile}
       onUnsupported={handleUnsupportedFile}
-      supportedExtensions={['stl', '3mf', 'step', 'stp']}
+      supportedExtensions={printRequestSettings.allowedFileTypes
+        .split(',')
+        .map((ext) => ext.trim())}
     />
 
     <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled} loading={submitting}>

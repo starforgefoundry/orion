@@ -1,6 +1,9 @@
 import { command, form, query } from '$app/server';
-import { createPrintMaterialDto, updatePrintMaterialDto } from '$lib/api/dtos/print_materials.dto';
-import { verifyAuth } from '$lib/api/utils';
+import {
+  createPrintMaterialDto,
+  updatePrintMaterialDto,
+} from '$lib/remotes/dtos/print_materials.dto';
+import { verifyAuth } from '$lib/remotes/utils';
 import { printMaterialsService } from '$lib/server/services/print_materials.service';
 
 export const getPrintMaterials = query(async () => {

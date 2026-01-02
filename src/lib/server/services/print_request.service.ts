@@ -1,16 +1,14 @@
 import { getRequestEvent } from '$app/server';
-import type { SubmitPrintRequestDto } from '$lib/api/dtos/print_request.dto';
-import { getPrintRequests } from '$lib/api/endpoints/print_request.remote';
+import type { SubmitPrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
+import { getPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
 import { BaseService } from '$lib/server/services/base.service';
 
 class PrintRequestService extends BaseService {
   async submitPrintRequest(dto: SubmitPrintRequestDto) {
     // TODO: check if customer is a member
+    const printRequest = await this.printRequestRepository.submit(dto);
+
     const ctx = getRequestEvent().platform?.ctx;
-
-    const customer = await this.printCustomerRepository.create(dto.customer);
-    const printRequest = await this.printRequestRepository.submit(customer, dto);
-
     ctx?.waitUntil(this.printFilesRepository.uploadFiles(printRequest.id, dto.files));
 
     return {

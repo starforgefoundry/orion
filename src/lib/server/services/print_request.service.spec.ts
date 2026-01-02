@@ -1,14 +1,8 @@
-import type { SubmitPrintRequestDto } from '$lib/api/dtos/print_request.dto';
-import { createMockRequestEvent } from '$lib/test/helpers';
+import type { SubmitPrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockRequestEvent } from './test-utils';
 
 // Mock the repositories
-vi.mock('$lib/server/repositories/print_customer.repostiory', () => {
-  const MockPrintCustomerRepository = vi.fn();
-  MockPrintCustomerRepository.prototype.create = vi.fn();
-  return { PrintCustomerRepository: MockPrintCustomerRepository };
-});
-
 vi.mock('$lib/server/repositories/print_files.repository', () => {
   const MockPrintFilesRepository = vi.fn();
   MockPrintFilesRepository.prototype.uploadFiles = vi.fn();
@@ -43,7 +37,7 @@ vi.mock('$app/server', () => ({
 }));
 
 // Mock getPrintRequests to avoid circular dependency
-vi.mock('$lib/api/endpoints/print_request.remote', () => ({
+vi.mock('$lib/remotes/endpoints/print_request.remote', () => ({
   getPrintRequests: vi.fn(() => ({
     refresh: vi.fn().mockResolvedValue(undefined),
   })),
@@ -73,15 +67,12 @@ describe('PrintRequestService', () => {
     printRequestService = service;
 
     // Get references to the repository mocks
-    const { PrintCustomerRepository } =
-      await import('$lib/server/repositories/print_customer.repostiory');
     const { PrintFilesRepository } =
       await import('$lib/server/repositories/print_files.repository');
     const { PrintRequestRepository } =
       await import('$lib/server/repositories/print_request.repository');
 
     // Access the prototype methods (these are the actual mocks)
-    mockCustomerRepo = PrintCustomerRepository.prototype;
     mockFilesRepo = PrintFilesRepository.prototype;
     mockRequestRepo = PrintRequestRepository.prototype;
   });
@@ -93,11 +84,6 @@ describe('PrintRequestService', () => {
   describe('submitPrintRequest', () => {
     it('should create customer, submit request, and upload files with correct parameters', async () => {
       // Arrange
-      const mockCustomer = {
-        id: 'customer-123',
-        name: 'John Doe',
-        email: 'john@example.com',
-      };
 
       const mockPrintRequest = {
         id: 'request-456',
@@ -131,7 +117,6 @@ describe('PrintRequestService', () => {
         ],
       };
 
-      vi.mocked(mockCustomerRepo.create).mockResolvedValue(mockCustomer);
       vi.mocked(mockRequestRepo.submit).mockResolvedValue(mockPrintRequest);
       vi.mocked(mockFilesRepo.uploadFiles).mockResolvedValue(undefined);
 
@@ -139,8 +124,7 @@ describe('PrintRequestService', () => {
       const result = await printRequestService.submitPrintRequest(dto);
 
       // Assert
-      expect(mockCustomerRepo.create).toHaveBeenCalledWith(dto.customer);
-      expect(mockRequestRepo.submit).toHaveBeenCalledWith(mockCustomer, dto);
+      expect(mockRequestRepo.submit).toHaveBeenCalledWith(dto);
       expect(mockFilesRepo.uploadFiles).toHaveBeenCalledWith(mockPrintRequest.id, dto.files);
 
       expect(result).toEqual({
@@ -151,11 +135,6 @@ describe('PrintRequestService', () => {
 
     it('should handle quote requests correctly', async () => {
       // Arrange
-      const mockCustomer = {
-        id: 'customer-789',
-        name: 'Jane Smith',
-        email: 'jane@example.com',
-      };
 
       const mockPrintRequest = {
         id: 'request-999',
@@ -182,7 +161,6 @@ describe('PrintRequestService', () => {
         files: [],
       };
 
-      vi.mocked(mockCustomerRepo.create).mockResolvedValue(mockCustomer);
       vi.mocked(mockRequestRepo.submit).mockResolvedValue(mockPrintRequest);
       vi.mocked(mockFilesRepo.uploadFiles).mockResolvedValue(undefined);
 
@@ -190,11 +168,7 @@ describe('PrintRequestService', () => {
       const result = await printRequestService.submitPrintRequest(dto);
 
       // Assert
-      expect(mockCustomerRepo.create).toHaveBeenCalledWith({
-        name: 'Jane Smith',
-        email: 'jane@example.com',
-      });
-      expect(mockRequestRepo.submit).toHaveBeenCalledWith(mockCustomer, dto);
+      expect(mockRequestRepo.submit).toHaveBeenCalledWith(dto);
       expect(result.printRequestId).toBe(mockPrintRequest.id);
     });
 
@@ -218,7 +192,6 @@ describe('PrintRequestService', () => {
         files: [],
       };
 
-      vi.mocked(mockCustomerRepo.create).mockResolvedValue(mockCustomer);
       vi.mocked(mockRequestRepo.submit).mockResolvedValue(mockPrintRequest);
       vi.mocked(mockFilesRepo.uploadFiles).mockResolvedValue(undefined);
 

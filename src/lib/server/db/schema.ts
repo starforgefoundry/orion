@@ -1,5 +1,5 @@
 import { type InferSelectModel } from 'drizzle-orm';
-import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { DateTime } from 'luxon';
 import { luxonTimestamp } from './custom/luxon';
 
@@ -17,20 +17,19 @@ export const printRequest = sqliteTable('print_request', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
 
-  customer: text('customer')
-    .notNull()
-    .references(() => printRequestCustomer.id),
-
   submissionDate: luxonTimestamp()
     .notNull()
     .$defaultFn(() => DateTime.now()),
+
+  email: text('email').notNull(),
+  customerName: text('customer_name').notNull(),
+  projectName: text('project_name').notNull(),
 
   status: text('status', {
     enum: ['in_queue', 'printing', 'done', 'picked_up', 'cancelled'],
   }).notNull(),
 
   isQuote: integer('is_quote', { mode: 'boolean' }).notNull().default(false),
-  projectName: text('project_name').notNull(),
 
   material: text('material')
     .notNull()
@@ -40,21 +39,12 @@ export const printRequest = sqliteTable('print_request', {
 
   billingCode: text('billing_code'),
   paymentId: text('payment_id').references(() => printRequestPayment.id),
+
+  buildplateCount: integer('buildplate_count').default(1),
+  materialUsageGrams: integer('material_usage_grams').default(0),
 });
 
 export type PrintRequest = InferSelectModel<typeof printRequest>;
-
-export const printRequestCustomer = sqliteTable('print_request_customer', {
-  id: text('id')
-    .notNull()
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  email: text('email').notNull(),
-  name: text('name').notNull(),
-  isMember: integer('is_member', { mode: 'boolean' }).notNull().default(false),
-});
-
-export type PrintRequestCustomer = InferSelectModel<typeof printRequestCustomer>;
 
 export const printRequestFile = sqliteTable('print_request_file', {
   id: text('id')
@@ -76,8 +66,7 @@ export const printRequestPayment = sqliteTable('print_request_payment', {
   issuedDate: integer('issued_date', { mode: 'timestamp' }).notNull(),
   status: text('status', { enum: ['quote', 'pending', 'paid', 'cancelled'] }),
   total: integer('total').notNull(), // in cents
-  buildplateCount: integer('buildplate_count').notNull().default(1),
-  materialUsageGrams: integer('material_usage_grams').notNull().default(0),
+  squareId: text('square_id').notNull(),
 });
 
 export const printMaterial = sqliteTable('print_material', {
@@ -86,15 +75,19 @@ export const printMaterial = sqliteTable('print_material', {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
-  cost: real('cost').notNull(),
+  cost: integer('cost').notNull(),
   available: integer('available', { mode: 'boolean' }).notNull().default(true),
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+});
+
+export const settingsTable = sqliteTable('settings', {
+  key: text('key').notNull().primaryKey(),
+  value: text('value', { mode: 'json' }).notNull(),
 });
 
 export const schema = {
   user,
   printRequest,
-  printRequestCustomer,
   printRequestFile,
   printRequestPayment,
   printMaterial,

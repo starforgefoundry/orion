@@ -1,20 +1,17 @@
-import { PrintCustomerRepository } from '$lib/server/repositories/print_customer.repostiory';
 import { PrintFilesRepository } from '$lib/server/repositories/print_files.repository';
 import { PrintMaterialsRepository } from '$lib/server/repositories/print_materials.repository';
+import { PrintPaymentRepository } from '$lib/server/repositories/print_payment.repository';
 import { PrintRequestRepository } from '$lib/server/repositories/print_request.repository';
+import { SettingsRepository } from '$lib/server/repositories/settings.repository';
+import { SquareRepository } from '$lib/server/repositories/square.repository';
 
 export class BaseService {
-  private _printCustomerRepository?: PrintCustomerRepository;
   private _printFilesRepository?: PrintFilesRepository;
   private _printMaterialsRepository?: PrintMaterialsRepository;
   private _printRequestRepository?: PrintRequestRepository;
-
-  protected get printCustomerRepository(): PrintCustomerRepository {
-    if (!this._printCustomerRepository) {
-      this._printCustomerRepository = new PrintCustomerRepository();
-    }
-    return this._printCustomerRepository;
-  }
+  private _printPaymentRepository?: PrintPaymentRepository;
+  private _settingsRepository?: SettingsRepository;
+  private _squareRepository?: SquareRepository;
 
   protected get printFilesRepository(): PrintFilesRepository {
     if (!this._printFilesRepository) {
@@ -35,5 +32,26 @@ export class BaseService {
       this._printRequestRepository = new PrintRequestRepository();
     }
     return this._printRequestRepository;
+  }
+
+  protected get printPaymentRepository(): PrintPaymentRepository {
+    if (!this._printPaymentRepository) {
+      this._printPaymentRepository = new PrintPaymentRepository();
+    }
+    return this._printPaymentRepository;
+  }
+
+  protected get settingsRepository(): SettingsRepository {
+    if (!this._settingsRepository) {
+      this._settingsRepository = new SettingsRepository();
+    }
+    return this._settingsRepository;
+  }
+
+  protected get squareRepository(): SquareRepository {
+    if (!this._squareRepository) {
+      this._squareRepository = new SquareRepository();
+    }
+    return this._squareRepository;
   }
 }

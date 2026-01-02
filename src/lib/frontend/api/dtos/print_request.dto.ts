@@ -1,8 +1,5 @@
-import {
-  printRequestCustomerDto,
-  type PrintRequestCustomerDto,
-} from '$lib/api/dtos/print_customer.dto';
-import type { PrintMaterialDto } from '$lib/api/dtos/print_materials.dto';
+import { type PrintRequestCustomerDto } from '$lib/remotes/dtos/print_customer.dto';
+import type { PrintMaterialDto } from '$lib/remotes/dtos/print_materials.dto';
 import { schema } from '$lib/server/db/schema';
 import * as v from 'valibot';
 
@@ -15,7 +12,10 @@ export const printRequestFileDto = v.object({
 export type PrintRequestFileDto = v.InferInput<typeof printRequestFileDto>;
 
 export const submitPrintRequestDto = v.object({
-  customer: printRequestCustomerDto,
+  customer: v.object({
+    name: v.string(),
+    email: v.pipe(v.string(), v.email()),
+  }),
   projectName: v.string(),
   specialRequests: v.optional(v.string(), ''),
   isQuote: v.optional(v.boolean(), false),

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a9dae9b1-8cfb-4293-a0d6-57ea886740ca",
+  "id": "159e5ed2-a265-44b9-b0a3-275fc0a1dd73",
   "prevId": "f14c9fe9-29ca-4866-8daa-5392bfbfc7b3",
   "tables": {
     "print_material": {
@@ -23,7 +23,7 @@
         },
         "cost": {
           "name": "cost",
-          "type": "real",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -61,16 +61,30 @@
           "notNull": true,
           "autoincrement": false
         },
-        "customer": {
-          "name": "customer",
+        "submissionDate": {
+          "name": "submissionDate",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "submissionDate": {
-          "name": "submissionDate",
-          "type": "timestamp",
+        "customer_name": {
+          "name": "customer_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "project_name": {
+          "name": "project_name",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -89,13 +103,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": false
-        },
-        "project_name": {
-          "name": "project_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
         },
         "material": {
           "name": "material",
@@ -124,23 +131,26 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "buildplate_count": {
+          "name": "buildplate_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 1
+        },
+        "material_usage_grams": {
+          "name": "material_usage_grams",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
         }
       },
       "indexes": {},
       "foreignKeys": {
-        "print_request_customer_print_request_customer_id_fk": {
-          "name": "print_request_customer_print_request_customer_id_fk",
-          "tableFrom": "print_request",
-          "tableTo": "print_request_customer",
-          "columnsFrom": [
-            "customer"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "print_request_material_print_material_id_fk": {
           "name": "print_request_material_print_material_id_fk",
           "tableFrom": "print_request",
@@ -168,45 +178,6 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "print_request_customer": {
-      "name": "print_request_customer",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "is_member": {
-          "name": "is_member",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -302,21 +273,12 @@
           "notNull": true,
           "autoincrement": false
         },
-        "buildplate_count": {
-          "name": "buildplate_count",
-          "type": "integer",
+        "square_id": {
+          "name": "square_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "material_usage_grams": {
-          "name": "material_usage_grams",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
+          "autoincrement": false
         }
       },
       "indexes": {},

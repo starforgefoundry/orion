@@ -1,14 +1,8 @@
 import type {
   CreatePrintMaterialDto,
   UpdatePrintMaterialDto,
-} from '$lib/api/dtos/print_materials.dto';
+} from '$lib/remotes/dtos/print_materials.dto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-// Mock the repositories
-vi.mock('$lib/server/repositories/print_customer.repostiory', () => {
-  const MockPrintCustomerRepository = vi.fn();
-  return { PrintCustomerRepository: MockPrintCustomerRepository };
-});
 
 vi.mock('$lib/server/repositories/print_files.repository', () => {
   const MockPrintFilesRepository = vi.fn();
@@ -41,7 +35,7 @@ vi.mock('$app/server', () => ({
 }));
 
 // Mock getPrintMaterials to avoid circular dependency
-vi.mock('$lib/api/endpoints/print_materials.remote', () => ({
+vi.mock('$lib/remotes/endpoints/print_materials.remote', () => ({
   getPrintMaterials: vi.fn(() => ({
     refresh: vi.fn().mockResolvedValue(undefined),
   })),

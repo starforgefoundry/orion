@@ -1,4 +1,4 @@
-import type { PrintRequestFileDto } from '$lib/api/dtos/print_request.dto';
+import type { PrintRequestFileDto } from '$lib/remotes/dtos/print_request.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { uploadToS3 } from '$lib/server/utils/s3';

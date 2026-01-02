@@ -20,6 +20,7 @@
 - Group Table
   - id: string (primary key)
   - name: string
+  - memberPricing: boolean (if true, members get discounted pricing)
 
 - Print Request Settings
   - New table containing settings for print request system
@@ -34,3 +35,10 @@
       - sqMemberDiscountId: string (references Square discount ID for members)
       - sqPrintRequestItemId: string (references Square item ID for print requests)
       - sqAdditionalBuildPlateModifierId: string (references Square item ID for additional build plates)
+
+## Billing Flow
+
+1. User submits print request form
+2. Resolve billing config
+   a. If billing code provided, check if belongs to group with member pricing
+   b. If user belongs to group with member pricing, apply member discount

@@ -1,32 +1,27 @@
 CREATE TABLE `print_material` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
-	`cost` real NOT NULL,
+	`cost` integer NOT NULL,
 	`available` integer DEFAULT true NOT NULL,
 	`archived` integer DEFAULT false NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `print_request` (
 	`id` text PRIMARY KEY NOT NULL,
-	`customer` text NOT NULL,
 	`submissionDate` timestamp NOT NULL,
+	`email` text NOT NULL,
+	`customer_name` text NOT NULL,
+	`project_name` text NOT NULL,
 	`status` text NOT NULL,
 	`is_quote` integer DEFAULT false NOT NULL,
-	`project_name` text NOT NULL,
 	`material` text NOT NULL,
 	`special_requests` text NOT NULL,
 	`billing_code` text,
 	`payment_id` text,
-	FOREIGN KEY (`customer`) REFERENCES `print_request_customer`(`id`) ON UPDATE no action ON DELETE no action,
+	`buildplate_count` integer DEFAULT 1,
+	`material_usage_grams` integer DEFAULT 0,
 	FOREIGN KEY (`material`) REFERENCES `print_material`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`payment_id`) REFERENCES `print_request_payment`(`id`) ON UPDATE no action ON DELETE no action
-);
---> statement-breakpoint
-CREATE TABLE `print_request_customer` (
-	`id` text PRIMARY KEY NOT NULL,
-	`email` text NOT NULL,
-	`name` text NOT NULL,
-	`is_member` integer DEFAULT false NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `print_request_file` (
@@ -43,6 +38,5 @@ CREATE TABLE `print_request_payment` (
 	`issued_date` integer NOT NULL,
 	`status` text,
 	`total` integer NOT NULL,
-	`buildplate_count` integer DEFAULT 1 NOT NULL,
-	`material_usage_grams` integer DEFAULT 0 NOT NULL
+	`square_id` text NOT NULL
 );

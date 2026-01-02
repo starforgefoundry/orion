@@ -1,8 +1,8 @@
 <script lang="ts">
   import logo from '$lib/assets/logo.png';
-  import { currentUser } from '$lib/auth/user.svelte';
-  import UserModal from '$lib/components/UserModal.svelte';
-  import { sidebarManager } from '$lib/stores/sidebar.svelte';
+  import UserModal from '$lib/frontend/components/UserModal.svelte';
+  import { sidebarManager } from '$lib/frontend/stores/sidebar.svelte';
+  import { currentUser } from '$lib/frontend/stores/user.svelte';
   import {
     AppShell,
     AppShellHeader,
@@ -13,7 +13,7 @@
     NavbarGroup,
     NavbarItem,
   } from '@immich/ui';
-  import { mdiMenu, mdiPaperRoll, mdiPrinter3d } from '@mdi/js';
+  import { mdiCog, mdiMenu, mdiPaperRoll, mdiPrinter3d } from '@mdi/js';
 
   let { children } = $props();
 
@@ -50,6 +50,7 @@
       <NavbarGroup title="3D Print Requests" />
       <NavbarItem href={'/staff/print_queue'} title={'Print Queue'} icon={mdiPrinter3d} />
       <NavbarItem href={'/staff/print_materials'} title={'Print Materials'} icon={mdiPaperRoll} />
+      <NavbarItem href={'/staff/print_settings'} title={'Settings'} icon={mdiCog} />
     </div>
   </AppShellSidebar>
 

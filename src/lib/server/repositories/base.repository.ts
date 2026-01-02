@@ -1,6 +1,8 @@
 import { env } from '$env/dynamic/private';
 import { getDB } from '$lib/server/db';
 import { drizzle } from 'drizzle-orm/d1';
+import { SquareClient } from 'square';
+
 import S3mini from 's3mini';
 
 type Database = ReturnType<typeof drizzle>;
@@ -8,6 +10,7 @@ type Database = ReturnType<typeof drizzle>;
 export class BaseRepository {
   private _db?: Database;
   private _s3?: S3mini;
+  private _square?: SquareClient;
 
   protected get db(): Database {
     if (!this._db) {
@@ -25,5 +28,15 @@ export class BaseRepository {
       });
     }
     return this._s3;
+  }
+
+  protected get square(): SquareClient {
+    if (!this._square) {
+      this._square = new SquareClient({
+        token: env.SQUARE_TOKEN,
+        baseUrl: env.SQUARE_URL ?? 'https://connect.squareup.com',
+      });
+    }
+    return this._square;
   }
 }

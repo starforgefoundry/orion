@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { currentUser } from '$lib/auth/user.svelte';
-  import type { ModalProps } from '$lib/components/utils';
+  import type { ModalProps } from '$lib/frontend/components/utils';
+  import { currentUser } from '$lib/frontend/stores/user.svelte';
   import { signOut } from '@auth/sveltekit/client';
   import { Button, Modal, ModalBody } from '@immich/ui';
 

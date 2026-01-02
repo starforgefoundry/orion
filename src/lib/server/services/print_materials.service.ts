@@ -1,8 +1,8 @@
 import type {
   CreatePrintMaterialDto,
   UpdatePrintMaterialDto,
-} from '$lib/api/dtos/print_materials.dto';
-import { getPrintMaterials } from '$lib/api/endpoints/print_materials.remote';
+} from '$lib/remotes/dtos/print_materials.dto';
+import { getPrintMaterials } from '$lib/remotes/endpoints/print_materials.remote';
 import { BaseService } from '$lib/server/services/base.service';
 
 class PrintMaterialsService extends BaseService {

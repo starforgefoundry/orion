@@ -61,6 +61,7 @@
     "p-retry": "^7.1.1",
     "s3mini": "^0.9.0",
     "square": "^43.2.1",
+    "svelte-highlight": "^7.9.0",
     "valibot": "^1.2.0"
   }
 }

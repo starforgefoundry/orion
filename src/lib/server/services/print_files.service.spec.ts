@@ -3,12 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Mock fetch globally
 global.fetch = vi.fn();
 
-// Mock the repositories
-vi.mock('$lib/server/repositories/print_customer.repostiory', () => {
-  const MockPrintCustomerRepository = vi.fn();
-  return { PrintCustomerRepository: MockPrintCustomerRepository };
-});
-
 vi.mock('$lib/server/repositories/print_files.repository', () => {
   const MockPrintFilesRepository = vi.fn();
   MockPrintFilesRepository.prototype.getByPrintRequestId = vi.fn();

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getPrintRequests } from '$lib/api/endpoints/print_request.remote';
+  import { getPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
   import { Heading, IconButton, LoadingSpinner } from '@immich/ui';
   import { mdiDeveloperBoard, mdiFormatListBulleted } from '@mdi/js';
   import Kanban from './Kanban.svelte';
