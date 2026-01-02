@@ -1,9 +1,14 @@
 <script lang="ts">
   import type { ModalProps } from '$lib/frontend/components/utils';
   import type { PrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
-  import { getPrintRequestFiles } from '$lib/remotes/endpoints/print_request.remote';
+  import { getPayment } from '$lib/remotes/endpoints/print_payment.remote';
+  import {
+    getPrintRequestFiles,
+    updatePrintRequest,
+  } from '$lib/remotes/endpoints/print_request.remote';
   import {
     Badge,
+    Button,
     Heading,
     HStack,
     Icon,
@@ -11,11 +16,22 @@
     LoadingSpinner,
     Modal,
     ModalBody,
+    modalManager,
     Stack,
     Switch,
     Text,
   } from '@immich/ui';
-  import { mdiAccount, mdiDownload, mdiEmail, mdiMonitorShare, mdiPrinter3dNozzle } from '@mdi/js';
+  import {
+    mdiAccount,
+    mdiClose,
+    mdiCurrencyUsd,
+    mdiDownload,
+    mdiEmail,
+    mdiHelp,
+    mdiMonitorShare,
+    mdiPrinter3dNozzle,
+  } from '@mdi/js';
+  import CreatePaymentModal from './CreatePaymentModal.svelte';
 
   type Props = ModalProps & {
     request: PrintRequestDto;
@@ -24,6 +40,36 @@
   const { request, onClose }: Props = $props();
 
   let printFiles = $derived(getPrintRequestFiles(request.id));
+  let paymentInfo = $derived(request.paymentId ? getPayment(request.paymentId).current : null);
+
+  async function createPayment() {
+    const result = await modalManager.show(CreatePaymentModal, {
+      request,
+    });
+
+    if (result) {
+      onClose();
+    }
+  }
+
+  async function cancelRequest() {
+    const cancel = await modalManager.showDialog({
+      title: 'Cancel Print Request',
+      prompt: 'Are you sure you want to cancel this print request? This action cannot be undone.',
+      confirmText: 'Cancel Request',
+      confirmColor: 'danger',
+      icon: mdiHelp,
+    });
+
+    if (cancel) {
+      await updatePrintRequest({
+        id: request.id,
+        status: 'canceled',
+      });
+
+      onClose();
+    }
+  }
 </script>
 
 <Modal title={request.projectName} size="giant" {onClose} icon={mdiPrinter3dNozzle}>
@@ -75,8 +121,34 @@
           </Stack>
         {/if}
 
-        <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-          <Heading size="small" class="mb-2">Payment Information</Heading>
+        {#if paymentInfo}
+          <Stack class="rounded-2xl border-2 border-slate-700 p-4">
+            <Heading size="small" class="mb-2">Payment Information</Heading>
+
+            <HStack class="justify-between">
+              <Text>Issued Date</Text>
+              <Text fontWeight="bold">{paymentInfo.issuedDate.toLocaleString()}</Text>
+            </HStack>
+
+            <HStack class="justify-between">
+              <Text>Status</Text>
+              <Text fontWeight="bold">{paymentInfo.status.toUpperCase()}</Text>
+            </HStack>
+
+            <HStack class="justify-between">
+              <Text>Total</Text>
+              <Text fontWeight="bold">${(paymentInfo.total / 100).toFixed(2)}</Text>
+            </HStack>
+          </Stack>
+        {/if}
+
+        <Stack gap={2}>
+          <Button leadingIcon={mdiCurrencyUsd} fullWidth color="success" onclick={createPayment}
+            >Create Payment</Button
+          >
+          <Button leadingIcon={mdiClose} fullWidth color="danger" onclick={cancelRequest}
+            >Cancel Request</Button
+          >
         </Stack>
       </div>
       <div class="flex h-full flex-1 flex-col">
@@ -112,7 +184,7 @@
           <div class="bg-level-2 mt-2 rounded-lg border border-slate-600 p-4">
             <HStack class="justify-between">
               <Text>{file.fileName}</Text>
-              <Text>Quantity: {file.quantity}</Text>
+              <Text fontWeight="bold">{file.quantity}x</Text>
             </HStack>
           </div>
         {/each}

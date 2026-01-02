@@ -8,7 +8,7 @@ import { desc, eq } from 'drizzle-orm';
 
 export class PrintRequestRepository extends BaseRepository {
   async submit(dto: SubmitPrintRequestDto) {
-    const result = await this.db
+    return await this.db
       .insert(schema.printRequest)
       .values({
         email: dto.customer.email,
@@ -20,9 +20,8 @@ export class PrintRequestRepository extends BaseRepository {
         material: dto.material,
         billingCode: dto.billingCode ?? null,
       })
-      .returning();
-
-    return result[0];
+      .returning()
+      .get();
   }
 
   async getAll() {
@@ -40,22 +39,20 @@ export class PrintRequestRepository extends BaseRepository {
   }
 
   async getById(id: string) {
-    const results = await this.db
+    const result = await this.db
       .select()
       .from(schema.printRequest)
       .innerJoin(schema.printMaterial, eq(schema.printRequest.material, schema.printMaterial.id))
       .orderBy(desc(schema.printRequest.submissionDate))
       .where(eq(schema.printRequest.id, id))
-      .limit(1);
+      .get();
 
-    if (results.length === 0) {
-      return null;
-    }
-
-    return results.map(({ print_request, print_material }) => ({
-      ...print_request,
-      material: print_material,
-    }))[0];
+    return result
+      ? {
+          ...result.print_request,
+          material: result.print_material,
+        }
+      : undefined;
   }
 
   async update(id: string, updates: UpdatePrintRequestDto) {

@@ -8,7 +8,7 @@ import { and, eq } from 'drizzle-orm';
 
 export class PrintMaterialsRepository extends BaseRepository {
   async create(dto: CreatePrintMaterialDto) {
-    await this.db.insert(schema.printMaterial).values(dto);
+    await this.db.insert(schema.printMaterial).values(dto).returning().get();
   }
 
   async get(available?: boolean) {
@@ -30,8 +30,9 @@ export class PrintMaterialsRepository extends BaseRepository {
       .update(schema.printMaterial)
       .set(updates)
       .where(eq(schema.printMaterial.id, id))
-      .returning();
+      .returning()
+      .get();
 
-    return material[0];
+    return material;
   }
 }

@@ -26,7 +26,7 @@ export const printRequest = sqliteTable('print_request', {
   projectName: text('project_name').notNull(),
 
   status: text('status', {
-    enum: ['in_queue', 'printing', 'done', 'picked_up', 'cancelled'],
+    enum: ['in_queue', 'printing', 'done', 'picked_up', 'canceled'],
   }).notNull(),
 
   isQuote: integer('is_quote', { mode: 'boolean' }).notNull().default(false),
@@ -64,7 +64,7 @@ export type PrintRequestFile = InferSelectModel<typeof printRequestFile>;
 export const printRequestPayment = sqliteTable('print_request_payment', {
   id: text('id').notNull().primaryKey(),
   issuedDate: integer('issued_date', { mode: 'timestamp' }).notNull(),
-  status: text('status', { enum: ['quote', 'pending', 'paid', 'cancelled'] }),
+  status: text('status', { enum: ['quote', 'pending', 'paid', 'canceled'] }).notNull(),
   total: integer('total').notNull(), // in cents
   squareId: text('square_id').notNull(),
 });
@@ -80,7 +80,7 @@ export const printMaterial = sqliteTable('print_material', {
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
 });
 
-export const settingsTable = sqliteTable('settings', {
+export const settings = sqliteTable('settings', {
   key: text('key').notNull().primaryKey(),
   value: text('value', { mode: 'json' }).notNull(),
 });
@@ -91,4 +91,5 @@ export const schema = {
   printRequestFile,
   printRequestPayment,
   printMaterial,
+  settings,
 };

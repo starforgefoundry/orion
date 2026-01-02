@@ -1,5 +1,7 @@
+import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import type { SettingsMap } from '$lib/server/repositories/settings.repository';
+import { eq } from 'drizzle-orm';
 import type { CalculateOrderRequest, OrderLineItemDiscount, OrderLineItemModifier } from 'square';
 
 type SquareSettings = SettingsMap['printRequestSquare'];
@@ -12,6 +14,20 @@ type PrintRequestInfo = {
 };
 
 export class PrintPaymentRepository extends BaseRepository {
+  async getById(paymentId: string) {
+    return await this.db
+      .select()
+      .from(schema.printRequestPayment)
+      .where(eq(schema.printRequestPayment.id, paymentId))
+      .get();
+  }
+
+  async getCatalog(ids: string[]) {
+    return await this.square.catalog.batchGet({
+      objectIds: ids,
+    });
+  }
+
   private buildOrder(
     squareSettings: SquareSettings,
     info: PrintRequestInfo,

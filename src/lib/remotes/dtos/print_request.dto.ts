@@ -32,7 +32,7 @@ export const updatePrintRequestDto = v.object({
       v.literal('printing'),
       v.literal('done'),
       v.literal('picked_up'),
-      v.literal('cancelled'),
+      v.literal('canceled'),
     ]),
   ),
   projectName: v.optional(v.string()),

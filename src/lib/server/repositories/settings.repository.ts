@@ -1,4 +1,4 @@
-import { settingsTable } from '$lib/server/db/schema';
+import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { eq } from 'drizzle-orm';
 
@@ -32,15 +32,15 @@ export class SettingsRepository extends BaseRepository {
   async getSetting<K extends keyof SettingsMap>(key: K) {
     const setting = await this.db
       .select()
-      .from(settingsTable)
-      .where(eq(settingsTable.key, key as string))
-      .execute();
+      .from(schema.settings)
+      .where(eq(schema.settings.key, key as string))
+      .get();
 
-    if (setting.length === 0) {
+    if (!setting) {
       return defaults[key];
     }
 
-    return setting[0]?.value as SettingsMap[K];
+    return setting.value as SettingsMap[K];
   }
 
   async setSetting<K extends keyof SettingsMap>(
@@ -48,20 +48,20 @@ export class SettingsRepository extends BaseRepository {
     value: SettingsMap[K],
   ): Promise<SettingsMap[K]> {
     const updated = await this.db
-      .insert(settingsTable)
+      .insert(schema.settings)
       .values({
         key: key as string,
         value: value,
       })
       .onConflictDoUpdate({
-        target: settingsTable.key,
+        target: schema.settings.key,
         set: {
           value: value,
         },
       })
       .returning()
-      .execute();
+      .get();
 
-    return updated[0]?.value as SettingsMap[K];
+    return updated.value as SettingsMap[K];
   }
 }

@@ -1,6 +1,35 @@
 import { BaseService } from '$lib/server/services/base.service';
+import type { CatalogObjectDiscount, CatalogObjectModifier } from 'square';
 
 class PrintPaymentService extends BaseService {
+  async getById(id: string) {
+    return await this.printPaymentRepository.getById(id);
+  }
+
+  async getPricingInfo(requestId: string) {
+    const squareSettings = await this.settingsRepository.getSetting('printRequestSquare');
+    const items = await this.printPaymentRepository.getCatalog([
+      squareSettings.additionalBuildPlateModifierId,
+      squareSettings.memberPrintDiscountId,
+    ]);
+
+    const buildPlateModifier = items.objects?.find(
+      (obj) => obj.id === squareSettings.additionalBuildPlateModifierId,
+    ) as CatalogObjectModifier;
+
+    const memberDiscount = items.objects?.find(
+      (obj) => obj.id === squareSettings.memberPrintDiscountId,
+    ) as CatalogObjectDiscount;
+
+    // Determine if customer is member
+
+    return {
+      additionalBuildPlateModifier: Number(buildPlateModifier.modifierData?.priceMoney?.amount),
+      memberPrintDiscount: memberDiscount.discountData?.percentage,
+      memberDiscountApplied: false,
+    };
+  }
+
   async testCost() {
     return await this.printPaymentRepository.calculateCost(
       {
