@@ -72,8 +72,7 @@
   let submitButtonText = $derived(submitting ? `Submitting... (${progress}%)` : 'Submit Request');
 
   type SubmitParameters = Parameters<Parameters<typeof submitPrintRequestForm.enhance>[0]>[0];
-  function handleSubmit({ form, data }: SubmitParameters) {
-    console.log('Submitting 3D Print Request Form', { form, data });
+  function handleSubmit({ form }: SubmitParameters) {
     submitting = true;
     progress = 0;
 

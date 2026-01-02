@@ -1,5 +1,6 @@
 <script lang="ts">
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { initForm } from '$lib/frontend/components/form/utils.svelte';
   import {
     getPrintRequestSettings,
     getPrintRequestSquareSettings,
@@ -17,28 +18,26 @@
     modalManager,
     NumberInput,
     Stack,
+    toastManager,
   } from '@immich/ui';
   import { mdiHelpCircle } from '@mdi/js';
-  import { onMount } from 'svelte';
   import SquareInfoModal from './SquareInfoModal.svelte';
 
   // Fetch initial settings
   let printRequestSettings = await getPrintRequestSettings();
   let squareSettings = await getPrintRequestSquareSettings();
 
-  // Initialize form values when data loads
-  onMount(() => {
-    printRequestSettingsForm.fields.maxUploadMB.set(printRequestSettings.maxUploadMB);
-    printRequestSettingsForm.fields.allowedFileTypes.set(printRequestSettings.allowedFileTypes);
-    printRequestSquareSettingsForm.fields.locationId.set(squareSettings.locationId);
-    printRequestSquareSettingsForm.fields.memberPrintDiscountId.set(
-      squareSettings.memberPrintDiscountId,
-    );
-    printRequestSquareSettingsForm.fields.printRequestItemId.set(squareSettings.printRequestItemId);
-    printRequestSquareSettingsForm.fields.additionalBuildPlateModifierId.set(
-      squareSettings.additionalBuildPlateModifierId,
-    );
-  });
+  initForm(printRequestSettingsForm, () => ({
+    maxUploadMB: printRequestSettings.maxUploadMB,
+    allowedFileTypes: printRequestSettings.allowedFileTypes,
+  }));
+
+  initForm(printRequestSquareSettingsForm, () => ({
+    locationId: squareSettings.locationId,
+    memberPrintDiscountId: squareSettings.memberPrintDiscountId,
+    printRequestItemId: squareSettings.printRequestItemId,
+    additionalBuildPlateModifierId: squareSettings.additionalBuildPlateModifierId,
+  }));
 
   let maxUpload = $state(printRequestSettings.maxUploadMB);
   $effect(() => {
@@ -47,6 +46,23 @@
 
   function showSquareInfoModal() {
     modalManager.show(SquareInfoModal);
+  }
+
+  async function handleSubmit(submit: () => Promise<void>) {
+    try {
+      await submit();
+      toastManager.show({
+        title: 'Settings Saved',
+        description: 'Settings have been updated successfully.',
+        color: 'success',
+      });
+    } catch (error) {
+      toastManager.show({
+        title: 'Error Saving Settings',
+        description: 'An error occurred while saving settings. Please try again.',
+        color: 'danger',
+      });
+    }
   }
 </script>
 
@@ -61,7 +77,7 @@
       <Heading size="medium" class="mb-4">Print Request Settings</Heading>
 
       <!-- Disable form reset -->
-      <form {...printRequestSettingsForm.enhance(async ({ submit }) => submit())}>
+      <form {...printRequestSettingsForm.enhance(async ({ submit }) => await handleSubmit(submit))}>
         <Stack gap={4}>
           <Field label="Max Upload Size (MB)" required="indicator">
             <NumberInput bind:value={maxUpload} />
@@ -100,7 +116,11 @@
       </HStack>
 
       <!-- Disable form reset -->
-      <form {...printRequestSquareSettingsForm.enhance(async ({ submit }) => submit())}>
+      <form
+        {...printRequestSquareSettingsForm.enhance(
+          async ({ submit }) => await handleSubmit(submit),
+        )}
+      >
         <Stack gap={4}>
           <Field label="Location ID" required="indicator">
             <TextInput
