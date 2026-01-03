@@ -24,7 +24,7 @@ type PrintRequestInfo = {
   memberPricing: boolean;
 };
 
-class PrintPaymentService extends BaseService {
+export class PrintPaymentService extends BaseService {
   async getById(id: string) {
     return await this.printPaymentRepository.getById(id);
   }

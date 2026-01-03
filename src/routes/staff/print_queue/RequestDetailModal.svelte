@@ -4,7 +4,7 @@
   import {
     getPrintRequestById,
     getPrintRequestFiles,
-    updatePrintRequest,
+    updatePrintRequestStatus,
   } from '$lib/remotes/endpoints/print_request.remote';
   import {
     Badge,
@@ -72,7 +72,7 @@
     });
 
     if (cancel) {
-      await updatePrintRequest({
+      await updatePrintRequestStatus({
         id: request?.id ?? '',
         status: 'canceled',
       });

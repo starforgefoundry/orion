@@ -2,7 +2,7 @@ import { BaseService } from '$lib/server/services/base.service';
 import JSZip from 'jszip';
 import pLimit from 'p-limit';
 
-class PrintFilesService extends BaseService {
+export class PrintFilesService extends BaseService {
   async getByRequestId(printRequestId: string) {
     return await this.printFilesRepository.getByPrintRequestId(printRequestId);
   }

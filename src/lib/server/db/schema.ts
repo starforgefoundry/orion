@@ -20,6 +20,7 @@ export const printRequest = sqliteTable('print_request', {
   submissionDate: luxonTimestamp()
     .notNull()
     .$defaultFn(() => DateTime.now()),
+  completionDate: luxonTimestamp(),
 
   email: text('email').notNull(),
   customerName: text('customer_name').notNull(),

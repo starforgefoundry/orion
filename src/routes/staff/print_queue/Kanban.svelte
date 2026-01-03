@@ -2,7 +2,7 @@
   import type { PrintRequestDto, PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
   import {
     getPrintRequests,
-    updatePrintRequest,
+    updatePrintRequestStatus,
   } from '$lib/remotes/endpoints/print_request.remote';
   import { Heading, modalManager, toastManager } from '@immich/ui';
   import type { DateTime } from 'luxon';
@@ -120,7 +120,8 @@
     dragOverIndex = -1;
 
     try {
-      await updatePrintRequest({ id: item.id, status: targetColumn }).updates(
+      // TODO: add check to confirm movement to Done column
+      await updatePrintRequestStatus({ id: item.id, status: targetColumn }).updates(
         getPrintRequests().withOverride((current) => optimisticUpdate(current, item, targetColumn)),
       );
     } catch (error) {

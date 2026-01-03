@@ -1,6 +1,6 @@
 import { BaseService } from '$lib/server/services/base.service';
 
-class SquareService extends BaseService {
+export class SquareService extends BaseService {
   async getLocations() {
     return await this.squareRepository.getLocations();
   }

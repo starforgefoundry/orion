@@ -12,6 +12,12 @@ export class BaseRepository {
   private _s3?: S3mini;
   private _square?: SquareClient;
 
+  constructor(db?: Database, s3?: S3mini, square?: SquareClient) {
+    this._db = db;
+    this._s3 = s3;
+    this._square = square;
+  }
+
   protected get db(): Database {
     if (!this._db) {
       this._db = getDB();

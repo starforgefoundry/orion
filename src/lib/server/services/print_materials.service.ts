@@ -5,7 +5,7 @@ import type {
 import { getPrintMaterials } from '$lib/remotes/endpoints/print_materials.remote';
 import { BaseService } from '$lib/server/services/base.service';
 
-class PrintMaterialsService extends BaseService {
+export class PrintMaterialsService extends BaseService {
   async getMaterials(available?: boolean) {
     return await this.printMaterialsRepository.get(available);
   }

@@ -1,8 +1,5 @@
-import type {
-  SubmitPrintRequestDto,
-  UpdatePrintRequestDto,
-} from '$lib/remotes/dtos/print_request.dto';
-import { schema } from '$lib/server/db/schema';
+import type { SubmitPrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
+import { schema, type PrintRequest } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { desc, eq } from 'drizzle-orm';
 
@@ -55,7 +52,7 @@ export class PrintRequestRepository extends BaseRepository {
       : undefined;
   }
 
-  async update(id: string, updates: UpdatePrintRequestDto) {
+  async update(id: string, updates: Partial<PrintRequest>) {
     return await this.db
       .update(schema.printRequest)
       .set(updates)

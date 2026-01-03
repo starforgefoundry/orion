@@ -1,0 +1,1 @@
+ALTER TABLE `print_request` ADD `completionDate` timestamp;

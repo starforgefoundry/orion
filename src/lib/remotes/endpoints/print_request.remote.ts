@@ -1,5 +1,9 @@
 import { command, form, query } from '$app/server';
-import { submitPrintRequestDto, updatePrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
+import {
+  submitPrintRequestDto,
+  updatePrintRequestDto,
+  updatePrintRequestStatusDto,
+} from '$lib/remotes/dtos/print_request.dto';
 import { verifyAuth } from '$lib/remotes/utils';
 import { printFilesService } from '$lib/server/services/print_files.service';
 import { printRequestService } from '$lib/server/services/print_request.service';
@@ -26,6 +30,16 @@ export const updatePrintRequest = command(
 
     const { id, ...updates } = dto;
     return await printRequestService.updatePrintRequest(id, updates);
+  },
+);
+
+export const updatePrintRequestStatus = command(
+  v.intersect([updatePrintRequestStatusDto, v.object({ id: v.string() })]),
+  async (dto) => {
+    verifyAuth();
+
+    const { id, ...updates } = dto;
+    return await printRequestService.updatePrintRequestStatus(id, updates);
   },
 );
 

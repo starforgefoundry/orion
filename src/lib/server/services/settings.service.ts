@@ -5,7 +5,7 @@ import {
 import type { SettingsMap } from '$lib/server/repositories/settings.repository';
 import { BaseService } from '$lib/server/services/base.service';
 
-class SettingsService extends BaseService {
+export class SettingsService extends BaseService {
   async getPrintRequestSettings() {
     return await this.settingsRepository.getSetting('printRequest');
   }

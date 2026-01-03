@@ -26,15 +26,6 @@ export const submitPrintRequestDto = v.object({
 export type SubmitPrintRequestDto = v.InferInput<typeof submitPrintRequestDto>;
 
 export const updatePrintRequestDto = v.object({
-  status: v.optional(
-    v.union([
-      v.literal('in_queue'),
-      v.literal('printing'),
-      v.literal('done'),
-      v.literal('picked_up'),
-      v.literal('canceled'),
-    ]),
-  ),
   customerName: v.optional(v.string()),
   email: v.optional(v.pipe(v.string(), v.email())),
   projectName: v.optional(v.string()),
@@ -47,6 +38,18 @@ export const updatePrintRequestDto = v.object({
 });
 
 export type UpdatePrintRequestDto = v.InferInput<typeof updatePrintRequestDto>;
+
+export const updatePrintRequestStatusDto = v.object({
+  status: v.union([
+    v.literal('in_queue'),
+    v.literal('printing'),
+    v.literal('done'),
+    v.literal('picked_up'),
+    v.literal('canceled'),
+  ]),
+});
+
+export type UpdatePrintRequestStatusDto = v.InferInput<typeof updatePrintRequestStatusDto>;
 
 export type PrintRequestDto = Omit<typeof schema.printRequest.$inferSelect, 'material'> & {
   material: PrintMaterialDto;
