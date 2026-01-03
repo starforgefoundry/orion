@@ -72,9 +72,9 @@ export class SquareRepository extends BaseRepository {
     });
   }
 
-  async calculateCost(order: CalculateOrderRequest) {
+  async calculateOrder(order: CalculateOrderRequest) {
     const calculated = await this.square.orders.calculate(order);
-    return calculated.order?.netAmountDueMoney?.amount ?? BigInt(0);
+    return calculated.order;
   }
 
   async getInvoiceById(invoiceId: string) {

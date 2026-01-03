@@ -3,19 +3,24 @@ import { getDB } from '$lib/server/db';
 import { drizzle } from 'drizzle-orm/d1';
 import { SquareClient } from 'square';
 
+import FormData from 'form-data';
+import Mailgun from 'mailgun.js';
 import S3mini from 's3mini';
 
+type MailgunClient = ReturnType<Mailgun['client']>;
 type Database = ReturnType<typeof drizzle>;
 
 export class BaseRepository {
   private _db?: Database;
   private _s3?: S3mini;
   private _square?: SquareClient;
+  private _mailgun?: MailgunClient;
 
-  constructor(db?: Database, s3?: S3mini, square?: SquareClient) {
+  constructor(db?: Database, s3?: S3mini, square?: SquareClient, mailgun?: MailgunClient) {
     this._db = db;
     this._s3 = s3;
     this._square = square;
+    this._mailgun = mailgun;
   }
 
   protected get db(): Database {
@@ -44,5 +49,17 @@ export class BaseRepository {
       });
     }
     return this._square;
+  }
+
+  protected get mailgun() {
+    if (!this._mailgun) {
+      const mailgun = new Mailgun(FormData);
+      this._mailgun = mailgun.client({
+        username: 'api',
+        key: env.MAILGUN_API_KEY!,
+      });
+    }
+
+    return this._mailgun;
   }
 }

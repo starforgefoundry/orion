@@ -1,9 +1,6 @@
 <script lang="ts">
   import { Button, Icon, Text } from '@immich/ui';
   import { mdiCheckCircle } from '@mdi/js';
-  import type { PageProps } from './$types';
-
-  let { data }: PageProps = $props();
 </script>
 
 <svelte:head>
@@ -21,10 +18,10 @@
 
   <Text>
     If you have any questions or need further assistance, please contact us at
-    <a href="mailto:contact@starforgefoundry.com"> contact@starforgefoundry.com</a>
+    <a href="mailto:3dprint@starforgefoundry.com"> 3dprint@starforgefoundry.com</a>
   </Text>
 
-  <Button onclick={() => (window.location.href = '/forms/3dprint')} class="mt-4">
+  <Button onclick={() => (window.location.href = '/print_request/form')} class="mt-4">
     Submit Another Request
   </Button>
 </div>

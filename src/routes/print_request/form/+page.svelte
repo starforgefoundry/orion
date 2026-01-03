@@ -91,7 +91,7 @@
       if (xhr.status === 200) {
         progress = 100;
         submitting = false;
-        goto('/forms/3dprint/success');
+        goto('/print_request/form/success');
       } else {
         toastManager.danger('Failed to submit print request. Please try again later.');
         submitting = false;

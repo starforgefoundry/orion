@@ -42,9 +42,15 @@ export class PrintPaymentRepository extends BaseRepository {
     requestId: string,
     payment: InferInsertModel<typeof schema.printRequestPayment>,
   ) {
+    const { id, ...rest } = payment;
+
     const result = await this.db
       .insert(schema.printRequestPayment)
       .values(payment)
+      .onConflictDoUpdate({
+        target: schema.printRequestPayment.id,
+        set: rest,
+      })
       .returning()
       .get();
 
@@ -79,5 +85,23 @@ export class PrintPaymentRepository extends BaseRepository {
       })
       .where(eq(schema.printRequestPayment.squareInvoiceId, invoiceId))
       .execute();
+  }
+
+  async getByPrintRequestId(printRequestId: string) {
+    const result = await this.db
+      .select()
+      .from(schema.printRequest)
+      .where(eq(schema.printRequest.id, printRequestId))
+      .leftJoin(
+        schema.printRequestPayment,
+        eq(schema.printRequest.paymentId, schema.printRequestPayment.id),
+      )
+      .get();
+
+    if (!result) {
+      return null;
+    }
+
+    return result.print_request_payment;
   }
 }

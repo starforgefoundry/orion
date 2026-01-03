@@ -40,14 +40,23 @@ export class PrintRequestRepository extends BaseRepository {
       .select()
       .from(schema.printRequest)
       .innerJoin(schema.printMaterial, eq(schema.printRequest.material, schema.printMaterial.id))
+      .leftJoin(
+        schema.printRequestPayment,
+        eq(schema.printRequest.paymentId, schema.printRequestPayment.id),
+      )
+      .leftJoin(
+        schema.printRequestFile,
+        eq(schema.printRequest.id, schema.printRequestFile.printRequestId),
+      )
       .orderBy(desc(schema.printRequest.submissionDate))
-      .where(eq(schema.printRequest.id, id))
-      .get();
+      .where(eq(schema.printRequest.id, id));
 
     return result
       ? {
-          ...result.print_request,
-          material: result.print_material,
+          ...result[0].print_request,
+          payment: result[0].print_request_payment,
+          material: result[0].print_material,
+          files: result.map((r) => r.print_request_file).filter((f) => f !== null),
         }
       : undefined;
   }

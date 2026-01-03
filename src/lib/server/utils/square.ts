@@ -10,3 +10,9 @@ export type SquareWebhook<T> = {
     object: T;
   };
 };
+
+export function stringifySquareObject(obj: any): string {
+  return JSON.stringify(obj, (_key, value) =>
+    typeof value === 'bigint' ? value.toString() : value,
+  );
+}

@@ -1,9 +1,7 @@
 <script lang="ts">
   import type { ModalProps } from '$lib/frontend/components/utils';
-  import { getPayment } from '$lib/remotes/endpoints/print_payment.remote';
   import {
     getPrintRequestById,
-    getPrintRequestFiles,
     updatePrintRequestStatus,
   } from '$lib/remotes/endpoints/print_request.remote';
   import {
@@ -14,7 +12,6 @@
     HStack,
     Icon,
     IconButton,
-    LoadingSpinner,
     Modal,
     ModalBody,
     modalManager,
@@ -43,13 +40,22 @@
 
   let requestRemote = $derived(getPrintRequestById(requestId));
   let request = $derived(requestRemote.current);
+  let billingType = $derived.by(() => {
+    if (!request) {
+      return 'N/A';
+    }
 
-  let printFiles = $derived(request ? getPrintRequestFiles(request.id) : undefined);
-  let paymentInfo = $derived(request?.paymentId ? getPayment(request.paymentId).current : null);
+    if (request.isQuote && (!request.payment || request.payment?.status === 'quote')) {
+      return 'Quote';
+    }
+
+    return request.isQuote ? 'Quote' : 'Payment';
+  });
 
   async function createPayment() {
     modalManager.show(PaymentModal, {
       request: request!,
+      billingType,
     });
   }
 
@@ -60,6 +66,7 @@
         buildPlates: request?.buildplateCount ?? 1,
         materialCost: request?.materialCost ?? 0,
       },
+      billingType,
       isEdit: true,
     });
   }
@@ -133,55 +140,45 @@
           </Stack>
         {/if}
 
-        {#if paymentInfo}
+        {#if request?.payment}
           <Stack class="rounded-2xl border-2 border-slate-700 p-4">
             <Heading size="small" class="mb-2">Payment Information</Heading>
 
             <HStack class="justify-between">
               <Text>Issued Date</Text>
-              <Text fontWeight="bold">{paymentInfo.issuedDate.toLocaleString()}</Text>
+              <Text fontWeight="bold">{request.payment.issuedDate.toLocaleString()}</Text>
             </HStack>
 
             <HStack class="justify-between">
               <Text>Status</Text>
-              <Text fontWeight="bold">{paymentInfo.status.toUpperCase()}</Text>
+              <Text fontWeight="bold">{request.payment.status.toUpperCase()}</Text>
             </HStack>
 
             <HStack class="justify-between">
               <Text>Total</Text>
-              <Text fontWeight="bold">${(paymentInfo.total / 100).toFixed(2)}</Text>
+              <Text fontWeight="bold">${(request.payment.total / 100).toFixed(2)}</Text>
             </HStack>
           </Stack>
         {/if}
         <!-- Dont show buttons while loading (undefined == loading) -->
-        {#if paymentInfo !== undefined}
-          <Stack gap={2}>
-            {#if paymentInfo}
-              {#if request?.status !== 'canceled' && paymentInfo.status !== 'paid' && paymentInfo.status !== 'canceled'}
-                <Button
-                  leadingIcon={mdiCurrencyUsd}
-                  fullWidth
-                  color="primary"
-                  onclick={editPayment}
-                >
-                  Edit Payment
-                </Button>
-              {/if}
-            {:else}
-              <Button
-                leadingIcon={mdiCurrencyUsd}
-                fullWidth
-                color="success"
-                onclick={createPayment}
-              >
-                Create Payment
+        <Stack gap={2}>
+          {#if request?.payment}
+            {#if request?.status !== 'canceled' && request.payment.status !== 'paid' && request.payment.status !== 'canceled'}
+              <Button leadingIcon={mdiCurrencyUsd} fullWidth color="primary" onclick={editPayment}>
+                Edit {billingType}
               </Button>
             {/if}
+          {:else}
+            <Button leadingIcon={mdiCurrencyUsd} fullWidth color="success" onclick={createPayment}>
+              Create {billingType}
+            </Button>
+          {/if}
+          {#if request?.status !== 'canceled' && request?.status !== 'done'}
             <Button leadingIcon={mdiClose} fullWidth color="danger" onclick={cancelRequest}>
               Cancel Request
             </Button>
-          </Stack>
-        {/if}
+          {/if}
+        </Stack>
       </div>
       <div class="flex h-full flex-1 flex-col">
         <HStack class="justify-between">
@@ -205,14 +202,8 @@
             />
           </HStack>
         </HStack>
-        {#if printFiles?.loading}
-          <div class="flex w-full flex-col items-center justify-center">
-            <LoadingSpinner size="large" />
-          </div>
-        {:else if printFiles?.error}
-          <Text class="text-danger">Error loading files: {printFiles?.error.message}</Text>
-        {/if}
-        {#each printFiles?.current as file}
+
+        {#each request?.files as file}
           <div class="bg-level-2 mt-2 rounded-lg border border-slate-600 p-4">
             <HStack class="justify-between">
               <Text>{file.fileName}</Text>

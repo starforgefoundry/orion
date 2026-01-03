@@ -1,6 +1,7 @@
 <script lang="ts">
   import PriceInput from '$lib/frontend/components/form/PriceInput.svelte';
   import { initForm } from '$lib/frontend/components/form/utils.svelte';
+  import { toFixedDown } from '$lib/frontend/components/utils';
   import type { PrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
   import { getPricingInfo, upsertPaymentForm } from '$lib/remotes/endpoints/print_payment.remote';
   import {
@@ -24,6 +25,7 @@
       buildPlates: number;
       materialCost: number;
     };
+    billingType: string;
     isEdit?: boolean;
     onClose: (created?: boolean) => void;
   }
@@ -33,6 +35,7 @@
     request,
     prefill = { buildPlates: 1, materialCost: 300 },
     isEdit = false,
+    billingType,
   }: Props = $props();
 
   initForm(upsertPaymentForm, () => ({
@@ -106,17 +109,19 @@
             </Stack>
             <Text>${(materialCost / 100).toFixed(2)}</Text>
           </HStack>
-          <HStack class="justify-between">
-            <Stack gap={0}>
-              <Text>Build Plate Surcharge</Text>
-              <Text size="small" color="muted">
-                ${buildPlateCost.toFixed(2)}/ea over 1 plate
+          {#if buildPlates > 1}
+            <HStack class="justify-between">
+              <Stack gap={0}>
+                <Text>Additional Build Plates ({buildPlates - 1}x)</Text>
+                <Text size="small" color="muted">
+                  ${buildPlateCost.toFixed(2)}/ea over 1 plate
+                </Text>
+              </Stack>
+              <Text>
+                ${buildPlateSurcharge.toFixed(2)}
               </Text>
-            </Stack>
-            <Text>
-              ${buildPlateSurcharge.toFixed(2)}
-            </Text>
-          </HStack>
+            </HStack>
+          {/if}
 
           {#if pricingInfo.current?.memberDiscountApplied}
             <HStack class="justify-between">
@@ -127,7 +132,7 @@
                 </Text>
               </Stack>
               <Text>
-                ${memberDiscount.toFixed(2)}
+                - ${memberDiscount.toFixed(2)}
               </Text>
             </HStack>
           {/if}
@@ -137,7 +142,7 @@
           <HStack class="justify-between">
             <Text fontWeight="bold">TOTAL</Text>
             <Text>
-              ${totalCost.toFixed(2)}
+              ${toFixedDown(totalCost, 2)}
             </Text>
           </HStack>
         </Stack>
@@ -150,7 +155,8 @@
           leadingIcon={mdiCurrencyUsd}
           {loading}
         >
-          {isEdit ? 'Update Payment' : 'Create Payment'}
+          {isEdit ? `Update` : `Create`}
+          {billingType}
         </Button>
       </form>
     {/if}

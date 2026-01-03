@@ -1,7 +1,6 @@
 CREATE TABLE `print_material` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
-	`cost` integer NOT NULL,
 	`available` integer DEFAULT true NOT NULL,
 	`archived` integer DEFAULT false NOT NULL
 );
@@ -9,6 +8,7 @@ CREATE TABLE `print_material` (
 CREATE TABLE `print_request` (
 	`id` text PRIMARY KEY NOT NULL,
 	`submissionDate` timestamp NOT NULL,
+	`completionDate` timestamp,
 	`email` text NOT NULL,
 	`customer_name` text NOT NULL,
 	`project_name` text NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE `print_request` (
 	`billing_code` text,
 	`payment_id` text,
 	`buildplate_count` integer DEFAULT 1,
-	`material_usage_grams` integer DEFAULT 0,
+	`material_cost` integer DEFAULT 0,
 	FOREIGN KEY (`material`) REFERENCES `print_material`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`payment_id`) REFERENCES `print_request_payment`(`id`) ON UPDATE no action ON DELETE no action
 );
@@ -35,8 +35,22 @@ CREATE TABLE `print_request_file` (
 --> statement-breakpoint
 CREATE TABLE `print_request_payment` (
 	`id` text PRIMARY KEY NOT NULL,
-	`issued_date` integer NOT NULL,
-	`status` text,
+	`issued_date` timestamp NOT NULL,
+	`payment_date` timestamp,
+	`status` text NOT NULL,
 	`total` integer NOT NULL,
-	`square_id` text NOT NULL
+	`square_invoice_id` text,
+	`square_order_id` text
+);
+--> statement-breakpoint
+CREATE INDEX `square_invoice_idx` ON `print_request_payment` (`square_invoice_id`);--> statement-breakpoint
+CREATE INDEX `square_order_idx` ON `print_request_payment` (`square_order_id`);--> statement-breakpoint
+CREATE TABLE `settings` (
+	`key` text PRIMARY KEY NOT NULL,
+	`value` text NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE `square_webhook_log` (
+	`id` text PRIMARY KEY NOT NULL,
+	`payload` text NOT NULL
 );

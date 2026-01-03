@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "78859c21-c634-4abc-8599-daca96e236b7",
-  "prevId": "159e5ed2-a265-44b9-b0a3-275fc0a1dd73",
+  "id": "03b3ff3e-0961-4e4d-96f0-3e1e3c72be2b",
+  "prevId": "a78c19cf-d141-4339-8618-9d6442f039c4",
   "tables": {
     "print_material": {
       "name": "print_material",
@@ -17,13 +17,6 @@
         "name": {
           "name": "name",
           "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "cost": {
-          "name": "cost",
-          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -66,6 +59,13 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "completionDate": {
+          "name": "completionDate",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "email": {
@@ -140,8 +140,8 @@
           "autoincrement": false,
           "default": 1
         },
-        "material_usage_grams": {
-          "name": "material_usage_grams",
+        "material_cost": {
+          "name": "material_cost",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -254,13 +254,34 @@
         },
         "issued_date": {
           "name": "issued_date",
-          "type": "integer",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
+        "payment_date": {
+          "name": "payment_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "status": {
           "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "square_invoice_id": {
+          "name": "square_invoice_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "square_order_id": {
+          "name": "square_order_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -273,15 +294,54 @@
           "notNull": true,
           "autoincrement": false
         },
-        "square_id": {
-          "name": "square_id",
-          "type": "text",
+        "material_cost": {
+          "name": "material_cost",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "build_plate_cost": {
+          "name": "build_plate_cost",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "discount_amount": {
+          "name": "discount_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "discount_title": {
+          "name": "discount_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "square_invoice_idx": {
+          "name": "square_invoice_idx",
+          "columns": [
+            "square_invoice_id"
+          ],
+          "isUnique": false
+        },
+        "square_order_idx": {
+          "name": "square_order_idx",
+          "columns": [
+            "square_order_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -299,6 +359,30 @@
         },
         "value": {
           "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "square_webhook_log": {
+      "name": "square_webhook_log",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

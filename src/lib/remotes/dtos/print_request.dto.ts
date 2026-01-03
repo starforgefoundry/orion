@@ -1,5 +1,9 @@
-import type { PrintMaterialDto } from '$lib/remotes/dtos/print_materials.dto';
-import { schema } from '$lib/server/db/schema';
+import {
+  schema,
+  type PrintMaterial,
+  type PrintRequestFile,
+  type PrintRequestPayment,
+} from '$lib/server/db/schema';
 import * as v from 'valibot';
 
 export const printRequestFileDto = v.object({
@@ -52,7 +56,9 @@ export const updatePrintRequestStatusDto = v.object({
 export type UpdatePrintRequestStatusDto = v.InferInput<typeof updatePrintRequestStatusDto>;
 
 export type PrintRequestDto = Omit<typeof schema.printRequest.$inferSelect, 'material'> & {
-  material: PrintMaterialDto;
+  payment: PrintRequestPayment | null;
+  material: PrintMaterial;
+  files: PrintRequestFile[];
 };
 
 export type PrintRequestStatus = PrintRequestDto['status'];

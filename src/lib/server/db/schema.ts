@@ -1,5 +1,5 @@
 import { type InferSelectModel } from 'drizzle-orm';
-import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { DateTime } from 'luxon';
 import { luxonTimestamp } from './custom/luxon';
 
@@ -72,13 +72,15 @@ export const printRequestPayment = sqliteTable(
     issuedDate: luxonTimestamp('issued_date').notNull(),
     paymentDate: luxonTimestamp('payment_date'),
     status: text('status', { enum: ['quote', 'pending', 'paid', 'canceled'] }).notNull(),
+    squareInvoiceId: text('square_invoice_id'),
+    squareOrderId: text('square_order_id'),
+
     total: integer('total').notNull(), // in cents
-    squareInvoiceId: text('square_invoice_id').notNull(),
-    squareOrderId: text('square_order_id').notNull(),
+    orderObject: text('order_object'),
   },
   (table) => [
-    uniqueIndex('square_invoice_idx').on(table.squareInvoiceId),
-    uniqueIndex('square_order_idx').on(table.squareOrderId),
+    index('square_invoice_idx').on(table.squareInvoiceId),
+    index('square_order_idx').on(table.squareOrderId),
   ],
 );
 

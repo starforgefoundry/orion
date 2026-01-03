@@ -23,6 +23,15 @@ export const getPrintRequestById = query(v.string(), async (id: string) => {
   return await printRequestService.getPrintRequestById(id);
 });
 
+export const getPrintRequestQuote = query(v.string(), async (id: string) => {
+  const request = await printRequestService.getPrintRequestById(id);
+  if (request?.payment?.status !== 'quote') {
+    throw new Error('Print request is not in quote status');
+  }
+
+  return request;
+});
+
 export const updatePrintRequest = command(
   v.intersect([updatePrintRequestDto, v.object({ id: v.string() })]),
   async (dto) => {

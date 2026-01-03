@@ -1,3 +1,4 @@
+import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
 import { PrintFilesRepository } from '$lib/server/repositories/print_files.repository';
 import { PrintMaterialsRepository } from '$lib/server/repositories/print_materials.repository';
 import { PrintPaymentRepository } from '$lib/server/repositories/print_payment.repository';
@@ -12,6 +13,7 @@ export class BaseService {
   protected printPaymentRepository: PrintPaymentRepository;
   protected settingsRepository: SettingsRepository;
   protected squareRepository: SquareRepository;
+  protected mailgunRepository: MailgunRepository;
 
   constructor(
     printFilesRepository?: PrintFilesRepository,
@@ -20,6 +22,7 @@ export class BaseService {
     printPaymentRepository?: PrintPaymentRepository,
     settingsRepository?: SettingsRepository,
     squareRepository?: SquareRepository,
+    mailgunRepository?: MailgunRepository,
   ) {
     this.printFilesRepository = printFilesRepository ?? new PrintFilesRepository();
     this.printMaterialsRepository = printMaterialsRepository ?? new PrintMaterialsRepository();
@@ -27,5 +30,6 @@ export class BaseService {
     this.printPaymentRepository = printPaymentRepository ?? new PrintPaymentRepository();
     this.settingsRepository = settingsRepository ?? new SettingsRepository();
     this.squareRepository = squareRepository ?? new SquareRepository();
+    this.mailgunRepository = mailgunRepository ?? new MailgunRepository();
   }
 }
