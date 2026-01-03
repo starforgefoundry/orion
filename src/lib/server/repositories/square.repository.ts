@@ -1,4 +1,6 @@
+import { schema, type SquareWebhookLog } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
+import type { SquareWebhook } from '$lib/server/utils/square';
 import type { CalculateOrderRequest, CreateOrderRequest, UpdateOrderRequest } from 'square';
 
 export class SquareRepository extends BaseRepository {
@@ -124,5 +126,19 @@ export class SquareRepository extends BaseRepository {
     }
 
     return createdCustomer.customer;
+  }
+
+  async logWebhook(webhookData: SquareWebhook<any>) {
+    const log = await this.db
+      .insert(schema.squareWebhookLog)
+      .values({
+        id: webhookData.event_id,
+        payload: webhookData,
+      })
+      .onConflictDoNothing()
+      .returning()
+      .get();
+
+    return log as SquareWebhookLog | undefined;
   }
 }

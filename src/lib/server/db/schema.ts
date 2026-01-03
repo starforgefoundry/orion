@@ -1,5 +1,5 @@
 import { type InferSelectModel } from 'drizzle-orm';
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { DateTime } from 'luxon';
 import { luxonTimestamp } from './custom/luxon';
 
@@ -62,17 +62,25 @@ export const printRequestFile = sqliteTable('print_request_file', {
 
 export type PrintRequestFile = InferSelectModel<typeof printRequestFile>;
 
-export const printRequestPayment = sqliteTable('print_request_payment', {
-  id: text('id')
-    .notNull()
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  issuedDate: luxonTimestamp('issued_date').notNull(),
-  status: text('status', { enum: ['quote', 'pending', 'paid', 'canceled'] }).notNull(),
-  total: integer('total').notNull(), // in cents
-  squareInvoiceId: text('square_invoice_id').notNull(),
-  squareOrderId: text('square_order_id').notNull(),
-});
+export const printRequestPayment = sqliteTable(
+  'print_request_payment',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    issuedDate: luxonTimestamp('issued_date').notNull(),
+    paymentDate: luxonTimestamp('payment_date'),
+    status: text('status', { enum: ['quote', 'pending', 'paid', 'canceled'] }).notNull(),
+    total: integer('total').notNull(), // in cents
+    squareInvoiceId: text('square_invoice_id').notNull(),
+    squareOrderId: text('square_order_id').notNull(),
+  },
+  (table) => [
+    uniqueIndex('square_invoice_idx').on(table.squareInvoiceId),
+    uniqueIndex('square_order_idx').on(table.squareOrderId),
+  ],
+);
 
 export type PrintRequestPayment = InferSelectModel<typeof printRequestPayment>;
 
@@ -86,10 +94,19 @@ export const printMaterial = sqliteTable('print_material', {
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
 });
 
+export type PrintMaterial = InferSelectModel<typeof printMaterial>;
+
 export const settings = sqliteTable('settings', {
   key: text('key').notNull().primaryKey(),
   value: text('value', { mode: 'json' }).notNull(),
 });
+
+export const squareWebhookLog = sqliteTable('square_webhook_log', {
+  id: text('id').notNull().primaryKey(),
+  payload: text('payload', { mode: 'json' }).notNull(),
+});
+
+export type SquareWebhookLog = InferSelectModel<typeof squareWebhookLog>;
 
 export const schema = {
   user,
@@ -98,4 +115,5 @@ export const schema = {
   printRequestPayment,
   printMaterial,
   settings,
+  squareWebhookLog,
 };

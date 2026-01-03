@@ -1,7 +1,6 @@
 import { printFilesService } from '$lib/server/services/print_files.service';
 import type { RequestHandler } from '@sveltejs/kit';
 
-// TODO: url.searchparams for auth
 export const GET: RequestHandler = async ({ params }) => {
   if (!params.id) {
     return new Response('Print request ID is required', { status: 400 });

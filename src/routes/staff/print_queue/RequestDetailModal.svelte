@@ -9,6 +9,7 @@
   import {
     Badge,
     Button,
+    CodeBlock,
     Heading,
     HStack,
     Icon,
@@ -31,6 +32,7 @@
     mdiMonitorShare,
     mdiPrinter3dNozzle,
   } from '@mdi/js';
+  import { plaintext } from 'svelte-highlight/languages';
   import PaymentModal from './PaymentModal.svelte';
 
   type Props = ModalProps & {
@@ -127,7 +129,7 @@
         {#if request?.specialRequests}
           <Stack class="rounded-2xl border-2 border-slate-700 p-4">
             <Heading size="small">Special Requests</Heading>
-            <Text>{request?.specialRequests}</Text>
+            <CodeBlock code={request?.specialRequests} copy={false} language={plaintext} />
           </Stack>
         {/if}
 
@@ -190,7 +192,7 @@
               aria-label="Download Files"
               color="primary"
               size="small"
-              href={`${window.location.origin}/api/print_download/${request?.id}`}
+              href={`${window.location.origin}/api/prints/download/${request?.id}`}
             />
             <IconButton
               icon={mdiMonitorShare}
@@ -198,7 +200,7 @@
               color="success"
               size="small"
               href={`orcaslicer://open?file=${encodeURIComponent(
-                `${window.location.origin}/api/print_download/${request?.id}`,
+                `${window.location.origin}/api/prints/download/${request?.id}`,
               )}`}
             />
           </HStack>

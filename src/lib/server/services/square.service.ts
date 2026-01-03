@@ -18,6 +18,27 @@ export class SquareService extends BaseService {
     const activeMemberships = memberships.filter((membership) => membership.status === 'ACTIVE');
     return activeMemberships.length > 0;
   }
+
+  async processWebhook(webhookData: any) {
+    const log = await this.squareRepository.logWebhook(webhookData);
+    if (!log) {
+      console.log('Already received and processed webhook event:', webhookData);
+      return { success: true, message: 'Already received and processed webhook event' };
+    }
+
+    // Process different webhook event types
+    if (webhookData.type === 'invoice.payment_made') {
+      const invoiceId = webhookData.data.id;
+      await this.printPaymentRepository.updateInvoiceStatus(invoiceId, 'paid');
+    }
+
+    if (webhookData.type === 'invoice.canceled') {
+      const invoiceId = webhookData.data.id;
+      await this.printPaymentRepository.updateInvoiceStatus(invoiceId, 'canceled');
+    }
+
+    return { success: true };
+  }
 }
 
 export const squareService = new SquareService();

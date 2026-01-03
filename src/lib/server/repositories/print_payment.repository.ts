@@ -69,4 +69,15 @@ export class PrintPaymentRepository extends BaseRepository {
       .where(eq(schema.printRequestPayment.id, paymentId))
       .returning();
   }
+
+  async updateInvoiceStatus(invoiceId: string, status: 'paid' | 'canceled') {
+    await this.db
+      .update(schema.printRequestPayment)
+      .set({
+        status: status,
+        paymentDate: status === 'paid' ? DateTime.now() : undefined,
+      })
+      .where(eq(schema.printRequestPayment.squareInvoiceId, invoiceId))
+      .execute();
+  }
 }

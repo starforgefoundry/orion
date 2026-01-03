@@ -55,7 +55,7 @@ export class PrintRequestService extends BaseService {
       updates.completionDate = DateTime.now();
 
       // cancel any outstanding invoices
-      if (payment?.squareInvoiceId) {
+      if (payment?.squareInvoiceId && payment.status !== 'canceled') {
         this.squareRepository.cancelInvoice(payment.squareInvoiceId);
       }
     }

@@ -43,6 +43,13 @@
       "when": 1767412228653,
       "tag": "0005_awesome_living_lightning",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1767465607066,
+      "tag": "0006_pink_red_hulk",
+      "breakpoints": true
     }
   ]
 }
