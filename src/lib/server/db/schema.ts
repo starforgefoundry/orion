@@ -73,6 +73,8 @@ export const printRequestPayment = sqliteTable('print_request_payment', {
   squareOrderId: text('square_order_id').notNull(),
 });
 
+export type PrintRequestPayment = InferSelectModel<typeof printRequestPayment>;
+
 export const printMaterial = sqliteTable('print_material', {
   id: text('id')
     .notNull()

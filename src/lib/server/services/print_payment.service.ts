@@ -1,4 +1,5 @@
 import type { CreatePaymentDto } from '$lib/remotes/dtos/print_payment.dto';
+import type { PrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
 import { getPayment } from '$lib/remotes/endpoints/print_payment.remote';
 import { getPrintRequestById, getPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
 import type { SettingsMap } from '$lib/server/repositories/settings.repository';
@@ -61,67 +62,80 @@ class PrintPaymentService extends BaseService {
       throw new Error('Print request not found');
     }
 
-    const payment = request.paymentId
+    const existingPayment = request.paymentId
       ? await this.printPaymentRepository.getById(request.paymentId)
       : undefined;
-    const squareSettings = await this.settingsRepository.getSetting('printRequestSquare');
-    const getPricingInfo = await this.getPricingInfo(request.email);
 
-    const customer = await this.printPaymentRepository.upsertCustomer(
+    if (existingPayment) {
+      // We have to cancel the existing invoice before creating a new one
+      // https://stackoverflow.com/questions/66733189
+      await this.squareRepository.cancelInvoice(existingPayment.squareInvoiceId);
+    }
+
+    return await this.createNewOrder(request, dto);
+  }
+
+  private async createNewOrder(request: PrintRequestDto, paymentInfo: CreatePaymentDto) {
+    const squareSettings = await this.settingsRepository.getSetting('printRequestSquare');
+    const activeMember = await squareService.checkActiveMember(request.email);
+    const customer = await this.squareRepository.upsertCustomer(
       request.customerName,
       request.email,
     );
 
-    const order = this.buildOrder(squareSettings, {
+    const order = this.buildNewOrder(squareSettings, {
       customer,
-      materialCost: dto.materialCost,
-      buildPlates: dto.buildPlates,
-      memberPricing: getPricingInfo.memberDiscountApplied,
+      materialCost: paymentInfo.materialCost,
+      buildPlates: paymentInfo.buildPlates,
+      memberPricing: activeMember,
     });
 
-    if (!payment) {
-      const createdOrder = await this.printPaymentRepository.createOrder(order);
-      if (!createdOrder) {
-        throw new Error('Failed to create order in Square');
-      }
-
-      const invoice = await this.printPaymentRepository.createInvoice(createdOrder);
-      if (!invoice) {
-        throw new Error('Failed to create invoice in Square');
-      }
-
-      if (!request.isQuote) {
-        await this.printPaymentRepository.sendInvoice(invoice.id!, invoice.version!);
-      }
-
-      const paymentRecord = await this.printPaymentRepository.savePayment(request.id, {
-        status: 'pending',
-        issuedDate: DateTime.fromISO(invoice.createdAt!),
-        total: Number(createdOrder.netAmountDueMoney?.amount),
-        squareInvoiceId: invoice.id!,
-        squareOrderId: createdOrder.id!,
-      });
-
-      await this.printRequestRepository.update(request.id, {
-        materialCost: dto.materialCost,
-        buildplateCount: dto.buildPlates,
-      });
-
-      await getPayment(paymentRecord.id).refresh();
-      await getPrintRequests().refresh();
-      await getPrintRequestById(request.id).refresh();
-
-      return paymentRecord;
-    } else {
-      // TODO: Update existing payment/order/invoice in Square
+    const createdOrder = await this.squareRepository.createOrder(order);
+    if (!createdOrder) {
+      throw new Error('Failed to create order in Square');
     }
+
+    const invoice = await this.printPaymentRepository.createInvoice(createdOrder);
+    if (!invoice) {
+      throw new Error('Failed to create invoice in Square');
+    }
+
+    if (!request.isQuote) {
+      await this.squareRepository.sendInvoice(invoice.id!, invoice.version!);
+    }
+
+    const paymentRecord = await this.printPaymentRepository.savePayment(request.id, {
+      status: 'pending',
+      issuedDate: DateTime.fromISO(invoice.createdAt!),
+      total: Number(createdOrder.netAmountDueMoney?.amount),
+      squareInvoiceId: invoice.id!,
+      squareOrderId: createdOrder.id!,
+    });
+
+    await this.printRequestRepository.update(request.id, {
+      materialCost: paymentInfo.materialCost,
+      buildplateCount: paymentInfo.buildPlates,
+    });
+
+    await getPayment(paymentRecord.id).refresh();
+    await getPrintRequests().refresh();
+    await getPrintRequestById(request.id).refresh();
+
+    return paymentRecord;
   }
 
-  private buildOrder(
+  private buildNewOrder(
     squareSettings: SquareSettings,
     info: PrintRequestInfo,
   ): CalculateOrderRequest {
     const discounts: OrderLineItemDiscount[] = [];
+    if (info.memberPricing) {
+      discounts.push({
+        catalogObjectId: squareSettings.memberPrintDiscountId,
+        scope: 'ORDER',
+      });
+    }
+
     const lineItems: OrderLineItem[] = [
       {
         quantity: '1',
@@ -132,13 +146,6 @@ class PrintPaymentService extends BaseService {
         },
       },
     ];
-
-    if (info.memberPricing) {
-      discounts.push({
-        catalogObjectId: squareSettings.memberPrintDiscountId,
-        scope: 'ORDER',
-      });
-    }
 
     if (info.buildPlates > 1) {
       lineItems.push({

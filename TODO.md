@@ -23,7 +23,7 @@
   - memberPricing: boolean (if true, members get discounted pricing)
 
 - MAIN BILLING TODO
-  - Handle editing a payment
+  - DONE: Handle editing a payment
   - Handle creating a quote
   - Handle editing a quote
   - Handle cancelling a quote
@@ -33,6 +33,7 @@
 - OTHER
   - Send payment pickup notification
   - Allow editing of quantities in print request
+  - CF turnstile on print request form
 
 <!-- - Print Request Settings DONE
   - New table containing settings for print request system

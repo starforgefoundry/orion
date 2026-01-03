@@ -1,4 +1,5 @@
 import { BaseRepository } from '$lib/server/repositories/base.repository';
+import type { CalculateOrderRequest, CreateOrderRequest, UpdateOrderRequest } from 'square';
 
 export class SquareRepository extends BaseRepository {
   async getLocations() {
@@ -42,5 +43,86 @@ export class SquareRepository extends BaseRepository {
     });
 
     return membershipsSearch.subscriptions;
+  }
+
+  async getOrderById(orderId: string) {
+    const response = await this.square.orders.get({
+      orderId,
+    });
+
+    return response.order;
+  }
+
+  async createOrder(order: CreateOrderRequest) {
+    const created = await this.square.orders.create(order);
+    return created.order;
+  }
+
+  async updateOrder(order: UpdateOrderRequest) {
+    const updated = await this.square.orders.update(order);
+    return updated.order;
+  }
+
+  async sendInvoice(invoiceId: string, invoiceVersion: number) {
+    await this.square.invoices.publish({
+      invoiceId,
+      version: invoiceVersion,
+    });
+  }
+
+  async calculateCost(order: CalculateOrderRequest) {
+    const calculated = await this.square.orders.calculate(order);
+    return calculated.order?.netAmountDueMoney?.amount ?? BigInt(0);
+  }
+
+  async getInvoiceById(invoiceId: string) {
+    const response = await this.square.invoices.get({
+      invoiceId,
+    });
+
+    return response.invoice;
+  }
+
+  async cancelInvoice(invoiceId: string) {
+    const invoice = await this.getInvoiceById(invoiceId);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+
+    await this.square.invoices.cancel({
+      invoiceId,
+      version: invoice.version!,
+    });
+  }
+
+  async upsertCustomer(name: string, email: string) {
+    const customerSearch = await this.square.customers.search({
+      query: {
+        filter: {
+          emailAddress: {
+            exact: email,
+          },
+        },
+      },
+    });
+
+    const customers = customerSearch.customers ?? [];
+    if (customers.length > 0) {
+      return customers[0];
+    }
+
+    const [firstName, ...lastNameParts] = name.split(' ');
+    const lastName = lastNameParts.join(' ');
+    const createdCustomer = await this.square.customers.create({
+      givenName: firstName,
+      familyName: lastName,
+      emailAddress: email,
+    });
+
+    if (!createdCustomer.customer) {
+      throw new Error('Failed to create customer in Square');
+    }
+
+    return createdCustomer.customer;
   }
 }

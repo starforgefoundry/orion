@@ -2,7 +2,7 @@ import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { eq, type InferInsertModel } from 'drizzle-orm';
 import { DateTime } from 'luxon';
-import type { CalculateOrderRequest, CreateOrderRequest, Order } from 'square';
+import type { Order } from 'square';
 
 export class PrintPaymentRepository extends BaseRepository {
   async getById(paymentId: string) {
@@ -11,42 +11,6 @@ export class PrintPaymentRepository extends BaseRepository {
       .from(schema.printRequestPayment)
       .where(eq(schema.printRequestPayment.id, paymentId))
       .get();
-  }
-
-  async upsertCustomer(name: string, email: string) {
-    const customerSearch = await this.square.customers.search({
-      query: {
-        filter: {
-          emailAddress: {
-            exact: email,
-          },
-        },
-      },
-    });
-
-    const customers = customerSearch.customers ?? [];
-    if (customers.length > 0) {
-      return customers[0];
-    }
-
-    const [firstName, ...lastNameParts] = name.split(' ');
-    const lastName = lastNameParts.join(' ');
-    const createdCustomer = await this.square.customers.create({
-      givenName: firstName,
-      familyName: lastName,
-      emailAddress: email,
-    });
-
-    if (!createdCustomer.customer) {
-      throw new Error('Failed to create customer in Square');
-    }
-
-    return createdCustomer.customer;
-  }
-
-  async createOrder(order: CreateOrderRequest) {
-    const created = await this.square.orders.create(order);
-    return created.order;
   }
 
   async createInvoice(order: Order) {
@@ -60,7 +24,7 @@ export class PrintPaymentRepository extends BaseRepository {
         paymentRequests: [
           {
             requestType: 'BALANCE',
-            dueDate: DateTime.now().toFormat('yyyy-MM-dd'),
+            dueDate: DateTime.now().plus({ days: 1 }).toFormat('yyyy-MM-dd'),
           },
         ],
         acceptedPaymentMethods: {
@@ -72,18 +36,6 @@ export class PrintPaymentRepository extends BaseRepository {
     });
 
     return created.invoice;
-  }
-
-  async sendInvoice(invoiceId: string, invoiceVersion: number) {
-    await this.square.invoices.publish({
-      invoiceId,
-      version: invoiceVersion,
-    });
-  }
-
-  async calculateCost(order: CalculateOrderRequest) {
-    const calculated = await this.square.orders.calculate(order);
-    return calculated.order?.netAmountDueMoney?.amount ?? BigInt(0);
   }
 
   async savePayment(
@@ -105,5 +57,16 @@ export class PrintPaymentRepository extends BaseRepository {
       .execute();
 
     return result;
+  }
+
+  async updatePayment(
+    paymentId: string,
+    updates: Partial<InferInsertModel<typeof schema.printRequestPayment>>,
+  ) {
+    return await this.db
+      .update(schema.printRequestPayment)
+      .set(updates)
+      .where(eq(schema.printRequestPayment.id, paymentId))
+      .returning();
   }
 }

@@ -31,7 +31,7 @@
     mdiMonitorShare,
     mdiPrinter3dNozzle,
   } from '@mdi/js';
-  import CreatePaymentModal from './CreatePaymentModal.svelte';
+  import PaymentModal from './PaymentModal.svelte';
 
   type Props = ModalProps & {
     requestId: string;
@@ -46,16 +46,19 @@
   let paymentInfo = $derived(request?.paymentId ? getPayment(request.paymentId).current : null);
 
   async function createPayment() {
-    modalManager.show(CreatePaymentModal, {
+    modalManager.show(PaymentModal, {
       request: request!,
     });
   }
 
   async function editPayment() {
-    modalManager.show(CreatePaymentModal, {
+    modalManager.show(PaymentModal, {
       request: request!,
-      initialBuildPlates: request?.buildplateCount ?? 1,
-      initialMaterialCost: request?.materialCost ?? 0,
+      prefill: {
+        buildPlates: request?.buildplateCount ?? 1,
+        materialCost: request?.materialCost ?? 0,
+      },
+      isEdit: true,
     });
   }
 

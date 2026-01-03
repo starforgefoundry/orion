@@ -20,24 +20,32 @@
 
   interface Props {
     request: PrintRequestDto;
-    initialBuildPlates?: number;
-    initialMaterialCost?: number;
+    prefill?: {
+      buildPlates: number;
+      materialCost: number;
+    };
+    isEdit?: boolean;
     onClose: (created?: boolean) => void;
   }
 
-  let { onClose, request, initialBuildPlates = 1, initialMaterialCost = 300 }: Props = $props();
+  let {
+    onClose,
+    request,
+    prefill = { buildPlates: 1, materialCost: 300 },
+    isEdit = false,
+  }: Props = $props();
 
   initForm(upsertPaymentForm, () => ({
     requestId: request.id,
-    materialCost: initialMaterialCost,
-    buildPlates: initialBuildPlates,
+    materialCost: prefill.materialCost,
+    buildPlates: prefill.buildPlates,
   }));
 
-  let materialCost = $derived(initialMaterialCost);
+  let materialCost = $derived(prefill.materialCost);
   $effect(() => {
     upsertPaymentForm.fields.materialCost.set(materialCost);
   });
-  let buildPlates = $derived(initialBuildPlates);
+  let buildPlates = $derived(prefill.buildPlates);
   $effect(() => {
     upsertPaymentForm.fields.buildPlates.set(buildPlates);
   });
@@ -60,6 +68,7 @@
     loading = true;
     try {
       await submit();
+      toastManager.success('Payment created successfully');
       onClose(true);
     } catch (error) {
       toastManager.danger('Failed to create payment: ' + (error as Error).message);
@@ -141,7 +150,7 @@
           leadingIcon={mdiCurrencyUsd}
           {loading}
         >
-          Create Payment
+          {isEdit ? 'Update Payment' : 'Create Payment'}
         </Button>
       </form>
     {/if}
