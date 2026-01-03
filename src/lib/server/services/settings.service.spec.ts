@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsService } from './settings.service';
-import { createServiceWithMocks, getRemoteMocks } from './test-utils';
+
+// Mock remote endpoints
+vi.mock('$lib/remotes/endpoints/settings.remote', () => ({
+  getPrintRequestSettings: vi.fn(() => ({
+    refresh: vi.fn().mockResolvedValue(undefined),
+  })),
+  getPrintRequestSquareSettings: vi.fn(() => ({
+    refresh: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
 
 describe('SettingsService', () => {
   let settingsService: SettingsService;
@@ -11,13 +20,23 @@ describe('SettingsService', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    const { service, mocks } = createServiceWithMocks(SettingsService);
-    settingsService = service;
-    mockSettingsRepo = mocks.settingsRepository;
+    mockSettingsRepo = {
+      getSetting: vi.fn(),
+      setSetting: vi.fn(),
+    };
 
-    const remoteMocks = await getRemoteMocks();
-    getPrintRequestSettings = remoteMocks.getPrintRequestSettings;
-    getPrintRequestSquareSettings = remoteMocks.getPrintRequestSquareSettings;
+    settingsService = new SettingsService(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      mockSettingsRepo,
+      undefined,
+    );
+
+    const settingsRemote = await import('$lib/remotes/endpoints/settings.remote');
+    getPrintRequestSettings = settingsRemote.getPrintRequestSettings;
+    getPrintRequestSquareSettings = settingsRemote.getPrintRequestSquareSettings;
   });
 
   afterEach(() => {
@@ -61,8 +80,8 @@ describe('SettingsService', () => {
       // Arrange
       const newSettings = {
         enabled: false,
-        maxFileSize: 50000000,
-        allowedFileTypes: ['.stl'],
+        maxUploadMB: 50000,
+        allowedFileTypes: '.stl',
       };
 
       const mockUpdatedSettings = {
@@ -87,8 +106,8 @@ describe('SettingsService', () => {
       // Arrange
       const newSettings = {
         enabled: true,
-        maxFileSize: 200000000,
-        allowedFileTypes: ['.stl', '.obj', '.3mf', '.step'],
+        maxUploadMB: 20000,
+        allowedFileTypes: '.stl,.obj,.3mf,.step',
         requireApproval: true,
       };
 

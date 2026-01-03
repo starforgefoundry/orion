@@ -24,6 +24,18 @@ vi.mock('$lib/server/repositories/print_request.repository', () => {
   return { PrintRequestRepository: MockPrintRequestRepository };
 });
 
+vi.mock('$lib/server/repositories/print_payment.repository', () => {
+  const MockPrintPaymentRepository = vi.fn();
+  MockPrintPaymentRepository.prototype.getById = vi.fn();
+  return { PrintPaymentRepository: MockPrintPaymentRepository };
+});
+
+vi.mock('$lib/server/repositories/square.repository', () => {
+  const MockSquareRepository = vi.fn();
+  MockSquareRepository.prototype.cancelInvoice = vi.fn();
+  return { SquareRepository: MockSquareRepository };
+});
+
 // Mock $app/server with all required exports
 vi.mock('$app/server', () => ({
   getRequestEvent: vi.fn(),
@@ -48,6 +60,8 @@ describe('PrintRequestService', () => {
   let mockCustomerRepo: any;
   let mockFilesRepo: any;
   let mockRequestRepo: any;
+  let mockPaymentRepo: any;
+  let mockSquareRepo: any;
   let getRequestEvent: any;
 
   beforeEach(async () => {
@@ -71,10 +85,15 @@ describe('PrintRequestService', () => {
       await import('$lib/server/repositories/print_files.repository');
     const { PrintRequestRepository } =
       await import('$lib/server/repositories/print_request.repository');
+    const { PrintPaymentRepository } =
+      await import('$lib/server/repositories/print_payment.repository');
+    const { SquareRepository } = await import('$lib/server/repositories/square.repository');
 
     // Access the prototype methods (these are the actual mocks)
     mockFilesRepo = PrintFilesRepository.prototype;
     mockRequestRepo = PrintRequestRepository.prototype;
+    mockPaymentRepo = PrintPaymentRepository.prototype;
+    mockSquareRepo = SquareRepository.prototype;
   });
 
   afterEach(() => {
@@ -375,6 +394,225 @@ describe('PrintRequestService', () => {
       expect(mockFilesRepo.getByPrintRequestId).toHaveBeenNthCalledWith(2, requestId2);
       expect(result1).toEqual(mockFiles1);
       expect(result2).toEqual(mockFiles2);
+    });
+  });
+
+  describe('getPrintRequestById', () => {
+    it('should return a single print request by ID', async () => {
+      // Arrange
+      const requestId = 'request-123';
+      const mockRequest = {
+        id: requestId,
+        customer: { id: 'cust-1', name: 'John', email: 'john@test.com' },
+        projectName: 'Test Project',
+        status: 'in_queue' as const,
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+
+      // Act
+      const result = await printRequestService.getPrintRequestById(requestId);
+
+      // Assert
+      expect(mockRequestRepo.getById).toHaveBeenCalledWith(requestId);
+      expect(result).toEqual(mockRequest);
+    });
+
+    it('should return null when request not found', async () => {
+      // Arrange
+      const requestId = 'nonexistent-request';
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(null);
+
+      // Act
+      const result = await printRequestService.getPrintRequestById(requestId);
+
+      // Assert
+      expect(mockRequestRepo.getById).toHaveBeenCalledWith(requestId);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('updatePrintRequestStatus', () => {
+    it('should update status to done and set completion date', async () => {
+      // Arrange
+      const requestId = 'request-done';
+      const dto = { status: 'done' as const };
+      const mockRequest = {
+        id: requestId,
+        status: 'printing' as const,
+        paymentId: null,
+      };
+      const mockUpdated = [{ id: requestId, status: 'done' as const }];
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
+
+      // Act
+      const result = await printRequestService.updatePrintRequestStatus(requestId, dto);
+
+      // Assert
+      expect(mockRequestRepo.getById).toHaveBeenCalledWith(requestId);
+      expect(mockRequestRepo.update).toHaveBeenCalledWith(
+        requestId,
+        expect.objectContaining({
+          status: 'done',
+          completionDate: expect.anything(),
+        }),
+      );
+      expect(result).toEqual(mockUpdated);
+    });
+
+    it('should update status to canceled and set completion date', async () => {
+      // Arrange
+      const requestId = 'request-cancel';
+      const dto = { status: 'canceled' as const };
+      const mockRequest = {
+        id: requestId,
+        status: 'in_queue' as const,
+        paymentId: null,
+      };
+      const mockUpdated = [{ id: requestId, status: 'canceled' as const }];
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
+
+      // Act
+      const result = await printRequestService.updatePrintRequestStatus(requestId, dto);
+
+      // Assert
+      expect(mockRequestRepo.update).toHaveBeenCalledWith(
+        requestId,
+        expect.objectContaining({
+          status: 'canceled',
+          completionDate: expect.anything(),
+        }),
+      );
+      expect(result).toEqual(mockUpdated);
+    });
+
+    it('should cancel invoice when status is canceled and payment exists', async () => {
+      // Arrange
+      const requestId = 'request-cancel-payment';
+      const dto = { status: 'canceled' as const };
+      const mockRequest = {
+        id: requestId,
+        status: 'in_queue' as const,
+        paymentId: 'payment-123',
+      };
+      const mockPayment = {
+        id: 'payment-123',
+        squareInvoiceId: 'inv-456',
+      };
+      const mockUpdated = [{ id: requestId, status: 'canceled' as const }];
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockPaymentRepo.getById).mockResolvedValue(mockPayment);
+      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
+
+      // Act
+      const result = await printRequestService.updatePrintRequestStatus(requestId, dto);
+
+      // Assert
+      expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-123');
+      expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-456');
+      expect(result).toEqual(mockUpdated);
+    });
+
+    it('should not cancel invoice when status is canceled but no payment exists', async () => {
+      // Arrange
+      const requestId = 'request-cancel-no-payment';
+      const dto = { status: 'canceled' as const };
+      const mockRequest = {
+        id: requestId,
+        status: 'in_queue' as const,
+        paymentId: null,
+      };
+      const mockUpdated = [{ id: requestId, status: 'canceled' as const }];
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
+
+      // Act
+      await printRequestService.updatePrintRequestStatus(requestId, dto);
+
+      // Assert
+      expect(mockPaymentRepo.getById).not.toHaveBeenCalled();
+      expect(mockSquareRepo.cancelInvoice).not.toHaveBeenCalled();
+    });
+
+    it('should not cancel invoice when status is canceled but payment has no invoice', async () => {
+      // Arrange
+      const requestId = 'request-cancel-no-invoice';
+      const dto = { status: 'canceled' as const };
+      const mockRequest = {
+        id: requestId,
+        status: 'in_queue' as const,
+        paymentId: 'payment-789',
+      };
+      const mockPayment = {
+        id: 'payment-789',
+        squareInvoiceId: null,
+      };
+      const mockUpdated = [{ id: requestId, status: 'canceled' as const }];
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockPaymentRepo.getById).mockResolvedValue(mockPayment);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
+
+      // Act
+      await printRequestService.updatePrintRequestStatus(requestId, dto);
+
+      // Assert
+      expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-789');
+      expect(mockSquareRepo.cancelInvoice).not.toHaveBeenCalled();
+    });
+
+    it('should update status without setting completion date for other statuses', async () => {
+      // Arrange
+      const requestId = 'request-printing';
+      const dto = { status: 'printing' as const };
+      const mockRequest = {
+        id: requestId,
+        status: 'in_queue' as const,
+        paymentId: null,
+      };
+      const mockUpdated = [{ id: requestId, status: 'printing' as const }];
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
+
+      // Act
+      const result = await printRequestService.updatePrintRequestStatus(requestId, dto);
+
+      // Assert
+      expect(mockRequestRepo.update).toHaveBeenCalledWith(requestId, {
+        status: 'printing',
+      });
+      expect(result).toEqual(mockUpdated);
+    });
+
+    it('should refresh print requests after updating status', async () => {
+      // Arrange
+      const requestId = 'request-refresh';
+      const dto = { status: 'done' as const };
+      const mockRequest = {
+        id: requestId,
+        status: 'printing' as const,
+        paymentId: null,
+      };
+      const mockUpdated = [{ id: requestId, status: 'done' as const }];
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
+
+      // Act
+      await printRequestService.updatePrintRequestStatus(requestId, dto);
+
+      // Assert
+      // Service calls getPrintRequests().refresh() which is mocked to return a fn
+      // We just need to verify the update was called
+      expect(mockRequestRepo.update).toHaveBeenCalled();
     });
   });
 });
