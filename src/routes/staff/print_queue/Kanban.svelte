@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PrintRequestDto, PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
+  import type { PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
   import {
     getPrintRequests,
     updatePrintRequestStatus,
@@ -11,10 +11,16 @@
   let printsRequest = getPrintRequests();
   let prints = $derived(printsRequest.current || []);
 
-  let draggedItem: PrintRequestDto | null = $state(null);
+  let draggedJobId: string | null = $state(null);
   let draggedFromColumn: PrintRequestStatus | null = $state(null);
   let dragOverColumn: PrintRequestStatus | null = $state(null);
   let dragOverIndex = $state(-1);
+
+  // Touch support
+  let touchStartX = $state(0);
+  let touchStartY = $state(0);
+  let isDragging = $state(false);
+  let draggedElement: HTMLElement | null = $state(null);
 
   const columns = [
     {
@@ -43,8 +49,8 @@
     },
   ];
 
-  function handleCardClick(request: PrintRequestDto) {
-    modalManager.open(RequestDetailModal, { requestId: request.id });
+  function handleCardClick(requestId: string) {
+    modalManager.open(RequestDetailModal, { requestId });
   }
 
   function formatDate(date: DateTime): string {
@@ -55,8 +61,8 @@
     });
   }
 
-  function handleDragStart(event: DragEvent, job: PrintRequestDto, column: PrintRequestStatus) {
-    draggedItem = job;
+  function handleDragStart(event: DragEvent, jobId: string, column: PrintRequestStatus) {
+    draggedJobId = jobId;
     draggedFromColumn = column;
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
@@ -78,12 +84,12 @@
   }
 
   function optimisticUpdate(
-    current: PrintRequestDto[],
-    item: PrintRequestDto,
+    current: typeof prints,
+    jobId: string,
     targetColumn: PrintRequestStatus,
   ) {
     return current.map((p) => {
-      if (p.id === item.id) {
+      if (p.id === jobId) {
         return { ...p, status: targetColumn };
       }
       return p;
@@ -109,23 +115,130 @@
   async function handleDrop(event: DragEvent, targetColumn: PrintRequestStatus) {
     event.preventDefault();
 
-    if (!draggedItem) return;
+    if (!draggedJobId) return;
 
     // keep a reference to the dragged item
-    const item = draggedItem;
+    const jobId = draggedJobId;
 
-    draggedItem = null;
+    draggedJobId = null;
     draggedFromColumn = null;
     dragOverColumn = null;
     dragOverIndex = -1;
 
     try {
       // TODO: add check to confirm movement to Done column
-      await updatePrintRequestStatus({ id: item.id, status: targetColumn }).updates(
-        getPrintRequests().withOverride((current) => optimisticUpdate(current, item, targetColumn)),
+      await updatePrintRequestStatus({ id: jobId, status: targetColumn }).updates(
+        getPrintRequests().withOverride((current) =>
+          optimisticUpdate(current, jobId, targetColumn),
+        ),
       );
     } catch (error) {
       toastManager.danger('Failed to update print request status.');
+    }
+  }
+
+  // Touch event handlers for mobile support
+  function handleTouchStart(event: TouchEvent, jobId: string, column: PrintRequestStatus) {
+    const touch = event.touches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+    draggedJobId = jobId;
+    draggedFromColumn = column;
+    isDragging = false;
+    draggedElement = event.currentTarget as HTMLElement;
+  }
+
+  function handleTouchMove(event: TouchEvent) {
+    if (!draggedJobId || !draggedElement) return;
+
+    const touch = event.touches[0];
+    const deltaX = Math.abs(touch.clientX - touchStartX);
+    const deltaY = Math.abs(touch.clientY - touchStartY);
+
+    // Start dragging if moved more than 10px
+    if (!isDragging && (deltaX > 10 || deltaY > 10)) {
+      isDragging = true;
+      event.preventDefault();
+    }
+
+    if (isDragging) {
+      event.preventDefault();
+
+      // Find element under touch point
+      const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (elementAtPoint) {
+        // Check if over a column container
+        const columnContainer = elementAtPoint.closest('[data-column-id]');
+        if (columnContainer) {
+          const columnId = columnContainer.getAttribute('data-column-id') as PrintRequestStatus;
+          dragOverColumn = columnId;
+
+          // Check if over a card
+          const card = elementAtPoint.closest('[data-card-index]');
+          if (card) {
+            dragOverIndex = parseInt(card.getAttribute('data-card-index') || '-1');
+          } else {
+            const columnData = getColumnData(columnId);
+            dragOverIndex = columnData.length;
+          }
+        }
+      }
+    }
+  }
+
+  async function handleTouchEnd(event: TouchEvent, targetColumn?: PrintRequestStatus) {
+    if (!isDragging || !draggedJobId) {
+      // Reset everything
+      draggedJobId = null;
+      draggedFromColumn = null;
+      dragOverColumn = null;
+      dragOverIndex = -1;
+      isDragging = false;
+      draggedElement = null;
+      return;
+    }
+
+    event.preventDefault();
+
+    const touch = event.changedTouches[0];
+    const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+
+    let finalColumn = targetColumn;
+    if (!finalColumn && elementAtPoint) {
+      const columnContainer = elementAtPoint.closest('[data-column-id]');
+      if (columnContainer) {
+        finalColumn = columnContainer.getAttribute('data-column-id') as PrintRequestStatus;
+      }
+    }
+
+    if (finalColumn && draggedJobId) {
+      const jobId = draggedJobId;
+
+      // Reset drag state
+      draggedJobId = null;
+      draggedFromColumn = null;
+      dragOverColumn = null;
+      dragOverIndex = -1;
+      isDragging = false;
+      draggedElement = null;
+
+      try {
+        await updatePrintRequestStatus({ id: jobId, status: finalColumn }).updates(
+          getPrintRequests().withOverride((current) =>
+            optimisticUpdate(current, jobId, finalColumn),
+          ),
+        );
+      } catch (error) {
+        toastManager.danger('Failed to update print request status.');
+      }
+    } else {
+      // Reset drag state
+      draggedJobId = null;
+      draggedFromColumn = null;
+      dragOverColumn = null;
+      dragOverIndex = -1;
+      isDragging = false;
+      draggedElement = null;
     }
   }
 </script>
@@ -137,6 +250,7 @@
       column.id
         ? column.hoverClass
         : ''}"
+      data-column-id={column.id}
     >
       <Heading size="small" class="mb-2 inline-block w-fit rounded-xl p-2 px-4 {column.titleClass}">
         {column.title}
@@ -147,18 +261,24 @@
         ondragleave={handleDragLeave}
         ondrop={(e) => handleDrop(e, column.id)}
         role="region"
-        aria-label="{column.title} column"
       >
         {#each prints.filter((p) => p.status === column.id) as job, index}
           <div
-            class="{column.cardClass} w-full cursor-grab rounded-md border-2 p-4 text-left transition-all duration-200 hover:border-blue-500 active:cursor-grabbing"
+            class="{column.cardClass} w-full cursor-grab rounded-md border-2 p-4 text-left transition-all duration-200 hover:border-blue-500 active:cursor-grabbing {isDragging &&
+            draggedJobId === job.id
+              ? 'opacity-50'
+              : ''}"
             draggable="true"
-            ondragstart={(e) => handleDragStart(e, job, column.id)}
+            ondragstart={(e) => handleDragStart(e, job.id, column.id)}
             ondragover={(e) => handleDragOverCard(e, column.id, index)}
-            onclick={() => handleCardClick(job)}
-            onkeydown={(e) => e.key === 'Enter' && handleCardClick(job)}
+            ontouchstart={(e) => handleTouchStart(e, job.id, column.id)}
+            ontouchmove={handleTouchMove}
+            ontouchend={(e) => handleTouchEnd(e, column.id)}
+            onclick={() => handleCardClick(job.id)}
+            onkeydown={(e) => e.key === 'Enter' && handleCardClick(job.id)}
             role="button"
             tabindex="0"
+            data-card-index={index}
           >
             <h3 class="mb-2 text-lg font-semibold">{job.projectName}</h3>
             <p class="mb-1 text-sm">{job.customerName}</p>
