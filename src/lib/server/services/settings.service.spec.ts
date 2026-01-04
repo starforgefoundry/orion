@@ -76,7 +76,7 @@ describe('SettingsService', () => {
   });
 
   describe('setPrintRequestSettings', () => {
-    it('should update print request settings and refresh', async () => {
+    it('should update print request settings', async () => {
       // Arrange
       const newSettings = {
         enabled: false,
@@ -89,8 +89,6 @@ describe('SettingsService', () => {
         id: 'setting-123',
       };
 
-      const mockRefresh = vi.fn().mockResolvedValue(undefined);
-      vi.mocked(getPrintRequestSettings).mockReturnValue({ refresh: mockRefresh } as any);
       vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue(mockUpdatedSettings);
 
       // Act
@@ -98,7 +96,6 @@ describe('SettingsService', () => {
 
       // Assert
       expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', newSettings);
-      expect(mockRefresh).toHaveBeenCalled();
       expect(result).toEqual(mockUpdatedSettings);
     });
 
@@ -202,7 +199,7 @@ describe('SettingsService', () => {
   });
 
   describe('setPrintRequestSquareSettings', () => {
-    it('should update square settings and refresh', async () => {
+    it('should update square settings', async () => {
       // Arrange
       const newSquareSettings = {
         locationId: 'loc-new',
@@ -216,8 +213,6 @@ describe('SettingsService', () => {
         id: 'square-setting-123',
       };
 
-      const mockRefresh = vi.fn().mockResolvedValue(undefined);
-      vi.mocked(getPrintRequestSquareSettings).mockReturnValue({ refresh: mockRefresh } as any);
       vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue(mockUpdatedSettings);
 
       // Act
@@ -228,7 +223,6 @@ describe('SettingsService', () => {
         'printRequestSquare',
         newSquareSettings,
       );
-      expect(mockRefresh).toHaveBeenCalled();
       expect(result).toEqual(mockUpdatedSettings);
     });
 
@@ -258,39 +252,6 @@ describe('SettingsService', () => {
       );
       expect(result).toEqual(mockUpdatedSettings);
     });
-
-    it('should not call printRequest refresh when updating square settings', async () => {
-      // Arrange
-      const newSquareSettings = {
-        locationId: 'loc-test',
-        printRequestItemId: 'item-test',
-        additionalBuildPlateItemId: 'item-plate-test',
-        memberPrintDiscountId: 'discount-test',
-      };
-
-      const mockUpdatedSettings = {
-        ...newSquareSettings,
-        id: 'square-setting-789',
-      };
-
-      const mockSquareRefresh = vi.fn().mockResolvedValue(undefined);
-      const mockPrintRequestRefresh = vi.fn().mockResolvedValue(undefined);
-
-      vi.mocked(getPrintRequestSquareSettings).mockReturnValue({
-        refresh: mockSquareRefresh,
-      } as any);
-      vi.mocked(getPrintRequestSettings).mockReturnValue({
-        refresh: mockPrintRequestRefresh,
-      } as any);
-      vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue(mockUpdatedSettings);
-
-      // Act
-      await settingsService.setPrintRequestSquareSettings(newSquareSettings);
-
-      // Assert
-      expect(mockSquareRefresh).toHaveBeenCalled();
-      expect(mockPrintRequestRefresh).not.toHaveBeenCalled();
-    });
   });
 
   describe('setting isolation', () => {
@@ -318,6 +279,48 @@ describe('SettingsService', () => {
         'printRequestSquare',
         squareSettings,
       );
+    });
+  });
+
+  describe('error handling', () => {
+    it('should handle repository errors in getPrintRequestSettings', async () => {
+      // Arrange
+      vi.mocked(mockSettingsRepo.getSetting).mockRejectedValue(new Error('Database error'));
+
+      // Act & Assert
+      await expect(settingsService.getPrintRequestSettings()).rejects.toThrow('Database error');
+    });
+
+    it('should handle repository errors in setPrintRequestSettings', async () => {
+      // Arrange
+      const newSettings = { enabled: true };
+      vi.mocked(mockSettingsRepo.setSetting).mockRejectedValue(new Error('Update failed'));
+
+      // Act & Assert
+      await expect(settingsService.setPrintRequestSettings(newSettings as any)).rejects.toThrow(
+        'Update failed',
+      );
+    });
+
+    it('should handle repository errors in getPrintRequestSquareSettings', async () => {
+      // Arrange
+      vi.mocked(mockSettingsRepo.getSetting).mockRejectedValue(new Error('Connection error'));
+
+      // Act & Assert
+      await expect(settingsService.getPrintRequestSquareSettings()).rejects.toThrow(
+        'Connection error',
+      );
+    });
+
+    it('should handle repository errors in setPrintRequestSquareSettings', async () => {
+      // Arrange
+      const newSettings = { locationId: 'loc-test' };
+      vi.mocked(mockSettingsRepo.setSetting).mockRejectedValue(new Error('Save failed'));
+
+      // Act & Assert
+      await expect(
+        settingsService.setPrintRequestSquareSettings(newSettings as any),
+      ).rejects.toThrow('Save failed');
     });
   });
 });

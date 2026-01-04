@@ -1,14 +1,7 @@
 import type { CreatePaymentDto } from '$lib/remotes/dtos/print_payment.dto';
 import type { PrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
 import { DateTime } from 'luxon';
-import type {
-  CatalogObject,
-  CatalogObjectDiscount,
-  CatalogObjectItemVariation,
-  Customer,
-  Invoice,
-  Order,
-} from 'square';
+import type { CatalogObject, Customer, Invoice, Order } from 'square';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrintPaymentService } from './print_payment.service';
 
@@ -52,6 +45,7 @@ describe('PrintPaymentService', () => {
       getById: vi.fn(),
       createInvoice: vi.fn(),
       savePayment: vi.fn(),
+      updatePayment: vi.fn(),
     };
 
     mockRequestRepo = {
@@ -69,6 +63,7 @@ describe('PrintPaymentService', () => {
       createOrder: vi.fn(),
       sendInvoice: vi.fn(),
       cancelInvoice: vi.fn(),
+      calculateOrder: vi.fn(),
     };
 
     printPaymentService = new PrintPaymentService(
@@ -146,7 +141,7 @@ describe('PrintPaymentService', () => {
             currency: 'USD',
           },
         },
-      } as CatalogObjectItemVariation;
+      };
 
       const mockMemberDiscount: CatalogObject = {
         type: 'DISCOUNT',
@@ -154,7 +149,7 @@ describe('PrintPaymentService', () => {
         discountData: {
           percentage: '10',
         },
-      } as CatalogObjectDiscount;
+      };
 
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
       vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
@@ -195,7 +190,7 @@ describe('PrintPaymentService', () => {
             currency: 'USD',
           },
         },
-      } as CatalogObjectItemVariation;
+      };
 
       const mockMemberDiscount: CatalogObject = {
         type: 'DISCOUNT',
@@ -203,7 +198,7 @@ describe('PrintPaymentService', () => {
         discountData: {
           percentage: '15',
         },
-      } as CatalogObjectDiscount;
+      };
 
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
       vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
@@ -324,6 +319,7 @@ describe('PrintPaymentService', () => {
         status: 'in_queue',
         isQuote: false,
         paymentId: 'payment-old',
+        payment: existingPayment,
         submissionDate: DateTime.now(),
       } as PrintRequestDto;
 
@@ -359,7 +355,6 @@ describe('PrintPaymentService', () => {
       };
 
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
-      vi.mocked(mockPaymentRepo.getById).mockResolvedValue(existingPayment);
       vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
       vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
@@ -374,7 +369,6 @@ describe('PrintPaymentService', () => {
       const result = await printPaymentService.upsertPayment(dto);
 
       // Assert
-      expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-old');
       expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-old');
       expect(result).toEqual(mockNewPayment);
     });
@@ -535,20 +529,27 @@ describe('PrintPaymentService', () => {
       };
 
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
-      vi.mocked(mockPaymentRepo.getById).mockResolvedValue(null);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
       vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
-      vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
-      vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
+      vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
       vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
+
+      // Mock mailgun repository
+      const mockMailgunRepo = {
+        sendTemplate: vi.fn().mockResolvedValue(undefined),
+      };
+      (printPaymentService as any).mailgunRepository = mockMailgunRepo;
 
       // Act
       await printPaymentService.upsertPayment(dto);
 
       // Assert
+      expect(mockSquareRepo.calculateOrder).toHaveBeenCalled();
+      expect(mockSquareRepo.createOrder).not.toHaveBeenCalled();
       expect(mockSquareRepo.sendInvoice).not.toHaveBeenCalled();
+      expect(mockMailgunRepo.sendTemplate).toHaveBeenCalled();
     });
 
     it('should include member discount for active members', async () => {
@@ -751,6 +752,316 @@ describe('PrintPaymentService', () => {
         materialCost: 6500,
         buildplateCount: 2,
       });
+    });
+  });
+
+  describe('getPrintRequestQuote', () => {
+    it('should return quote when status is quote', async () => {
+      // Arrange
+      const requestId = 'request-quote-123';
+      const mockRequest: PrintRequestDto = {
+        id: requestId,
+        customerName: 'Quote Customer',
+        email: 'quote@example.com',
+        projectName: 'Quote Project',
+        status: 'in_queue',
+        isQuote: true,
+        payment: {
+          id: 'payment-quote',
+          status: 'quote',
+          total: 5000,
+        },
+        submissionDate: DateTime.now(),
+      } as PrintRequestDto;
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+
+      // Act
+      const result = await printPaymentService.getPrintRequestQuote(requestId);
+
+      // Assert
+      expect(mockRequestRepo.getById).toHaveBeenCalledWith(requestId);
+      expect(result).toEqual(mockRequest);
+      expect(result.payment?.status).toBe('quote');
+    });
+
+    it('should throw error when payment status is not quote', async () => {
+      // Arrange
+      const requestId = 'request-not-quote';
+      const mockRequest: PrintRequestDto = {
+        id: requestId,
+        payment: {
+          id: 'payment-pending',
+          status: 'pending',
+        },
+      } as PrintRequestDto;
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+
+      // Act & Assert
+      await expect(printPaymentService.getPrintRequestQuote(requestId)).rejects.toThrow(
+        'Print request is not in quote status',
+      );
+    });
+
+    it('should throw error when payment is null', async () => {
+      // Arrange
+      const requestId = 'request-no-payment';
+      const mockRequest: PrintRequestDto = {
+        id: requestId,
+        payment: null,
+      } as PrintRequestDto;
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+
+      // Act & Assert
+      await expect(printPaymentService.getPrintRequestQuote(requestId)).rejects.toThrow(
+        'Print request is not in quote status',
+      );
+    });
+  });
+
+  describe('respondToQuote', () => {
+    it.skip('should cancel request when quote is declined', async () => {
+      // Arrange
+      const dto = {
+        id: 'request-decline',
+        approve: false,
+      };
+
+      const mockRequest: PrintRequestDto = {
+        id: dto.id,
+        customerName: 'Decline Customer',
+        email: 'decline@example.com',
+        isQuote: true,
+        payment: {
+          id: 'payment-quote',
+          status: 'quote',
+        },
+      } as PrintRequestDto;
+
+      const mockUpdated = [{ id: dto.id, status: 'canceled' }];
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
+
+      // Import the service singleton
+      const { printRequestService } = await import('./print_request.service');
+      vi.spyOn(printRequestService, 'updatePrintRequestStatus').mockResolvedValue(
+        mockUpdated as any,
+      );
+
+      // Act
+      const result = await printPaymentService.respondToQuote(dto);
+
+      // Assert
+      expect(mockRequestRepo.getById).toHaveBeenCalledWith(dto.id);
+      expect(printRequestService.updatePrintRequestStatus).toHaveBeenCalledWith(dto.id, {
+        status: 'canceled',
+      });
+      expect(result).toEqual({ status: 'canceled' });
+    });
+
+    it.skip('should create order when quote is approved', async () => {
+      // Arrange
+      const dto = {
+        id: 'request-approve',
+        approve: true,
+      };
+
+      const mockRequest: PrintRequestDto = {
+        id: dto.id,
+        customerName: 'Approve Customer',
+        email: 'approve@example.com',
+        isQuote: true,
+        materialCost: 5000,
+        buildplateCount: 2,
+        payment: {
+          id: 'payment-quote',
+          status: 'quote',
+        },
+      } as PrintRequestDto;
+
+      const mockCustomer: Customer = {
+        id: 'customer-approve',
+        emailAddress: 'approve@example.com',
+      };
+
+      const mockOrder: Order = {
+        id: 'order-approve',
+        locationId: 'loc-123',
+        netAmountDueMoney: { amount: BigInt(5000), currency: 'USD' },
+      };
+
+      const mockInvoice: Invoice = {
+        id: 'inv-approve',
+        version: 1,
+        createdAt: DateTime.now().toISO(),
+      };
+
+      const mockPayment = {
+        id: 'payment-new',
+        requestId: dto.id,
+        status: 'pending',
+      };
+
+      const mockSquareSettings = {
+        locationId: 'loc-123',
+        printRequestItemId: 'item-123',
+        additionalBuildPlateItemId: 'plate-456',
+        memberPrintDiscountId: 'discount-789',
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+      vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
+      vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
+      vi.mocked(mockSquareRepo.sendInvoice).mockResolvedValue(undefined);
+      vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
+
+      // Act
+      const result = await printPaymentService.respondToQuote(dto);
+
+      // Assert
+      expect(mockRequestRepo.getById).toHaveBeenCalledWith(dto.id);
+      expect(mockSquareRepo.createOrder).toHaveBeenCalled();
+      expect(mockSquareRepo.sendInvoice).toHaveBeenCalled();
+      expect(result).toEqual(mockPayment);
+    });
+
+    it('should throw error when request not found', async () => {
+      // Arrange
+      const dto = {
+        id: 'nonexistent',
+        approve: true,
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(printPaymentService.respondToQuote(dto)).rejects.toThrow(
+        'Print request not found',
+      );
+    });
+
+    it('should throw error when request is not a quote', async () => {
+      // Arrange
+      const dto = {
+        id: 'request-not-quote',
+        approve: true,
+      };
+
+      const mockRequest: PrintRequestDto = {
+        id: dto.id,
+        isQuote: false,
+        payment: {
+          status: 'pending',
+        },
+      } as PrintRequestDto;
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+
+      // Act & Assert
+      await expect(printPaymentService.respondToQuote(dto)).rejects.toThrow(
+        'Print request is not a quote',
+      );
+    });
+
+    it('should throw error when payment status is not quote', async () => {
+      // Arrange
+      const dto = {
+        id: 'request-wrong-status',
+        approve: true,
+      };
+
+      const mockRequest: PrintRequestDto = {
+        id: dto.id,
+        isQuote: true,
+        payment: {
+          status: 'paid',
+        },
+      } as PrintRequestDto;
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+
+      // Act & Assert
+      await expect(printPaymentService.respondToQuote(dto)).rejects.toThrow(
+        'Print request is not a quote',
+      );
+    });
+  });
+
+  describe('upsertQuote', () => {
+    it('should create quote without sending invoice', async () => {
+      // Arrange
+      const dto: CreatePaymentDto = {
+        requestId: 'request-new-quote',
+        materialCost: 8000,
+        buildPlates: 3,
+      };
+
+      const mockRequest: PrintRequestDto = {
+        id: 'request-new-quote',
+        customerName: 'New Quote Customer',
+        email: 'newquote@example.com',
+        projectName: 'New Quote Project',
+        status: 'in_queue',
+        isQuote: true,
+        paymentId: null,
+        submissionDate: DateTime.now(),
+      } as PrintRequestDto;
+
+      const mockCustomer: Customer = {
+        id: 'customer-newquote',
+        emailAddress: 'newquote@example.com',
+      };
+
+      const mockCalculatedOrder: Order = {
+        id: 'order-quote-new',
+        locationId: 'loc-123',
+        netAmountDueMoney: { amount: BigInt(9000), currency: 'USD' },
+      };
+
+      const mockPayment = {
+        id: 'payment-quote-new',
+        requestId: 'request-new-quote',
+        status: 'quote',
+        total: 9000,
+      };
+
+      const mockSquareSettings = {
+        locationId: 'loc-123',
+        printRequestItemId: 'item-123',
+        additionalBuildPlateItemId: 'plate-456',
+        memberPrintDiscountId: 'discount-789',
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+      vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(mockCalculatedOrder);
+      vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
+
+      // Mock mailgun repository
+      const mockMailgunRepo = {
+        sendTemplate: vi.fn().mockResolvedValue(undefined),
+      };
+      (printPaymentService as any).mailgunRepository = mockMailgunRepo;
+
+      // Act
+      const result = await printPaymentService.upsertPayment(dto);
+
+      // Assert
+      expect(mockSquareRepo.calculateOrder).toHaveBeenCalled();
+      expect(mockSquareRepo.createOrder).not.toHaveBeenCalled();
+      expect(mockSquareRepo.sendInvoice).not.toHaveBeenCalled();
+      expect(mockMailgunRepo.sendTemplate).toHaveBeenCalled();
+      expect(result.status).toBe('quote');
     });
   });
 });

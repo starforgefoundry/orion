@@ -1,9 +1,10 @@
 import { env } from '$env/dynamic/private';
 import { env as publicEnv } from '$env/dynamic/public';
 import type { CreatePaymentDto } from '$lib/remotes/dtos/print_payment.dto';
-import type { PrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
+import type { PrintRequestDto, RespondToQuoteDto } from '$lib/remotes/dtos/print_request.dto';
 import type { SettingsMap } from '$lib/server/repositories/settings.repository';
 import { BaseService } from '$lib/server/services/base.service';
+import { printRequestService } from '$lib/server/services/print_request.service';
 import { squareService } from '$lib/server/services/square.service';
 import { stringifySquareObject } from '$lib/server/utils/square';
 import { DateTime } from 'luxon';
@@ -220,6 +221,39 @@ export class PrintPaymentService extends BaseService {
         discounts: discounts,
       },
     };
+  }
+
+  async getPrintRequestQuote(id: string) {
+    const request = await this.printRequestRepository.getById(id);
+    if (request?.payment?.status !== 'quote') {
+      throw new Error('Print request is not in quote status');
+    }
+
+    return request;
+  }
+
+  async respondToQuote(dto: RespondToQuoteDto) {
+    const request = await this.printRequestRepository.getById(dto.id);
+    if (!request) {
+      throw new Error('Print request not found');
+    }
+
+    if (request.payment?.status !== 'quote' || !request.isQuote) {
+      throw new Error('Print request is not a quote');
+    }
+
+    if (!dto.approve) {
+      // User declined the quote, cancel the request
+      await printRequestService.updatePrintRequestStatus(dto.id, { status: 'canceled' });
+      return { status: 'canceled' };
+    }
+
+    // User accepted the quote, proceed to create an order
+    return await printPaymentService.upsertOrder(request, {
+      requestId: request.id,
+      materialCost: request.materialCost!,
+      buildPlates: request.buildplateCount!,
+    });
   }
 }
 

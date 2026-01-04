@@ -7,6 +7,7 @@ import {
 } from '$lib/remotes/dtos/print_request.dto';
 import { verifyAuth } from '$lib/remotes/utils';
 import { printFilesService } from '$lib/server/services/print_files.service';
+import { printPaymentService } from '$lib/server/services/print_payment.service';
 import { printRequestService } from '$lib/server/services/print_request.service';
 import * as v from 'valibot';
 
@@ -25,12 +26,12 @@ export const getPrintRequestById = query(v.string(), async (id: string) => {
 });
 
 export const getPrintRequestQuote = query(v.string(), async (id: string) => {
-  return await printRequestService.getPrintRequestQuote(id);
+  return await printPaymentService.getPrintRequestQuote(id);
 });
 
 export const respondToPrintRequestQuote = command(respondToQuoteDto, async (dto) => {
   try {
-    return await printRequestService.respondToQuote(dto);
+    return await printPaymentService.respondToQuote(dto);
   } catch (error) {
     console.error('Error responding to print request quote:', error);
     throw error;

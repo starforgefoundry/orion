@@ -234,5 +234,72 @@ describe('PrintMaterialsService', () => {
       expect(mockMaterialsRepo.update).toHaveBeenCalledWith(id, updates);
       expect(result.available).toBe(false);
     });
+
+    it('should handle multiple field updates simultaneously', async () => {
+      // Arrange
+      const id = 'mat-789';
+      const updates: Omit<UpdatePrintMaterialDto, 'id'> = {
+        name: 'PETG Premium',
+        available: true,
+      };
+
+      const mockUpdatedMaterial = {
+        id: 'mat-789',
+        name: 'PETG Premium',
+        cost: 0.07,
+        available: true,
+        archived: false,
+      };
+
+      vi.mocked(mockMaterialsRepo.update).mockResolvedValue(mockUpdatedMaterial);
+
+      // Act
+      const result = await printMaterialsService.updateMaterial(id, updates);
+
+      // Assert
+      expect(mockMaterialsRepo.update).toHaveBeenCalledWith(id, updates);
+      expect(result.name).toBe('PETG Premium');
+      expect(result.available).toBe(true);
+    });
+
+    it('should throw error when material not found', async () => {
+      // Arrange
+      const id = 'nonexistent-mat';
+      const updates: Omit<UpdatePrintMaterialDto, 'id'> = {
+        name: 'New Name',
+      };
+
+      vi.mocked(mockMaterialsRepo.update).mockRejectedValue(new Error('Material not found'));
+
+      // Act & Assert
+      await expect(printMaterialsService.updateMaterial(id, updates)).rejects.toThrow(
+        'Material not found',
+      );
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should handle repository errors in getMaterials', async () => {
+      // Arrange
+      vi.mocked(mockMaterialsRepo.get).mockRejectedValue(new Error('Database error'));
+
+      // Act & Assert
+      await expect(printMaterialsService.getMaterials()).rejects.toThrow('Database error');
+    });
+
+    it('should handle repository errors in createMaterial', async () => {
+      // Arrange
+      const dto: CreatePrintMaterialDto = {
+        name: 'Error Material',
+        available: true,
+      };
+
+      vi.mocked(mockMaterialsRepo.create).mockRejectedValue(new Error('Failed to create material'));
+
+      // Act & Assert
+      await expect(printMaterialsService.createMaterial(dto)).rejects.toThrow(
+        'Failed to create material',
+      );
+    });
   });
 });

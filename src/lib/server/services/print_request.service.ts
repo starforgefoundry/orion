@@ -1,13 +1,11 @@
 import { getRequestEvent } from '$app/server';
 import type {
-  RespondToQuoteDto,
   SubmitPrintRequestDto,
   UpdatePrintRequestDto,
   UpdatePrintRequestStatusDto,
 } from '$lib/remotes/dtos/print_request.dto';
 import type { PrintRequest } from '$lib/server/db/schema';
 import { BaseService } from '$lib/server/services/base.service';
-import { printPaymentService } from '$lib/server/services/print_payment.service';
 import { DateTime } from 'luxon';
 
 export class PrintRequestService extends BaseService {
@@ -72,39 +70,6 @@ export class PrintRequestService extends BaseService {
 
   async getFilesByRequestId(printRequestId: string) {
     return await this.printFilesRepository.getByPrintRequestId(printRequestId);
-  }
-
-  async getPrintRequestQuote(id: string) {
-    const request = await this.printRequestRepository.getById(id);
-    if (request?.payment?.status !== 'quote') {
-      throw new Error('Print request is not in quote status');
-    }
-
-    return request;
-  }
-
-  async respondToQuote(dto: RespondToQuoteDto) {
-    const request = await this.printRequestRepository.getById(dto.id);
-    if (!request) {
-      throw new Error('Print request not found');
-    }
-
-    if (request.payment?.status !== 'quote' || !request.isQuote) {
-      throw new Error('Print request is not a quote');
-    }
-
-    if (!dto.approve) {
-      // User declined the quote, cancel the request
-      await this.updatePrintRequestStatus(dto.id, { status: 'canceled' });
-      return { status: 'canceled' };
-    }
-
-    // User accepted the quote, proceed to create an order
-    return await printPaymentService.upsertOrder(request, {
-      requestId: request.id,
-      materialCost: request.materialCost!,
-      buildPlates: request.buildplateCount!,
-    });
   }
 }
 

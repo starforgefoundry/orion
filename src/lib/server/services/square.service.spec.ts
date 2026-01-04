@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Location, Subscription } from 'square';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the repositories
 vi.mock('$lib/server/repositories/square.repository', () => {
@@ -7,6 +7,7 @@ vi.mock('$lib/server/repositories/square.repository', () => {
   MockSquareRepository.prototype.getLocations = vi.fn();
   MockSquareRepository.prototype.getCatalog = vi.fn();
   MockSquareRepository.prototype.getMembershipsByEmail = vi.fn();
+  MockSquareRepository.prototype.logWebhook = vi.fn();
   return { SquareRepository: MockSquareRepository };
 });
 
@@ -27,6 +28,7 @@ vi.mock('$lib/server/repositories/print_request.repository', () => {
 
 vi.mock('$lib/server/repositories/print_payment.repository', () => {
   const MockPrintPaymentRepository = vi.fn();
+  MockPrintPaymentRepository.prototype.updateInvoiceStatus = vi.fn();
   return { PrintPaymentRepository: MockPrintPaymentRepository };
 });
 
@@ -38,6 +40,7 @@ vi.mock('$lib/server/repositories/settings.repository', () => {
 describe('SquareService', () => {
   let squareService: any;
   let mockSquareRepo: any;
+  let mockPaymentRepo: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -47,6 +50,10 @@ describe('SquareService', () => {
 
     const { SquareRepository } = await import('$lib/server/repositories/square.repository');
     mockSquareRepo = SquareRepository.prototype;
+
+    const { PrintPaymentRepository } =
+      await import('$lib/server/repositories/print_payment.repository');
+    mockPaymentRepo = PrintPaymentRepository.prototype;
   });
 
   afterEach(() => {
@@ -345,9 +352,7 @@ describe('SquareService', () => {
   describe('edge cases', () => {
     it('should handle repository errors gracefully in getLocations', async () => {
       // Arrange
-      vi.mocked(mockSquareRepo.getLocations).mockRejectedValue(
-        new Error('Square API error'),
-      );
+      vi.mocked(mockSquareRepo.getLocations).mockRejectedValue(new Error('Square API error'));
 
       // Act & Assert
       await expect(squareService.getLocations()).rejects.toThrow('Square API error');
@@ -355,9 +360,7 @@ describe('SquareService', () => {
 
     it('should handle repository errors gracefully in getCatalog', async () => {
       // Arrange
-      vi.mocked(mockSquareRepo.getCatalog).mockRejectedValue(
-        new Error('Catalog not available'),
-      );
+      vi.mocked(mockSquareRepo.getCatalog).mockRejectedValue(new Error('Catalog not available'));
 
       // Act & Assert
       await expect(squareService.getCatalog()).rejects.toThrow('Catalog not available');
@@ -374,6 +377,161 @@ describe('SquareService', () => {
       await expect(squareService.checkActiveMember(customerEmail)).rejects.toThrow(
         'Membership lookup failed',
       );
+    });
+  });
+
+  describe('processWebhook', () => {
+    it('should process invoice.payment_made webhook event', async () => {
+      // Arrange
+      const webhookData = {
+        type: 'invoice.payment_made',
+        data: {
+          id: 'inv-paid-123',
+        },
+      };
+
+      const mockLog = { id: 'log-1', eventId: 'evt-1' };
+
+      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue(mockLog);
+      vi.mocked(mockPaymentRepo.updateInvoiceStatus).mockResolvedValue(undefined);
+
+      // Act
+      const result = await squareService.processWebhook(webhookData);
+
+      // Assert
+      expect(mockSquareRepo.logWebhook).toHaveBeenCalledWith(webhookData);
+      expect(mockPaymentRepo.updateInvoiceStatus).toHaveBeenCalledWith('inv-paid-123', 'paid');
+      expect(result).toEqual({ success: true });
+    });
+
+    it('should process invoice.canceled webhook event', async () => {
+      // Arrange
+      const webhookData = {
+        type: 'invoice.canceled',
+        data: {
+          id: 'inv-canceled-456',
+        },
+      };
+
+      const mockLog = { id: 'log-2', eventId: 'evt-2' };
+
+      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue(mockLog);
+      vi.mocked(mockPaymentRepo.updateInvoiceStatus).mockResolvedValue(undefined);
+
+      // Act
+      const result = await squareService.processWebhook(webhookData);
+
+      // Assert
+      expect(mockSquareRepo.logWebhook).toHaveBeenCalledWith(webhookData);
+      expect(mockPaymentRepo.updateInvoiceStatus).toHaveBeenCalledWith(
+        'inv-canceled-456',
+        'canceled',
+      );
+      expect(result).toEqual({ success: true });
+    });
+
+    it('should handle duplicate webhook events', async () => {
+      // Arrange
+      const webhookData = {
+        type: 'invoice.payment_made',
+        data: {
+          id: 'inv-duplicate-789',
+        },
+      };
+
+      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue(null);
+
+      // Act
+      const result = await squareService.processWebhook(webhookData);
+
+      // Assert
+      expect(mockSquareRepo.logWebhook).toHaveBeenCalledWith(webhookData);
+      expect(mockPaymentRepo.updateInvoiceStatus).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        success: true,
+        message: 'Already received and processed webhook event',
+      });
+    });
+
+    it('should ignore unknown webhook event types', async () => {
+      // Arrange
+      const webhookData = {
+        type: 'unknown.event.type',
+        data: {
+          id: 'some-id',
+        },
+      };
+
+      const mockLog = { id: 'log-3', eventId: 'evt-3' };
+
+      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue(mockLog);
+
+      // Act
+      const result = await squareService.processWebhook(webhookData);
+
+      // Assert
+      expect(mockSquareRepo.logWebhook).toHaveBeenCalledWith(webhookData);
+      expect(mockPaymentRepo.updateInvoiceStatus).not.toHaveBeenCalled();
+      expect(result).toEqual({ success: true });
+    });
+
+    it('should handle webhook with missing data', async () => {
+      // Arrange
+      const webhookData = {
+        type: 'invoice.payment_made',
+        data: {},
+      };
+
+      const mockLog = { id: 'log-4', eventId: 'evt-4' };
+
+      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue(mockLog);
+      vi.mocked(mockPaymentRepo.updateInvoiceStatus).mockResolvedValue(undefined);
+
+      // Act
+      const result = await squareService.processWebhook(webhookData);
+
+      // Assert
+      expect(mockSquareRepo.logWebhook).toHaveBeenCalledWith(webhookData);
+      expect(mockPaymentRepo.updateInvoiceStatus).toHaveBeenCalledWith(undefined, 'paid');
+      expect(result).toEqual({ success: true });
+    });
+
+    it('should handle multiple webhook events in sequence', async () => {
+      // Arrange
+      const webhook1 = {
+        type: 'invoice.payment_made',
+        data: { id: 'inv-1' },
+      };
+      const webhook2 = {
+        type: 'invoice.canceled',
+        data: { id: 'inv-2' },
+      };
+
+      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue({ id: 'log' });
+      vi.mocked(mockPaymentRepo.updateInvoiceStatus).mockResolvedValue(undefined);
+
+      // Act
+      await squareService.processWebhook(webhook1);
+      await squareService.processWebhook(webhook2);
+
+      // Assert
+      expect(mockSquareRepo.logWebhook).toHaveBeenCalledTimes(2);
+      expect(mockPaymentRepo.updateInvoiceStatus).toHaveBeenNthCalledWith(1, 'inv-1', 'paid');
+      expect(mockPaymentRepo.updateInvoiceStatus).toHaveBeenNthCalledWith(2, 'inv-2', 'canceled');
+    });
+
+    it('should handle errors in webhook processing', async () => {
+      // Arrange
+      const webhookData = {
+        type: 'invoice.payment_made',
+        data: { id: 'inv-error' },
+      };
+
+      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue({ id: 'log' });
+      vi.mocked(mockPaymentRepo.updateInvoiceStatus).mockRejectedValue(new Error('Update failed'));
+
+      // Act & Assert
+      await expect(squareService.processWebhook(webhookData)).rejects.toThrow('Update failed');
     });
   });
 });

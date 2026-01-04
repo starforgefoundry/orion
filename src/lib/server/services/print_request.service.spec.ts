@@ -27,6 +27,7 @@ vi.mock('$lib/server/repositories/print_request.repository', () => {
 vi.mock('$lib/server/repositories/print_payment.repository', () => {
   const MockPrintPaymentRepository = vi.fn();
   MockPrintPaymentRepository.prototype.getById = vi.fn();
+  MockPrintPaymentRepository.prototype.updatePayment = vi.fn();
   return { PrintPaymentRepository: MockPrintPaymentRepository };
 });
 
@@ -508,6 +509,7 @@ describe('PrintRequestService', () => {
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockPaymentRepo.getById).mockResolvedValue(mockPayment);
       vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      vi.mocked(mockPaymentRepo.updatePayment).mockResolvedValue(undefined);
       vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
 
       // Act
@@ -515,6 +517,9 @@ describe('PrintRequestService', () => {
 
       // Assert
       expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-123');
+      expect(mockPaymentRepo.updatePayment).toHaveBeenCalledWith('payment-123', {
+        status: 'canceled',
+      });
       expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-456');
       expect(result).toEqual(mockUpdated);
     });
