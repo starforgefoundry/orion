@@ -3,6 +3,7 @@
   import { Heading, IconButton, LoadingSpinner } from '@immich/ui';
   import { mdiDeveloperBoard, mdiFormatListBulleted } from '@mdi/js';
   import Kanban from './Kanban.svelte';
+  import Table from './Table.svelte';
 
   let selectedMode: 'board' | 'list' = $state('board');
   let prints = getPrintRequests();
@@ -36,5 +37,5 @@
 {:else if selectedMode === 'board'}
   <Kanban />
 {:else}
-  <!-- <ListView /> -->
+  <Table />
 {/if}

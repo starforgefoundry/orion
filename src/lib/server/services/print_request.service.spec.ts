@@ -21,6 +21,8 @@ vi.mock('$lib/server/repositories/print_request.repository', () => {
   MockPrintRequestRepository.prototype.getAll = vi.fn();
   MockPrintRequestRepository.prototype.update = vi.fn();
   MockPrintRequestRepository.prototype.getById = vi.fn();
+  MockPrintRequestRepository.prototype.search = vi.fn();
+  MockPrintRequestRepository.prototype.updatePartQuantity = vi.fn();
   return { PrintRequestRepository: MockPrintRequestRepository };
 });
 
@@ -430,6 +432,148 @@ describe('PrintRequestService', () => {
       // Assert
       expect(mockRequestRepo.getById).toHaveBeenCalledWith(requestId);
       expect(result).toBeNull();
+    });
+  });
+
+  describe('searchPrintRequests', () => {
+    it('should search print requests with given criteria', async () => {
+      // Arrange
+      const dto = {
+        status: 'in_queue' as const,
+        customerEmail: 'search@example.com',
+      };
+
+      const mockResults = [
+        {
+          id: 'request-1',
+          status: 'in_queue' as const,
+          email: 'search@example.com',
+          projectName: 'Project A',
+        },
+        {
+          id: 'request-2',
+          status: 'in_queue' as const,
+          email: 'search@example.com',
+          projectName: 'Project B',
+        },
+      ];
+
+      vi.mocked(mockRequestRepo.search).mockResolvedValue(mockResults);
+
+      // Act
+      const result = await printRequestService.searchPrintRequests(dto);
+
+      // Assert
+      expect(mockRequestRepo.search).toHaveBeenCalledWith(dto);
+      expect(result).toEqual(mockResults);
+    });
+
+    it('should return empty array when no requests match criteria', async () => {
+      // Arrange
+      const dto = {
+        status: 'canceled' as const,
+      };
+
+      vi.mocked(mockRequestRepo.search).mockResolvedValue([]);
+
+      // Act
+      const result = await printRequestService.searchPrintRequests(dto);
+
+      // Assert
+      expect(mockRequestRepo.search).toHaveBeenCalledWith(dto);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('updatePartQuantity', () => {
+    it('should update quantity for a specific part', async () => {
+      // Arrange
+      const dto = {
+        partId: 'part-123',
+        quantity: 5,
+      };
+
+      const mockUpdated = {
+        id: 'part-123',
+        quantity: 5,
+      };
+
+      vi.mocked(mockRequestRepo.updatePartQuantity).mockResolvedValue(mockUpdated);
+
+      // Act
+      const result = await printRequestService.updatePartQuantity(dto);
+
+      // Assert
+      expect(mockRequestRepo.updatePartQuantity).toHaveBeenCalledWith('part-123', 5);
+      expect(result).toEqual(mockUpdated);
+    });
+
+    it('should handle zero quantity updates', async () => {
+      // Arrange
+      const dto = {
+        partId: 'part-456',
+        quantity: 0,
+      };
+
+      const mockUpdated = {
+        id: 'part-456',
+        quantity: 0,
+      };
+
+      vi.mocked(mockRequestRepo.updatePartQuantity).mockResolvedValue(mockUpdated);
+
+      // Act
+      const result = await printRequestService.updatePartQuantity(dto);
+
+      // Assert
+      expect(mockRequestRepo.updatePartQuantity).toHaveBeenCalledWith('part-456', 0);
+      expect(result).toEqual(mockUpdated);
+    });
+  });
+
+  describe('sendPickupNotification', () => {
+    it('should send pickup email notification to customer', async () => {
+      // Arrange
+      const requestId = 'request-pickup';
+      const mockRequest = {
+        id: requestId,
+        email: 'customer@example.com',
+        projectName: 'Completed Project',
+      };
+
+      const mockMailgunRepo = {
+        sendTemplate: vi.fn().mockResolvedValue(undefined),
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      (printRequestService as any).mailgunRepository = mockMailgunRepo;
+
+      // Act
+      await printRequestService.sendPickupNotification(requestId);
+
+      // Assert
+      expect(mockRequestRepo.getById).toHaveBeenCalledWith(requestId);
+      expect(mockMailgunRepo.sendTemplate).toHaveBeenCalledWith(
+        'customer@example.com',
+        expect.stringContaining('Starforge 3D Prints'),
+        expect.any(String),
+        expect.stringContaining('Completed Project'),
+        'print_pickup',
+        expect.objectContaining({
+          projectName: 'Completed Project',
+        }),
+      );
+    });
+
+    it('should throw error when request not found', async () => {
+      // Arrange
+      const requestId = 'nonexistent';
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(printRequestService.sendPickupNotification(requestId)).rejects.toThrow(
+        'Print request not found',
+      );
     });
   });
 

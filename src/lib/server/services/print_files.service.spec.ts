@@ -261,5 +261,54 @@ describe('PrintFilesService', () => {
         'https://bucket.s3.amazonaws.com/designs/file1.stl',
       );
     });
+
+    it('should handle file download errors gracefully', async () => {
+      // Arrange
+      const printRequestId = 'request-error';
+      const mockFiles = [
+        {
+          id: 'file-1',
+          printRequestId: 'request-error',
+          fileName: 'broken.stl',
+          fileUrl: 'https://s3.example.com/broken.stl',
+          quantity: 1,
+        },
+      ];
+
+      vi.mocked(mockFilesRepo.getByPrintRequestId).mockResolvedValue(mockFiles);
+      vi.mocked(global.fetch).mockRejectedValue(new Error('Network error'));
+
+      // Act & Assert
+      await expect(printFilesService.downloadRequestZIP(printRequestId)).rejects.toThrow(
+        'Network error',
+      );
+    });
+
+    it('should handle concurrent downloads with limit', async () => {
+      // Arrange
+      const printRequestId = 'request-concurrent';
+      const mockFiles = Array.from({ length: 10 }, (_, i) => ({
+        id: `file-${i}`,
+        printRequestId: 'request-concurrent',
+        fileName: `part${i}.stl`,
+        fileUrl: `https://s3.example.com/part${i}.stl`,
+        quantity: 1,
+      }));
+
+      const mockFileContent = new ArrayBuffer(8);
+      const mockResponse = {
+        arrayBuffer: vi.fn().mockResolvedValue(mockFileContent),
+      };
+
+      vi.mocked(mockFilesRepo.getByPrintRequestId).mockResolvedValue(mockFiles);
+      vi.mocked(global.fetch).mockResolvedValue(mockResponse as any);
+
+      // Act
+      const result = await printFilesService.downloadRequestZIP(printRequestId);
+
+      // Assert
+      expect(global.fetch).toHaveBeenCalledTimes(10);
+      expect(result).toBeInstanceOf(Blob);
+    });
   });
 });

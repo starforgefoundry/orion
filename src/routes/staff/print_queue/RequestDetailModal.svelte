@@ -2,6 +2,8 @@
   import type { ModalProps } from '$lib/frontend/components/utils';
   import {
     getPrintRequestById,
+    sendPickupNotification,
+    updatePartQuantity,
     updatePrintRequestStatus,
   } from '$lib/remotes/endpoints/print_request.remote';
   import {
@@ -15,28 +17,40 @@
     Modal,
     ModalBody,
     modalManager,
+    NumberInput,
     Stack,
     Switch,
     Text,
+    toastManager,
   } from '@immich/ui';
   import {
     mdiAccount,
+    mdiCheck,
     mdiClose,
     mdiCurrencyUsd,
     mdiDownload,
     mdiEmail,
     mdiHelp,
     mdiMonitorShare,
+    mdiOpenInNew,
+    mdiPackageVariantClosed,
+    mdiPencil,
     mdiPrinter3dNozzle,
   } from '@mdi/js';
   import { plaintext } from 'svelte-highlight/languages';
   import PaymentModal from './PaymentModal.svelte';
+  import { getPaymentStatusColor, getStatusColor } from './utils';
 
   type Props = ModalProps & {
     requestId: string;
   };
 
   const { requestId, onClose }: Props = $props();
+
+  // Track editing state
+  let isEditingQuantities = $state(false);
+  let editQuantities = $state<Record<string, number>>({});
+  let originalQuantities = $state<Record<string, number>>({});
 
   let requestRemote = $derived(getPrintRequestById(requestId));
   let request = $derived(requestRemote.current);
@@ -89,6 +103,76 @@
       onClose();
     }
   }
+
+  async function markPickedUp() {
+    // Check if payment is paid
+    if (request?.payment && request.payment.status !== 'paid') {
+      await modalManager.showDialog({
+        title: 'Payment Required',
+        prompt:
+          'This print request cannot be marked as picked up because the payment has not been completed. Please ensure the payment is marked as paid before marking as picked up.',
+        confirmText: 'OK',
+        confirmColor: 'primary',
+        icon: mdiPackageVariantClosed,
+      });
+      return;
+    }
+
+    await updatePrintRequestStatus({
+      id: request?.id ?? '',
+      status: 'picked_up',
+    });
+
+    onClose();
+  }
+
+  async function sendPickupEmail() {
+    try {
+      await sendPickupNotification(request?.id ?? '');
+      toastManager.success({
+        title: 'Pickup Notification Sent',
+        description: 'The pickup notification email has been sent to the customer.',
+      });
+    } catch (error) {
+      toastManager.danger({
+        title: 'Error Sending Email',
+        description:
+          'An error occurred while sending the pickup notification email. Please try again later.',
+      });
+    }
+  }
+
+  function startEditingQuantities() {
+    // Initialize quantities for all files
+    if (request?.files) {
+      request.files.forEach((file) => {
+        editQuantities[file.id] = file.quantity;
+        originalQuantities[file.id] = file.quantity;
+      });
+    }
+    isEditingQuantities = true;
+  }
+
+  function cancelEditingQuantities() {
+    editQuantities = {};
+    originalQuantities = {};
+    isEditingQuantities = false;
+  }
+
+  async function saveQuantities() {
+    // Only update quantities that changed
+    const updates = Object.entries(editQuantities).filter(
+      ([fileId, newQuantity]) => originalQuantities[fileId] !== newQuantity,
+    );
+
+    for (const [fileId, quantity] of updates) {
+      await updatePartQuantity({ id: request!.id, partId: fileId, quantity });
+    }
+
+    editQuantities = {};
+    originalQuantities = {};
+    isEditingQuantities = false;
+  }
 </script>
 
 <Modal title={request?.projectName ?? ''} size="giant" {onClose} icon={mdiPrinter3dNozzle}>
@@ -103,34 +187,35 @@
           </HStack>
           <HStack>
             <Icon icon={mdiEmail} size="24" />
-            <Text><a href={`mailto:${request?.email}`}>{request?.email}</a></Text>
+            <Text color="primary"><a href={`mailto:${request?.email}`}>{request?.email}</a></Text>
           </HStack>
         </Stack>
         <Stack class="rounded-2xl border-2 border-slate-700 p-4">
           <Stack>
             <HStack class="justify-between">
-              <Heading size="tiny">Status</Heading>
-              <Badge
-                color={request?.status === 'in_queue'
-                  ? 'secondary'
-                  : request?.status === 'printing'
-                    ? 'info'
-                    : request?.status === 'done'
-                      ? 'success'
-                      : 'danger'}
-                size="small"
-              >
+              <Text>Status</Text>
+              <Badge color={getStatusColor(request?.status ?? 'pending')}>
                 {request?.status.replace('_', ' ').toUpperCase()}
               </Badge>
             </HStack>
             <HStack class="justify-between">
-              <Heading size="tiny">Quote Requested</Heading>
+              <Text>Quote Requested</Text>
               <Switch disabled checked={request?.isQuote} />
             </HStack>
             <HStack class="justify-between">
-              <Heading size="tiny">Print Material</Heading>
+              <Text>Print Material</Text>
               <Text>{request?.material.name}</Text>
             </HStack>
+            {#if request?.materialCost && request?.materialCost >= 0}
+              <HStack class="justify-between">
+                <Text>Build Plates</Text>
+                <Text>{request?.buildplateCount}</Text>
+              </HStack>
+              <HStack class="justify-between">
+                <Text>Material Cost</Text>
+                <Text>${(request?.materialCost / 100).toFixed(2)}</Text>
+              </HStack>
+            {/if}
           </Stack>
         </Stack>
         {#if request?.specialRequests}
@@ -142,7 +227,19 @@
 
         {#if request?.payment}
           <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-            <Heading size="small" class="mb-2">Payment Information</Heading>
+            <HStack class="items-center justify-between">
+              <Heading size="small">Payment Information</Heading>
+              {#if request.payment.squareInvoiceId}
+                <IconButton
+                  icon={mdiOpenInNew}
+                  aria-label="View Invoice"
+                  color="primary"
+                  variant="ghost"
+                  shape="round"
+                  href={`https://app.squareup.com/invoices/${request.payment.squareInvoiceId}`}
+                />
+              {/if}
+            </HStack>
 
             <HStack class="justify-between">
               <Text>Issued Date</Text>
@@ -151,7 +248,9 @@
 
             <HStack class="justify-between">
               <Text>Status</Text>
-              <Text fontWeight="bold">{request.payment.status.toUpperCase()}</Text>
+              <Badge color={getPaymentStatusColor(request.payment.status)}
+                >{request.payment.status.toUpperCase()}</Badge
+              >
             </HStack>
 
             <HStack class="justify-between">
@@ -160,8 +259,20 @@
             </HStack>
           </Stack>
         {/if}
-        <!-- Dont show buttons while loading (undefined == loading) -->
         <Stack gap={2}>
+          {#if request?.status === 'done'}
+            <Button leadingIcon={mdiEmail} fullWidth color="primary" onclick={sendPickupEmail}>
+              Send Pickup Email
+            </Button>
+            <Button
+              leadingIcon={mdiPackageVariantClosed}
+              fullWidth
+              color="success"
+              onclick={markPickedUp}
+            >
+              Picked up
+            </Button>
+          {/if}
           {#if request?.payment}
             {#if request?.status !== 'canceled' && request.payment.status !== 'paid' && request.payment.status !== 'canceled'}
               <Button leadingIcon={mdiCurrencyUsd} fullWidth color="primary" onclick={editPayment}>
@@ -173,7 +284,7 @@
               Create {billingType}
             </Button>
           {/if}
-          {#if request?.status !== 'canceled' && request?.status !== 'done'}
+          {#if request?.status !== 'canceled' && request?.status !== 'done' && request?.payment?.status !== 'paid'}
             <Button leadingIcon={mdiClose} fullWidth color="danger" onclick={cancelRequest}>
               Cancel Request
             </Button>
@@ -184,30 +295,66 @@
         <HStack class="justify-between">
           <Heading size="medium">Print Files</Heading>
           <HStack gap={2}>
-            <IconButton
-              icon={mdiDownload}
-              aria-label="Download Files"
-              color="primary"
-              size="small"
-              href={`${window.location.origin}/api/prints/download/${request?.id}`}
-            />
-            <IconButton
-              icon={mdiMonitorShare}
-              aria-label="Send to OrcaSlicer"
-              color="success"
-              size="small"
-              href={`orcaslicer://open?file=${encodeURIComponent(
-                `${window.location.origin}/api/prints/download/${request?.id}`,
-              )}`}
-            />
+            {#if isEditingQuantities}
+              <IconButton
+                icon={mdiCheck}
+                aria-label="Save Changes"
+                color="success"
+                size="small"
+                onclick={saveQuantities}
+              />
+              <IconButton
+                icon={mdiClose}
+                aria-label="Cancel"
+                color="danger"
+                size="small"
+                onclick={cancelEditingQuantities}
+              />
+            {:else}
+              <IconButton
+                icon={mdiPencil}
+                aria-label="Edit Quantities"
+                color="primary"
+                size="small"
+                onclick={startEditingQuantities}
+              />
+              <IconButton
+                icon={mdiDownload}
+                aria-label="Download Files"
+                color="primary"
+                size="small"
+                href={`${window.location.origin}/api/prints/download/${request?.id}`}
+              />
+              <IconButton
+                icon={mdiMonitorShare}
+                aria-label="Send to OrcaSlicer"
+                color="success"
+                size="small"
+                href={`orcaslicer://open?file=${encodeURIComponent(
+                  `${window.location.origin}/api/prints/download/${request?.id}`,
+                )}`}
+              />
+            {/if}
           </HStack>
         </HStack>
 
         {#each request?.files as file}
           <div class="bg-level-2 mt-2 rounded-lg border border-slate-600 p-4">
-            <HStack class="justify-between">
-              <Text>{file.fileName}</Text>
-              <Text fontWeight="bold">{file.quantity}x</Text>
+            <HStack class="items-center justify-between gap-4">
+              <Text class="min-w-0 flex-1">{file.fileName}</Text>
+              {#if isEditingQuantities}
+                <div class="shrink-0">
+                  <NumberInput
+                    bind:value={editQuantities[file.id]}
+                    min={1}
+                    max={999}
+                    step={1}
+                    class="w-24"
+                  />
+                </div>
+              {:else}
+                <Text fontWeight="bold" class="shrink-0">{file.quantity}x</Text>
+              {/if}
             </HStack>
           </div>
         {/each}

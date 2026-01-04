@@ -1,7 +1,9 @@
 import { command, form, query } from '$app/server';
 import {
   respondToQuoteDto,
+  searchPrintRequestsDto,
   submitPrintRequestDto,
+  updatePartQuantityDto,
   updatePrintRequestDto,
   updatePrintRequestStatusDto,
 } from '$lib/remotes/dtos/print_request.dto';
@@ -18,6 +20,11 @@ export const submitPrintRequestForm = form(submitPrintRequestDto, async (dto) =>
 export const getPrintRequests = query(async () => {
   verifyAuth();
   return await printRequestService.getPrintRequests();
+});
+
+export const searchPrintRequests = query(searchPrintRequestsDto, async (dto) => {
+  verifyAuth();
+  return await printRequestService.searchPrintRequests(dto);
 });
 
 export const getPrintRequestById = query(v.string(), async (id: string) => {
@@ -65,8 +72,29 @@ export const updatePrintRequestStatus = command(
   },
 );
 
+export const updatePartQuantity = command(
+  v.intersect([v.object({ id: v.string() }), updatePartQuantityDto]),
+  async (dto) => {
+    verifyAuth();
+
+    const { id, ...update } = dto;
+    const response = await printRequestService.updatePartQuantity(update);
+
+    await getPrintRequestById(id).refresh();
+    await getPrintRequests().refresh();
+
+    return response;
+  },
+);
+
 export const getPrintRequestFiles = query(v.string(), async (printRequestId: string) => {
   verifyAuth();
 
   return await printFilesService.getByRequestId(printRequestId);
+});
+
+export const sendPickupNotification = command(v.string(), async (printRequestId: string) => {
+  verifyAuth();
+
+  return await printRequestService.sendPickupNotification(printRequestId);
 });

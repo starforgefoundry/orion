@@ -69,7 +69,7 @@
 {:else}
   <Table>
     <TableHeader>
-      <TableHeaderCell width="w-4/12">Name</TableHeaderCell>
+      <TableHeaderCell width="w-6/12">Name</TableHeaderCell>
       <TableHeaderCell width="w-3/12">Availability</TableHeaderCell>
       <TableHeaderCell width="w-3/12">Actions</TableHeaderCell>
     </TableHeader>

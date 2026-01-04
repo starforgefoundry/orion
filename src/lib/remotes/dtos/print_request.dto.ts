@@ -62,6 +62,21 @@ export const respondToQuoteDto = v.object({
 
 export type RespondToQuoteDto = v.InferInput<typeof respondToQuoteDto>;
 
+export const updatePartQuantityDto = v.object({
+  partId: v.string(),
+  quantity: v.number(),
+});
+
+export type UpdatePartQuantityDto = v.InferInput<typeof updatePartQuantityDto>;
+
+export const searchPrintRequestsDto = v.object({
+  query: v.string(),
+  page: v.optional(v.number(), 1),
+  pageSize: v.optional(v.number(), 25),
+});
+
+export type SearchPrintRequestsDto = v.InferInput<typeof searchPrintRequestsDto>;
+
 export type PrintRequestDto = Omit<typeof schema.printRequest.$inferSelect, 'material'> & {
   payment: PrintRequestPayment | null;
   material: PrintMaterial;

@@ -753,6 +753,78 @@ describe('PrintPaymentService', () => {
         buildplateCount: 2,
       });
     });
+
+    it('should mark payment as paid when order total is zero', async () => {
+      // Arrange
+      const dto: CreatePaymentDto = {
+        requestId: 'request-free',
+        materialCost: 0,
+        buildPlates: 1,
+      };
+
+      const mockRequest: PrintRequestDto = {
+        id: 'request-free',
+        customerName: 'Free User',
+        email: 'free@example.com',
+        status: 'in_queue',
+        isQuote: false,
+        paymentId: null,
+      } as PrintRequestDto;
+
+      const mockCustomer: Customer = {
+        id: 'customer-free',
+        emailAddress: 'free@example.com',
+      };
+
+      const mockOrder: Order = {
+        id: 'order-free',
+        locationId: 'loc-123',
+        totalMoney: { amount: BigInt(0), currency: 'USD' },
+        netAmountDueMoney: { amount: BigInt(0), currency: 'USD' },
+      };
+
+      const mockPayment = {
+        id: 'payment-free',
+        requestId: 'request-free',
+        status: 'paid',
+        total: 0,
+        squareInvoiceId: null,
+        squareOrderId: 'order-free',
+      };
+
+      const mockSquareSettings = {
+        locationId: 'loc-123',
+        printRequestItemId: 'item-123',
+        additionalBuildPlateItemId: 'plate-456',
+        memberPrintDiscountId: 'discount-789',
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+      vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
+      vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
+
+      // Act
+      const result = await printPaymentService.upsertPayment(dto);
+
+      // Assert
+      expect(mockSquareRepo.createOrder).toHaveBeenCalled();
+      expect(mockPaymentRepo.createInvoice).not.toHaveBeenCalled();
+      expect(mockSquareRepo.sendInvoice).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.savePayment).toHaveBeenCalledWith(
+        'request-free',
+        expect.objectContaining({
+          status: 'paid',
+          total: 0,
+          squareInvoiceId: null,
+          squareOrderId: 'order-free',
+        }),
+      );
+      expect(result.status).toBe('paid');
+    });
   });
 
   describe('getPrintRequestQuote', () => {
@@ -822,6 +894,8 @@ describe('PrintPaymentService', () => {
   });
 
   describe('respondToQuote', () => {
+    // Note: The following tests are skipped because respondToQuote has circular dependency
+    // with printRequestService. In a real scenario, these would be integration tests.
     it.skip('should cancel request when quote is declined', async () => {
       // Arrange
       const dto = {
@@ -1062,6 +1136,49 @@ describe('PrintPaymentService', () => {
       expect(mockSquareRepo.sendInvoice).not.toHaveBeenCalled();
       expect(mockMailgunRepo.sendTemplate).toHaveBeenCalled();
       expect(result.status).toBe('quote');
+    });
+
+    it('should throw error when calculate order fails for quote', async () => {
+      // Arrange
+      const dto: CreatePaymentDto = {
+        requestId: 'request-quote-fail',
+        materialCost: 8000,
+        buildPlates: 2,
+      };
+
+      const mockRequest: PrintRequestDto = {
+        id: 'request-quote-fail',
+        customerName: 'Quote Fail Customer',
+        email: 'quotefail@example.com',
+        projectName: 'Quote Fail Project',
+        status: 'in_queue',
+        isQuote: true,
+        paymentId: null,
+        submissionDate: DateTime.now(),
+      } as PrintRequestDto;
+
+      const mockCustomer: Customer = {
+        id: 'customer-quotefail',
+        emailAddress: 'quotefail@example.com',
+      };
+
+      const mockSquareSettings = {
+        locationId: 'loc-123',
+        printRequestItemId: 'item-123',
+        additionalBuildPlateItemId: 'plate-456',
+        memberPrintDiscountId: 'discount-789',
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+      vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(printPaymentService.upsertPayment(dto)).rejects.toThrow(
+        'Failed to calculate order in Square',
+      );
     });
   });
 });

@@ -2,9 +2,11 @@
   import type { PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
   import {
     getPrintRequests,
+    sendPickupNotification,
     updatePrintRequestStatus,
   } from '$lib/remotes/endpoints/print_request.remote';
-  import { Heading, modalManager, toastManager } from '@immich/ui';
+  import { Badge, Heading, IconButton, modalManager, toastManager } from '@immich/ui';
+  import { mdiEmailOutline, mdiPackageVariantClosed } from '@mdi/js';
   import type { DateTime } from 'luxon';
   import RequestDetailModal from './RequestDetailModal.svelte';
 
@@ -41,7 +43,7 @@
     },
     {
       id: 'done' as const,
-      title: 'Done',
+      title: 'Ready for Pickup',
       titleClass: 'bg-success-200',
       cardClass: 'bg-success-100 border-success-200 hover:border-success-300',
       columnClass: 'bg-success-50',
@@ -116,6 +118,10 @@
     event.preventDefault();
 
     if (!draggedJobId) return;
+    if (draggedFromColumn === targetColumn) {
+      resetDragState();
+      return;
+    }
 
     // keep a reference to the dragged item
     const jobId = draggedJobId;
@@ -126,7 +132,21 @@
     dragOverIndex = -1;
 
     try {
-      // TODO: add check to confirm movement to Done column
+      // Confirm movement to Done column
+      if (targetColumn === 'done') {
+        const confirmed = await modalManager.showDialog({
+          title: 'Mark as Done',
+          prompt: 'Are you sure this print request is complete and ready for pickup?',
+          confirmText: 'Mark as Done',
+          confirmColor: 'success',
+          icon: mdiPackageVariantClosed,
+        });
+
+        if (!confirmed) {
+          return;
+        }
+      }
+
       await updatePrintRequestStatus({ id: jobId, status: targetColumn }).updates(
         getPrintRequests().withOverride((current) =>
           optimisticUpdate(current, jobId, targetColumn),
@@ -186,15 +206,18 @@
     }
   }
 
+  function resetDragState() {
+    draggedJobId = null;
+    draggedFromColumn = null;
+    dragOverColumn = null;
+    dragOverIndex = -1;
+    isDragging = false;
+    draggedElement = null;
+  }
+
   async function handleTouchEnd(event: TouchEvent, targetColumn?: PrintRequestStatus) {
     if (!isDragging || !draggedJobId) {
-      // Reset everything
-      draggedJobId = null;
-      draggedFromColumn = null;
-      dragOverColumn = null;
-      dragOverIndex = -1;
-      isDragging = false;
-      draggedElement = null;
+      resetDragState();
       return;
     }
 
@@ -211,34 +234,63 @@
       }
     }
 
-    if (finalColumn && draggedJobId) {
+    console.log('drag Column:', draggedFromColumn);
+    console.log('Final Column:', finalColumn);
+
+    if (finalColumn && draggedJobId && draggedFromColumn !== finalColumn) {
       const jobId = draggedJobId;
 
-      // Reset drag state
-      draggedJobId = null;
-      draggedFromColumn = null;
-      dragOverColumn = null;
-      dragOverIndex = -1;
-      isDragging = false;
-      draggedElement = null;
-
-      try {
-        await updatePrintRequestStatus({ id: jobId, status: finalColumn }).updates(
+      updatePrintRequestStatus({ id: jobId, status: finalColumn })
+        .updates(
           getPrintRequests().withOverride((current) =>
             optimisticUpdate(current, jobId, finalColumn),
           ),
-        );
-      } catch (error) {
-        toastManager.danger('Failed to update print request status.');
-      }
-    } else {
-      // Reset drag state
-      draggedJobId = null;
-      draggedFromColumn = null;
-      dragOverColumn = null;
-      dragOverIndex = -1;
-      isDragging = false;
-      draggedElement = null;
+        )
+        .catch(() => {
+          toastManager.danger('Failed to update print request status.');
+        });
+    }
+
+    resetDragState();
+  }
+
+  async function markPickedUp(event: MouseEvent, jobId: string) {
+    event.stopPropagation();
+
+    // Find the job and check payment status
+    const job = prints.find((p) => p.id === jobId);
+    if (!job) return;
+
+    // Check if payment is paid
+    if (job.payment && job.payment.status !== 'paid') {
+      await modalManager.showDialog({
+        title: 'Payment Required',
+        prompt:
+          'This print request cannot be marked as picked up because the payment has not been completed. Please ensure the payment is marked as paid before marking as picked up.',
+        confirmText: 'OK',
+        confirmColor: 'primary',
+        icon: mdiPackageVariantClosed,
+      });
+      return;
+    }
+
+    try {
+      await updatePrintRequestStatus({ id: jobId, status: 'picked_up' }).updates(
+        getPrintRequests().withOverride((current) => optimisticUpdate(current, jobId, 'picked_up')),
+      );
+    } catch (error) {
+      toastManager.danger('Failed to mark print request as picked up.');
+    }
+  }
+
+  async function sendPickupEmail(event: MouseEvent, jobId: string) {
+    event.stopPropagation();
+
+    try {
+      await sendPickupNotification(jobId);
+      toastManager.success('Pickup notification sent successfully.');
+    } catch (error) {
+      toastManager.danger('Failed to send pickup notification.');
     }
   }
 </script>
@@ -264,14 +316,16 @@
       >
         {#each prints.filter((p) => p.status === column.id) as job, index}
           <div
-            class="{column.cardClass} w-full cursor-grab rounded-md border-2 p-4 text-left transition-all duration-200 hover:border-blue-500 active:cursor-grabbing {isDragging &&
-            draggedJobId === job.id
-              ? 'opacity-50'
-              : ''}"
-            draggable="true"
-            ondragstart={(e) => handleDragStart(e, job.id, column.id)}
+            class="{column.cardClass} w-full {job.status === 'done'
+              ? 'cursor-pointer'
+              : 'cursor-grab'} rounded-md border-2 p-4 text-left transition-all duration-200 hover:border-blue-500 {job.status !==
+            'done'
+              ? 'active:cursor-grabbing'
+              : ''} {isDragging && draggedJobId === job.id ? 'opacity-50' : ''}"
+            draggable={job.status !== 'done'}
+            ondragstart={(e) => job.status !== 'done' && handleDragStart(e, job.id, column.id)}
             ondragover={(e) => handleDragOverCard(e, column.id, index)}
-            ontouchstart={(e) => handleTouchStart(e, job.id, column.id)}
+            ontouchstart={(e) => job.status !== 'done' && handleTouchStart(e, job.id, column.id)}
             ontouchmove={handleTouchMove}
             ontouchend={(e) => handleTouchEnd(e, column.id)}
             onclick={() => handleCardClick(job.id)}
@@ -280,9 +334,42 @@
             tabindex="0"
             data-card-index={index}
           >
-            <h3 class="mb-2 text-lg font-semibold">{job.projectName}</h3>
-            <p class="mb-1 text-sm">{job.customerName}</p>
-            <p class="text-xs">{formatDate(job.submissionDate)}</p>
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <h3 class="mb-2 text-lg font-semibold">{job.projectName}</h3>
+                <p class="mb-1 text-sm">{job.customerName}</p>
+                <p class="text-xs">{formatDate(job.submissionDate)}</p>
+                {#if job.payment}
+                  <div class="mt-2">
+                    {#if job.payment.status === 'quote'}
+                      <Badge color="secondary" size="small">Awaiting Quote</Badge>
+                    {:else if job.payment.status === 'pending'}
+                      <Badge color="info" size="small">Pending Payment</Badge>
+                    {:else if job.payment.status === 'paid'}
+                      <Badge color="success" size="small">Paid</Badge>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+              {#if job.status === 'done'}
+                <div class="flex gap-2">
+                  <IconButton
+                    icon={mdiEmailOutline}
+                    color="primary"
+                    size="small"
+                    aria-label="Send Pickup Notification"
+                    onclick={(e: MouseEvent) => sendPickupEmail(e, job.id)}
+                  />
+                  <IconButton
+                    icon={mdiPackageVariantClosed}
+                    color="success"
+                    size="small"
+                    aria-label="Mark as Picked Up"
+                    onclick={(e: MouseEvent) => markPickedUp(e, job.id)}
+                  />
+                </div>
+              {/if}
+            </div>
           </div>
         {/each}
       </div>

@@ -1,18 +1,14 @@
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import {
-  templates,
-  type MailgunTemplates,
-  type TemplateVariables,
-} from '$lib/server/utils/email_templates';
+import { templates, type Templates } from '$lib/server/utils/email_templates';
 
 export class MailgunRepository extends BaseRepository {
-  async sendTemplate<T extends MailgunTemplates>(
+  async sendTemplate<T extends keyof Templates>(
     to: string,
     from: string,
     replyTo: string,
     subject: string,
     template: T,
-    variables: TemplateVariables[T],
+    variables: Templates[T],
   ) {
     let emailContent = templates[template];
     if (!emailContent) {

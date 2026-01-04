@@ -1,6 +1,9 @@
 import { getRequestEvent } from '$app/server';
+import { env as publicEnv } from '$env/dynamic/public';
 import type {
+  SearchPrintRequestsDto,
   SubmitPrintRequestDto,
+  UpdatePartQuantityDto,
   UpdatePrintRequestDto,
   UpdatePrintRequestStatusDto,
 } from '$lib/remotes/dtos/print_request.dto';
@@ -25,6 +28,10 @@ export class PrintRequestService extends BaseService {
     return await this.printRequestRepository.getAll();
   }
 
+  async searchPrintRequests(dto: SearchPrintRequestsDto) {
+    return await this.printRequestRepository.search(dto);
+  }
+
   async getPrintRequestById(id: string) {
     return await this.printRequestRepository.getById(id);
   }
@@ -45,7 +52,17 @@ export class PrintRequestService extends BaseService {
 
     if (dto.status === 'done') {
       updates.completionDate = DateTime.now();
-      // TODO: send notification email to customer
+
+      // Send pickup notification email to customer
+      const ctx = getRequestEvent().platform?.ctx;
+      if (ctx) {
+        ctx.waitUntil(this.sendPickupNotification(id));
+      } else {
+        // Fallback if ctx is not available
+        this.sendPickupNotification(id).catch((error) => {
+          console.error('Failed to send pickup notification:', error);
+        });
+      }
     }
 
     if (dto.status === 'canceled') {
@@ -69,6 +86,28 @@ export class PrintRequestService extends BaseService {
 
   async getFilesByRequestId(printRequestId: string) {
     return await this.printFilesRepository.getByPrintRequestId(printRequestId);
+  }
+
+  async updatePartQuantity(dto: UpdatePartQuantityDto) {
+    return await this.printRequestRepository.updatePartQuantity(dto.partId, dto.quantity);
+  }
+
+  async sendPickupNotification(printRequestId: string) {
+    const request = await this.printRequestRepository.getById(printRequestId);
+    if (!request) {
+      throw new Error('Print request not found');
+    }
+
+    await this.mailgunRepository.sendTemplate(
+      request.email,
+      `Starforge 3D Prints <${publicEnv.PUBLIC_PRINT_REQUEST_EMAIL}>`,
+      publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
+      `Your Print Request is Ready! - ${request.projectName}`,
+      'print_pickup',
+      {
+        projectName: request.projectName,
+      },
+    );
   }
 }
 
