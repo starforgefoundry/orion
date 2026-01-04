@@ -10,7 +10,6 @@ import { DateTime } from 'luxon';
 
 export class PrintRequestService extends BaseService {
   async submitPrintRequest(dto: SubmitPrintRequestDto) {
-    // TODO: check if customer is a member
     const printRequest = await this.printRequestRepository.submit(dto);
 
     const ctx = getRequestEvent().platform?.ctx;

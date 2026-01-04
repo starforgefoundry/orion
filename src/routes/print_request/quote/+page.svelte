@@ -79,7 +79,7 @@
       >Unable to fetch quote for this print request.</Text
     >
     <Text>
-      This could be because you have already cancelled the request or the quote is no longer
+      This could be because you have already replied to the quote or the quote is no longer
       available.
     </Text>
 

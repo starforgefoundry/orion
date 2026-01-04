@@ -18,7 +18,9 @@
 
   <Text>
     If you have any questions or need further assistance, please contact us at
-    <a href="mailto:3dprint@starforgefoundry.com"> 3dprint@starforgefoundry.com</a>
+    <a href="mailto:3dprint@starforgefoundry.com" class="text-primary">
+      3dprint@starforgefoundry.com
+    </a>.
   </Text>
 
   <Button onclick={() => (window.location.href = '/print_request/form')} class="mt-4">
