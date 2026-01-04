@@ -2,7 +2,6 @@ import type {
   CreatePrintMaterialDto,
   UpdatePrintMaterialDto,
 } from '$lib/remotes/dtos/print_materials.dto';
-import { getPrintMaterials } from '$lib/remotes/endpoints/print_materials.remote';
 import { BaseService } from '$lib/server/services/base.service';
 
 export class PrintMaterialsService extends BaseService {
@@ -16,7 +15,6 @@ export class PrintMaterialsService extends BaseService {
 
   async updateMaterial(id: string, updates: Omit<UpdatePrintMaterialDto, 'id'>) {
     const material = await this.printMaterialsRepository.update(id, updates);
-    await getPrintMaterials().refresh();
     return material;
   }
 }

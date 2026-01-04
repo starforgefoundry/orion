@@ -55,6 +55,13 @@ export const updatePrintRequestStatusDto = v.object({
 
 export type UpdatePrintRequestStatusDto = v.InferInput<typeof updatePrintRequestStatusDto>;
 
+export const respondToQuoteDto = v.object({
+  id: v.string(),
+  approve: v.boolean(),
+});
+
+export type RespondToQuoteDto = v.InferInput<typeof respondToQuoteDto>;
+
 export type PrintRequestDto = Omit<typeof schema.printRequest.$inferSelect, 'material'> & {
   payment: PrintRequestPayment | null;
   material: PrintMaterial;

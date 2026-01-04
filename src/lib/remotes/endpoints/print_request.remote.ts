@@ -1,5 +1,6 @@
 import { command, form, query } from '$app/server';
 import {
+  respondToQuoteDto,
   submitPrintRequestDto,
   updatePrintRequestDto,
   updatePrintRequestStatusDto,
@@ -24,12 +25,16 @@ export const getPrintRequestById = query(v.string(), async (id: string) => {
 });
 
 export const getPrintRequestQuote = query(v.string(), async (id: string) => {
-  const request = await printRequestService.getPrintRequestById(id);
-  if (request?.payment?.status !== 'quote') {
-    throw new Error('Print request is not in quote status');
-  }
+  return await printRequestService.getPrintRequestQuote(id);
+});
 
-  return request;
+export const respondToPrintRequestQuote = command(respondToQuoteDto, async (dto) => {
+  try {
+    return await printRequestService.respondToQuote(dto);
+  } catch (error) {
+    console.error('Error responding to print request quote:', error);
+    throw error;
+  }
 });
 
 export const updatePrintRequest = command(
@@ -38,7 +43,11 @@ export const updatePrintRequest = command(
     verifyAuth();
 
     const { id, ...updates } = dto;
-    return await printRequestService.updatePrintRequest(id, updates);
+    const response = await printRequestService.updatePrintRequest(id, updates);
+
+    await getPrintRequests().refresh();
+
+    return response;
   },
 );
 
@@ -48,7 +57,10 @@ export const updatePrintRequestStatus = command(
     verifyAuth();
 
     const { id, ...updates } = dto;
-    return await printRequestService.updatePrintRequestStatus(id, updates);
+    const response = await printRequestService.updatePrintRequestStatus(id, updates);
+    await getPrintRequests().refresh();
+
+    return response;
   },
 );
 

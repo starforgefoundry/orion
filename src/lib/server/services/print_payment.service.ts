@@ -2,8 +2,6 @@ import { env } from '$env/dynamic/private';
 import { env as publicEnv } from '$env/dynamic/public';
 import type { CreatePaymentDto } from '$lib/remotes/dtos/print_payment.dto';
 import type { PrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
-import { getPayment } from '$lib/remotes/endpoints/print_payment.remote';
-import { getPrintRequestById, getPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
 import type { SettingsMap } from '$lib/server/repositories/settings.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { squareService } from '$lib/server/services/square.service';
@@ -74,8 +72,8 @@ export class PrintPaymentService extends BaseService {
     return await this.upsertOrder(request, dto);
   }
 
-  private async upsertOrder(request: PrintRequestDto, paymentInfo: CreatePaymentDto) {
-    if (request.payment && request.payment.squareInvoiceId) {
+  async upsertOrder(request: PrintRequestDto, paymentInfo: CreatePaymentDto) {
+    if (request.payment && request.payment.squareInvoiceId && request.payment.status !== 'quote') {
       // We have to cancel the existing invoice before creating a new one
       // https://stackoverflow.com/questions/66733189
       await this.squareRepository.cancelInvoice(request.payment.squareInvoiceId);
@@ -105,7 +103,9 @@ export class PrintPaymentService extends BaseService {
       throw new Error('Failed to create invoice in Square');
     }
 
-    if (!request.isQuote) {
+    // Send the invoice only if this is not a quote or
+    // if it was a quote being converted to an order
+    if (!request.isQuote || request.payment?.status === 'quote') {
       await this.squareRepository.sendInvoice(invoice.id!, invoice.version!);
     }
 
@@ -123,10 +123,6 @@ export class PrintPaymentService extends BaseService {
       materialCost: paymentInfo.materialCost,
       buildplateCount: paymentInfo.buildPlates,
     });
-
-    await getPayment(paymentRecord.id).refresh();
-    await getPrintRequests().refresh();
-    await getPrintRequestById(request.id).refresh();
 
     return paymentRecord;
   }
@@ -179,13 +175,9 @@ export class PrintPaymentService extends BaseService {
       {
         projectName: request.projectName,
         quotePrice: (orderTotal / 100).toFixed(2),
-        quoteURL: `${env.FRONTEND_URL}/print_request/quote/${request.id}`,
+        quoteURL: `${env.FRONTEND_URL}/print_request/quote?id=${request.id}`,
       },
     );
-
-    await getPayment(paymentRecord.id).refresh();
-    await getPrintRequests().refresh();
-    await getPrintRequestById(request.id).refresh();
 
     return paymentRecord;
   }

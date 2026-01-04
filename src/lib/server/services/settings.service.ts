@@ -1,7 +1,3 @@
-import {
-  getPrintRequestSettings,
-  getPrintRequestSquareSettings,
-} from '$lib/remotes/endpoints/settings.remote';
 import type { SettingsMap } from '$lib/server/repositories/settings.repository';
 import { BaseService } from '$lib/server/services/base.service';
 
@@ -12,7 +8,6 @@ export class SettingsService extends BaseService {
 
   async setPrintRequestSettings(value: SettingsMap['printRequest']) {
     const setting = await this.settingsRepository.setSetting('printRequest', value);
-    getPrintRequestSettings().refresh();
 
     return setting;
   }
@@ -23,7 +18,6 @@ export class SettingsService extends BaseService {
 
   async setPrintRequestSquareSettings(value: SettingsMap['printRequestSquare']) {
     const setting = await this.settingsRepository.setSetting('printRequestSquare', value);
-    getPrintRequestSquareSettings().refresh();
 
     return setting;
   }

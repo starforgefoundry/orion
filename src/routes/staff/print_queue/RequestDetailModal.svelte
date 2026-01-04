@@ -49,7 +49,7 @@
       return 'Quote';
     }
 
-    return request.isQuote ? 'Quote' : 'Payment';
+    return 'Payment';
   });
 
   async function createPayment() {

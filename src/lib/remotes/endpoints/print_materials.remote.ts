@@ -31,5 +31,8 @@ export const updatePrintMaterial = command(updatePrintMaterialDto, async (dto) =
 
   const { id, ...updates } = dto;
 
-  return await printMaterialsService.updateMaterial(id, updates);
+  const response = await printMaterialsService.updateMaterial(id, updates);
+  await getPrintMaterials().refresh();
+
+  return response;
 });

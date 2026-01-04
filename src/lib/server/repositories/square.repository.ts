@@ -91,10 +91,17 @@ export class SquareRepository extends BaseRepository {
       throw new Error('Invoice not found');
     }
 
-    await this.square.invoices.cancel({
-      invoiceId,
-      version: invoice.version!,
-    });
+    if (invoice.status === 'DRAFT') {
+      await this.square.invoices.delete({
+        invoiceId,
+        version: invoice.version!,
+      });
+    } else if (invoice.status === 'SCHEDULED' || invoice.status === 'PAYMENT_PENDING') {
+      await this.square.invoices.cancel({
+        invoiceId,
+        version: invoice.version!,
+      });
+    }
   }
 
   async upsertCustomer(name: string, email: string) {

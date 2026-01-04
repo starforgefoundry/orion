@@ -12,10 +12,16 @@ export const getPrintRequestSquareSettings = query(() => {
 
 export const printRequestSettingsForm = form(printRequestSettings, async (dto) => {
   verifyAuth();
-  return await settingsService.setPrintRequestSettings(dto);
+  const response = await settingsService.setPrintRequestSettings(dto);
+  getPrintRequestSettings().refresh();
+
+  return response;
 });
 
 export const printRequestSquareSettingsForm = form(printRequestSquareSettings, async (dto) => {
   verifyAuth();
-  return await settingsService.setPrintRequestSquareSettings(dto);
+  const response = await settingsService.setPrintRequestSquareSettings(dto);
+  getPrintRequestSquareSettings().refresh();
+
+  return response;
 });

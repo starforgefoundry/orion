@@ -1,6 +1,10 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { getPrintRequestQuote } from '$lib/remotes/endpoints/print_request.remote';
+  import {
+    getPrintRequestQuote,
+    respondToPrintRequestQuote,
+  } from '$lib/remotes/endpoints/print_request.remote';
   import {
     Badge,
     Button,
@@ -18,18 +22,25 @@
   import { mdiCheckCircle, mdiClose, mdiHelp, mdiReceipt } from '@mdi/js';
   import type { Order } from 'square';
 
-  const requestRemote = getPrintRequestQuote(page.params.id ?? '');
+  const requestRemote = getPrintRequestQuote(page.url.searchParams.get('id') ?? '');
   const request = $derived(requestRemote.current);
   const payment = $derived(request?.payment);
 
   // Calculate values from payment data
-  const materialCost = $derived(request?.materialCost ?? 0);
-  const buildPlates = $derived(request?.buildplateCount ?? 1);
   const order = $derived(JSON.parse(payment?.orderObject ?? '{}') as Order);
   const totalCost = $derived((payment?.total ?? 0) / 100);
 
+  let submitting = $state(false);
+
   async function handleApprove() {
-    // Empty function - to be filled in manually
+    submitting = true;
+
+    await respondToPrintRequestQuote({
+      id: request!.id,
+      approve: true,
+    });
+
+    await goto('/print_request/quote/approved');
   }
 
   async function handleCancel() {
@@ -42,7 +53,14 @@
     });
 
     if (cancel) {
-      // Empty function - to be filled in manually
+      submitting = true;
+
+      await respondToPrintRequestQuote({
+        id: request!.id,
+        approve: false,
+      });
+
+      await goto('/print_request/quote/canceled');
     }
   }
 </script>
@@ -55,7 +73,7 @@
 </CardHeader>
 <CardBody>
   {#if requestRemote.loading}
-    <LoadingSpinner />
+    <LoadingSpinner class="mx-auto" size="large" />
   {:else if requestRemote.error || !request || !request.payment}
     <Text color="danger" class="mb-4" fontWeight="bold"
       >Unable to fetch quote for this print request.</Text
@@ -73,6 +91,23 @@
     </Text>
   {:else}
     <div class="space-y-6">
+      <Text class="mb-2" color="muted">TOTAL</Text>
+      <Heading class="text-5xl">${totalCost.toFixed(2)}</Heading>
+
+      <!-- Action Buttons -->
+      {#if submitting}
+        <LoadingSpinner class="mx-auto" size="large" />
+      {:else}
+        <Stack gap={2}>
+          <Button fullWidth color="success" leadingIcon={mdiCheckCircle} onclick={handleApprove}>
+            Approve Quote
+          </Button>
+          <Button fullWidth color="danger" onclick={handleCancel} leadingIcon={mdiClose}
+            >Cancel Request</Button
+          >
+        </Stack>
+      {/if}
+
       <!-- Request Information -->
       <Stack class="rounded-2xl border-2 border-slate-700 p-4">
         <Heading size="small">Request Details</Heading>
@@ -118,6 +153,11 @@
             <HStack class="justify-between">
               <Stack gap={0}>
                 <Text>{discount.name?.replace('3D Print Request - ', '')}</Text>
+                {#if Number(discount.percentage) > 0}
+                  <Text size="small" color="muted">
+                    {Number(discount.percentage).toFixed(0)}% Off
+                  </Text>
+                {/if}
               </Stack>
               <Text>
                 - ${discount.appliedMoney
@@ -140,16 +180,6 @@
             </Text>
           </HStack>
         </Stack>
-      </Stack>
-
-      <!-- Action Buttons -->
-      <Stack gap={2}>
-        <Button fullWidth color="success" leadingIcon={mdiCheckCircle} onclick={handleApprove}>
-          Approve Quote
-        </Button>
-        <Button fullWidth color="danger" onclick={handleCancel} leadingIcon={mdiClose}
-          >Cancel Request</Button
-        >
       </Stack>
     </div>
   {/if}

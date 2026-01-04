@@ -3,7 +3,7 @@ import {
   templates,
   type MailgunTemplates,
   type TemplateVariables,
-} from '$lib/server/utils/mailgun_templates';
+} from '$lib/server/utils/email_templates';
 
 export class MailgunRepository extends BaseRepository {
   async sendTemplate<T extends MailgunTemplates>(
@@ -28,7 +28,7 @@ export class MailgunRepository extends BaseRepository {
       to: [to],
       'h:Reply-To': replyTo,
       subject: subject,
-      text: emailContent,
+      html: emailContent,
     });
   }
 }

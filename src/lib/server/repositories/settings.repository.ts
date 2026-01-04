@@ -18,7 +18,7 @@ export type SettingsMap = {
 const defaults: SettingsMap = {
   printRequest: {
     maxUploadMB: 1000,
-    allowedFileTypes: '.stl, .3mf, .obj',
+    allowedFileTypes: '.stl, .3mf, .step, .stp',
   },
   printRequestSquare: {
     locationId: '',
