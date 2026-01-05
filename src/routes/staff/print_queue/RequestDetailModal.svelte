@@ -291,11 +291,12 @@
                 Edit {billingType}
               </Button>
             {/if}
-          {:else}
+          {:else if request?.status !== 'canceled'}
             <Button leadingIcon={mdiCurrencyUsd} fullWidth color="success" onclick={createPayment}>
               Create {billingType}
             </Button>
           {/if}
+
           {#if request?.status !== 'canceled' && request?.status !== 'done' && request?.payment?.status !== 'paid'}
             <Button leadingIcon={mdiClose} fullWidth color="danger" onclick={cancelRequest}>
               Cancel Request
