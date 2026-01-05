@@ -248,7 +248,7 @@
                   color="primary"
                   variant="ghost"
                   shape="round"
-                  href={`https://app.squareup.com/invoices/${request.payment.squareInvoiceId}`}
+                  href={`https://app.squareup.com/dashboard/invoices/${request.payment.squareInvoiceId}`}
                 />
               {/if}
             </HStack>
