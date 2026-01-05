@@ -1,6 +1,6 @@
 <script lang="ts">
   import logo from '$lib/assets/logo.png';
-  import SignInWithGoogle from '$lib/components/SignInWithGoogle.svelte';
+  import SignInWithGoogle from '$lib/frontend/components/SignInWithGoogle.svelte';
   import { Card, CardBody, CardHeader, CardTitle } from '@immich/ui';
 </script>
 

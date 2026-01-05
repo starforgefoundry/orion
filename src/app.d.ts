@@ -1,6 +1,6 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 
-import type { User } from '$lib/db/schema';
+import type { User } from '$lib/server/db/schema';
 
 // for information about these interfaces
 declare global {
@@ -31,5 +31,4 @@ declare module '@auth/core/jwt' {
   }
 }
 
-export { };
-
+export {};

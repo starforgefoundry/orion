@@ -4273,7 +4273,7 @@ type ResponseStatus =
 	| 'completed'
 	| 'failed'
 	| 'in_progress'
-	| 'cancelled'
+	| 'canceled'
 	| 'queued'
 	| 'incomplete';
 type ResponseStreamEvent =

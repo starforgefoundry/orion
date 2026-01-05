@@ -5,7 +5,10 @@ import type { LayoutServerLoad } from './$types';
 export const load: LayoutServerLoad = async (event) => {
   if (!event.locals.user) {
     // Allow access to auth routes without authentication
-    if (!event.url.pathname.startsWith('/auth/') && !event.url.pathname.startsWith('/forms')) {
+    if (
+      !event.url.pathname.startsWith('/auth') &&
+      !event.url.pathname.startsWith('/print_request')
+    ) {
       redirect(302, '/auth/login');
     }
   }

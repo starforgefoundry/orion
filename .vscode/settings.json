@@ -4,10 +4,10 @@
   },
   "editor.tabSize": 2,
   "typescript.preferences.importModuleSpecifier": "non-relative",
-  "files.exclude": {
-    "**/.svelte-kit": true,
-    // "**/node_modu les": true,
-    "**/.wrangler": true
+  "editor.formatOnSave": true,
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    "*.ts": "${capture}.spec.ts,${capture}.mock.ts",
+    "package.json": "package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb, bun.lock, pnpm-workspace.yaml, .pnpmfile.cjs"
   },
-  "editor.formatOnSave": true
 }
