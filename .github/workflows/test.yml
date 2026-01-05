@@ -1,0 +1,27 @@
+on:
+  push:
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - uses: jdx/mise-action@v3
+
+      - name: Install dependencies
+        run: pnpm i
+
+      - name: Setup env variables
+        run: cp .env.example .env
+
+      - name: Run formatter
+        run: pnpm format
+
+      - name: Run tsc
+        run: pnpm check
+
+      - name: Run tests
+        run: pnpm test
