@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import Pagination from '$lib/frontend/components/Pagination.svelte';
   import {
     Table,
@@ -29,6 +30,7 @@
   $inspect(pagination);
 
   function handleRowClick(requestId: string) {
+    goto(`?id=${requestId}`, { replaceState: true, noScroll: true, keepFocus: true });
     modalManager.open(RequestDetailModal, { requestId });
   }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import {
     getPrintRequestById,
@@ -46,6 +47,12 @@
   };
 
   const { requestId, onClose }: Props = $props();
+
+  // Wrap onClose to also clear the query param
+  const handleClose = () => {
+    goto('?', { replaceState: true, noScroll: true, keepFocus: true });
+    onClose();
+  };
 
   // Track editing state
   let isEditingQuantities = $state(false);
@@ -175,7 +182,12 @@
   }
 </script>
 
-<Modal title={request?.projectName ?? ''} size="giant" {onClose} icon={mdiPrinter3dNozzle}>
+<Modal
+  title={request?.projectName ?? ''}
+  size="giant"
+  onClose={handleClose}
+  icon={mdiPrinter3dNozzle}
+>
   <ModalBody>
     <HStack gap={8} class="w-full items-start">
       <div class="flex flex-1 flex-col gap-4">

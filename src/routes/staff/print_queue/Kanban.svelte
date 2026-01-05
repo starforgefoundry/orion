@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import type { PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
   import {
     getPrintRequests,
@@ -52,6 +53,7 @@
   ];
 
   function handleCardClick(requestId: string) {
+    goto(`?id=${requestId}`, { replaceState: true, noScroll: true, keepFocus: true });
     modalManager.open(RequestDetailModal, { requestId });
   }
 

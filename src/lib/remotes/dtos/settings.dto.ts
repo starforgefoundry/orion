@@ -10,4 +10,5 @@ export const printRequestSquareSettings = v.object({
 export const printRequestSettings = v.object({
   maxUploadMB: v.number(),
   allowedFileTypes: v.string(),
+  discordWebhookUrl: v.optional(v.string()),
 });

@@ -1,12 +1,25 @@
 <script lang="ts">
+  import { page } from '$app/state';
   import { getPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
-  import { Heading, IconButton, LoadingSpinner } from '@immich/ui';
+  import { Heading, IconButton, LoadingSpinner, modalManager } from '@immich/ui';
   import { mdiDeveloperBoard, mdiFormatListBulleted } from '@mdi/js';
+  import { onMount } from 'svelte';
   import Kanban from './Kanban.svelte';
+  import RequestDetailModal from './RequestDetailModal.svelte';
   import Table from './Table.svelte';
 
   let selectedMode: 'board' | 'list' = $state('board');
   let prints = getPrintRequests();
+
+  // Open detail modal on page load if id is set
+  onMount(() => {
+    const id = page.url.searchParams.get('id');
+    if (id) {
+      modalManager.open(RequestDetailModal, {
+        requestId: id,
+      });
+    }
+  });
 </script>
 
 <svelte:head>

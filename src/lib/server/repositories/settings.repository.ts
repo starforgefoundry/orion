@@ -6,6 +6,7 @@ export type SettingsMap = {
   printRequest: {
     maxUploadMB: number;
     allowedFileTypes: string;
+    discordWebhookUrl: string;
   };
   printRequestSquare: {
     locationId: string;
@@ -19,6 +20,7 @@ const defaults: SettingsMap = {
   printRequest: {
     maxUploadMB: 1000,
     allowedFileTypes: '.stl, .3mf, .step, .stp',
+    discordWebhookUrl: '',
   },
   printRequestSquare: {
     locationId: '',

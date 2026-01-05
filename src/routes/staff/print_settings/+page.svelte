@@ -34,6 +34,7 @@
   initForm(printRequestSettingsForm, () => ({
     maxUploadMB: printRequestSettings.maxUploadMB,
     allowedFileTypes: printRequestSettings.allowedFileTypes,
+    discordWebhookUrl: printRequestSettings.discordWebhookUrl,
   }));
 
   initForm(printRequestSquareSettingsForm, () => ({
@@ -146,6 +147,16 @@
             <TextInput
               {...printRequestSettingsForm.fields.allowedFileTypes.as('text')}
               placeholder=".stl, .3mf, .obj"
+            />
+          </Field>
+
+          <Field
+            label="Discord Webhook URL"
+            description="Webhook URL for Discord notifications when print requests are submitted"
+          >
+            <TextInput
+              {...printRequestSettingsForm.fields.discordWebhookUrl.as('text')}
+              placeholder="https://discord.com/api/webhooks/..."
             />
           </Field>
 
