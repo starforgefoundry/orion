@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import { Buffer } from 'node:buffer';
 import pRetry from 'p-retry';
 import type S3mini from 's3mini';
 
