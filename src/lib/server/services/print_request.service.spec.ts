@@ -39,6 +39,24 @@ vi.mock('$lib/server/repositories/square.repository', () => {
   return { SquareRepository: MockSquareRepository };
 });
 
+vi.mock('$lib/server/repositories/discord.repository', () => {
+  const MockDiscordRepository = vi.fn();
+  MockDiscordRepository.prototype.sendWebhookNotification = vi.fn();
+  return { DiscordRepository: MockDiscordRepository };
+});
+
+vi.mock('$lib/server/repositories/settings.repository', () => {
+  const MockSettingsRepository = vi.fn();
+  MockSettingsRepository.prototype.getSetting = vi.fn();
+  return { SettingsRepository: MockSettingsRepository };
+});
+
+vi.mock('$lib/server/repositories/mailgun.repository', () => {
+  const MockMailgunRepository = vi.fn();
+  MockMailgunRepository.prototype.sendTemplate = vi.fn();
+  return { MailgunRepository: MockMailgunRepository };
+});
+
 // Mock $app/server with all required exports
 vi.mock('$app/server', () => ({
   getRequestEvent: vi.fn(),
@@ -65,6 +83,9 @@ describe('PrintRequestService', () => {
   let mockRequestRepo: any;
   let mockPaymentRepo: any;
   let mockSquareRepo: any;
+  let mockDiscordRepo: any;
+  let mockSettingsRepo: any;
+  let mockMailgunRepo: any;
   let getRequestEvent: any;
 
   beforeEach(async () => {
@@ -91,12 +112,18 @@ describe('PrintRequestService', () => {
     const { PrintPaymentRepository } =
       await import('$lib/server/repositories/print_payment.repository');
     const { SquareRepository } = await import('$lib/server/repositories/square.repository');
+    const { DiscordRepository } = await import('$lib/server/repositories/discord.repository');
+    const { SettingsRepository } = await import('$lib/server/repositories/settings.repository');
+    const { MailgunRepository } = await import('$lib/server/repositories/mailgun.repository');
 
     // Access the prototype methods (these are the actual mocks)
     mockFilesRepo = PrintFilesRepository.prototype;
     mockRequestRepo = PrintRequestRepository.prototype;
     mockPaymentRepo = PrintPaymentRepository.prototype;
     mockSquareRepo = SquareRepository.prototype;
+    mockDiscordRepo = DiscordRepository.prototype;
+    mockSettingsRepo = SettingsRepository.prototype;
+    mockMailgunRepo = MailgunRepository.prototype;
   });
 
   afterEach(() => {
@@ -141,6 +168,15 @@ describe('PrintRequestService', () => {
 
       vi.mocked(mockRequestRepo.submit).mockResolvedValue(mockPrintRequest);
       vi.mocked(mockFilesRepo.uploadFiles).mockResolvedValue(undefined);
+      // Mock getById for Discord notification
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue({
+        ...mockPrintRequest,
+        customerName: dto.customer.name,
+        email: dto.customer.email,
+      });
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        discordWebhookUrl: null,
+      });
 
       // Act
       const result = await printRequestService.submitPrintRequest(dto);
@@ -185,6 +221,15 @@ describe('PrintRequestService', () => {
 
       vi.mocked(mockRequestRepo.submit).mockResolvedValue(mockPrintRequest);
       vi.mocked(mockFilesRepo.uploadFiles).mockResolvedValue(undefined);
+      // Mock getById for Discord notification
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue({
+        ...mockPrintRequest,
+        customerName: dto.customer.name,
+        email: dto.customer.email,
+      });
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        discordWebhookUrl: null,
+      });
 
       // Act
       const result = await printRequestService.submitPrintRequest(dto);
@@ -216,12 +261,134 @@ describe('PrintRequestService', () => {
 
       vi.mocked(mockRequestRepo.submit).mockResolvedValue(mockPrintRequest);
       vi.mocked(mockFilesRepo.uploadFiles).mockResolvedValue(undefined);
+      // Mock getById for Discord notification
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue({
+        ...mockPrintRequest,
+        customerName: dto.customer.name,
+        email: dto.customer.email,
+      });
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        discordWebhookUrl: null,
+      });
 
       // Act
       await printRequestService.submitPrintRequest(dto);
 
       // Assert
       expect(mockWaitUntil).toHaveBeenCalled();
+    });
+  });
+
+  describe('sendDiscordNotification', () => {
+    it('should send Discord webhook notification with correct data', async () => {
+      // Arrange
+      const requestId = 'request-discord';
+      const mockRequest = {
+        id: requestId,
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        projectName: 'Test Project',
+        specialRequests: 'Handle with care',
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        discordWebhookUrl: 'https://discord.com/api/webhooks/test',
+      });
+      vi.mocked(mockDiscordRepo.sendWebhookNotification).mockResolvedValue(undefined);
+
+      // Act
+      await printRequestService.sendDiscordNotification(requestId);
+
+      // Assert
+      expect(mockRequestRepo.getById).toHaveBeenCalledWith(requestId);
+      expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequest');
+      expect(mockDiscordRepo.sendWebhookNotification).toHaveBeenCalledWith(
+        'https://discord.com/api/webhooks/test',
+        expect.objectContaining({
+          content: expect.stringContaining('new print request'),
+          embeds: expect.arrayContaining([
+            expect.objectContaining({
+              title: '🖨️ New Print Request Submitted',
+              fields: expect.arrayContaining([
+                expect.objectContaining({ name: 'Project Name', value: 'Test Project' }),
+                expect.objectContaining({ name: 'Customer', value: 'John Doe' }),
+                expect.objectContaining({ name: 'Email', value: 'john@example.com' }),
+                expect.objectContaining({ name: 'Special Requests', value: 'Handle with care' }),
+              ]),
+            }),
+          ]),
+        }),
+      );
+    });
+
+    it('should not include special requests field when empty', async () => {
+      // Arrange
+      const requestId = 'request-no-special';
+      const mockRequest = {
+        id: requestId,
+        customerName: 'Jane Smith',
+        email: 'jane@example.com',
+        projectName: 'Simple Project',
+        specialRequests: null,
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        discordWebhookUrl: 'https://discord.com/api/webhooks/test',
+      });
+      vi.mocked(mockDiscordRepo.sendWebhookNotification).mockResolvedValue(undefined);
+
+      // Act
+      await printRequestService.sendDiscordNotification(requestId);
+
+      // Assert
+      expect(mockDiscordRepo.sendWebhookNotification).toHaveBeenCalledWith(
+        'https://discord.com/api/webhooks/test',
+        expect.objectContaining({
+          embeds: expect.arrayContaining([
+            expect.objectContaining({
+              fields: expect.not.arrayContaining([
+                expect.objectContaining({ name: 'Special Requests' }),
+              ]),
+            }),
+          ]),
+        }),
+      );
+    });
+
+    it('should return early when webhook URL is not configured', async () => {
+      // Arrange
+      const requestId = 'request-no-webhook';
+      const mockRequest = {
+        id: requestId,
+        customerName: 'Test User',
+        email: 'test@example.com',
+        projectName: 'Test',
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        discordWebhookUrl: null,
+      });
+
+      // Act
+      await printRequestService.sendDiscordNotification(requestId);
+
+      // Assert
+      expect(mockDiscordRepo.sendWebhookNotification).not.toHaveBeenCalled();
+    });
+
+    it('should throw error when request not found', async () => {
+      // Arrange
+      const requestId = 'nonexistent';
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(printRequestService.sendDiscordNotification(requestId)).rejects.toThrow(
+        'Print request not found',
+      );
+      expect(mockDiscordRepo.sendWebhookNotification).not.toHaveBeenCalled();
     });
   });
 
@@ -541,12 +708,8 @@ describe('PrintRequestService', () => {
         projectName: 'Completed Project',
       };
 
-      const mockMailgunRepo = {
-        sendTemplate: vi.fn().mockResolvedValue(undefined),
-      };
-
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
-      (printRequestService as any).mailgunRepository = mockMailgunRepo;
+      vi.mocked(mockMailgunRepo.sendTemplate).mockResolvedValue(undefined);
 
       // Act
       await printRequestService.sendPickupNotification(requestId);

@@ -19,14 +19,8 @@ export class PrintRequestService extends BaseService {
     ctx?.waitUntil(this.printFilesRepository.uploadFiles(printRequest.id, dto.files));
 
     // Send Discord webhook notification
-    const settings = await this.settingsRepository.getSetting('printRequest');
-    if (settings.discordWebhookUrl) {
-      const event = getRequestEvent();
-      const origin = event?.url?.origin || 'http://localhost:5173';
-      ctx?.waitUntil(
-        this.sendDiscordNotification(printRequest.id, origin, settings.discordWebhookUrl),
-      );
-    }
+
+    ctx?.waitUntil(this.sendDiscordNotification(printRequest.id));
 
     return {
       status: 'success',
@@ -120,12 +114,14 @@ export class PrintRequestService extends BaseService {
     );
   }
 
-  async sendDiscordNotification(printRequestId: string, origin: string, webhookUrl: string) {
+  async sendDiscordNotification(printRequestId: string) {
     const request = await this.printRequestRepository.getById(printRequestId);
     if (!request) {
       throw new Error('Print request not found');
     }
 
+    const event = getRequestEvent();
+    const origin = event?.url?.origin || 'http://localhost:5173';
     const printQueueUrl = `${origin}/staff/print_queue?id=${printRequestId}`;
 
     const embed = {
@@ -159,21 +155,17 @@ export class PrintRequestService extends BaseService {
       });
     }
 
-    try {
-      await fetch(webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: `[View in Print Queue](${printQueueUrl})`,
-          embeds: [embed],
-        }),
-      });
-    } catch (error) {
-      console.error('Failed to send Discord webhook:', error);
-      // Don't throw error - we don't want to fail the print request submission
+    const settings = await this.settingsRepository.getSetting('printRequest');
+    const webhookUrl = settings.discordWebhookUrl;
+    if (!webhookUrl) {
+      console.warn('Discord webhook URL not configured for print requests');
+      return;
     }
+
+    await this.discordRepository.sendWebhookNotification(webhookUrl, {
+      content: `A new print request has been submitted! [View in Print Queue](${printQueueUrl})`,
+      embeds: [embed],
+    });
   }
 }
 

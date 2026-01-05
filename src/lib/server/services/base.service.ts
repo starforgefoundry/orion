@@ -1,3 +1,4 @@
+import { DiscordRepository } from '$lib/server/repositories/discord.repository';
 import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
 import { PrintFilesRepository } from '$lib/server/repositories/print_files.repository';
 import { PrintMaterialsRepository } from '$lib/server/repositories/print_materials.repository';
@@ -14,6 +15,7 @@ export class BaseService {
   protected settingsRepository: SettingsRepository;
   protected squareRepository: SquareRepository;
   protected mailgunRepository: MailgunRepository;
+  protected discordRepository: DiscordRepository;
 
   constructor(
     printFilesRepository?: PrintFilesRepository,
@@ -23,6 +25,7 @@ export class BaseService {
     settingsRepository?: SettingsRepository,
     squareRepository?: SquareRepository,
     mailgunRepository?: MailgunRepository,
+    discordRepository?: DiscordRepository,
   ) {
     this.printFilesRepository = printFilesRepository ?? new PrintFilesRepository();
     this.printMaterialsRepository = printMaterialsRepository ?? new PrintMaterialsRepository();
@@ -31,5 +34,6 @@ export class BaseService {
     this.settingsRepository = settingsRepository ?? new SettingsRepository();
     this.squareRepository = squareRepository ?? new SquareRepository();
     this.mailgunRepository = mailgunRepository ?? new MailgunRepository();
+    this.discordRepository = discordRepository ?? new DiscordRepository();
   }
 }

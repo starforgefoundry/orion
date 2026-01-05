@@ -82,6 +82,7 @@ describe('SettingsService', () => {
         enabled: false,
         maxUploadMB: 50000,
         allowedFileTypes: '.stl',
+        discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/abcdefghijklmnopqrstuvwxyz',
       };
 
       const mockUpdatedSettings = {
@@ -106,6 +107,7 @@ describe('SettingsService', () => {
         maxUploadMB: 20000,
         allowedFileTypes: '.stl,.obj,.3mf,.step',
         requireApproval: true,
+        discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/abcdefghijklmnopqrstuvwxyz',
       };
 
       const mockUpdatedSettings = {
