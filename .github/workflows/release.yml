@@ -5,6 +5,8 @@ on:
     tags:
       - '*'
 
+  workflow_dispatch:
+
 jobs:
   cfw-publish:
     name: Push to Cloudflare Workers
