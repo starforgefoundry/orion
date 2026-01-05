@@ -38,9 +38,10 @@ CREATE TABLE `print_request_payment` (
 	`issued_date` timestamp NOT NULL,
 	`payment_date` timestamp,
 	`status` text NOT NULL,
-	`total` integer NOT NULL,
 	`square_invoice_id` text,
-	`square_order_id` text
+	`square_order_id` text,
+	`total` integer NOT NULL,
+	`order_object` text
 );
 --> statement-breakpoint
 CREATE INDEX `square_invoice_idx` ON `print_request_payment` (`square_invoice_id`);--> statement-breakpoint

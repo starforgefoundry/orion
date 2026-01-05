@@ -12,22 +12,8 @@
     {
       "idx": 1,
       "version": "6",
-      "when": 1767475913899,
+      "when": 1767575291933,
       "tag": "0001_create_print_request_tables",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1767480640489,
-      "tag": "0002_marvelous_korath",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1767481262586,
-      "tag": "0003_amusing_puff_adder",
       "breakpoints": true
     }
   ]
