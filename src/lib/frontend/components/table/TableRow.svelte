@@ -7,7 +7,13 @@
     onclick?: () => void;
   }
 
-  let { children, class: className = '', hoverable = false, clickable = false, onclick }: Props = $props();
+  let {
+    children,
+    class: className = '',
+    hoverable = false,
+    clickable = false,
+    onclick,
+  }: Props = $props();
 
   const hoverClass = $derived(hoverable ? 'hover:bg-primary/10' : '');
   const clickableClass = $derived(clickable ? 'cursor-pointer' : '');

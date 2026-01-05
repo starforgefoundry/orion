@@ -155,12 +155,8 @@
           "name": "print_request_material_print_material_id_fk",
           "tableFrom": "print_request",
           "tableTo": "print_material",
-          "columnsFrom": [
-            "material"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["material"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -168,12 +164,8 @@
           "name": "print_request_payment_id_print_request_payment_id_fk",
           "tableFrom": "print_request",
           "tableTo": "print_request_payment",
-          "columnsFrom": [
-            "payment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["payment_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -228,12 +220,8 @@
           "name": "print_request_file_print_request_id_print_request_id_fk",
           "tableFrom": "print_request_file",
           "tableTo": "print_request",
-          "columnsFrom": [
-            "print_request_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["print_request_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -305,16 +293,12 @@
       "indexes": {
         "square_invoice_idx": {
           "name": "square_invoice_idx",
-          "columns": [
-            "square_invoice_id"
-          ],
+          "columns": ["square_invoice_id"],
           "isUnique": false
         },
         "square_order_idx": {
           "name": "square_order_idx",
-          "columns": [
-            "square_order_id"
-          ],
+          "columns": ["square_order_id"],
           "isUnique": false
         }
       },
@@ -399,9 +383,7 @@
       "indexes": {
         "user_email_unique": {
           "name": "user_email_unique",
-          "columns": [
-            "email"
-          ],
+          "columns": ["email"],
           "isUnique": true
         }
       },

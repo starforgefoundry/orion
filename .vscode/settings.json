@@ -9,5 +9,5 @@
   "explorer.fileNesting.patterns": {
     "*.ts": "${capture}.spec.ts,${capture}.mock.ts",
     "package.json": "package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lockb, bun.lock, pnpm-workspace.yaml, .pnpmfile.cjs"
-  },
+  }
 }

@@ -8,7 +8,9 @@
 
   let { children, class: className = '', width = '', align = 'center' }: Props = $props();
 
-  const alignmentClass = $derived(align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center');
+  const alignmentClass = $derived(
+    align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center',
+  );
 </script>
 
 <td class="{width} {alignmentClass} {className}">

@@ -17,7 +17,7 @@
 </script>
 
 <svelte:head>
-    <title>Unauthorized | Orion</title>
+  <title>Unauthorized | Orion</title>
 </svelte:head>
 
 <div class="flex justify-center">
