@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  cfw-publish:
+    name: Push to Cloudflare Workers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - uses: jdx/mise-action@v3
+
+      - name: Install dependencies
+        run: pnpm i
+
+      - name: Setup env variables
+        run: cp .env.example .env
+
+      - name: Migrate database
+        run: pnpm run db:migrate --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Publish to Cloudflare Workers
+        run: pnpm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
