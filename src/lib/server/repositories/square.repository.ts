@@ -96,7 +96,11 @@ export class SquareRepository extends BaseRepository {
         invoiceId,
         version: invoice.version!,
       });
-    } else if (invoice.status === 'SCHEDULED' || invoice.status === 'PAYMENT_PENDING') {
+    } else if (
+      invoice.status === 'SCHEDULED' ||
+      invoice.status === 'PAYMENT_PENDING' ||
+      invoice.status === 'UNPAID'
+    ) {
       await this.square.invoices.cancel({
         invoiceId,
         version: invoice.version!,

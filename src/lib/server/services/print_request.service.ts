@@ -74,7 +74,7 @@ export class PrintRequestService extends BaseService {
 
       // cancel any outstanding invoices
       if (payment?.squareInvoiceId && payment.status !== 'canceled') {
-        this.squareRepository.cancelInvoice(payment.squareInvoiceId);
+        await this.squareRepository.cancelInvoice(payment.squareInvoiceId);
       }
 
       // cancel payment
