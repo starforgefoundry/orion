@@ -149,6 +149,14 @@
       />
     </Field>
 
+    <Field label="Billing/Discount Code (Optional)">
+      <TextInput
+        {...submitPrintRequestForm.fields.billingCode.as('text')}
+        placeholder="Enter your billing or discount code"
+        class="max-w-xs"
+      />
+    </Field>
+
     <hr class="my-4 w-full border-gray-300" />
     <Field label="Project Title" required="indicator">
       <TextInput

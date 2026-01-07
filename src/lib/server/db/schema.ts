@@ -39,7 +39,7 @@ export const printRequest = sqliteTable('print_request', {
   specialRequests: text('special_requests').notNull(),
 
   billingCode: text('billing_code'),
-  paymentId: text('payment_id').references(() => printRequestPayment.id),
+  paymentId: text('payment_id').references(() => payment.id),
 
   buildplateCount: integer('buildplate_count').default(1),
   materialCost: integer('material_cost').default(0),
@@ -62,8 +62,8 @@ export const printRequestFile = sqliteTable('print_request_file', {
 
 export type PrintRequestFile = InferSelectModel<typeof printRequestFile>;
 
-export const printRequestPayment = sqliteTable(
-  'print_request_payment',
+export const payment = sqliteTable(
+  'payment',
   {
     id: text('id')
       .notNull()
@@ -74,6 +74,8 @@ export const printRequestPayment = sqliteTable(
     status: text('status', { enum: ['quote', 'pending', 'paid', 'canceled'] }).notNull(),
     squareInvoiceId: text('square_invoice_id'),
     squareOrderId: text('square_order_id'),
+    organizationId: text('organization_id').references(() => organization.id),
+    type: text('type', { enum: ['print_request', 'balance'] }).notNull(),
 
     total: integer('total').notNull(), // in cents
     orderObject: text('order_object'),
@@ -84,7 +86,7 @@ export const printRequestPayment = sqliteTable(
   ],
 );
 
-export type PrintRequestPayment = InferSelectModel<typeof printRequestPayment>;
+export type Payment = InferSelectModel<typeof payment>;
 
 export const printMaterial = sqliteTable('print_material', {
   id: text('id')
@@ -110,12 +112,40 @@ export const squareWebhookLog = sqliteTable('square_webhook_log', {
 
 export type SquareWebhookLog = InferSelectModel<typeof squareWebhookLog>;
 
+export const billingCode = sqliteTable('billing_code', {
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  code: text('code').notNull().unique(),
+  description: text('description').notNull(),
+  organizationId: text('organization_id').references(() => organization.id),
+  discountId: text('discount_id'),
+  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+});
+
+export type BillingCode = InferSelectModel<typeof billingCode>;
+
+export const organization = sqliteTable('organization', {
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+});
+
+export type Organization = InferSelectModel<typeof organization>;
+
 export const schema = {
   user,
   printRequest,
   printRequestFile,
-  printRequestPayment,
+  payment,
   printMaterial,
   settings,
   squareWebhookLog,
+  billingCode,
+  organization,
 };

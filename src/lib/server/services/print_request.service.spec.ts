@@ -27,10 +27,10 @@ vi.mock('$lib/server/repositories/print_request.repository', () => {
 });
 
 vi.mock('$lib/server/repositories/print_payment.repository', () => {
-  const MockPrintPaymentRepository = vi.fn();
-  MockPrintPaymentRepository.prototype.getById = vi.fn();
-  MockPrintPaymentRepository.prototype.updatePayment = vi.fn();
-  return { PrintPaymentRepository: MockPrintPaymentRepository };
+  const MockPaymentRepository = vi.fn();
+  MockPaymentRepository.prototype.getById = vi.fn();
+  MockPaymentRepository.prototype.updatePayment = vi.fn();
+  return { PaymentRepository: MockPaymentRepository };
 });
 
 vi.mock('$lib/server/repositories/square.repository', () => {
@@ -109,8 +109,7 @@ describe('PrintRequestService', () => {
       await import('$lib/server/repositories/print_files.repository');
     const { PrintRequestRepository } =
       await import('$lib/server/repositories/print_request.repository');
-    const { PrintPaymentRepository } =
-      await import('$lib/server/repositories/print_payment.repository');
+    const { PaymentRepository } = await import('$lib/server/repositories/print_payment.repository');
     const { SquareRepository } = await import('$lib/server/repositories/square.repository');
     const { DiscordRepository } = await import('$lib/server/repositories/discord.repository');
     const { SettingsRepository } = await import('$lib/server/repositories/settings.repository');
@@ -119,7 +118,7 @@ describe('PrintRequestService', () => {
     // Access the prototype methods (these are the actual mocks)
     mockFilesRepo = PrintFilesRepository.prototype;
     mockRequestRepo = PrintRequestRepository.prototype;
-    mockPaymentRepo = PrintPaymentRepository.prototype;
+    mockPaymentRepo = PaymentRepository.prototype;
     mockSquareRepo = SquareRepository.prototype;
     mockDiscordRepo = DiscordRepository.prototype;
     mockSettingsRepo = SettingsRepository.prototype;
@@ -767,6 +766,103 @@ describe('PrintRequestService', () => {
           completionDate: expect.anything(),
         }),
       );
+      expect(result).toEqual(mockUpdated);
+    });
+
+    it('should mark organization payment as paid when status changes to done', async () => {
+      // Arrange
+      const requestId = 'request-org-done';
+      const dto = { status: 'done' as const };
+      const mockRequest = {
+        id: requestId,
+        status: 'printing' as const,
+        paymentId: 'payment-org-123',
+      };
+      const mockPayment = {
+        id: 'payment-org-123',
+        organizationId: 'org-456',
+        status: 'pending',
+      };
+      const mockUpdated = [{ id: requestId, status: 'done' as const }];
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockPaymentRepo.getById).mockResolvedValue(mockPayment);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
+
+      // Act
+      const result = await printRequestService.updatePrintRequestStatus(requestId, dto);
+
+      // Assert
+      expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-org-123');
+      expect(mockPaymentRepo.updatePayment).toHaveBeenCalledWith('payment-org-123', {
+        status: 'paid',
+        paymentDate: expect.anything(),
+      });
+      expect(mockRequestRepo.update).toHaveBeenCalledWith(
+        requestId,
+        expect.objectContaining({
+          status: 'done',
+          completionDate: expect.anything(),
+        }),
+      );
+      expect(result).toEqual(mockUpdated);
+    });
+
+    it('should not mark payment as paid when status is done but payment is not from organization', async () => {
+      // Arrange
+      const requestId = 'request-regular-done';
+      const dto = { status: 'done' as const };
+      const mockRequest = {
+        id: requestId,
+        status: 'printing' as const,
+        paymentId: 'payment-regular-123',
+      };
+      const mockPayment = {
+        id: 'payment-regular-123',
+        organizationId: null, // Not an organization payment
+        status: 'pending',
+      };
+      const mockUpdated = [{ id: requestId, status: 'done' as const }];
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockPaymentRepo.getById).mockResolvedValue(mockPayment);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
+
+      // Act
+      const result = await printRequestService.updatePrintRequestStatus(requestId, dto);
+
+      // Assert
+      expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-regular-123');
+      expect(mockPaymentRepo.updatePayment).not.toHaveBeenCalled();
+      expect(result).toEqual(mockUpdated);
+    });
+
+    it('should not mark payment as paid when status is done but payment is already paid', async () => {
+      // Arrange
+      const requestId = 'request-already-paid';
+      const dto = { status: 'done' as const };
+      const mockRequest = {
+        id: requestId,
+        status: 'printing' as const,
+        paymentId: 'payment-already-paid',
+      };
+      const mockPayment = {
+        id: 'payment-already-paid',
+        organizationId: 'org-456',
+        status: 'paid', // Already paid
+      };
+      const mockUpdated = [{ id: requestId, status: 'done' as const }];
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockPaymentRepo.getById).mockResolvedValue(mockPayment);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
+
+      // Act
+      const result = await printRequestService.updatePrintRequestStatus(requestId, dto);
+
+      // Assert
+      expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-already-paid');
+      expect(mockPaymentRepo.updatePayment).not.toHaveBeenCalled();
       expect(result).toEqual(mockUpdated);
     });
 

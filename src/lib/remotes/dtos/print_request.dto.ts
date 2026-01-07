@@ -1,8 +1,8 @@
 import {
   schema,
+  type Payment,
   type PrintMaterial,
   type PrintRequestFile,
-  type PrintRequestPayment,
 } from '$lib/server/db/schema';
 import * as v from 'valibot';
 
@@ -78,7 +78,7 @@ export const searchPrintRequestsDto = v.object({
 export type SearchPrintRequestsDto = v.InferInput<typeof searchPrintRequestsDto>;
 
 export type PrintRequestDto = Omit<typeof schema.printRequest.$inferSelect, 'material'> & {
-  payment: PrintRequestPayment | null;
+  payment: Payment | null;
   material: PrintMaterial;
   files: PrintRequestFile[];
 };

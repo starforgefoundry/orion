@@ -29,12 +29,12 @@ export class SquareService extends BaseService {
     // Process different webhook event types
     if (webhookData.type === 'invoice.payment_made') {
       const invoiceId = webhookData.data.id;
-      await this.printPaymentRepository.updateInvoiceStatus(invoiceId, 'paid');
+      await this.paymentRepository.updateInvoiceStatus(invoiceId, 'paid');
     }
 
     if (webhookData.type === 'invoice.canceled') {
       const invoiceId = webhookData.data.id;
-      await this.printPaymentRepository.updateInvoiceStatus(invoiceId, 'canceled');
+      await this.paymentRepository.updateInvoiceStatus(invoiceId, 'canceled');
     }
 
     return { success: true };

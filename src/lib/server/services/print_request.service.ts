@@ -49,13 +49,21 @@ export class PrintRequestService extends BaseService {
   async updatePrintRequestStatus(id: string, dto: UpdatePrintRequestStatusDto) {
     const request = await this.printRequestRepository.getById(id);
     const payment = request?.paymentId
-      ? await this.printPaymentRepository.getById(request?.paymentId)
+      ? await this.paymentRepository.getById(request?.paymentId)
       : undefined;
 
     const updates: Partial<PrintRequest> = { status: dto.status };
 
     if (dto.status === 'done') {
       updates.completionDate = DateTime.now();
+
+      // Mark organization payment as paid when print request is done
+      if (payment && payment.organizationId && payment.status === 'pending') {
+        await this.paymentRepository.updatePayment(payment.id, {
+          status: 'paid',
+          paymentDate: DateTime.now(),
+        });
+      }
 
       // Send pickup notification email to customer
       const ctx = getRequestEvent().platform?.ctx;
@@ -79,7 +87,7 @@ export class PrintRequestService extends BaseService {
 
       // cancel payment
       if (payment) {
-        await this.printPaymentRepository.updatePayment(payment.id, { status: 'canceled' });
+        await this.paymentRepository.updatePayment(payment.id, { status: 'canceled' });
       }
     }
 

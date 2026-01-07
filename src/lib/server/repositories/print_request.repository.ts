@@ -29,17 +29,14 @@ export class PrintRequestRepository extends BaseRepository {
       .select()
       .from(schema.printRequest)
       .innerJoin(schema.printMaterial, eq(schema.printRequest.material, schema.printMaterial.id))
-      .leftJoin(
-        schema.printRequestPayment,
-        eq(schema.printRequest.paymentId, schema.printRequestPayment.id),
-      )
+      .leftJoin(schema.payment, eq(schema.printRequest.paymentId, schema.payment.id))
       .orderBy(desc(schema.printRequest.submissionDate))
       .limit(100);
 
-    return results.map(({ print_request, print_material, print_request_payment }) => ({
+    return results.map(({ print_request, print_material, payment }) => ({
       ...print_request,
       material: print_material,
-      payment: print_request_payment,
+      payment: payment,
     }));
   }
 
@@ -67,20 +64,19 @@ export class PrintRequestRepository extends BaseRepository {
       .select()
       .from(schema.printRequest)
       .innerJoin(schema.printMaterial, eq(schema.printRequest.material, schema.printMaterial.id))
-      .leftJoin(
-        schema.printRequestPayment,
-        eq(schema.printRequest.paymentId, schema.printRequestPayment.id),
-      )
+      .leftJoin(schema.payment, eq(schema.printRequest.paymentId, schema.payment.id))
+      .leftJoin(schema.billingCode, eq(schema.printRequest.billingCode, schema.billingCode.code))
+      .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
       .where(whereClause)
       .orderBy(desc(schema.printRequest.submissionDate))
       .limit(dto.pageSize ?? 25)
       .offset(((dto.page ?? 1) - 1) * (dto.pageSize ?? 25))
       .execute();
 
-    const data = results.map(({ print_request, print_material, print_request_payment }) => ({
+    const data = results.map(({ print_request, print_material, payment }) => ({
       ...print_request,
       material: print_material,
-      payment: print_request_payment,
+      payment: payment,
     }));
 
     const pageSize = dto.pageSize ?? 25;
@@ -103,21 +99,21 @@ export class PrintRequestRepository extends BaseRepository {
       .select()
       .from(schema.printRequest)
       .innerJoin(schema.printMaterial, eq(schema.printRequest.material, schema.printMaterial.id))
-      .leftJoin(
-        schema.printRequestPayment,
-        eq(schema.printRequest.paymentId, schema.printRequestPayment.id),
-      )
+      .leftJoin(schema.payment, eq(schema.printRequest.paymentId, schema.payment.id))
       .leftJoin(
         schema.printRequestFile,
         eq(schema.printRequest.id, schema.printRequestFile.printRequestId),
       )
+      .leftJoin(schema.billingCode, eq(schema.printRequest.billingCode, schema.billingCode.code))
+      .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
       .orderBy(desc(schema.printRequest.submissionDate))
       .where(eq(schema.printRequest.id, id));
 
     return result
       ? {
           ...result[0].print_request,
-          payment: result[0].print_request_payment,
+          organization: result[0].organization,
+          payment: result[0].payment,
           material: result[0].print_material,
           files: result.map((r) => r.print_request_file).filter((f) => f !== null),
         }

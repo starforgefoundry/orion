@@ -31,6 +31,7 @@
     mdiCurrencyUsd,
     mdiDownload,
     mdiEmail,
+    mdiGroup,
     mdiHelp,
     mdiMonitorShare,
     mdiOpenInNew,
@@ -201,6 +202,12 @@
             <Icon icon={mdiEmail} size="24" />
             <Text color="primary"><a href={`mailto:${request?.email}`}>{request?.email}</a></Text>
           </HStack>
+          {#if request?.organization}
+            <HStack>
+              <Icon icon={mdiGroup} size="24" />
+              <Text color="primary">{request?.organization.name}</Text>
+            </HStack>
+          {/if}
         </Stack>
         <Stack class="rounded-2xl border-2 border-slate-700 p-4">
           <Stack>

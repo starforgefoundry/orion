@@ -36,6 +36,7 @@ describe('PrintPaymentService', () => {
   let mockRequestRepo: any;
   let mockSettingsRepo: any;
   let mockSquareRepo: any;
+  let mockBillingCodeRepo: any;
   let squareServiceMock: any;
 
   beforeEach(async () => {
@@ -66,6 +67,14 @@ describe('PrintPaymentService', () => {
       calculateOrder: vi.fn(),
     };
 
+    mockBillingCodeRepo = {
+      getByCode: vi.fn(),
+      getById: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      getAll: vi.fn(),
+    };
+
     printPaymentService = new PrintPaymentService(
       undefined,
       undefined,
@@ -73,6 +82,10 @@ describe('PrintPaymentService', () => {
       mockPaymentRepo,
       mockSettingsRepo,
       mockSquareRepo,
+      undefined,
+      undefined,
+      undefined,
+      mockBillingCodeRepo,
     );
 
     const { squareService } = await import('./square.service');
@@ -162,12 +175,17 @@ describe('PrintPaymentService', () => {
 
       // Assert
       expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequestSquare');
-      expect(mockSquareRepo.getCatalogByIds).toHaveBeenCalledWith(['plate-456', 'discount-789']);
+      expect(mockSquareRepo.getCatalogByIds).toHaveBeenCalledWith(['plate-456']);
       expect(squareServiceMock.checkActiveMember).toHaveBeenCalledWith(customerEmail);
       expect(result).toEqual({
         additionalBuildPlateModifier: 1000,
-        memberPrintDiscount: 10,
-        memberDiscountApplied: false,
+        discounts: [
+          {
+            id: 'discount-789',
+            name: 'Unnamed Discount',
+            percentage: 10,
+          },
+        ],
       });
     });
 
@@ -210,9 +228,14 @@ describe('PrintPaymentService', () => {
       const result = await printPaymentService.getPricingInfo(customerEmail);
 
       // Assert
-      expect(result.memberDiscountApplied).toBe(true);
+      expect(result.discounts).toStrictEqual([
+        {
+          id: 'discount-789',
+          name: 'Unnamed Discount',
+          percentage: 15,
+        },
+      ]);
       expect(result.additionalBuildPlateModifier).toBe(1500);
-      expect(result.memberPrintDiscount).toBe(15);
     });
   });
 
@@ -1179,6 +1202,967 @@ describe('PrintPaymentService', () => {
       await expect(printPaymentService.upsertPayment(dto)).rejects.toThrow(
         'Failed to calculate order in Square',
       );
+    });
+  });
+
+  describe('Group Billing', () => {
+    describe('getPricingInfo with billing code', () => {
+      it('should include billing code discount when valid billing code is provided', async () => {
+        // Arrange
+        const customerEmail = 'user@example.com';
+        const billingCode = 'GROUP123';
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'discount-789',
+        };
+
+        const mockBuildPlateItem: CatalogObject = {
+          type: 'ITEM_VARIATION',
+          id: 'plate-456',
+          itemVariationData: {
+            priceMoney: {
+              amount: BigInt(1000),
+              currency: 'USD',
+            },
+          },
+        };
+
+        const mockBillingDiscount: CatalogObject = {
+          type: 'DISCOUNT',
+          id: 'billing-discount-456',
+          discountData: {
+            name: 'Group Discount',
+            percentage: '20',
+          },
+        };
+
+        const mockBillingCodeData = {
+          billingCode: {
+            id: 'billing-id-123',
+            code: 'GROUP123',
+            description: 'Group billing code',
+            organizationId: 'org-123',
+            discountId: 'billing-discount-456',
+          },
+          organization: {
+            id: 'org-123',
+            name: 'Test Organization',
+            email: 'org@example.com',
+            archived: false,
+          },
+        };
+
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
+          objects: [mockBuildPlateItem, mockBillingDiscount],
+        });
+
+        // Act
+        const result = await printPaymentService.getPricingInfo(customerEmail, billingCode);
+
+        // Assert
+        expect(mockBillingCodeRepo.getByCode).toHaveBeenCalledWith('GROUP123');
+        expect(mockSquareRepo.getCatalogByIds).toHaveBeenCalledWith([
+          'plate-456',
+          'billing-discount-456',
+        ]);
+        expect(result).toEqual({
+          additionalBuildPlateModifier: 1000,
+          discounts: [
+            {
+              id: 'billing-discount-456',
+              name: 'Group Discount',
+              percentage: 20,
+            },
+          ],
+        });
+      });
+
+      it('should include both member and billing code discounts when user is active member with billing code', async () => {
+        // Arrange
+        const customerEmail = 'member@example.com';
+        const billingCode = 'GROUP456';
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'member-discount-789',
+        };
+
+        const mockBuildPlateItem: CatalogObject = {
+          type: 'ITEM_VARIATION',
+          id: 'plate-456',
+          itemVariationData: {
+            priceMoney: {
+              amount: BigInt(1000),
+              currency: 'USD',
+            },
+          },
+        };
+
+        const mockMemberDiscount: CatalogObject = {
+          type: 'DISCOUNT',
+          id: 'member-discount-789',
+          discountData: {
+            name: 'Member Discount',
+            percentage: '15',
+          },
+        };
+
+        const mockBillingDiscount: CatalogObject = {
+          type: 'DISCOUNT',
+          id: 'billing-discount-999',
+          discountData: {
+            name: 'Organization Discount',
+            percentage: '25',
+          },
+        };
+
+        const mockBillingCodeData = {
+          billingCode: {
+            id: 'billing-id-456',
+            code: 'GROUP456',
+            description: 'Organization billing code',
+            organizationId: 'org-456',
+            discountId: 'billing-discount-999',
+          },
+          organization: null,
+        };
+
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
+          objects: [mockBuildPlateItem, mockMemberDiscount, mockBillingDiscount],
+        });
+
+        // Act
+        const result = await printPaymentService.getPricingInfo(customerEmail, billingCode);
+
+        // Assert
+        expect(mockBillingCodeRepo.getByCode).toHaveBeenCalledWith('GROUP456');
+        expect(mockSquareRepo.getCatalogByIds).toHaveBeenCalledWith([
+          'plate-456',
+          'member-discount-789',
+          'billing-discount-999',
+        ]);
+        expect(result.discounts).toHaveLength(2);
+        expect(result.discounts).toEqual(
+          expect.arrayContaining([
+            {
+              id: 'member-discount-789',
+              name: 'Member Discount',
+              percentage: 15,
+            },
+            {
+              id: 'billing-discount-999',
+              name: 'Organization Discount',
+              percentage: 25,
+            },
+          ]),
+        );
+      });
+
+      it('should not include billing code discount when billing code has no discount', async () => {
+        // Arrange
+        const customerEmail = 'user@example.com';
+        const billingCode = 'NODISCOUNT';
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'discount-789',
+        };
+
+        const mockBuildPlateItem: CatalogObject = {
+          type: 'ITEM_VARIATION',
+          id: 'plate-456',
+          itemVariationData: {
+            priceMoney: {
+              amount: BigInt(1000),
+              currency: 'USD',
+            },
+          },
+        };
+
+        const mockBillingCodeData = {
+          billingCode: {
+            id: 'billing-id-789',
+            code: 'NODISCOUNT',
+            description: 'Billing code without discount',
+            organizationId: 'org-789',
+            discountId: null,
+          },
+          organization: null,
+        };
+
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
+          objects: [mockBuildPlateItem],
+        });
+
+        // Act
+        const result = await printPaymentService.getPricingInfo(customerEmail, billingCode);
+
+        // Assert
+        expect(mockBillingCodeRepo.getByCode).toHaveBeenCalledWith('NODISCOUNT');
+        expect(mockSquareRepo.getCatalogByIds).toHaveBeenCalledWith(['plate-456']);
+        expect(result.discounts).toHaveLength(0);
+      });
+
+      it('should not include billing code discount when billing code is not found', async () => {
+        // Arrange
+        const customerEmail = 'user@example.com';
+        const billingCode = 'INVALID';
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'discount-789',
+        };
+
+        const mockBuildPlateItem: CatalogObject = {
+          type: 'ITEM_VARIATION',
+          id: 'plate-456',
+          itemVariationData: {
+            priceMoney: {
+              amount: BigInt(1000),
+              currency: 'USD',
+            },
+          },
+        };
+
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(null);
+        vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
+          objects: [mockBuildPlateItem],
+        });
+
+        // Act
+        const result = await printPaymentService.getPricingInfo(customerEmail, billingCode);
+
+        // Assert
+        expect(mockBillingCodeRepo.getByCode).toHaveBeenCalledWith('INVALID');
+        expect(mockSquareRepo.getCatalogByIds).toHaveBeenCalledWith(['plate-456']);
+        expect(result.discounts).toHaveLength(0);
+      });
+    });
+
+    describe('upsertPayment with organization billing', () => {
+      it('should handle organization billing when billing code has organization', async () => {
+        // Arrange
+        const dto: CreatePaymentDto = {
+          requestId: 'request-org',
+          materialCost: 10000,
+          buildPlates: 3,
+        };
+
+        const mockRequest: PrintRequestDto = {
+          id: 'request-org',
+          customerName: 'Org User',
+          email: 'orguser@example.com',
+          projectName: 'Org Project',
+          status: 'in_queue',
+          isQuote: false,
+          paymentId: null,
+          billingCode: 'ORG123',
+          submissionDate: DateTime.now(),
+        } as PrintRequestDto;
+
+        const mockBillingCodeData = {
+          billingCode: {
+            id: 'billing-code-123',
+            code: 'ORG123',
+            description: 'Organization code',
+            organizationId: 'org-123',
+            discountId: 'org-discount-456',
+          },
+          organization: {
+            id: 'org-123',
+            name: 'Test Organization',
+            email: 'billing@org.com',
+            archived: false,
+          },
+        };
+
+        const mockCustomer: Customer = {
+          id: 'customer-org',
+          emailAddress: 'orguser@example.com',
+        };
+
+        const mockCalculatedOrder: Order = {
+          id: 'order-org',
+          locationId: 'loc-123',
+          netAmountDueMoney: { amount: BigInt(12000), currency: 'USD' },
+        };
+
+        const mockPayment = {
+          id: 'payment-org',
+          requestId: 'request-org',
+          status: 'pending',
+          total: 12000,
+          organizationId: 'org-123',
+          type: 'print_request',
+        };
+
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'member-discount-789',
+        };
+
+        vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockBillingCodeRepo.getById).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+        vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(mockCalculatedOrder);
+        vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
+        vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
+
+        // Act
+        const result = await printPaymentService.upsertPayment(dto);
+
+        // Assert
+        expect(mockBillingCodeRepo.getByCode).toHaveBeenCalledWith('ORG123');
+        expect(mockBillingCodeRepo.getById).toHaveBeenCalledWith('billing-code-123');
+        expect(mockSquareRepo.upsertCustomer).toHaveBeenCalledWith(
+          'Org User',
+          'orguser@example.com',
+        );
+        expect(mockSquareRepo.calculateOrder).toHaveBeenCalled();
+        expect(mockSquareRepo.createOrder).not.toHaveBeenCalled();
+        expect(mockSquareRepo.sendInvoice).not.toHaveBeenCalled();
+        expect(mockPaymentRepo.savePayment).toHaveBeenCalledWith(
+          'request-org',
+          expect.objectContaining({
+            status: 'pending',
+            total: 12000,
+            organizationId: 'org-123',
+            type: 'print_request',
+            squareInvoiceId: null,
+            squareOrderId: null,
+          }),
+        );
+        expect(mockRequestRepo.update).toHaveBeenCalledWith('request-org', {
+          materialCost: 10000,
+          buildplateCount: 3,
+        });
+        expect(result).toEqual(mockPayment);
+      });
+
+      it('should use billing code discount (not member discount) for organization billing', async () => {
+        // Arrange
+        const dto: CreatePaymentDto = {
+          requestId: 'request-org-member',
+          materialCost: 5000,
+          buildPlates: 1,
+        };
+
+        const mockRequest: PrintRequestDto = {
+          id: 'request-org-member',
+          customerName: 'Org Member',
+          email: 'orgmember@example.com',
+          projectName: 'Org Member Project',
+          status: 'in_queue',
+          isQuote: false,
+          paymentId: null,
+          billingCode: 'ORGMEMBER',
+          submissionDate: DateTime.now(),
+        } as PrintRequestDto;
+
+        const mockBillingCodeData = {
+          billingCode: {
+            id: 'billing-code-456',
+            code: 'ORGMEMBER',
+            description: 'Org member code',
+            organizationId: 'org-456',
+            discountId: 'org-discount-789',
+          },
+          organization: {
+            id: 'org-456',
+            name: 'Member Organization',
+            email: 'billing@memberorg.com',
+            archived: false,
+          },
+        };
+
+        const mockCustomer: Customer = {
+          id: 'customer-org-member',
+          emailAddress: 'orgmember@example.com',
+        };
+
+        const mockCalculatedOrder: Order = {
+          id: 'order-org-member',
+          locationId: 'loc-123',
+          netAmountDueMoney: { amount: BigInt(4500), currency: 'USD' },
+        };
+
+        const mockPayment = {
+          id: 'payment-org-member',
+          requestId: 'request-org-member',
+          status: 'pending',
+          organizationId: 'org-456',
+        };
+
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'member-discount-999',
+        };
+
+        vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockBillingCodeRepo.getById).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+        vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(mockCalculatedOrder);
+        vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
+        vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
+        // Member check should not be called for organization billing
+        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+
+        // Act
+        await printPaymentService.upsertPayment(dto);
+
+        // Assert
+        const orderCall = vi.mocked(mockSquareRepo.calculateOrder).mock.calls[0][0];
+        // Verify discount is from billing code, not member discount
+        expect(orderCall.order.discounts).toHaveLength(1);
+        expect(orderCall.order.discounts[0].catalogObjectId).toBe('org-discount-789');
+        // Member discount should NOT be in the order
+        expect(orderCall.order.discounts[0].catalogObjectId).not.toBe('member-discount-999');
+        // Member check should not be called in organization billing flow
+        expect(squareServiceMock.checkActiveMember).not.toHaveBeenCalled();
+      });
+
+      it('should handle organization billing without discount when billing code has no discount', async () => {
+        // Arrange
+        const dto: CreatePaymentDto = {
+          requestId: 'request-org-nodiscount',
+          materialCost: 7000,
+          buildPlates: 2,
+        };
+
+        const mockRequest: PrintRequestDto = {
+          id: 'request-org-nodiscount',
+          customerName: 'Org No Discount',
+          email: 'nodiscount@example.com',
+          projectName: 'No Discount Project',
+          status: 'in_queue',
+          isQuote: false,
+          paymentId: null,
+          billingCode: 'ORGNODISCOUNT',
+          submissionDate: DateTime.now(),
+        } as PrintRequestDto;
+
+        const mockBillingCodeData = {
+          billingCode: {
+            id: 'billing-code-789',
+            code: 'ORGNODISCOUNT',
+            description: 'Org code without discount',
+            organizationId: 'org-789',
+            discountId: null,
+          },
+          organization: {
+            id: 'org-789',
+            name: 'No Discount Org',
+            email: 'billing@nodiscount.com',
+            archived: false,
+          },
+        };
+
+        const mockCustomer: Customer = {
+          id: 'customer-org-nodiscount',
+          emailAddress: 'nodiscount@example.com',
+        };
+
+        const mockCalculatedOrder: Order = {
+          id: 'order-org-nodiscount',
+          locationId: 'loc-123',
+          netAmountDueMoney: { amount: BigInt(7000), currency: 'USD' },
+        };
+
+        const mockPayment = {
+          id: 'payment-org-nodiscount',
+          requestId: 'request-org-nodiscount',
+          status: 'pending',
+          organizationId: 'org-789',
+        };
+
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'member-discount-999',
+        };
+
+        vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockBillingCodeRepo.getById).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+        vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(mockCalculatedOrder);
+        vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
+        vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
+
+        // Act
+        await printPaymentService.upsertPayment(dto);
+
+        // Assert
+        const orderCall = vi.mocked(mockSquareRepo.calculateOrder).mock.calls[0][0];
+        // When there's no discount, discounts array should be empty or have length 0
+        expect(orderCall.order.discounts ?? []).toHaveLength(0);
+        expect(mockPaymentRepo.savePayment).toHaveBeenCalledWith(
+          'request-org-nodiscount',
+          expect.objectContaining({
+            organizationId: 'org-789',
+          }),
+        );
+      });
+
+      it('should throw error when organization billing calculateOrder fails', async () => {
+        // Arrange
+        const dto: CreatePaymentDto = {
+          requestId: 'request-org-fail',
+          materialCost: 5000,
+          buildPlates: 1,
+        };
+
+        const mockRequest: PrintRequestDto = {
+          id: 'request-org-fail',
+          customerName: 'Org Fail User',
+          email: 'orgfail@example.com',
+          projectName: 'Org Fail Project',
+          status: 'in_queue',
+          isQuote: false,
+          paymentId: null,
+          billingCode: 'ORGFAIL',
+          submissionDate: DateTime.now(),
+        } as PrintRequestDto;
+
+        const mockBillingCodeData = {
+          billingCode: {
+            id: 'billing-code-fail',
+            code: 'ORGFAIL',
+            description: 'Org fail code',
+            organizationId: 'org-fail',
+            discountId: 'discount-fail',
+          },
+          organization: {
+            id: 'org-fail',
+            name: 'Fail Organization',
+            email: 'billing@fail.com',
+            archived: false,
+          },
+        };
+
+        const mockCustomer: Customer = {
+          id: 'customer-org-fail',
+          emailAddress: 'orgfail@example.com',
+        };
+
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'member-discount-999',
+        };
+
+        vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockBillingCodeRepo.getById).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+        vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(null);
+
+        // Act & Assert
+        await expect(printPaymentService.upsertPayment(dto)).rejects.toThrow(
+          'Failed to calculate order in Square',
+        );
+      });
+
+      it('should use regular invoice flow when billing code exists but has no organization', async () => {
+        // Arrange
+        const dto: CreatePaymentDto = {
+          requestId: 'request-billing-no-org',
+          materialCost: 6000,
+          buildPlates: 1,
+        };
+
+        const mockRequest: PrintRequestDto = {
+          id: 'request-billing-no-org',
+          customerName: 'No Org User',
+          email: 'noorg@example.com',
+          projectName: 'No Org Project',
+          status: 'in_queue',
+          isQuote: false,
+          paymentId: null,
+          billingCode: 'NOORG',
+          submissionDate: DateTime.now(),
+        } as PrintRequestDto;
+
+        const mockBillingCodeData = {
+          billingCode: {
+            id: 'billing-code-noorg',
+            code: 'NOORG',
+            description: 'Code without organization',
+            organizationId: null,
+            discountId: 'discount-noorg',
+          },
+          organization: null,
+        };
+
+        const mockCustomer: Customer = {
+          id: 'customer-noorg',
+          emailAddress: 'noorg@example.com',
+        };
+
+        const mockOrder: Order = {
+          id: 'order-noorg',
+          locationId: 'loc-123',
+          netAmountDueMoney: { amount: BigInt(5400), currency: 'USD' },
+        };
+
+        const mockInvoice: Invoice = {
+          id: 'inv-noorg',
+          version: 1,
+          createdAt: DateTime.now().toISO(),
+        };
+
+        const mockPayment = {
+          id: 'payment-noorg',
+          requestId: 'request-billing-no-org',
+          status: 'pending',
+          squareInvoiceId: 'inv-noorg',
+          squareOrderId: 'order-noorg',
+        };
+
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'member-discount-999',
+        };
+
+        vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+        vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
+        vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
+        vi.mocked(mockSquareRepo.sendInvoice).mockResolvedValue(undefined);
+        vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
+        vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
+
+        // Act
+        await printPaymentService.upsertPayment(dto);
+
+        // Assert
+        expect(mockSquareRepo.createOrder).toHaveBeenCalled();
+        expect(mockPaymentRepo.createInvoice).toHaveBeenCalledWith(mockOrder);
+        expect(mockSquareRepo.sendInvoice).toHaveBeenCalledWith('inv-noorg', 1);
+        expect(mockSquareRepo.calculateOrder).not.toHaveBeenCalled();
+        expect(mockPaymentRepo.savePayment).toHaveBeenCalledWith(
+          'request-billing-no-org',
+          expect.objectContaining({
+            status: 'pending',
+            squareInvoiceId: 'inv-noorg',
+            squareOrderId: 'order-noorg',
+          }),
+        );
+      });
+    });
+
+    describe('Archived billing codes in payment processing', () => {
+      it('should allow processing payment with archived billing code that has discount', async () => {
+        // Arrange - archived billing codes should still be retrievable and usable in payment processing
+        const dto: CreatePaymentDto = {
+          requestId: 'request-archived',
+          materialCost: 5000,
+          buildPlates: 1,
+        };
+
+        const mockRequest: PrintRequestDto = {
+          id: 'request-archived',
+          customerName: 'Test User',
+          email: 'user@example.com',
+          projectName: 'Test Project',
+          status: 'in_queue',
+          isQuote: false,
+          paymentId: null,
+          billingCode: 'ARCHIVED123',
+          submissionDate: DateTime.now(),
+        } as PrintRequestDto;
+
+        // The billing code is archived, but should still be retrievable
+        const mockBillingCodeData = {
+          billingCode: {
+            id: 'billing-archived',
+            code: 'ARCHIVED123',
+            description: 'Archived billing code',
+            organizationId: null,
+            discountId: 'archived-discount-123',
+            archived: true, // ARCHIVED
+          },
+          organization: null,
+        };
+
+        const mockCustomer: Customer = {
+          id: 'customer-123',
+          emailAddress: 'user@example.com',
+        };
+
+        const mockOrder: Order = {
+          id: 'order-archived',
+          locationId: 'loc-123',
+          netAmountDueMoney: { amount: BigInt(4000), currency: 'USD' },
+          version: 1,
+        };
+
+        const mockInvoice: Invoice = {
+          id: 'inv-archived',
+          version: 1,
+          createdAt: DateTime.now().toISO(),
+        };
+
+        const mockPayment = {
+          id: 'payment-archived',
+          requestId: 'request-archived',
+          status: 'pending',
+          total: 4000,
+        };
+
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'member-discount-789',
+        };
+
+        const mockBuildPlateItem: CatalogObject = {
+          type: 'ITEM_VARIATION',
+          id: 'plate-456',
+          itemVariationData: {
+            priceMoney: {
+              amount: BigInt(1000),
+              currency: 'USD',
+            },
+          },
+        };
+
+        const mockArchivedDiscount: CatalogObject = {
+          type: 'DISCOUNT',
+          id: 'archived-discount-123',
+          discountData: {
+            name: 'Archived Discount',
+            percentage: '20',
+          },
+        };
+
+        vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
+          objects: [mockBuildPlateItem, mockArchivedDiscount],
+        });
+        vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+        vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
+        vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
+        vi.mocked(mockSquareRepo.sendInvoice).mockResolvedValue(undefined);
+        vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
+        vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
+
+        // Act
+        const result = await printPaymentService.upsertPayment(dto);
+
+        // Assert
+        // Verify that the billing code was retrieved even though it's archived
+        expect(mockBillingCodeRepo.getByCode).toHaveBeenCalledWith('ARCHIVED123');
+
+        // Verify that the discount from the archived billing code was still applied
+        expect(mockSquareRepo.createOrder).toHaveBeenCalledWith(
+          expect.objectContaining({
+            order: expect.objectContaining({
+              discounts: expect.arrayContaining([
+                expect.objectContaining({
+                  catalogObjectId: 'archived-discount-123',
+                }),
+              ]),
+            }),
+          }),
+        );
+
+        expect(result).toBeDefined();
+        expect(result.status).toBe('pending');
+      });
+
+      it('should allow organization billing with archived billing code', async () => {
+        // Arrange - archived billing codes with organizations should still work
+        const dto: CreatePaymentDto = {
+          requestId: 'request-org-archived',
+          materialCost: 8000,
+          buildPlates: 2,
+        };
+
+        const mockRequest: PrintRequestDto = {
+          id: 'request-org-archived',
+          customerName: 'Org User',
+          email: 'user@org.com',
+          projectName: 'Org Project',
+          status: 'in_queue',
+          isQuote: false,
+          paymentId: null,
+          billingCode: 'OLDORG123',
+          submissionDate: DateTime.now(),
+        } as PrintRequestDto;
+
+        // Archived billing code with organization
+        const mockBillingCodeData = {
+          billingCode: {
+            id: 'billing-old-org',
+            code: 'OLDORG123',
+            description: 'Old organization code',
+            organizationId: 'org-archived',
+            discountId: 'org-discount-old',
+            archived: true, // ARCHIVED
+          },
+          organization: {
+            id: 'org-archived',
+            name: 'Old Organization',
+            email: 'billing@oldorg.com',
+            archived: false, // Organization is not archived
+          },
+        };
+
+        const mockCustomer: Customer = {
+          id: 'customer-org',
+          emailAddress: 'billing@oldorg.com',
+        };
+
+        const mockCalculatedOrder: Order = {
+          id: 'order-org-archived',
+          locationId: 'loc-123',
+          netAmountDueMoney: { amount: BigInt(7000), currency: 'USD' },
+        };
+
+        const mockPayment = {
+          id: 'payment-org-archived',
+          requestId: 'request-org-archived',
+          status: 'pending',
+          total: 7000,
+          organizationId: 'org-archived',
+          type: 'print_request',
+        };
+
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'member-discount-789',
+        };
+
+        vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+        vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(mockCalculatedOrder);
+        vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
+        vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
+
+        // Act
+        const result = await printPaymentService.upsertPayment(dto);
+
+        // Assert
+        // Verify that the archived billing code was still used for organization billing
+        expect(mockBillingCodeRepo.getByCode).toHaveBeenCalledWith('OLDORG123');
+        // Organization billing uses the request's customer info, not the organization's
+        expect(mockSquareRepo.upsertCustomer).toHaveBeenCalledWith('Org User', 'user@org.com');
+        expect(mockPaymentRepo.savePayment).toHaveBeenCalledWith(
+          'request-org-archived',
+          expect.objectContaining({
+            organizationId: 'org-archived',
+            type: 'print_request',
+          }),
+        );
+        expect(result.organizationId).toBe('org-archived');
+      });
+
+      it('should handle getPricingInfo with archived billing code', async () => {
+        // Arrange
+        const customerEmail = 'user@example.com';
+        const billingCode = 'ARCHIVED456';
+
+        const mockSquareSettings = {
+          locationId: 'loc-123',
+          printRequestItemId: 'item-123',
+          additionalBuildPlateItemId: 'plate-456',
+          memberPrintDiscountId: 'discount-789',
+        };
+
+        const mockBuildPlateItem: CatalogObject = {
+          type: 'ITEM_VARIATION',
+          id: 'plate-456',
+          itemVariationData: {
+            priceMoney: {
+              amount: BigInt(1000),
+              currency: 'USD',
+            },
+          },
+        };
+
+        const mockArchivedDiscount: CatalogObject = {
+          type: 'DISCOUNT',
+          id: 'archived-discount-456',
+          discountData: {
+            name: 'Archived Code Discount',
+            percentage: '15',
+          },
+        };
+
+        const mockBillingCodeData = {
+          billingCode: {
+            id: 'billing-archived-456',
+            code: 'ARCHIVED456',
+            description: 'Another archived code',
+            organizationId: null,
+            discountId: 'archived-discount-456',
+            archived: true, // ARCHIVED
+          },
+          organization: null,
+        };
+
+        vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
+        vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
+          objects: [mockBuildPlateItem, mockArchivedDiscount],
+        });
+
+        // Act
+        const result = await printPaymentService.getPricingInfo(customerEmail, billingCode);
+
+        // Assert
+        expect(mockBillingCodeRepo.getByCode).toHaveBeenCalledWith('ARCHIVED456');
+        expect(result.discounts).toHaveLength(1);
+        expect(result.discounts[0]).toEqual({
+          id: 'archived-discount-456',
+          name: 'Archived Code Discount',
+          percentage: 15,
+        });
+      });
     });
   });
 });

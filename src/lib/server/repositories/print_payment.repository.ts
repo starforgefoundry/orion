@@ -4,12 +4,12 @@ import { eq, type InferInsertModel } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { Order } from 'square';
 
-export class PrintPaymentRepository extends BaseRepository {
+export class PaymentRepository extends BaseRepository {
   async getById(paymentId: string) {
     return await this.db
       .select()
-      .from(schema.printRequestPayment)
-      .where(eq(schema.printRequestPayment.id, paymentId))
+      .from(schema.payment)
+      .where(eq(schema.payment.id, paymentId))
       .get();
   }
 
@@ -38,17 +38,14 @@ export class PrintPaymentRepository extends BaseRepository {
     return created.invoice;
   }
 
-  async savePayment(
-    requestId: string,
-    payment: InferInsertModel<typeof schema.printRequestPayment>,
-  ) {
+  async savePayment(requestId: string, payment: InferInsertModel<typeof schema.payment>) {
     const { id, ...rest } = payment;
 
     const result = await this.db
-      .insert(schema.printRequestPayment)
+      .insert(schema.payment)
       .values(payment)
       .onConflictDoUpdate({
-        target: schema.printRequestPayment.id,
+        target: schema.payment.id,
         set: rest,
       })
       .returning()
@@ -65,25 +62,31 @@ export class PrintPaymentRepository extends BaseRepository {
     return result;
   }
 
+  async createStandalonePayment(payment: InferInsertModel<typeof schema.payment>) {
+    const result = await this.db.insert(schema.payment).values(payment).returning().get();
+
+    return result;
+  }
+
   async updatePayment(
     paymentId: string,
-    updates: Partial<InferInsertModel<typeof schema.printRequestPayment>>,
+    updates: Partial<InferInsertModel<typeof schema.payment>>,
   ) {
     return await this.db
-      .update(schema.printRequestPayment)
+      .update(schema.payment)
       .set(updates)
-      .where(eq(schema.printRequestPayment.id, paymentId))
+      .where(eq(schema.payment.id, paymentId))
       .returning();
   }
 
   async updateInvoiceStatus(invoiceId: string, status: 'paid' | 'canceled') {
     await this.db
-      .update(schema.printRequestPayment)
+      .update(schema.payment)
       .set({
         status: status,
         paymentDate: status === 'paid' ? DateTime.now() : undefined,
       })
-      .where(eq(schema.printRequestPayment.squareInvoiceId, invoiceId))
+      .where(eq(schema.payment.squareInvoiceId, invoiceId))
       .execute();
   }
 
@@ -92,16 +95,13 @@ export class PrintPaymentRepository extends BaseRepository {
       .select()
       .from(schema.printRequest)
       .where(eq(schema.printRequest.id, printRequestId))
-      .leftJoin(
-        schema.printRequestPayment,
-        eq(schema.printRequest.paymentId, schema.printRequestPayment.id),
-      )
+      .leftJoin(schema.payment, eq(schema.printRequest.paymentId, schema.payment.id))
       .get();
 
     if (!result) {
       return null;
     }
 
-    return result.print_request_payment;
+    return result.payment;
   }
 }
