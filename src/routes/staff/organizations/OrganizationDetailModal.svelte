@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Pagination from '$lib/frontend/components/Pagination.svelte';
   import {
     Table,
     TableBody,
@@ -7,7 +8,6 @@
     TableHeaderCell,
     TableRow,
   } from '$lib/frontend/components/table';
-  import Pagination from '$lib/frontend/components/Pagination.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import {
     archiveOrganization,
@@ -53,7 +53,7 @@
   let editEmail = $state('');
   let originalName = $state('');
   let originalEmail = $state('');
-  
+
   // Pagination state
   let chargesCurrentPage = $state(1);
   let chargesItemsPerPage = 10;
@@ -277,7 +277,7 @@
               {/if}
             </TableBody>
           </Table>
-          
+
           <Pagination
             currentPage={chargesCurrentPage}
             totalPages={chargesTotalPages()}

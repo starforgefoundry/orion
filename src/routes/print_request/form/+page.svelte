@@ -149,10 +149,10 @@
       />
     </Field>
 
-    <Field label="Billing/Discount Code (Optional)">
+    <Field label="Group or Discount Code">
       <TextInput
         {...submitPrintRequestForm.fields.billingCode.as('text')}
-        placeholder="Enter your billing or discount code"
+        placeholder="ORG2026"
         class="max-w-xs"
       />
     </Field>
