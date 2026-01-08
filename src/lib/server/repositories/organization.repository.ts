@@ -2,9 +2,11 @@ import type {
   CreateOrganizationDto,
   UpdateOrganizationDto,
 } from '$lib/remotes/dtos/organization.dto';
+import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { and, eq } from 'drizzle-orm';
+import { DateTime } from 'luxon';
 
 export class OrganizationRepository extends BaseRepository {
   async create(dto: CreateOrganizationDto) {
@@ -80,5 +82,48 @@ export class OrganizationRepository extends BaseRepository {
       );
 
     return balancePayments;
+  }
+
+  async getCharges(organizationId: string) {
+    const charges = await this.db
+      .select()
+      .from(schema.organizationCharge)
+      .innerJoin(schema.payment, eq(schema.organizationCharge.paymentId, schema.payment.id))
+      .where(eq(schema.organizationCharge.organizationId, organizationId));
+
+    return charges.map(({ organization_charge, payment }) => ({
+      ...organization_charge,
+      payment,
+    }));
+  }
+
+  async createCharge(dto: CreateOrgChargeDto) {
+    return await this.db.transaction(async (tx) => {
+      const payment = await tx
+        .insert(schema.payment)
+        .values({
+          type: 'org_charge',
+          total: dto.amount,
+          status: 'paid',
+          organizationId: dto.organizationId,
+          issuedDate: DateTime.now(),
+          paymentDate: DateTime.now(),
+        })
+        .returning()
+        .get();
+
+      const created = await tx
+        .insert(schema.organizationCharge)
+        .values({
+          organizationId: dto.organizationId,
+          description: dto.description,
+          creationDate: DateTime.now(),
+          paymentId: payment.id,
+        })
+        .returning()
+        .get();
+
+      return created;
+    });
   }
 }

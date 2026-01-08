@@ -75,7 +75,7 @@ export const payment = sqliteTable(
     squareInvoiceId: text('square_invoice_id'),
     squareOrderId: text('square_order_id'),
     organizationId: text('organization_id').references(() => organization.id),
-    type: text('type', { enum: ['print_request', 'balance'] }).notNull(),
+    type: text('type', { enum: ['print_request', 'balance', 'org_charge'] }).notNull(),
 
     total: integer('total').notNull(), // in cents
     orderObject: text('order_object'),
@@ -138,6 +138,27 @@ export const organization = sqliteTable('organization', {
 
 export type Organization = InferSelectModel<typeof organization>;
 
+export const organizationCharge = sqliteTable(
+  'organization_charge',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id),
+    creationDate: luxonTimestamp('creation_date').notNull(),
+    description: text('description').notNull(),
+    paymentId: text('payment_id')
+      .references(() => payment.id)
+      .notNull(),
+  },
+  (table) => [index('org_charge_org_idx').on(table.organizationId)],
+);
+
+export type OrganizationCharge = InferSelectModel<typeof organizationCharge>;
+
 export const schema = {
   user,
   printRequest,
@@ -148,4 +169,5 @@ export const schema = {
   squareWebhookLog,
   billingCode,
   organization,
+  organizationCharge,
 };

@@ -28,13 +28,14 @@ export const organizationDetailDto = v.object({
   name: v.string(),
   email: v.string(),
   outstandingBalance: v.number(),
-  printRequests: v.array(
+  charges: v.array(
     v.object({
       id: v.string(),
-      projectName: v.string(),
-      submissionDate: v.string(),
+      description: v.string(),
+      date: v.string(),
+      amount: v.number(),
       status: v.string(),
-      total: v.number(),
+      type: v.union([v.literal('print'), v.literal('charge')]),
     }),
   ),
   balancePayments: v.array(

@@ -16,64 +16,49 @@
     multiplier = 1,
   }: Props = $props();
 
-  let displayValue = $derived((value / multiplier).toFixed(2) ?? '0.00');
+  let displayValue = $derived((value / multiplier).toFixed(2));
 
-  function handleKeydown(event: KeyboardEvent) {
-    const input = event.target as HTMLInputElement;
-    const key = event.key;
-
-    // Allow control keys
-    if (
-      key === 'Backspace' ||
-      key === 'Delete' ||
-      key === 'Tab' ||
-      key === 'Escape' ||
-      key === 'Enter' ||
-      key === 'ArrowLeft' ||
-      key === 'ArrowRight' ||
-      key === 'ArrowUp' ||
-      key === 'ArrowDown' ||
-      key === 'Home' ||
-      key === 'End' ||
-      event.ctrlKey ||
-      event.metaKey // Allow copy/paste/select all
-    ) {
-      return;
+  // Update display when value changes externally
+  $effect(() => {
+    if (document.activeElement?.tagName !== 'INPUT') {
+      displayValue = (value / multiplier).toFixed(2);
     }
-
-    // Only allow digits and decimal point
-    if (!/^[0-9.]$/.test(key)) {
-      event.preventDefault();
-      return;
-    }
-
-    // Prevent multiple decimal points
-    if (key === '.' && input.value.includes('.')) {
-      event.preventDefault();
-      return;
-    }
-
-    // Limit to 2 decimal places
-    const cursorPos = input.selectionStart ?? 0;
-    const decimalIndex = input.value.indexOf('.');
-    if (decimalIndex !== -1 && cursorPos > decimalIndex) {
-      const decimals = input.value.slice(decimalIndex + 1);
-      if (decimals.length >= 2 && input.selectionStart === input.selectionEnd) {
-        event.preventDefault();
-        return;
-      }
-    }
-  }
+  });
 
   function handleInput(event: Event) {
     const input = event.target as HTMLInputElement;
-    displayValue = input.value;
-    value = parseFloat(input.value) * multiplier || 0;
+    let rawValue = input.value;
+
+    // Remove all non-numeric characters except decimal point and minus sign
+    rawValue = rawValue.replace(/[^0-9.]/g, '');
+
+    // Keep only the first decimal point
+    const parts = rawValue.split('.');
+    if (parts.length > 2) {
+      rawValue = parts[0] + '.' + parts.slice(1).join('');
+    }
+
+    // Update the input value if we cleaned it
+    if (input.value !== rawValue) {
+      const cursorPos = input.selectionStart ?? 0;
+      input.value = rawValue;
+      input.setSelectionRange(cursorPos, cursorPos);
+    }
+
+    displayValue = rawValue;
   }
 
   function handleBlur() {
-    // Format to 2 decimal places on blur
-    displayValue = (value / multiplier).toFixed(2);
+    // Parse and format to 2 decimal places on blur
+    const parsed = parseFloat(displayValue);
+
+    if (isNaN(parsed)) {
+      value = 0;
+      displayValue = '0.00';
+    } else {
+      value = Math.round(parsed * multiplier);
+      displayValue = (value / multiplier).toFixed(2);
+    }
   }
 </script>
 
@@ -82,7 +67,6 @@
   inputmode="decimal"
   leadingIcon={mdiCurrencyUsd}
   value={displayValue}
-  onkeydown={handleKeydown}
   oninput={handleInput}
   onblur={handleBlur}
   {placeholder}
