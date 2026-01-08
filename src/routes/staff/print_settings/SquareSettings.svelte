@@ -141,7 +141,7 @@
         )}
       >
         <Stack gap={4}>
-          <Field label="Location ID" required="indicator">
+          <Field label="Location" required="indicator">
             <Select
               bind:value={selectedLocation}
               data={squareLocationOptions}
@@ -179,7 +179,7 @@
             />
           </Field>
 
-          <Field label="Additional Build Plate Modifier" required="indicator">
+          <Field label="Additional Build Plate Item" required="indicator">
             <Select
               bind:value={selectedBuildPlateItem}
               data={squareItemOptions}
