@@ -18,12 +18,3 @@ export const createOrgChargeDto = v.object({
 });
 
 export type CreateOrgChargeDto = v.InferInput<typeof createOrgChargeDto>;
-
-export const updateOrgChargeDto = v.object({
-  id: v.string(),
-  organizationId: v.optional(v.string()),
-  description: v.optional(v.string()),
-  amount: v.optional(v.number()), // in cents
-});
-
-export type UpdateOrgChargeDto = v.InferInput<typeof updateOrgChargeDto>;
