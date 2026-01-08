@@ -1,124 +1,15 @@
 <script lang="ts">
-  import TextInput from '$lib/frontend/components/form/TextInput.svelte';
-  import { initForm } from '$lib/frontend/components/form/utils.svelte';
   import {
     getPrintRequestSettings,
     getPrintRequestSquareSettings,
-    printRequestSettingsForm,
-    printRequestSquareSettingsForm,
   } from '$lib/remotes/endpoints/settings.remote';
-  import { getSquareCatalog, getSquareLocations } from '$lib/remotes/endpoints/square.remote';
-  import {
-    Button,
-    Card,
-    CardBody,
-    Field,
-    Heading,
-    HStack,
-    IconButton,
-    LoadingSpinner,
-    modalManager,
-    NumberInput,
-    Select,
-    Stack,
-    toastManager,
-    type SelectItem,
-  } from '@immich/ui';
-  import { mdiHelpCircle } from '@mdi/js';
-  import SquareInfoModal from './SquareInfoModal.svelte';
+  import { Heading, LoadingSpinner } from '@immich/ui';
+  import SquareSettings from './SquareSettings.svelte';
+  import SystemSettings from './SystemSettings.svelte';
 
   // Fetch initial settings
-  let printRequestSettings = await getPrintRequestSettings();
-  let squareSettings = await getPrintRequestSquareSettings();
-
-  initForm(printRequestSettingsForm, () => ({
-    maxUploadMB: printRequestSettings.maxUploadMB,
-    allowedFileTypes: printRequestSettings.allowedFileTypes,
-    discordWebhookUrl: printRequestSettings.discordWebhookUrl,
-  }));
-
-  initForm(printRequestSquareSettingsForm, () => ({
-    locationId: squareSettings.locationId,
-    memberPrintDiscountId: squareSettings.memberPrintDiscountId,
-    printRequestItemId: squareSettings.printRequestItemId,
-    additionalBuildPlateItemId: squareSettings.additionalBuildPlateItemId,
-  }));
-
-  let maxUpload = $state(printRequestSettings.maxUploadMB);
-  $effect(() => {
-    printRequestSettingsForm.fields.maxUploadMB.set(maxUpload ?? 100);
-  });
-
-  function showSquareInfoModal() {
-    modalManager.show(SquareInfoModal);
-  }
-
-  async function handleSubmit(submit: () => Promise<void>) {
-    try {
-      await submit();
-      toastManager.show({
-        title: 'Settings Saved',
-        description: 'Settings have been updated successfully.',
-        color: 'success',
-      });
-    } catch (error) {
-      toastManager.show({
-        title: 'Error Saving Settings',
-        description: 'An error occurred while saving settings. Please try again.',
-        color: 'danger',
-      });
-    }
-  }
-
-  let locationRequest = getSquareLocations();
-  let squareLocations = $derived(locationRequest.current ?? []);
-  let squareLocationOptions = $derived(
-    squareLocations.map((loc) => ({
-      label: loc.name,
-      value: loc.id,
-    })) as SelectItem[],
-  );
-
-  let catalogRequest = getSquareCatalog();
-  let squareCatalog = $derived(catalogRequest.current ?? []);
-  let squareItemOptions = $derived(
-    squareCatalog
-      .filter((item) => item.type === 'ITEM')
-      .map((item) => ({
-        label: item.itemData?.name || 'Unnamed Item',
-        value: item.itemData?.variations?.[0]?.id || '',
-      })) as SelectItem[],
-  );
-  let squareDiscountOptions = $derived(
-    squareCatalog
-      .filter((item) => item.type === 'DISCOUNT')
-      .map((item) => ({
-        label: item.discountData?.name || 'Unnamed Discount',
-        value: item.id,
-      })) as SelectItem[],
-  );
-
-  let selectedLocation = $derived(
-    squareLocationOptions.find(
-      (loc) => loc.value === printRequestSquareSettingsForm.fields.locationId.value(),
-    ),
-  );
-  let selectedMaterialItem = $derived(
-    squareItemOptions.find(
-      (item) => item.value === printRequestSquareSettingsForm.fields.printRequestItemId.value(),
-    ),
-  );
-  let selectedBuildPlateItem = $derived(
-    squareItemOptions.find(
-      (item) =>
-        item.value === printRequestSquareSettingsForm.fields.additionalBuildPlateItemId.value(),
-    ),
-  );
-  let selectedMemberDiscount = $derived(
-    squareDiscountOptions.find(
-      (disc) => disc.value === printRequestSquareSettingsForm.fields.memberPrintDiscountId.value(),
-    ),
-  );
+  let printRequestSettings = getPrintRequestSettings();
+  let squareSettings = getPrintRequestSquareSettings();
 </script>
 
 <div class="mb-6">
@@ -126,134 +17,19 @@
 </div>
 
 <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-  <!-- Print Request Settings -->
-  <Card>
-    <CardBody>
-      <Heading size="medium" class="mb-4">Print Request Settings</Heading>
+  {#if printRequestSettings.loading}
+    <LoadingSpinner />
+  {:else if printRequestSettings.error}
+    <p class="text-danger">Error loading print request settings.</p>
+  {:else}
+    <SystemSettings printRequestSettings={printRequestSettings.current!} />
+  {/if}
 
-      <!-- Disable form reset -->
-      <form {...printRequestSettingsForm.enhance(async ({ submit }) => await handleSubmit(submit))}>
-        <Stack gap={4}>
-          <Field label="Max Upload Size (MB)" required="indicator">
-            <NumberInput bind:value={maxUpload} />
-            <input hidden {...printRequestSettingsForm.fields.maxUploadMB.as('number')} />
-          </Field>
-
-          <Field
-            label="Allowed File Types"
-            required="indicator"
-            description="Comma-separated list of file extensions (e.g., .stl, .3mf, .obj)"
-          >
-            <TextInput
-              {...printRequestSettingsForm.fields.allowedFileTypes.as('text')}
-              placeholder=".stl, .3mf, .obj"
-            />
-          </Field>
-
-          <Field
-            label="Discord Webhook URL"
-            description="Webhook URL for Discord notifications when print requests are submitted"
-          >
-            <TextInput
-              {...printRequestSettingsForm.fields.discordWebhookUrl.as('text')}
-              placeholder="https://discord.com/api/webhooks/..."
-            />
-          </Field>
-
-          <Button type="submit" variant="filled" fullWidth>Save Print Request Settings</Button>
-        </Stack>
-      </form>
-    </CardBody>
-  </Card>
-
-  <!-- Square Settings -->
-  <Card>
-    <CardBody>
-      {#if locationRequest.loading || catalogRequest.loading}
-        <LoadingSpinner />
-      {:else if locationRequest.error}
-        <div class="flex items-center justify-center">
-          <p class="text-danger">Error loading Square locations: {locationRequest.error.message}</p>
-        </div>
-      {:else if catalogRequest.error}
-        <div class="flex items-center justify-center">
-          <p class="text-danger">Error loading Square catalog: {catalogRequest.error.message}</p>
-        </div>
-      {:else}
-        <HStack class="mb-4 justify-between">
-          <Heading size="medium">Square Settings</Heading>
-          <IconButton
-            icon={mdiHelpCircle}
-            variant="ghost"
-            color="secondary"
-            aria-label="Show Square Info"
-            onclick={showSquareInfoModal}
-          />
-        </HStack>
-
-        <!-- Disable form reset -->
-        <form
-          {...printRequestSquareSettingsForm.enhance(
-            async ({ submit }) => await handleSubmit(submit),
-          )}
-        >
-          <Stack gap={4}>
-            <Field label="Location ID" required="indicator">
-              <Select
-                bind:value={selectedLocation}
-                data={squareLocationOptions}
-                placeholder="Square Location"
-                onChange={(e) => printRequestSquareSettingsForm.fields.locationId.set(e.value)}
-              />
-              <input hidden {...printRequestSquareSettingsForm.fields.locationId.as('text')} />
-            </Field>
-
-            <Field label="Member Print Discount Item" required="indicator">
-              <Select
-                bind:value={selectedMemberDiscount}
-                data={squareDiscountOptions}
-                placeholder="Select Discount"
-                onChange={(e) =>
-                  printRequestSquareSettingsForm.fields.memberPrintDiscountId.set(e.value)}
-              />
-              <input
-                hidden
-                {...printRequestSquareSettingsForm.fields.memberPrintDiscountId.as('text')}
-              />
-            </Field>
-
-            <Field label="Print Request Item" required="indicator">
-              <Select
-                bind:value={selectedMaterialItem}
-                data={squareItemOptions}
-                placeholder="Select Item"
-                onChange={(e) =>
-                  printRequestSquareSettingsForm.fields.printRequestItemId.set(e.value)}
-              />
-              <input
-                hidden
-                {...printRequestSquareSettingsForm.fields.printRequestItemId.as('text')}
-              />
-            </Field>
-
-            <Field label="Additional Build Plate Modifier" required="indicator">
-              <Select
-                bind:value={selectedBuildPlateItem}
-                data={squareItemOptions}
-                placeholder="Select Item"
-                onChange={(e) =>
-                  printRequestSquareSettingsForm.fields.additionalBuildPlateItemId.set(e.value)}
-              />
-              <input
-                hidden
-                {...printRequestSquareSettingsForm.fields.additionalBuildPlateItemId.as('text')}
-              />
-            </Field>
-
-            <Button type="submit" variant="filled" fullWidth>Save Square Settings</Button>
-          </Stack>
-        </form>
-      {/if}
-    </CardBody>
-  </Card>
+  {#if squareSettings.loading}
+    <LoadingSpinner />
+  {:else if squareSettings.error}
+    <p class="text-danger">Error loading Square settings.</p>
+  {:else}
+    <SquareSettings squareSettings={squareSettings.current!} />
+  {/if}
 </div>

@@ -307,7 +307,9 @@
                       : '-'}
                   </TableCell>
                   <TableCell width="w-3/12">
-                    <Badge color={getPaymentStatusColor(payment.status)}>{payment.status}</Badge>
+                    <Badge color={getPaymentStatusColor(payment.status)}
+                      >{formatStatus(payment.status)}</Badge
+                    >
                   </TableCell>
                   <TableCell width="w-3/12" align="right" class="px-4">
                     {formatCurrency(payment.total)}

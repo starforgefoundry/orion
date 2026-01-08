@@ -190,7 +190,7 @@
   icon={mdiPrinter3dNozzle}
 >
   <ModalBody>
-    <HStack gap={8} class="w-full items-start">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <div class="flex flex-1 flex-col gap-4">
         <Stack class="rounded-2xl border-2 border-slate-700 p-4">
           <Heading size="medium">Customer Information</Heading>
@@ -311,8 +311,8 @@
           {/if}
         </Stack>
       </div>
-      <div class="flex h-full flex-1 flex-col">
-        <HStack class="justify-between">
+      <div class="flex h-full flex-1 flex-col rounded-2xl border-2 border-slate-700 p-4">
+        <HStack class="justify-between ">
           <Heading size="medium">Print Files</Heading>
           <HStack gap={2}>
             {#if isEditingQuantities}
@@ -379,6 +379,6 @@
           </div>
         {/each}
       </div>
-    </HStack>
+    </div>
   </ModalBody>
 </Modal>
