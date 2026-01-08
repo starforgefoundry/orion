@@ -78,7 +78,7 @@ export class BillingCodeService extends BaseService {
   }
 
   async createBillingCode(data: CreateBillingCodeDto) {
-    if (data.discountId ?? ('' === '' && data.organizationId) ?? '' === '') {
+    if ((data.discountId ?? '') === '' && (data.organizationId ?? '') === '') {
       throw new Error('Either discountId or organizationId must be provided');
     }
 

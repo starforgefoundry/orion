@@ -460,11 +460,12 @@ describe('BillingCodeService', () => {
       expect(result).toEqual(mockCreated);
     });
 
-    it('should create billing code without organization', async () => {
+    it('should create billing code with only discountId', async () => {
       // Arrange
       const dto: CreateBillingCodeDto = {
         code: 'SIMPLE',
         description: 'Simple code',
+        discountId: '1234',
       };
 
       const mockCreated = {
@@ -484,6 +485,46 @@ describe('BillingCodeService', () => {
       expect(mockBillingCodeRepo.create).toHaveBeenCalledWith(dto);
       expect(result.organizationId).toBeNull();
       expect(result.discountId).toBeNull();
+    });
+
+    it('should create billing code with only organizationId', async () => {
+      // Arrange
+      const dto: CreateBillingCodeDto = {
+        code: 'SIMPLE',
+        description: 'Simple code',
+        organizationId: 'org-123',
+      };
+
+      const mockCreated = {
+        id: 'code-simple',
+        code: 'SIMPLE',
+        description: 'Simple code',
+        organizationId: null,
+        discountId: null,
+      };
+
+      vi.mocked(mockBillingCodeRepo.create).mockResolvedValue(mockCreated);
+
+      // Act
+      const result = await billingCodeService.createBillingCode(dto);
+
+      // Assert
+      expect(mockBillingCodeRepo.create).toHaveBeenCalledWith(dto);
+      expect(result.organizationId).toBeNull();
+      expect(result.discountId).toBeNull();
+    });
+
+    it('should throw error when neither organizationId nor discountId is provided', async () => {
+      // Arrange
+      const dto: CreateBillingCodeDto = {
+        code: 'INVALID',
+        description: 'Invalid code',
+      };
+
+      // Act & Assert
+      await expect(billingCodeService.createBillingCode(dto)).rejects.toThrow(
+        'Either discountId or organizationId must be provided',
+      );
     });
   });
 

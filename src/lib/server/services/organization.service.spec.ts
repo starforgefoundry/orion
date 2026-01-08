@@ -389,11 +389,13 @@ describe('OrganizationService', () => {
       expect(result).toBe(6000); // 5000 + 3000 - 2000
     });
 
-    it('should only count paid payments (not pending)', async () => {
+    it('should only count non quote or canceled payments', async () => {
       // Arrange
       const mockPayments = [
         { id: 'p1', total: 5000, status: 'paid', type: 'print' },
         { id: 'p2', total: 3000, status: 'pending', type: 'print' },
+        { id: 'p3', total: 4000, status: 'quote', type: 'print' },
+        { id: 'p4', total: 2000, status: 'canceled', type: 'print' },
       ];
 
       vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
@@ -402,7 +404,7 @@ describe('OrganizationService', () => {
       const result = await organizationService.getOutstandingBalance('org-123');
 
       // Assert
-      expect(result).toBe(5000); // Only paid payment counts
+      expect(result).toBe(8000); // Only paid payment counts
     });
 
     it('should return 0 when no payments exist', async () => {
