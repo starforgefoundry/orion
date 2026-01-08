@@ -30,6 +30,7 @@
   } from '@immich/ui';
   import {
     mdiAccountGroup,
+    mdiCashPlus,
     mdiChatQuestion,
     mdiCheck,
     mdiClose,
@@ -37,7 +38,8 @@
     mdiTrashCan,
   } from '@mdi/js';
   import { DateTime } from 'luxon';
-  import { getPaymentStatusColor, getStatusColor } from '../print_queue/utils';
+  import { getPaymentStatusColor } from '../print_queue/utils';
+  import CreateChargeModal from './CreateChargeModal.svelte';
 
   type Props = ModalProps & {
     organizationId: string;
@@ -59,19 +61,33 @@
   let chargesItemsPerPage = 10;
 
   // Paginated data
-  let paginatedPrintRequests = $derived(() => {
+  let paginatedCharges = $derived(() => {
     if (!organizationDetail.current) return [];
     const startIndex = (chargesCurrentPage - 1) * chargesItemsPerPage;
     const endIndex = startIndex + chargesItemsPerPage;
-    return organizationDetail.current.printRequests.slice(startIndex, endIndex);
+    return organizationDetail.current.charges.slice(startIndex, endIndex);
   });
 
   let chargesTotalPages = $derived(() => {
     if (!organizationDetail.current) return 1;
-    return Math.ceil(organizationDetail.current.printRequests.length / chargesItemsPerPage);
+    return Math.ceil(organizationDetail.current.charges.length / chargesItemsPerPage);
   });
 
   async function handleChargeBalance() {
+    const confirm = await modalManager.showDialog({
+      title: 'Charge Outstanding Balance',
+      prompt: `Are you sure you want to send an invoice for the outstanding balance of ${formatCurrency(
+        organizationDetail.current?.outstandingBalance || 0,
+      )} to the organization's email?`,
+      confirmText: 'Charge Balance',
+      confirmColor: 'success',
+      icon: mdiCashPlus,
+    });
+
+    if (!confirm) {
+      return;
+    }
+
     isChargingBalance = true;
     try {
       await chargeOrganizationBalance({ organizationId });
@@ -97,6 +113,12 @@
     originalName = '';
     originalEmail = '';
     isEditing = false;
+  }
+
+  function createOrganizationCharge() {
+    modalManager.show(CreateChargeModal, {
+      orgId: organizationId,
+    });
   }
 
   async function saveEdits() {
@@ -137,7 +159,7 @@
   }
 </script>
 
-<Modal title="Organization Details" icon={mdiAccountGroup} {onClose} size="large">
+<Modal title="Organization Details" icon={mdiAccountGroup} {onClose} size="giant">
   <ModalBody>
     {#if organizationDetail.loading}
       <div class="flex justify-center py-8">
@@ -184,6 +206,13 @@
                 onclick={cancelEditing}
               />
             {:else}
+              <IconButton
+                icon={mdiCashPlus}
+                aria-label="Create Organization Charge"
+                color="success"
+                size="small"
+                onclick={createOrganizationCharge}
+              />
               <IconButton
                 icon={mdiPencil}
                 aria-label="Edit Organization"
@@ -240,39 +269,29 @@
         {#if activeTab === 'charges'}
           <Table>
             <TableHeader class="bg-level-3">
-              <TableHeaderCell width="w-4/12" align="left" class=" px-4">
-                Project Name
+              <TableHeaderCell width="w-6/12" align="left" class="px-4">
+                Description
               </TableHeaderCell>
               <TableHeaderCell width="w-3/12" align="left" class="px-4">Date</TableHeaderCell>
-              <TableHeaderCell width="w-3/12">Status</TableHeaderCell>
-              <TableHeaderCell width="w-2/12" align="right" class="px-4">Amount</TableHeaderCell>
+              <TableHeaderCell width="w-3/12" align="right" class="px-4">Amount</TableHeaderCell>
             </TableHeader>
             <TableBody>
-              {#each paginatedPrintRequests() as request}
+              {#each paginatedCharges() as charge}
                 <TableRow>
-                  <TableCell width="w-4/12" align="left" class="px-4">
-                    {request.projectName}
+                  <TableCell width="w-6/12" align="left" class="px-4">
+                    {charge.description}
                   </TableCell>
                   <TableCell width="w-3/12" align="left" class="px-4">
-                    {request.submissionDate.toLocaleString(DateTime.DATE_SHORT)}
+                    {DateTime.fromISO(charge.date).toLocaleString(DateTime.DATE_SHORT)}
                   </TableCell>
-                  <TableCell width="w-3/12">
-                    <Badge color={getStatusColor(request.status)}>
-                      {formatStatus(request.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell width="w-2/12" align="right" class="px-4">
-                    {#if request.payment}
-                      {formatCurrency(request.payment?.total)}
-                    {:else}
-                      -
-                    {/if}
+                  <TableCell width="w-3/12" align="right" class="px-4">
+                    {formatCurrency(charge.amount)}
                   </TableCell>
                 </TableRow>
               {/each}
-              {#if organizationDetail.current.printRequests.length === 0}
+              {#if organizationDetail.current.charges.length === 0}
                 <TableRow>
-                  <TableCell width="w-full" class="text-center">No print requests found.</TableCell>
+                  <TableCell width="w-full" class="text-center">No charges found.</TableCell>
                 </TableRow>
               {/if}
             </TableBody>

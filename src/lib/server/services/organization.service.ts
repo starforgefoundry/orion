@@ -3,6 +3,7 @@ import type {
   CreateOrganizationDto,
   UpdateOrganizationDto,
 } from '$lib/remotes/dtos/organization.dto';
+import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
 import { BaseService } from '$lib/server/services/base.service';
 import { DateTime } from 'luxon';
 
@@ -21,18 +22,47 @@ export class OrganizationService extends BaseService {
       throw new Error('Organization not found');
     }
 
-    const [outstandingBalance, printRequests, balancePayments] = await Promise.all([
-      this.getOutstandingBalance(id),
-      this.organizationRepository.getPrintRequests(id),
-      this.organizationRepository.getBalancePayments(id),
-    ]);
+    const [outstandingBalance, printRequests, organizationCharges, balancePayments] =
+      await Promise.all([
+        this.getOutstandingBalance(id),
+        this.organizationRepository.getPrintRequests(id),
+        this.organizationRepository.getCharges(id),
+        this.organizationRepository.getBalancePayments(id),
+      ]);
+
+    // Convert print requests to charges
+    const printCharges = printRequests.map((req) => ({
+      id: req.id,
+      description: `Print Request - ${req.projectName}`,
+      date: req.submissionDate.toISO()!,
+      amount: req.payment?.total ?? 0,
+      status: req.status,
+      type: 'print' as const,
+    }));
+
+    // Convert organization charges
+    const orgCharges = organizationCharges.map((charge) => ({
+      id: charge.id,
+      description: charge.description,
+      date: charge.creationDate.toISO()!,
+      amount: charge.payment.total,
+      status: 'charged',
+      type: 'charge' as const,
+    }));
+
+    // Merge and sort by date (newest first)
+    const allCharges = [...printCharges, ...orgCharges].sort((a, b) => {
+      const dateA = DateTime.fromISO(a.date);
+      const dateB = DateTime.fromISO(b.date);
+      return dateB.toMillis() - dateA.toMillis();
+    });
 
     return {
       id: organization.id,
       name: organization.name,
       email: organization.email,
       outstandingBalance,
-      printRequests,
+      charges: allCharges,
       balancePayments,
     };
   }
@@ -54,6 +84,7 @@ export class OrganizationService extends BaseService {
 
     let totalOwed = 0;
 
+    // Add payment charges (print requests)
     for (const row of allPayments) {
       if (row.status !== 'quote' && row.status !== 'canceled' && row.type !== 'balance') {
         totalOwed += row.total;
@@ -67,7 +98,7 @@ export class OrganizationService extends BaseService {
     return totalOwed;
   }
 
-  async chargeOrganizationBalance(dto: ChargeOrganizationBalanceDto) {
+  async chargeBalance(dto: ChargeOrganizationBalanceDto) {
     const organization = await this.organizationRepository.getById(dto.organizationId);
     if (!organization) {
       throw new Error('Organization not found');
@@ -131,6 +162,10 @@ export class OrganizationService extends BaseService {
     });
 
     return payment;
+  }
+
+  async createCharge(dto: CreateOrgChargeDto) {
+    return await this.organizationRepository.createCharge(dto);
   }
 }
 

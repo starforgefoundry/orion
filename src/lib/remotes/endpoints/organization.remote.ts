@@ -4,6 +4,7 @@ import {
   createOrganizationDto,
   updateOrganizationDto,
 } from '$lib/remotes/dtos/organization.dto';
+import { createOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
 import { verifyAuth } from '$lib/remotes/utils';
 import { organizationService } from '$lib/server/services/organization.service';
 import * as v from 'valibot';
@@ -53,7 +54,14 @@ export const archiveOrganization = command(v.object({ id: v.string() }), async (
 
 export const chargeOrganizationBalance = command(chargeOrganizationBalanceDto, async (dto) => {
   verifyAuth();
-  const payment = await organizationService.chargeOrganizationBalance(dto);
+  const payment = await organizationService.chargeBalance(dto);
+  await getOrganizationDetail({ id: dto.organizationId }).refresh();
+  return payment;
+});
+
+export const createOrganizationChargeForm = form(createOrgChargeDto, async (dto) => {
+  verifyAuth();
+  const payment = await organizationService.createCharge(dto);
   await getOrganizationDetail({ id: dto.organizationId }).refresh();
   return payment;
 });
