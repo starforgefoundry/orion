@@ -275,9 +275,9 @@
               <TableHeaderCell width="w-3/12" align="left" class="px-4">Date</TableHeaderCell>
               <TableHeaderCell width="w-3/12" align="right" class="px-4">Amount</TableHeaderCell>
             </TableHeader>
-            <TableBody>
+            <TableBody class="border border-gray-700">
               {#each paginatedCharges() as charge}
-                <TableRow>
+                <TableRow class="border-b border-gray-700">
                   <TableCell width="w-6/12" align="left" class="px-4">
                     {charge.description}
                   </TableCell>
