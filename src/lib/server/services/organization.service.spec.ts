@@ -34,7 +34,7 @@ describe('OrganizationService', () => {
       getById: vi.fn(),
       update: vi.fn(),
       archive: vi.fn(),
-      getOutstandingBalance: vi.fn(),
+      getPayments: vi.fn(),
       getPrintRequests: vi.fn(),
       getBalancePayments: vi.fn(),
     };
@@ -188,8 +188,29 @@ describe('OrganizationService', () => {
         },
       ];
 
+      const mockPayments = [
+        {
+          id: 'payment-1',
+          total: 5000,
+          status: 'paid',
+          type: 'print',
+        },
+        {
+          id: 'payment-2',
+          total: 3000,
+          status: 'paid',
+          type: 'print',
+        },
+        {
+          id: 'balance-payment-1',
+          total: 2000,
+          status: 'paid',
+          type: 'balance',
+        },
+      ];
+
       vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getOutstandingBalance).mockResolvedValue(6000);
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
       vi.mocked(mockOrganizationRepo.getPrintRequests).mockResolvedValue(mockPrintRequests);
       vi.mocked(mockOrganizationRepo.getBalancePayments).mockResolvedValue(mockBalancePayments);
 
@@ -198,7 +219,7 @@ describe('OrganizationService', () => {
 
       // Assert
       expect(mockOrganizationRepo.getById).toHaveBeenCalledWith('org-detail');
-      expect(mockOrganizationRepo.getOutstandingBalance).toHaveBeenCalledWith('org-detail');
+      expect(mockOrganizationRepo.getPayments).toHaveBeenCalledWith('org-detail');
       expect(mockOrganizationRepo.getPrintRequests).toHaveBeenCalledWith('org-detail');
       expect(mockOrganizationRepo.getBalancePayments).toHaveBeenCalledWith('org-detail');
       expect(result).toEqual({
@@ -231,7 +252,7 @@ describe('OrganizationService', () => {
       };
 
       vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getOutstandingBalance).mockResolvedValue(0);
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue([]);
       vi.mocked(mockOrganizationRepo.getPrintRequests).mockResolvedValue([]);
       vi.mocked(mockOrganizationRepo.getBalancePayments).mockResolvedValue([]);
 
@@ -333,6 +354,103 @@ describe('OrganizationService', () => {
     });
   });
 
+  describe('getOutstandingBalance', () => {
+    it('should calculate outstanding balance correctly with paid print requests', async () => {
+      // Arrange
+      const mockPayments = [
+        { id: 'p1', total: 5000, status: 'paid', type: 'print' },
+        { id: 'p2', total: 3000, status: 'paid', type: 'print' },
+      ];
+
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
+
+      // Act
+      const result = await organizationService.getOutstandingBalance('org-123');
+
+      // Assert
+      expect(mockOrganizationRepo.getPayments).toHaveBeenCalledWith('org-123');
+      expect(result).toBe(8000); // 5000 + 3000
+    });
+
+    it('should subtract balance payments from outstanding balance', async () => {
+      // Arrange
+      const mockPayments = [
+        { id: 'p1', total: 5000, status: 'paid', type: 'print' },
+        { id: 'p2', total: 3000, status: 'paid', type: 'print' },
+        { id: 'p3', total: 2000, status: 'paid', type: 'balance' },
+      ];
+
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
+
+      // Act
+      const result = await organizationService.getOutstandingBalance('org-123');
+
+      // Assert
+      expect(result).toBe(6000); // 5000 + 3000 - 2000
+    });
+
+    it('should only count paid payments (not pending)', async () => {
+      // Arrange
+      const mockPayments = [
+        { id: 'p1', total: 5000, status: 'paid', type: 'print' },
+        { id: 'p2', total: 3000, status: 'pending', type: 'print' },
+      ];
+
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
+
+      // Act
+      const result = await organizationService.getOutstandingBalance('org-123');
+
+      // Assert
+      expect(result).toBe(5000); // Only paid payment counts
+    });
+
+    it('should return 0 when no payments exist', async () => {
+      // Arrange
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue([]);
+
+      // Act
+      const result = await organizationService.getOutstandingBalance('org-empty');
+
+      // Assert
+      expect(result).toBe(0);
+    });
+
+    it('should return negative balance when balance payments exceed print payments', async () => {
+      // Arrange
+      const mockPayments = [
+        { id: 'p1', total: 1000, status: 'paid', type: 'print' },
+        { id: 'p2', total: 2000, status: 'paid', type: 'balance' },
+      ];
+
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
+
+      // Act
+      const result = await organizationService.getOutstandingBalance('org-overpaid');
+
+      // Assert
+      expect(result).toBe(-1000); // 1000 - 2000
+    });
+
+    it('should handle multiple balance payments', async () => {
+      // Arrange
+      const mockPayments = [
+        { id: 'p1', total: 10000, status: 'paid', type: 'print' },
+        { id: 'p2', total: 3000, status: 'paid', type: 'balance' },
+        { id: 'p3', total: 2000, status: 'paid', type: 'balance' },
+        { id: 'p4', total: 5000, status: 'paid', type: 'print' },
+      ];
+
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
+
+      // Act
+      const result = await organizationService.getOutstandingBalance('org-multi');
+
+      // Assert
+      expect(result).toBe(10000); // (10000 + 5000) - (3000 + 2000)
+    });
+  });
+
   describe('chargeOrganizationBalance', () => {
     it('should create invoice and payment for organization balance', async () => {
       // Arrange
@@ -381,8 +499,13 @@ describe('OrganizationService', () => {
         type: 'balance',
       };
 
+      const mockPayments = [
+        { id: 'p1', total: 5000, status: 'paid', type: 'print' },
+        { id: 'p2', total: 3000, status: 'paid', type: 'print' },
+      ];
+
       vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getOutstandingBalance).mockResolvedValue(8000);
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
@@ -395,7 +518,7 @@ describe('OrganizationService', () => {
 
       // Assert
       expect(mockOrganizationRepo.getById).toHaveBeenCalledWith('org-charge');
-      expect(mockOrganizationRepo.getOutstandingBalance).toHaveBeenCalledWith('org-charge');
+      expect(mockOrganizationRepo.getPayments).toHaveBeenCalledWith('org-charge');
       expect(mockSquareRepo.upsertCustomer).toHaveBeenCalledWith('Charge Org', 'charge@org.com');
       expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequestSquare');
       expect(mockSquareRepo.createOrder).toHaveBeenCalledWith({
@@ -455,8 +578,13 @@ describe('OrganizationService', () => {
         archived: false,
       };
 
+      const mockPaymentsNegative = [
+        { id: 'p1', total: 1000, status: 'paid', type: 'print' },
+        { id: 'p2', total: 2000, status: 'paid', type: 'balance' },
+      ];
+
       vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getOutstandingBalance).mockResolvedValue(0);
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPaymentsNegative);
 
       // Act & Assert
       await expect(organizationService.chargeOrganizationBalance(dto)).rejects.toThrow(
@@ -477,8 +605,13 @@ describe('OrganizationService', () => {
         archived: false,
       };
 
+      const mockPaymentsNegative = [
+        { id: 'p1', total: 1000, status: 'paid', type: 'print' },
+        { id: 'p2', total: 2000, status: 'paid', type: 'balance' },
+      ];
+
       vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getOutstandingBalance).mockResolvedValue(-1000);
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPaymentsNegative);
 
       // Act & Assert
       await expect(organizationService.chargeOrganizationBalance(dto)).rejects.toThrow(
@@ -511,8 +644,10 @@ describe('OrganizationService', () => {
         memberPrintDiscountId: 'discount-789',
       };
 
+      const mockPaymentsOrder = [{ id: 'p1', total: 5000, status: 'paid', type: 'print' }];
+
       vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getOutstandingBalance).mockResolvedValue(5000);
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPaymentsOrder);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(null);
@@ -548,6 +683,8 @@ describe('OrganizationService', () => {
         memberPrintDiscountId: 'discount-789',
       };
 
+      const mockPaymentsInvoice = [{ id: 'p1', total: 5000, status: 'paid', type: 'print' }];
+
       const mockOrder: Order = {
         id: 'order-fail-inv',
         locationId: 'loc-123',
@@ -555,7 +692,7 @@ describe('OrganizationService', () => {
       };
 
       vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getOutstandingBalance).mockResolvedValue(5000);
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPaymentsInvoice);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
@@ -616,8 +753,13 @@ describe('OrganizationService', () => {
         type: 'balance',
       };
 
+      const mockLargePayments = [
+        { id: 'p1', total: 60000, status: 'paid', type: 'print' },
+        { id: 'p2', total: 40000, status: 'paid', type: 'print' },
+      ];
+
       vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getOutstandingBalance).mockResolvedValue(largeBalance);
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockLargePayments);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);

@@ -45,26 +45,13 @@ export class OrganizationRepository extends BaseRepository {
       .where(eq(schema.organization.id, id));
   }
 
-  async getOutstandingBalance(organizationId: string) {
-    // Get all payments associated with this organization
-    const allPayments = await this.db
+  async getPayments(organizationId: string) {
+    const payments = await this.db
       .select()
       .from(schema.payment)
       .where(eq(schema.payment.organizationId, organizationId));
 
-    let totalOwed = 0;
-
-    for (const row of allPayments) {
-      if (row.status !== 'quote' && row.type !== 'balance') {
-        totalOwed += row.total;
-      }
-
-      if (row.type === 'balance') {
-        totalOwed -= row.total;
-      }
-    }
-
-    return totalOwed;
+    return payments;
   }
 
   async getPrintRequests(organizationId: string) {

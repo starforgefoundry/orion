@@ -22,7 +22,7 @@ export class OrganizationService extends BaseService {
     }
 
     const [outstandingBalance, printRequests, balancePayments] = await Promise.all([
-      this.organizationRepository.getOutstandingBalance(id),
+      this.getOutstandingBalance(id),
       this.organizationRepository.getPrintRequests(id),
       this.organizationRepository.getBalancePayments(id),
     ]);
@@ -49,15 +49,31 @@ export class OrganizationService extends BaseService {
     await this.organizationRepository.archive(id);
   }
 
+  async getOutstandingBalance(organizationId: string) {
+    const allPayments = await this.organizationRepository.getPayments(organizationId);
+
+    let totalOwed = 0;
+
+    for (const row of allPayments) {
+      if (row.status === 'paid' && row.type !== 'balance') {
+        totalOwed += row.total;
+      }
+
+      if (row.type === 'balance') {
+        totalOwed -= row.total;
+      }
+    }
+
+    return totalOwed;
+  }
+
   async chargeOrganizationBalance(dto: ChargeOrganizationBalanceDto) {
     const organization = await this.organizationRepository.getById(dto.organizationId);
     if (!organization) {
       throw new Error('Organization not found');
     }
 
-    const outstandingBalance = await this.organizationRepository.getOutstandingBalance(
-      dto.organizationId,
-    );
+    const outstandingBalance = await this.getOutstandingBalance(dto.organizationId);
 
     if (outstandingBalance <= 0) {
       throw new Error('No outstanding balance to charge');

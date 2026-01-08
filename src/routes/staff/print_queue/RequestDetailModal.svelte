@@ -26,12 +26,12 @@
   } from '@immich/ui';
   import {
     mdiAccount,
+    mdiAccountGroup,
     mdiCheck,
     mdiClose,
     mdiCurrencyUsd,
     mdiDownload,
     mdiEmail,
-    mdiGroup,
     mdiHelp,
     mdiMonitorShare,
     mdiOpenInNew,
@@ -204,8 +204,8 @@
           </HStack>
           {#if request?.organization}
             <HStack>
-              <Icon icon={mdiGroup} size="24" />
-              <Text color="primary">{request?.organization.name}</Text>
+              <Icon icon={mdiAccountGroup} size="24" />
+              <Text>{request?.organization.name}</Text>
             </HStack>
           {/if}
         </Stack>
