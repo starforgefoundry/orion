@@ -54,16 +54,20 @@
   });
 
   // Cost Calculations
-  let pricingInfo = $derived(getPricingInfo(request.email));
+  let pricingInfo = $derived(
+    getPricingInfo({ customerEmail: request.email, billingCode: request.billingCode ?? undefined }),
+  );
   let buildPlateCost = $derived((pricingInfo.current?.additionalBuildPlateModifier ?? 0) / 100);
   let buildPlateSurcharge = $derived(buildPlates > 1 ? (buildPlates - 1) * buildPlateCost : 0);
   let subtotal = $derived(materialCost / 100 + buildPlateSurcharge);
-  let memberDiscount = $derived(
-    pricingInfo.current?.memberDiscountApplied
-      ? (subtotal * (pricingInfo.current?.memberPrintDiscount ?? 0)) / 100
-      : 0,
+
+  // Apply discounts sequentially (as Square does)
+  let totalCost = $derived(
+    (pricingInfo.current?.discounts ?? []).reduce(
+      (price, discount) => price * (1 - discount.percentage / 100),
+      subtotal,
+    ),
   );
-  let totalCost = $derived(subtotal - memberDiscount);
 
   let loading = $state(false);
 
@@ -123,18 +127,24 @@
             </HStack>
           {/if}
 
-          {#if pricingInfo.current?.memberDiscountApplied}
-            <HStack class="justify-between">
-              <Stack gap={0}>
-                <Text>Member Discount</Text>
-                <Text size="small" color="muted">
-                  {pricingInfo.current?.memberPrintDiscount}% off
+          {#if pricingInfo.current?.discounts && pricingInfo.current.discounts.length > 0}
+            {#each pricingInfo.current.discounts as discount, i}
+              {@const priceBeforeDiscount = (pricingInfo.current?.discounts ?? [])
+                .slice(0, i)
+                .reduce((price, d) => price * (1 - d.percentage / 100), subtotal)}
+              {@const discountAmount = priceBeforeDiscount * (discount.percentage / 100)}
+              <HStack class="justify-between">
+                <Stack gap={0}>
+                  <Text>{discount.name}</Text>
+                  <Text size="small" color="muted">
+                    {discount.percentage}% off
+                  </Text>
+                </Stack>
+                <Text>
+                  - ${discountAmount.toFixed(2)}
                 </Text>
-              </Stack>
-              <Text>
-                - ${memberDiscount.toFixed(2)}
-              </Text>
-            </HStack>
+              </HStack>
+            {/each}
           {/if}
 
           <hr class="mt-1 mb-2 w-1/3 self-end border-slate-700" />

@@ -10,10 +10,16 @@ export const getPayment = query(v.string(), async (id) => {
   return await printPaymentService.getById(id);
 });
 
-export const getPricingInfo = query(v.pipe(v.string(), v.email()), async (customerEmail) => {
-  verifyAuth();
-  return await printPaymentService.getPricingInfo(customerEmail);
-});
+export const getPricingInfo = query(
+  v.object({
+    customerEmail: v.pipe(v.string(), v.email()),
+    billingCode: v.optional(v.string()),
+  }),
+  async (dto) => {
+    verifyAuth();
+    return await printPaymentService.getPricingInfo(dto.customerEmail, dto.billingCode);
+  },
+);
 
 export const upsertPaymentForm = form(createPaymentDto, async (dto) => {
   verifyAuth();

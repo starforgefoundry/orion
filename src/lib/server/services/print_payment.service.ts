@@ -23,37 +23,64 @@ type PrintRequestInfo = {
   customer?: Customer;
   materialCost: number;
   buildPlates: number;
-  memberPricing: boolean;
 };
 
 export class PrintPaymentService extends BaseService {
   async getById(id: string) {
-    return await this.printPaymentRepository.getById(id);
+    return await this.paymentRepository.getById(id);
   }
 
-  async getPricingInfo(customerEmail: string) {
+  /**
+   * Get all applicable discount IDs for a customer and billing code
+   */
+  private async getApplicableDiscounts(
+    customerEmail: string,
+    billingCode: string,
+  ): Promise<string[]> {
     const squareSettings = await this.settingsRepository.getSetting('printRequestSquare');
+    const discounts: string[] = [];
 
-    const [items, activeMember] = await Promise.all([
-      this.squareRepository.getCatalogByIds([
-        squareSettings.additionalBuildPlateItemId,
-        squareSettings.memberPrintDiscountId,
-      ]),
-      squareService.checkActiveMember(customerEmail),
+    // Check for member discount
+    const activeMember = await squareService.checkActiveMember(customerEmail);
+    if (activeMember) {
+      discounts.push(squareSettings.memberPrintDiscountId);
+    }
+
+    // Check for billing code discount
+    if (billingCode !== '') {
+      const billingCodeData = await this.billingCodeRepository.getByCode(billingCode);
+      if (billingCodeData?.billingCode.discountId) {
+        discounts.push(billingCodeData.billingCode.discountId);
+      }
+    }
+
+    return discounts;
+  }
+
+  async getPricingInfo(customerEmail: string, billingCode?: string) {
+    const squareSettings = await this.settingsRepository.getSetting('printRequestSquare');
+    const discountIds = await this.getApplicableDiscounts(customerEmail, billingCode ?? '');
+
+    const items = await this.squareRepository.getCatalogByIds([
+      squareSettings.additionalBuildPlateItemId,
+      ...discountIds,
     ]);
 
     const buildPlateItem = items.objects?.find(
       (obj) => obj.id === squareSettings.additionalBuildPlateItemId,
     ) as CatalogObjectItemVariation;
 
-    const memberDiscount = items.objects?.find(
-      (obj) => obj.id === squareSettings.memberPrintDiscountId,
-    ) as CatalogObjectDiscount;
+    const discountObjects = items.objects?.filter(
+      (obj) => obj.type === 'DISCOUNT',
+    ) as CatalogObjectDiscount[];
 
     return {
       additionalBuildPlateModifier: Number(buildPlateItem?.itemVariationData?.priceMoney?.amount),
-      memberPrintDiscount: Number(memberDiscount.discountData?.percentage),
-      memberDiscountApplied: activeMember,
+      discounts: discountObjects.map((discount) => ({
+        id: discount.id,
+        name: discount.discountData?.name || 'Unnamed Discount',
+        percentage: Number(discount.discountData?.percentage),
+      })),
     };
   }
 
@@ -74,6 +101,21 @@ export class PrintPaymentService extends BaseService {
   }
 
   async upsertOrder(request: PrintRequestDto, paymentInfo: CreatePaymentDto) {
+    // Check if this request has a billing code with organization association
+    if (request.billingCode) {
+      const billingCodeData = await this.billingCodeRepository.getByCode(request.billingCode);
+
+      if (billingCodeData?.billingCode.organizationId) {
+        // This is an organization billing code - mark as paid and associate with organization
+        return await this.handleOrganizationBilling(
+          request,
+          paymentInfo,
+          billingCodeData.billingCode.organizationId,
+          billingCodeData.billingCode.id,
+        );
+      }
+    }
+
     if (request.payment && request.payment.squareInvoiceId && request.payment.status !== 'quote') {
       // We have to cancel the existing invoice before creating a new one
       // https://stackoverflow.com/questions/66733189
@@ -81,18 +123,23 @@ export class PrintPaymentService extends BaseService {
     }
 
     const squareSettings = await this.settingsRepository.getSetting('printRequestSquare');
-    const activeMember = await squareService.checkActiveMember(request.email);
     const customer = await this.squareRepository.upsertCustomer(
       request.customerName,
       request.email,
     );
 
-    const order = this.buildOrder(squareSettings, {
-      customer,
-      materialCost: paymentInfo.materialCost,
-      buildPlates: paymentInfo.buildPlates,
-      memberPricing: activeMember,
-    });
+    // Get all applicable discounts
+    const discountIds = await this.getApplicableDiscounts(request.email, request.billingCode ?? '');
+
+    const order = this.buildOrder(
+      squareSettings,
+      {
+        customer,
+        materialCost: paymentInfo.materialCost,
+        buildPlates: paymentInfo.buildPlates,
+      },
+      discountIds,
+    );
 
     const createdOrder = await this.squareRepository.createOrder(order);
     if (!createdOrder) {
@@ -102,7 +149,7 @@ export class PrintPaymentService extends BaseService {
     let paymentRecord;
     if (createdOrder.totalMoney?.amount === BigInt(0)) {
       // No payment required, mark as paid
-      paymentRecord = await this.printPaymentRepository.savePayment(request.id, {
+      paymentRecord = await this.paymentRepository.savePayment(request.id, {
         id: request.payment?.id,
         status: 'paid',
         issuedDate: DateTime.now(),
@@ -111,6 +158,7 @@ export class PrintPaymentService extends BaseService {
         total: 0,
         squareInvoiceId: null,
         squareOrderId: createdOrder.id!,
+        type: 'print_request',
       });
 
       await this.printRequestRepository.update(request.id, {
@@ -118,7 +166,7 @@ export class PrintPaymentService extends BaseService {
         buildplateCount: paymentInfo.buildPlates,
       });
     } else {
-      const invoice = await this.printPaymentRepository.createInvoice(createdOrder);
+      const invoice = await this.paymentRepository.createInvoice(createdOrder);
       if (!invoice) {
         throw new Error('Failed to create invoice in Square');
       }
@@ -129,7 +177,7 @@ export class PrintPaymentService extends BaseService {
         await this.squareRepository.sendInvoice(invoice.id!, invoice.version!);
       }
 
-      paymentRecord = await this.printPaymentRepository.savePayment(request.id, {
+      paymentRecord = await this.paymentRepository.savePayment(request.id, {
         id: request.payment?.id,
         status: 'pending',
         issuedDate: DateTime.fromISO(invoice.createdAt!),
@@ -137,6 +185,7 @@ export class PrintPaymentService extends BaseService {
         total: Number(createdOrder.netAmountDueMoney?.amount),
         squareInvoiceId: invoice.id!,
         squareOrderId: createdOrder.id!,
+        type: 'print_request',
       });
 
       await this.printRequestRepository.update(request.id, {
@@ -148,20 +197,81 @@ export class PrintPaymentService extends BaseService {
     return paymentRecord;
   }
 
-  private async upsertQuote(request: PrintRequestDto, paymentInfo: CreatePaymentDto) {
+  private async handleOrganizationBilling(
+    request: PrintRequestDto,
+    paymentInfo: CreatePaymentDto,
+    organizationId: string,
+    billingCodeId: string,
+  ) {
     const squareSettings = await this.settingsRepository.getSetting('printRequestSquare');
-    const activeMember = await squareService.checkActiveMember(request.email);
     const customer = await this.squareRepository.upsertCustomer(
       request.customerName,
       request.email,
     );
 
-    const order = this.buildOrder(squareSettings, {
-      customer,
-      materialCost: paymentInfo.materialCost,
-      buildPlates: paymentInfo.buildPlates,
-      memberPricing: activeMember,
+    // Get billing code discount (no member discounts for organization billing)
+    const billingCodeData = await this.billingCodeRepository.getById(billingCodeId);
+    const discountIds = billingCodeData?.billingCode.discountId
+      ? [billingCodeData.billingCode.discountId]
+      : [];
+
+    const order = this.buildOrder(
+      squareSettings,
+      {
+        customer,
+        materialCost: paymentInfo.materialCost,
+        buildPlates: paymentInfo.buildPlates,
+      },
+      discountIds,
+    );
+
+    const calculatedOrder = await this.squareRepository.calculateOrder(order);
+    if (!calculatedOrder) {
+      throw new Error('Failed to calculate order in Square');
+    }
+
+    // Create payment record marked as pending and associated with the organization
+    // It will be marked as paid when the print request is moved to 'done' status
+    const paymentRecord = await this.paymentRepository.savePayment(request.id, {
+      id: request.payment?.id,
+      status: 'pending',
+      issuedDate: DateTime.now(),
+      paymentDate: null,
+      orderObject: stringifySquareObject(calculatedOrder),
+      total: Number(calculatedOrder.netAmountDueMoney?.amount ?? 0),
+      squareInvoiceId: null,
+      squareOrderId: null,
+      organizationId: organizationId,
+      type: 'print_request',
     });
+
+    await this.printRequestRepository.update(request.id, {
+      materialCost: paymentInfo.materialCost,
+      buildplateCount: paymentInfo.buildPlates,
+    });
+
+    return paymentRecord;
+  }
+
+  private async upsertQuote(request: PrintRequestDto, paymentInfo: CreatePaymentDto) {
+    const squareSettings = await this.settingsRepository.getSetting('printRequestSquare');
+    const customer = await this.squareRepository.upsertCustomer(
+      request.customerName,
+      request.email,
+    );
+
+    // Get all applicable discounts
+    const discountIds = await this.getApplicableDiscounts(request.email, request.billingCode ?? '');
+
+    const order = this.buildOrder(
+      squareSettings,
+      {
+        customer,
+        materialCost: paymentInfo.materialCost,
+        buildPlates: paymentInfo.buildPlates,
+      },
+      discountIds,
+    );
 
     const calculatedOrder = await this.squareRepository.calculateOrder(order);
 
@@ -171,7 +281,7 @@ export class PrintPaymentService extends BaseService {
 
     const orderTotal = Number(calculatedOrder.netAmountDueMoney?.amount ?? 0);
 
-    const paymentRecord = await this.printPaymentRepository.savePayment(request.id, {
+    const paymentRecord = await this.paymentRepository.savePayment(request.id, {
       id: request.payment?.id,
       status: 'quote',
       issuedDate: DateTime.now(),
@@ -179,6 +289,7 @@ export class PrintPaymentService extends BaseService {
       total: orderTotal,
       squareInvoiceId: null,
       squareOrderId: null,
+      type: 'print_request',
     });
 
     await this.printRequestRepository.update(request.id, {
@@ -206,14 +317,13 @@ export class PrintPaymentService extends BaseService {
   private buildOrder(
     squareSettings: SquareSettings,
     info: PrintRequestInfo,
+    discountIds: string[] = [],
   ): CalculateOrderRequest {
-    const discounts: OrderLineItemDiscount[] = [];
-    if (info.memberPricing) {
-      discounts.push({
-        catalogObjectId: squareSettings.memberPrintDiscountId,
-        scope: 'ORDER',
-      });
-    }
+    // Build discounts array from all applicable discount IDs
+    const discounts: OrderLineItemDiscount[] = discountIds.map((discountId) => ({
+      catalogObjectId: discountId,
+      scope: 'ORDER',
+    }));
 
     const lineItems: OrderLineItem[] = [
       {

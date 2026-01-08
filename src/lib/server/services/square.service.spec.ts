@@ -27,9 +27,9 @@ vi.mock('$lib/server/repositories/print_request.repository', () => {
 });
 
 vi.mock('$lib/server/repositories/print_payment.repository', () => {
-  const MockPrintPaymentRepository = vi.fn();
-  MockPrintPaymentRepository.prototype.updateInvoiceStatus = vi.fn();
-  return { PrintPaymentRepository: MockPrintPaymentRepository };
+  const MockPaymentRepository = vi.fn();
+  MockPaymentRepository.prototype.updateInvoiceStatus = vi.fn();
+  return { PaymentRepository: MockPaymentRepository };
 });
 
 vi.mock('$lib/server/repositories/settings.repository', () => {
@@ -51,9 +51,8 @@ describe('SquareService', () => {
     const { SquareRepository } = await import('$lib/server/repositories/square.repository');
     mockSquareRepo = SquareRepository.prototype;
 
-    const { PrintPaymentRepository } =
-      await import('$lib/server/repositories/print_payment.repository');
-    mockPaymentRepo = PrintPaymentRepository.prototype;
+    const { PaymentRepository } = await import('$lib/server/repositories/print_payment.repository');
+    mockPaymentRepo = PaymentRepository.prototype;
   });
 
   afterEach(() => {

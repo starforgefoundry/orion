@@ -149,6 +149,14 @@
       />
     </Field>
 
+    <Field label="Group or Discount Code">
+      <TextInput
+        {...submitPrintRequestForm.fields.billingCode.as('text')}
+        placeholder="ORG2026"
+        class="max-w-xs"
+      />
+    </Field>
+
     <hr class="my-4 w-full border-gray-300" />
     <Field label="Project Title" required="indicator">
       <TextInput
