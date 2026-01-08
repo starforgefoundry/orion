@@ -61,7 +61,7 @@ export const chargeOrganizationBalance = command(chargeOrganizationBalanceDto, a
 
 export const createOrganizationChargeForm = form(createOrgChargeDto, async (dto) => {
   verifyAuth();
-  const payment = await organizationService.createCharge(dto);
+  const charge = await organizationService.createCharge(dto);
   await getOrganizationDetail({ id: dto.organizationId }).refresh();
-  return payment;
+  return charge;
 });

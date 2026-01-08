@@ -4,7 +4,7 @@
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { createOrganizationChargeForm } from '$lib/remotes/endpoints/organization.remote';
   import { Button, Field, Modal, ModalBody, Stack, Switch } from '@immich/ui';
-  import { mdiAccountGroup } from '@mdi/js';
+  import { mdiCashPlus } from '@mdi/js';
 
   interface Props extends ModalProps {
     orgId: string;
@@ -12,7 +12,7 @@
 
   const { onClose, orgId }: Props = $props();
 
-  let amountInput = $derived(0);
+  let amountInput = $state(0);
   let isCredit = $state(false);
   let amount = $derived(amountInput * (isCredit ? -1 : 1));
   $effect(() => {
@@ -20,7 +20,7 @@
   });
 </script>
 
-<Modal {onClose} title="Create Organization Charge" icon={mdiAccountGroup}>
+<Modal {onClose} title="Create Organization Charge" icon={mdiCashPlus}>
   <ModalBody>
     <form {...createOrganizationChargeForm} onsubmit={() => onClose()}>
       <input
