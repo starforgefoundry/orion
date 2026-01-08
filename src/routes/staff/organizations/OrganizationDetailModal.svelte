@@ -314,7 +314,7 @@
               <TableHeaderCell width="w-3/12">Status</TableHeaderCell>
               <TableHeaderCell width="w-3/12" align="right" class="px-4">Amount</TableHeaderCell>
             </TableHeader>
-            <TableBody>
+            <TableBody class="border border-gray-700">
               {#each organizationDetail.current.balancePayments as payment}
                 <TableRow>
                   <TableCell width="w-3/12" align="left" class="px-4">
