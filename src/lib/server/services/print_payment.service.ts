@@ -47,7 +47,7 @@ export class PrintPaymentService extends BaseService {
     }
 
     // Check for billing code discount
-    if (billingCode != '') {
+    if (billingCode !== '') {
       const billingCodeData = await this.billingCodeRepository.getByCode(billingCode);
       if (billingCodeData?.billingCode.discountId) {
         discounts.push(billingCodeData.billingCode.discountId);

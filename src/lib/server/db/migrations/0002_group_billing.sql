@@ -19,4 +19,3 @@ CREATE TABLE `organization` (
 --> statement-breakpoint
 ALTER TABLE `payment` ADD `organization_id` text REFERENCES organization(id);--> statement-breakpoint
 ALTER TABLE `payment` ADD `type` text NOT NULL DEFAULT 'print_request';--> statement-breakpoint
-ALTER TABLE `payment` ALTER `type` DROP DEFAULT;--> statement-breakpoint

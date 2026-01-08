@@ -54,6 +54,7 @@ export class OrganizationRepository extends BaseRepository {
     return payments;
   }
 
+  // TODO: convert this to include all items related to the organization
   async getPrintRequests(organizationId: string) {
     const requests = await this.db
       .select({

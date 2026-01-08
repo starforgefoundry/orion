@@ -42,8 +42,8 @@
       })),
   ]);
 
-  let selectedOrganization: SelectItem | undefined = $state(undefined);
-  let selectedDiscount: SelectItem | undefined = $state(undefined);
+  let selectedOrganization: SelectItem = $state({ value: '', label: 'No Organization' });
+  let selectedDiscount: SelectItem = $state({ value: '', label: 'No Discount' });
 
   $effect(() => {
     createBillingCode.fields.organizationId.set(selectedOrganization?.value ?? '');
@@ -52,6 +52,8 @@
   $effect(() => {
     createBillingCode.fields.discountId.set(selectedDiscount?.value ?? '');
   });
+
+  let validSubmit = $derived(selectedOrganization.value !== '' || selectedDiscount.value !== '');
 </script>
 
 <Modal title="Create Billing Code" icon={mdiTicket} {onClose}>
@@ -77,7 +79,7 @@
             />
           </Field>
 
-          <Field label="Organization (Optional)">
+          <Field label="Bill to Organization">
             <Select
               data={organizationOptions}
               bind:value={selectedOrganization}
@@ -86,7 +88,7 @@
             <input {...createBillingCode.fields.organizationId.as('text')} hidden />
           </Field>
 
-          <Field label="Discount (Optional)">
+          <Field label="Apply Discount">
             <Select
               data={squareDiscountOptions}
               bind:value={selectedDiscount}
@@ -95,7 +97,9 @@
             <input {...createBillingCode.fields.discountId.as('text')} hidden />
           </Field>
 
-          <Button type="submit" variant="filled" fullWidth>Create Billing Code</Button>
+          <Button type="submit" variant="filled" fullWidth disabled={!validSubmit}
+            >Create Billing Code</Button
+          >
         </Stack>
       </form>
     {/if}

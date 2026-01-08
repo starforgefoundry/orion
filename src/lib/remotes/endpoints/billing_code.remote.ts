@@ -14,10 +14,10 @@ export const getBillingCodeById = query(v.object({ id: v.string() }), async (dto
   return await billingCodeService.getBillingCodeById(dto.id);
 });
 
-export const getBillingCodeByCode = query(v.object({ code: v.string() }), async (dto) => {
-  // This can be used publicly to validate codes on the print request form
-  return await billingCodeService.getBillingCodeByCode(dto.code);
-});
+// export const getBillingCodeByCode = query(v.object({ code: v.string() }), async (dto) => {
+//   // This can be used publicly to validate codes on the print request form
+//   return await billingCodeService.getBillingCodeByCode(dto.code);
+// });
 
 export const createBillingCode = form(createBillingCodeDto, async (data) => {
   verifyAuth();

@@ -61,12 +61,13 @@
   let buildPlateSurcharge = $derived(buildPlates > 1 ? (buildPlates - 1) * buildPlateCost : 0);
   let subtotal = $derived(materialCost / 100 + buildPlateSurcharge);
 
-  // Calculate total discount from all applicable discounts
-  let totalDiscountPercentage = $derived(
-    (pricingInfo.current?.discounts ?? []).reduce((sum, discount) => sum + discount.percentage, 0),
+  // Apply discounts sequentially (as Square does)
+  let totalCost = $derived(
+    (pricingInfo.current?.discounts ?? []).reduce(
+      (price, discount) => price * (1 - discount.percentage / 100),
+      subtotal,
+    ),
   );
-  let totalDiscount = $derived((subtotal * totalDiscountPercentage) / 100);
-  let totalCost = $derived(subtotal - totalDiscount);
 
   let loading = $state(false);
 
@@ -127,7 +128,11 @@
           {/if}
 
           {#if pricingInfo.current?.discounts && pricingInfo.current.discounts.length > 0}
-            {#each pricingInfo.current.discounts as discount}
+            {#each pricingInfo.current.discounts as discount, i}
+              {@const priceBeforeDiscount = (pricingInfo.current?.discounts ?? [])
+                .slice(0, i)
+                .reduce((price, d) => price * (1 - d.percentage / 100), subtotal)}
+              {@const discountAmount = priceBeforeDiscount * (discount.percentage / 100)}
               <HStack class="justify-between">
                 <Stack gap={0}>
                   <Text>{discount.name}</Text>
@@ -136,7 +141,7 @@
                   </Text>
                 </Stack>
                 <Text>
-                  - ${((subtotal * discount.percentage) / 100).toFixed(2)}
+                  - ${discountAmount.toFixed(2)}
                 </Text>
               </HStack>
             {/each}

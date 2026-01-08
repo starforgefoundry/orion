@@ -55,7 +55,7 @@ export class OrganizationService extends BaseService {
     let totalOwed = 0;
 
     for (const row of allPayments) {
-      if (row.status === 'paid' && row.type !== 'balance') {
+      if (row.status !== 'quote' && row.status !== 'canceled' && row.type !== 'balance') {
         totalOwed += row.total;
       }
 
