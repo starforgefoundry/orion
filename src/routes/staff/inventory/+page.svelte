@@ -1,0 +1,187 @@
+<script lang="ts">
+  import { goto } from '$app/navigation';
+  import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHeader,
+    TableHeaderCell,
+    TableRow,
+  } from '$lib/frontend/components/table';
+  import type { InventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
+  import { deleteInventoryItem, getInventoryItems } from '$lib/remotes/endpoints/inventory.remote';
+  import {
+    Button,
+    Checkbox,
+    Heading,
+    IconButton,
+    Input,
+    LoadingSpinner,
+    modalManager,
+  } from '@immich/ui';
+  import {
+    mdiChatQuestion,
+    mdiMagnify,
+    mdiPencil,
+    mdiPlus,
+    mdiPrinter,
+    mdiTrashCan,
+  } from '@mdi/js';
+  import InventoryItemModal from './InventoryItemModal.svelte';
+
+  let inventoryItems = getInventoryItems();
+  let searchTerm = $state('');
+  let searchedItems = $derived(
+    inventoryItems.current?.filter(
+      (item) =>
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.vendor.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.description.toLowerCase().includes(searchTerm.toLowerCase()),
+    ) || [],
+  );
+
+  let selectedItems = $state<Set<string>>(new Set());
+  let selectedCount = $derived(selectedItems.size);
+  let lastSelectedIndex = $state<number | null>(null);
+
+  function showCreateModal() {
+    modalManager.show(InventoryItemModal, { type: 'new' });
+  }
+
+  function showEditModal(item: InventoryItemDto) {
+    // @ts-ignore - modalManager type doesn't support our CreateOrUpdate pattern
+    modalManager.show(InventoryItemModal, { type: 'edit', item });
+  }
+
+  async function handleDeleteItem(id: string) {
+    const confirm = await modalManager.showDialog({
+      title: 'Delete Inventory Item',
+      prompt:
+        'Are you sure you want to delete this item? It will also be removed from the purchase list.',
+      confirmText: 'Delete',
+      confirmColor: 'danger',
+      icon: mdiChatQuestion,
+    });
+
+    if (confirm) {
+      await deleteInventoryItem({ id });
+      const newSelected = new Set(selectedItems);
+      newSelected.delete(id);
+      selectedItems = newSelected;
+    }
+  }
+
+  function handleCheckboxChange(id: string, index: number, isChecked: boolean) {
+    const shiftKey = (event as any).shiftKey;
+
+    if (shiftKey && lastSelectedIndex !== null && searchedItems.length > 0) {
+      // Shift-click: select range
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      const newSelected = new Set(selectedItems);
+      for (let i = start; i <= end; i++) {
+        if (searchedItems[i]) {
+          if (isChecked) {
+            newSelected.add(searchedItems[i].id);
+          } else {
+            newSelected.delete(searchedItems[i].id);
+          }
+        }
+      }
+      selectedItems = newSelected;
+    } else {
+      // Normal click
+      const newSelected = new Set(selectedItems);
+      if (isChecked) {
+        newSelected.add(id);
+      } else {
+        newSelected.delete(id);
+      }
+      selectedItems = newSelected;
+      lastSelectedIndex = index;
+    }
+  }
+
+  async function handlePrintLabels() {
+    if (selectedItems.size === 0) return;
+
+    // Get the selected inventory items
+    const itemsToPrint = searchedItems.filter((item) => selectedItems.has(item.id));
+
+    goto('/staff/inventory/labels?items=' + encodeURIComponent(JSON.stringify(itemsToPrint)));
+  }
+</script>
+
+<div class="mb-6 flex items-center justify-between">
+  <Heading size="large" class="inline-block w-fit">Inventory Items</Heading>
+  <div class="flex w-1/2 items-center gap-2">
+    <Button
+      variant="filled"
+      leadingIcon={mdiPrinter}
+      disabled={selectedCount === 0}
+      onclick={handlePrintLabels}
+    >
+      Print Labels ({selectedCount})
+    </Button>
+    <IconButton
+      icon={mdiPlus}
+      variant="filled"
+      aria-label="Add Inventory Item"
+      class="min-w-10"
+      onclick={showCreateModal}
+    />
+    <Input placeholder="Search Items" leadingIcon={mdiMagnify} bind:value={searchTerm} />
+  </div>
+</div>
+
+{#if inventoryItems.loading}
+  <div class="flex justify-center">
+    <LoadingSpinner size="large" />
+  </div>
+{:else if inventoryItems.error}
+  <p class="text-danger">Error loading inventory items: {inventoryItems.error.message}</p>
+{:else}
+  <Table>
+    <TableHeader>
+      <TableHeaderCell width="w-1/12"></TableHeaderCell>
+      <TableHeaderCell width="w-3/12">Name</TableHeaderCell>
+      <TableHeaderCell width="w-2/12">Vendor</TableHeaderCell>
+      <TableHeaderCell width="w-4/12">Description</TableHeaderCell>
+      <TableHeaderCell width="w-2/12">Actions</TableHeaderCell>
+    </TableHeader>
+    <TableBody>
+      {#each searchedItems as item, index}
+        <TableRow>
+          <TableCell width="w-1/12" class="pl-6">
+            <Checkbox
+              checked={selectedItems.has(item.id)}
+              onCheckedChange={(newValue) => handleCheckboxChange(item.id, index, newValue)}
+            />
+          </TableCell>
+          <TableCell width="w-3/12" align="left">{item.name}</TableCell>
+          <TableCell width="w-2/12" align="left">{item.vendor}</TableCell>
+          <TableCell width="w-4/12" align="left" class="truncate">{item.description}</TableCell>
+          <TableCell width="w-2/12" class="flex justify-center gap-2">
+            <IconButton
+              icon={mdiPencil}
+              aria-label="Edit Item"
+              onclick={() => showEditModal(item)}
+            />
+            <IconButton
+              icon={mdiTrashCan}
+              aria-label="Delete Item"
+              color="danger"
+              onclick={() => handleDeleteItem(item.id)}
+            />
+          </TableCell>
+        </TableRow>
+      {/each}
+
+      {#if searchedItems.length === 0}
+        <TableRow>
+          <TableCell width="w-full" class="text-center">No inventory items found.</TableCell>
+        </TableRow>
+      {/if}
+    </TableBody>
+  </Table>
+{/if}

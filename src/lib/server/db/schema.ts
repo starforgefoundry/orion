@@ -159,6 +159,37 @@ export const organizationCharge = sqliteTable(
 
 export type OrganizationCharge = InferSelectModel<typeof organizationCharge>;
 
+export const inventoryItem = sqliteTable('inventory_item', {
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  vendor: text('vendor').notNull(),
+  url: text('url').notNull(),
+  imageUrl: text('image_url'),
+  description: text('description').notNull(),
+});
+
+export type InventoryItem = InferSelectModel<typeof inventoryItem>;
+
+export const purchaseList = sqliteTable(
+  'purchase_list',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    inventoryItemId: text('inventory_item_id')
+      .notNull()
+      .references(() => inventoryItem.id),
+    addedDate: luxonTimestamp('added_date').notNull(),
+  },
+  (table) => [index('purchase_list_item_idx').on(table.inventoryItemId)],
+);
+
+export type PurchaseList = InferSelectModel<typeof purchaseList>;
+
 export const schema = {
   user,
   printRequest,
@@ -170,4 +201,6 @@ export const schema = {
   billingCode,
   organization,
   organizationCharge,
+  inventoryItem,
+  purchaseList,
 };
