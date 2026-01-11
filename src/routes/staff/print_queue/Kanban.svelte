@@ -24,6 +24,10 @@
   let touchStartY = $state(0);
   let isDragging = $state(false);
   let draggedElement: HTMLElement | null = $state(null);
+  let scrollContainer: HTMLElement | null = $state(null);
+  let autoScrollInterval: number | null = $state(null);
+  let dragOffsetX = $state(0);
+  let dragOffsetY = $state(0);
 
   const columns = [
     {
@@ -73,6 +77,12 @@
     }
   }
 
+  function handleDrag(event: DragEvent) {
+    if (event.clientX > 0) {
+      updateAutoScroll(event.clientX);
+    }
+  }
+
   function handleDragOverCard(event: DragEvent, column: PrintRequestStatus, index: number) {
     event.preventDefault();
     event.stopPropagation();
@@ -119,23 +129,28 @@
   async function handleDrop(event: DragEvent, targetColumn: PrintRequestStatus) {
     event.preventDefault();
 
-    if (!draggedJobId) return;
-    if (draggedFromColumn === targetColumn) {
+    if (!draggedJobId) {
+      resetDragState();
+      return;
+    }
+
+    // Use dragOverColumn if available, otherwise fall back to targetColumn
+    const finalColumn = dragOverColumn || targetColumn;
+
+    if (draggedFromColumn === finalColumn) {
       resetDragState();
       return;
     }
 
     // keep a reference to the dragged item
     const jobId = draggedJobId;
+    const destinationColumn = finalColumn;
 
-    draggedJobId = null;
-    draggedFromColumn = null;
-    dragOverColumn = null;
-    dragOverIndex = -1;
+    resetDragState();
 
     try {
       // Confirm movement to Done column
-      if (targetColumn === 'done') {
+      if (destinationColumn === 'done') {
         const confirmed = await modalManager.showDialog({
           title: 'Mark as Done',
           prompt: 'Are you sure this print request is complete and ready for pickup?',
@@ -149,9 +164,9 @@
         }
       }
 
-      await updatePrintRequestStatus({ id: jobId, status: targetColumn }).updates(
+      await updatePrintRequestStatus({ id: jobId, status: destinationColumn }).updates(
         getPrintRequests().withOverride((current) =>
-          optimisticUpdate(current, jobId, targetColumn),
+          optimisticUpdate(current, jobId, destinationColumn),
         ),
       );
     } catch (error) {
@@ -177,14 +192,24 @@
     const deltaX = Math.abs(touch.clientX - touchStartX);
     const deltaY = Math.abs(touch.clientY - touchStartY);
 
-    // Start dragging if moved more than 10px
-    if (!isDragging && (deltaX > 10 || deltaY > 10)) {
+    // Start dragging if moved more than 5px in any direction
+    if (!isDragging && (deltaX > 5 || deltaY > 5)) {
       isDragging = true;
       event.preventDefault();
+      dragOffsetX = touch.clientX - touchStartX;
+      dragOffsetY = touch.clientY - touchStartY;
+      startAutoScroll(touch.clientX);
     }
 
     if (isDragging) {
       event.preventDefault();
+
+      // Update drag offset for visual feedback
+      dragOffsetX = touch.clientX - touchStartX;
+      dragOffsetY = touch.clientY - touchStartY;
+
+      // Update auto-scroll based on touch position
+      updateAutoScroll(touch.clientX);
 
       // Find element under touch point
       const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
@@ -208,6 +233,49 @@
     }
   }
 
+  function startAutoScroll(clientX: number) {
+    if (autoScrollInterval !== null) return;
+    updateAutoScroll(clientX);
+  }
+
+  function updateAutoScroll(clientX: number) {
+    if (!scrollContainer) return;
+
+    const scrollZone = 100; // pixels from edge to trigger scroll
+    const scrollSpeed = 10; // pixels per frame
+    const containerRect = scrollContainer.getBoundingClientRect();
+
+    // Clear existing interval
+    if (autoScrollInterval !== null) {
+      clearInterval(autoScrollInterval);
+      autoScrollInterval = null;
+    }
+
+    // Check if near left edge
+    if (clientX < containerRect.left + scrollZone) {
+      autoScrollInterval = window.setInterval(() => {
+        if (scrollContainer) {
+          scrollContainer.scrollLeft -= scrollSpeed;
+        }
+      }, 16);
+    }
+    // Check if near right edge
+    else if (clientX > containerRect.right - scrollZone) {
+      autoScrollInterval = window.setInterval(() => {
+        if (scrollContainer) {
+          scrollContainer.scrollLeft += scrollSpeed;
+        }
+      }, 16);
+    }
+  }
+
+  function stopAutoScroll() {
+    if (autoScrollInterval !== null) {
+      clearInterval(autoScrollInterval);
+      autoScrollInterval = null;
+    }
+  }
+
   function resetDragState() {
     draggedJobId = null;
     draggedFromColumn = null;
@@ -215,6 +283,9 @@
     dragOverIndex = -1;
     isDragging = false;
     draggedElement = null;
+    dragOffsetX = 0;
+    dragOffsetY = 0;
+    stopAutoScroll();
   }
 
   async function handleTouchEnd(event: TouchEvent, targetColumn?: PrintRequestStatus) {
@@ -225,18 +296,11 @@
 
     event.preventDefault();
 
-    const touch = event.changedTouches[0];
-    const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
-
-    let finalColumn = targetColumn;
-    if (!finalColumn && elementAtPoint) {
-      const columnContainer = elementAtPoint.closest('[data-column-id]');
-      if (columnContainer) {
-        finalColumn = columnContainer.getAttribute('data-column-id') as PrintRequestStatus;
-      }
-    }
+    // Use dragOverColumn which is tracked during touch move
+    const finalColumn = dragOverColumn || targetColumn;
 
     console.log('drag Column:', draggedFromColumn);
+    console.log('dragOver Column:', dragOverColumn);
     console.log('Final Column:', finalColumn);
 
     if (finalColumn && draggedJobId && draggedFromColumn !== finalColumn) {
@@ -297,7 +361,7 @@
   }
 </script>
 
-<div class="-mx-4 flex h-full gap-6 overflow-x-auto px-4">
+<div class="-mx-4 flex h-full gap-6 overflow-x-auto px-4" bind:this={scrollContainer}>
   {#each columns as column}
     <div
       class="my-1 flex min-w-75 flex-1 flex-col rounded-lg p-4 {column.columnClass} {dragOverColumn ===
@@ -324,9 +388,14 @@
             'done'
               ? 'active:cursor-grabbing'
               : ''} {isDragging && draggedJobId === job.id ? 'opacity-50' : ''}"
+            style={isDragging && draggedJobId === job.id
+              ? `transform: translate(${dragOffsetX}px, ${dragOffsetY}px); transition: none;`
+              : ''}
             draggable={job.status !== 'done'}
             ondragstart={(e) => job.status !== 'done' && handleDragStart(e, job.id, column.id)}
+            ondrag={handleDrag}
             ondragover={(e) => handleDragOverCard(e, column.id, index)}
+            ondragend={resetDragState}
             ontouchstart={(e) => job.status !== 'done' && handleTouchStart(e, job.id, column.id)}
             ontouchmove={handleTouchMove}
             ontouchend={(e) => handleTouchEnd(e, column.id)}
