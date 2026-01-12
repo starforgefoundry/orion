@@ -19,6 +19,9 @@ importers:
       '@auth/sveltekit':
         specifier: ^1.11.1
         version: 1.11.1(@sveltejs/kit@2.49.2(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.46.1)(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(lightningcss@1.30.2)))(svelte@5.46.1)(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(lightningcss@1.30.2)))(svelte@5.46.1)
+      '@castlenine/svelte-qrcode':
+        specifier: ^2.3.0
+        version: 2.3.0(svelte@5.46.1)
       '@immich/ui':
         specifier: ^0.50.1
         version: 0.50.1(patch_hash=72e2d453e9d71a3b06f1cd8fa1c394e69a36f0017efe17cd8f479f62391c8e09)(@sveltejs/kit@2.49.2(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.46.1)(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(lightningcss@1.30.2)))(svelte@5.46.1)(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(lightningcss@1.30.2)))(svelte@5.46.1)(tailwindcss@4.1.18)
@@ -206,6 +209,11 @@ packages:
         optional: true
       nodemailer:
         optional: true
+
+  '@castlenine/svelte-qrcode@2.3.0':
+    resolution: {integrity: sha512-1YO6tL63gjbCuBkhd/PyMMFbjFD6gO6TJjvq5Ucfs5+0s13oDfiUyxO15kjR11enG7O/A2R0WBuc4bfdMqjTJQ==}
+    peerDependencies:
+      svelte: '>=3.54.0'
 
   '@cloudflare/kv-asset-handler@0.4.1':
     resolution: {integrity: sha512-Nu8ahitGFFJztxUml9oD/DLb7Z28C8cd8F46IVQ7y5Btz575pvMY8AqZsXkX7Gds29eCKdMgIHjIvzskHgPSFg==}
@@ -3078,6 +3086,10 @@ snapshots:
       '@auth/core': 0.41.1
       '@sveltejs/kit': 2.49.2(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.46.1)(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(lightningcss@1.30.2)))(svelte@5.46.1)(vite@7.3.0(@types/node@24.10.4)(jiti@2.6.1)(lightningcss@1.30.2))
       set-cookie-parser: 2.7.2
+      svelte: 5.46.1
+
+  '@castlenine/svelte-qrcode@2.3.0(svelte@5.46.1)':
+    dependencies:
       svelte: 5.46.1
 
   '@cloudflare/kv-asset-handler@0.4.1':
