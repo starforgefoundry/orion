@@ -9,15 +9,19 @@
     TableRow,
   } from '$lib/frontend/components/table';
   import type { InventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
-  import { deleteInventoryItem, getInventoryItems } from '$lib/remotes/endpoints/inventory.remote';
   import {
-    Button,
+    addToPurchaseList,
+    deleteInventoryItem,
+    getInventoryItems,
+  } from '$lib/remotes/endpoints/inventory.remote';
+  import {
     Checkbox,
     Heading,
     IconButton,
     Input,
     LoadingSpinner,
     modalManager,
+    toastManager,
   } from '@immich/ui';
   import {
     mdiChatQuestion,
@@ -45,12 +49,12 @@
   let lastSelectedIndex = $state<number | null>(null);
 
   function showCreateModal() {
-    modalManager.show(InventoryItemModal, { type: 'new' });
+    modalManager.show(InventoryItemModal, {});
   }
 
   function showEditModal(item: InventoryItemDto) {
     // @ts-ignore - modalManager type doesn't support our CreateOrUpdate pattern
-    modalManager.show(InventoryItemModal, { type: 'edit', item });
+    modalManager.show(InventoryItemModal, { itemId: item.id, prefill: item });
   }
 
   async function handleDeleteItem(id: string) {
@@ -110,19 +114,25 @@
 
     goto('/staff/inventory/labels?items=' + encodeURIComponent(JSON.stringify(itemsToPrint)));
   }
+
+  async function handleAddToPurchaseList(item: InventoryItemDto) {
+    await addToPurchaseList({ inventoryItemId: item.id });
+
+    toastManager.success(`Added "${item.name}" to purchase list.`);
+  }
 </script>
 
 <div class="mb-6 flex items-center justify-between">
   <Heading size="large" class="inline-block w-fit">Inventory Items</Heading>
   <div class="flex w-1/2 items-center gap-2">
-    <Button
-      variant="filled"
-      leadingIcon={mdiPrinter}
+    <IconButton
+      class="min-w-10"
+      icon={mdiPrinter}
+      color="success"
+      aria-label="Print Labels"
       disabled={selectedCount === 0}
       onclick={handlePrintLabels}
-    >
-      Print Labels ({selectedCount})
-    </Button>
+    />
     <IconButton
       icon={mdiPlus}
       variant="filled"
@@ -162,6 +172,12 @@
           <TableCell width="w-2/12" align="left">{item.vendor}</TableCell>
           <TableCell width="w-4/12" align="left" class="truncate">{item.description}</TableCell>
           <TableCell width="w-2/12" class="flex justify-center gap-2">
+            <IconButton
+              icon={mdiPlus}
+              color="success"
+              aria-label="Add Item to Purchase List"
+              onclick={() => handleAddToPurchaseList(item)}
+            />
             <IconButton
               icon={mdiPencil}
               aria-label="Edit Item"

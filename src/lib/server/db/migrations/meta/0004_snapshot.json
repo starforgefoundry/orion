@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7a589e4b-1014-40c9-b030-1f9b8188fc2f",
+  "id": "f3f59484-ed35-4cd8-8a1f-3beefd0cde94",
   "prevId": "5b5b7840-ccd2-414c-b0d1-ed767fc057af",
   "tables": {
     "billing_code": {
@@ -623,6 +623,13 @@
         }
       },
       "indexes": {
+        "purchase_list_inventory_item_id_unique": {
+          "name": "purchase_list_inventory_item_id_unique",
+          "columns": [
+            "inventory_item_id"
+          ],
+          "isUnique": true
+        },
         "purchase_list_item_idx": {
           "name": "purchase_list_item_idx",
           "columns": [

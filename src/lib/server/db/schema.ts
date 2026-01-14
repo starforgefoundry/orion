@@ -182,6 +182,7 @@ export const purchaseList = sqliteTable(
       .$defaultFn(() => crypto.randomUUID()),
     inventoryItemId: text('inventory_item_id')
       .notNull()
+      .unique()
       .references(() => inventoryItem.id),
     addedDate: luxonTimestamp('added_date').notNull(),
   },

@@ -1,16 +1,13 @@
-import type {
-  CreateInventoryItemDto,
-  UpdateInventoryItemDto,
-} from '$lib/remotes/dtos/inventory.dto';
+import type { UpsertInventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
 import { BaseService } from '$lib/server/services/base.service';
 
 export class InventoryService extends BaseService {
-  async getInventoryItems() {
+  async getItems() {
     const items = await this.inventoryRepository.getAll();
     return items;
   }
 
-  async getInventoryItemById(id: string) {
+  async getItemById(id: string) {
     const item = await this.inventoryRepository.getById(id);
     if (!item) {
       throw new Error('Inventory item not found');
@@ -18,16 +15,12 @@ export class InventoryService extends BaseService {
     return item;
   }
 
-  async createInventoryItem(data: CreateInventoryItemDto) {
-    const item = await this.inventoryRepository.create(data);
+  async upsertItem(dto: UpsertInventoryItemDto) {
+    const item = await this.inventoryRepository.upsert(dto);
     return item;
   }
 
-  async updateInventoryItem(id: string, updates: Omit<UpdateInventoryItemDto, 'id'>) {
-    return await this.inventoryRepository.update(id, updates);
-  }
-
-  async deleteInventoryItem(id: string) {
+  async deleteItem(id: string) {
     await this.inventoryRepository.delete(id);
   }
 

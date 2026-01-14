@@ -14,4 +14,5 @@ CREATE TABLE `purchase_list` (
 	FOREIGN KEY (`inventory_item_id`) REFERENCES `inventory_item`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `purchase_list_inventory_item_id_unique` ON `purchase_list` (`inventory_item_id`);--> statement-breakpoint
 CREATE INDEX `purchase_list_item_idx` ON `purchase_list` (`inventory_item_id`);

@@ -1,8 +1,23 @@
 <script lang="ts">
-  import { CardBody, CardHeader, CardTitle, Icon, Text } from '@immich/ui';
+  import { page } from '$app/state';
+  import { addToPurchaseList } from '$lib/remotes/endpoints/inventory.remote';
+  import { CardBody, CardHeader, CardTitle, Icon, LoadingSpinner, Text } from '@immich/ui';
   import { mdiAlertCircle, mdiCheckCircle, mdiPackageVariant } from '@mdi/js';
+  import { onMount } from 'svelte';
 
-  let { data }: { data: any } = $props();
+  let error = $state<string | null>(null);
+  let loading = $state(true);
+
+  onMount(async () => {
+    try {
+      await addToPurchaseList({ inventoryItemId: page.params.id ?? '' });
+    } catch (e) {
+      console.log(e);
+      error = 'Failed to add item to purchase list. Please try again.';
+    } finally {
+      loading = false;
+    }
+  });
 </script>
 
 <CardHeader>
@@ -12,42 +27,23 @@
   </div>
 </CardHeader>
 <CardBody>
-  {#if data.error}
+  {#if error}
     <div class="flex flex-col items-center justify-center text-center">
       <Icon icon={mdiAlertCircle} class="h-16 w-16 align-middle text-danger" />
-      <h1 class="mb-6 text-3xl font-bold">Error</h1>
+      <h1 class="mb-2 text-3xl font-bold">Error</h1>
 
-      <Text class="mb-6">{data.error}</Text>
+      <Text class="mb-6">{error}</Text>
 
-      <Text>If you believe this is an error, please contact the staff.</Text>
+      <Text color="muted">If you believe this is an error, please ask a staff member.</Text>
     </div>
+  {:else if loading}
+    <LoadingSpinner class="mx-auto" size="large" />
   {:else}
     <div class="flex flex-col items-center justify-center text-center">
       <Icon icon={mdiCheckCircle} class="h-16 w-16 align-middle text-success" />
       <h1 class="mb-6 text-3xl font-bold">Added to Purchase List</h1>
 
-      <div class="mb-6 w-full rounded-lg bg-gray-100 p-4 text-left">
-        <div class="mb-2">
-          <span class="font-bold">Item:</span>
-          {data.item.name}
-        </div>
-        <div class="mb-2">
-          <span class="font-bold">Vendor:</span>
-          {data.item.vendor}
-        </div>
-        <div>
-          <span class="font-bold">Description:</span>
-          {data.item.description}
-        </div>
-      </div>
-
-      <Text class="mb-6">
-        This item has been added to the purchase list and will be reviewed by staff.
-      </Text>
-
-      <Text class="text-sm text-gray-600">
-        If this item is already on the purchase list, it will not be duplicated.
-      </Text>
+      <Text class="mb-6">This item has been added to the purchase list. Thanks!</Text>
     </div>
   {/if}
 </CardBody>

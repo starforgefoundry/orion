@@ -1,7 +1,4 @@
-import type {
-  CreateInventoryItemDto,
-  UpdateInventoryItemDto,
-} from '$lib/remotes/dtos/inventory.dto';
+import type { UpsertInventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { uploadToS3 } from '$lib/server/utils/s3';
@@ -9,11 +6,6 @@ import { eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 
 export class InventoryRepository extends BaseRepository {
-  async create(dto: CreateInventoryItemDto) {
-    const item = await this.db.insert(schema.inventoryItem).values(dto).returning().get();
-    return item;
-  }
-
   async getAll() {
     const items = await this.db.select().from(schema.inventoryItem).all();
     return items;
@@ -28,11 +20,23 @@ export class InventoryRepository extends BaseRepository {
     return item;
   }
 
-  async update(id: string, updates: Omit<UpdateInventoryItemDto, 'id'>) {
+  async upsert(dto: UpsertInventoryItemDto) {
     const item = await this.db
-      .update(schema.inventoryItem)
-      .set(updates)
-      .where(eq(schema.inventoryItem.id, id))
+      .insert(schema.inventoryItem)
+      .values({
+        ...dto,
+        id: dto.id != '' ? dto.id : undefined,
+      })
+      .onConflictDoUpdate({
+        target: schema.inventoryItem.id,
+        set: {
+          name: dto.name,
+          vendor: dto.vendor,
+          url: dto.url,
+          imageUrl: dto.imageUrl,
+          description: dto.description,
+        },
+      })
       .returning()
       .get();
     return item;
@@ -66,27 +70,37 @@ export class InventoryRepository extends BaseRepository {
   }
 
   async addToPurchaseList(inventoryItemId: string) {
-    // Check if already in purchase list
-    const existing = await this.db
+    // check if item exists
+    const inventoryItem = await this.db
       .select()
-      .from(schema.purchaseList)
-      .where(eq(schema.purchaseList.inventoryItemId, inventoryItemId))
+      .from(schema.inventoryItem)
+      .where(eq(schema.inventoryItem.id, inventoryItemId))
       .get();
 
-    if (existing) {
-      return existing;
+    if (!inventoryItem) {
+      throw new Error('Inventory item not found');
     }
 
-    const item = await this.db
-      .insert(schema.purchaseList)
-      .values({
-        inventoryItemId,
-        addedDate: DateTime.now(),
-      })
-      .returning()
-      .get();
-
-    return item;
+    try {
+      const item = await this.db
+        .insert(schema.purchaseList)
+        .values({
+          inventoryItemId,
+          addedDate: DateTime.now(),
+        })
+        .onConflictDoUpdate({
+          target: schema.purchaseList.inventoryItemId,
+          set: {
+            addedDate: DateTime.now(),
+          },
+        })
+        .returning()
+        .get();
+      return item;
+    } catch (e) {
+      console.log(e);
+      throw new Error('Failed to add item to purchase list');
+    }
   }
 
   async removeFromPurchaseList(inventoryItemId: string) {
