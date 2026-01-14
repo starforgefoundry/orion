@@ -12,7 +12,7 @@
 
   onMount(() => {
     // Trigger print dialog on mount
-    // window.print();
+    window.print();
   });
 </script>
 
