@@ -13,7 +13,16 @@
     NavbarGroup,
     NavbarItem,
   } from '@immich/ui';
-  import { mdiAccountGroup, mdiCog, mdiMenu, mdiPaperRoll, mdiPrinter3d, mdiTicket } from '@mdi/js';
+  import {
+    mdiAccountGroup,
+    mdiArchive,
+    mdiCartOutline,
+    mdiCog,
+    mdiMenu,
+    mdiPaperRoll,
+    mdiPrinter3d,
+    mdiTicket,
+  } from '@mdi/js';
 
   let { children } = $props();
 
@@ -51,6 +60,13 @@
       <NavbarItem href={'/staff/print_queue'} title={'Print Queue'} icon={mdiPrinter3d} />
       <NavbarItem href={'/staff/print_materials'} title={'Print Materials'} icon={mdiPaperRoll} />
       <NavbarItem href={'/staff/print_settings'} title={'Settings'} icon={mdiCog} />
+      <NavbarGroup title="Inventory" />
+      <NavbarItem href={'/staff/inventory'} title={'Items'} icon={mdiArchive} />
+      <NavbarItem
+        href={'/staff/inventory/purchase'}
+        title={'Purchase List'}
+        icon={mdiCartOutline}
+      />
       <NavbarGroup title="Payments" />
       <NavbarItem href={'/staff/organizations'} title={'Organizations'} icon={mdiAccountGroup} />
       <NavbarItem href={'/staff/billing_codes'} title={'Billing Codes'} icon={mdiTicket} />

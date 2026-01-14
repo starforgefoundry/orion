@@ -29,6 +29,13 @@
       "when": 1767841845752,
       "tag": "0003_group_charges",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1768350936278,
+      "tag": "0004_inventory_tracking",
+      "breakpoints": true
     }
   ]
 }

@@ -14,5 +14,7 @@
 </script>
 
 <th class="{width} {alignmentClass} {className}">
-  {@render children()}
+  {#if children}
+    {@render children()}
+  {/if}
 </th>
