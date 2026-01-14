@@ -278,6 +278,17 @@
             </HStack>
           </Stack>
         {/if}
+        {#if request?.payment}
+          {#if request?.status !== 'canceled' && request.payment.status !== 'paid' && request.payment.status !== 'canceled'}
+            <Button leadingIcon={mdiCurrencyUsd} fullWidth color="primary" onclick={editPayment}>
+              Edit {billingType}
+            </Button>
+          {/if}
+        {:else if request?.status !== 'canceled'}
+          <Button leadingIcon={mdiCurrencyUsd} fullWidth color="success" onclick={createPayment}>
+            Create {billingType}
+          </Button>
+        {/if}
         <Stack gap={2}>
           {#if request?.status === 'done'}
             <Button leadingIcon={mdiEmail} fullWidth color="primary" onclick={sendPickupEmail}>
@@ -290,17 +301,6 @@
               onclick={markPickedUp}
             >
               Picked up
-            </Button>
-          {/if}
-          {#if request?.payment}
-            {#if request?.status !== 'canceled' && request.payment.status !== 'paid' && request.payment.status !== 'canceled'}
-              <Button leadingIcon={mdiCurrencyUsd} fullWidth color="primary" onclick={editPayment}>
-                Edit {billingType}
-              </Button>
-            {/if}
-          {:else if request?.status !== 'canceled'}
-            <Button leadingIcon={mdiCurrencyUsd} fullWidth color="success" onclick={createPayment}>
-              Create {billingType}
             </Button>
           {/if}
 

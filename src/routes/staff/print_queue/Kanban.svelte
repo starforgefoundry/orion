@@ -6,7 +6,14 @@
     sendPickupNotification,
     updatePrintRequestStatus,
   } from '$lib/remotes/endpoints/print_request.remote';
-  import { Badge, Heading, IconButton, modalManager, toastManager } from '@immich/ui';
+  import {
+    Badge,
+    ContextMenuButton,
+    Heading,
+    modalManager,
+    toastManager,
+    type MenuItems,
+  } from '@immich/ui';
   import { mdiEmailOutline, mdiPackageVariantClosed } from '@mdi/js';
   import type { DateTime } from 'luxon';
   import RequestDetailModal from './RequestDetailModal.svelte';
@@ -320,9 +327,7 @@
     resetDragState();
   }
 
-  async function markPickedUp(event: MouseEvent, jobId: string) {
-    event.stopPropagation();
-
+  async function markPickedUp(jobId: string) {
     // Find the job and check payment status
     const job = prints.find((p) => p.id === jobId);
     if (!job) return;
@@ -349,9 +354,7 @@
     }
   }
 
-  async function sendPickupEmail(event: MouseEvent, jobId: string) {
-    event.stopPropagation();
-
+  async function sendPickupEmail(jobId: string) {
     try {
       await sendPickupNotification(jobId);
       toastManager.success('Pickup notification sent successfully.');
@@ -359,6 +362,19 @@
       toastManager.danger('Failed to send pickup notification.');
     }
   }
+
+  const doneContextItems = (jobId: string): MenuItems => [
+    {
+      title: 'Send Pickup Reminder',
+      icon: mdiEmailOutline,
+      onAction: () => sendPickupEmail(jobId),
+    },
+    {
+      title: 'Mark as Picked Up',
+      icon: mdiPackageVariantClosed,
+      onAction: () => markPickedUp(jobId),
+    },
+  ];
 </script>
 
 <div class="-mx-4 flex h-full gap-6 overflow-x-auto px-4" bind:this={scrollContainer}>
@@ -423,21 +439,10 @@
                 {/if}
               </div>
               {#if job.status === 'done'}
-                <div class="flex gap-2">
-                  <IconButton
-                    icon={mdiEmailOutline}
-                    color="primary"
-                    size="small"
-                    aria-label="Send Pickup Notification"
-                    onclick={(e: MouseEvent) => sendPickupEmail(e, job.id)}
-                  />
-                  <IconButton
-                    icon={mdiPackageVariantClosed}
-                    color="success"
-                    size="small"
-                    aria-label="Mark as Picked Up"
-                    onclick={(e: MouseEvent) => markPickedUp(e, job.id)}
-                  />
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <div class="flex gap-2" onclick={(e) => e.stopPropagation()}>
+                  <ContextMenuButton position="top-right" items={doneContextItems(job.id)} />
                 </div>
               {/if}
             </div>
