@@ -4,11 +4,8 @@ import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async (event) => {
   if (!event.locals.user) {
-    // Allow access to auth routes without authentication
-    if (
-      !event.url.pathname.startsWith('/auth') &&
-      !event.url.pathname.startsWith('/print_request')
-    ) {
+    // Allow access to staff when authenticated
+    if (event.url.pathname.startsWith('/staff')) {
       redirect(302, '/auth/login');
     }
   }
