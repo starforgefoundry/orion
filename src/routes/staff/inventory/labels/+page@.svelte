@@ -21,7 +21,7 @@
     <Heading class="w-full text-center text-black">{item.name}</Heading>
     <Text class="w-full text-center text-black">{item.vendor}</Text>
     <div class="my-2 w-full border border-black"></div>
-    <QRCode data={window.location.origin + '/inventory/request/' + item.id} size={84} />
+    <QRCode data={window.location.origin + '/inventory/scan/' + item.id} size={84} />
 
     <Text class="mt-2 w-full text-center text-black" size="tiny">{item.description}</Text>
     <!-- <div class="flex h-full flex-1 flex-col justify-center overflow-hidden text-black">
