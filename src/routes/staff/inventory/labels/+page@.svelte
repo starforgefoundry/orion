@@ -17,7 +17,7 @@
 </script>
 
 {#each items as item, index}
-  <div class="flex flex-col items-center justify-center">
+  <div class="flex flex-col items-center justify-center bg-white">
     <Heading class="w-full text-center text-black">{item.name}</Heading>
     <Text class="-mt-2 w-full text-center text-black">{item.vendor}</Text>
     <div class=" w-full border border-black"></div>
@@ -40,7 +40,6 @@
     margin: 0;
     padding: 0;
     font-family: Arial, sans-serif;
-    background-color: white;
   }
 
   @page {
