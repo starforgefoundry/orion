@@ -207,9 +207,10 @@
       isDragging = true;
       event.preventDefault();
 
-      // Prevent body scrolling during drag
+      // Prevent body scrolling and text selection during drag
       document.body.style.overflow = 'hidden';
       document.body.style.touchAction = 'none';
+      document.body.style.userSelect = 'none';
 
       // Create a clone of the card for dragging
       if (!dragClone && initialCardRect) {
@@ -314,9 +315,10 @@
   }
 
   function resetDragState() {
-    // Restore body scrolling
+    // Restore body scrolling and text selection
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
+    document.body.style.userSelect = '';
 
     // Remove the drag clone if it exists
     if (dragClone) {
