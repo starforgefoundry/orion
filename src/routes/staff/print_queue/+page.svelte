@@ -26,6 +26,8 @@
   <title>3D Print Requests | Orion</title>
 </svelte:head>
 
+<svelte:window onfocus={() => getPrintRequests().refresh()} />
+
 <div class="mb-4 flex flex-row items-center justify-between">
   <Heading>3D Print Requests</Heading>
   <IconButton
