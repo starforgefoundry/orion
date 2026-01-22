@@ -352,25 +352,39 @@
     // Use dragOverColumn which is tracked during touch move
     const finalColumn = dragOverColumn || targetColumn;
 
-    console.log('drag Column:', draggedFromColumn);
-    console.log('dragOver Column:', dragOverColumn);
-    console.log('Final Column:', finalColumn);
-
     if (finalColumn && draggedJobId && draggedFromColumn !== finalColumn) {
       const jobId = draggedJobId;
+      const destinationColumn = finalColumn;
 
-      updatePrintRequestStatus({ id: jobId, status: finalColumn })
-        .updates(
+      resetDragState();
+
+      try {
+        // Confirm movement to Done column
+        if (destinationColumn === 'done') {
+          const confirmed = await modalManager.showDialog({
+            title: 'Mark as Done',
+            prompt: 'Are you sure this print request is complete and ready for pickup?',
+            confirmText: 'Mark as Done',
+            confirmColor: 'success',
+            icon: mdiPackageVariantClosed,
+          });
+
+          if (!confirmed) {
+            return;
+          }
+        }
+
+        await updatePrintRequestStatus({ id: jobId, status: destinationColumn }).updates(
           getPrintRequests().withOverride((current) =>
-            optimisticUpdate(current, jobId, finalColumn),
+            optimisticUpdate(current, jobId, destinationColumn),
           ),
-        )
-        .catch(() => {
-          toastManager.danger('Failed to update print request status.');
-        });
+        );
+      } catch (error) {
+        toastManager.danger('Failed to update print request status.');
+      }
+    } else {
+      resetDragState();
     }
-
-    resetDragState();
   }
 
   async function markPickedUp(jobId: string) {
