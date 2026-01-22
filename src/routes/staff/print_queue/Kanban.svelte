@@ -35,6 +35,8 @@
   let autoScrollInterval: number | null = $state(null);
   let dragOffsetX = $state(0);
   let dragOffsetY = $state(0);
+  let dragClone: HTMLElement | null = $state(null);
+  let initialCardRect: DOMRect | null = $state(null);
 
   const columns = [
     {
@@ -190,6 +192,7 @@
     draggedFromColumn = column;
     isDragging = false;
     draggedElement = event.currentTarget as HTMLElement;
+    initialCardRect = draggedElement.getBoundingClientRect();
   }
 
   function handleTouchMove(event: TouchEvent) {
@@ -199,27 +202,54 @@
     const deltaX = Math.abs(touch.clientX - touchStartX);
     const deltaY = Math.abs(touch.clientY - touchStartY);
 
-    // Start dragging if moved more than 5px in any direction
-    if (!isDragging && (deltaX > 5 || deltaY > 5)) {
+    // Start dragging if moved more than 10px in any direction
+    if (!isDragging && (deltaX > 10 || deltaY > 10)) {
       isDragging = true;
       event.preventDefault();
-      dragOffsetX = touch.clientX - touchStartX;
-      dragOffsetY = touch.clientY - touchStartY;
+
+      // Prevent body scrolling during drag
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+
+      // Create a clone of the card for dragging
+      if (!dragClone && initialCardRect) {
+        dragClone = draggedElement.cloneNode(true) as HTMLElement;
+        dragClone.style.position = 'fixed';
+        dragClone.style.left = `${initialCardRect.left}px`;
+        dragClone.style.top = `${initialCardRect.top}px`;
+        dragClone.style.width = `${initialCardRect.width}px`;
+        dragClone.style.height = `${initialCardRect.height}px`;
+        dragClone.style.zIndex = '9999';
+        dragClone.style.pointerEvents = 'none';
+        dragClone.style.opacity = '0.9';
+        dragClone.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)';
+        dragClone.style.transform = 'rotate(2deg)';
+        document.body.appendChild(dragClone);
+
+        // Hide the original element
+        draggedElement.style.opacity = '0.3';
+      }
+
       startAutoScroll(touch.clientX);
     }
 
-    if (isDragging) {
+    if (isDragging && dragClone && initialCardRect) {
       event.preventDefault();
 
-      // Update drag offset for visual feedback
+      // Update clone position
       dragOffsetX = touch.clientX - touchStartX;
       dragOffsetY = touch.clientY - touchStartY;
+      dragClone.style.left = `${initialCardRect.left + dragOffsetX}px`;
+      dragClone.style.top = `${initialCardRect.top + dragOffsetY}px`;
 
       // Update auto-scroll based on touch position
       updateAutoScroll(touch.clientX);
 
-      // Find element under touch point
+      // Find element under touch point (temporarily hide clone to get element below)
+      dragClone.style.display = 'none';
       const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+      dragClone.style.display = '';
+
       if (elementAtPoint) {
         // Check if over a column container
         const columnContainer = elementAtPoint.closest('[data-column-id]');
@@ -284,6 +314,19 @@
   }
 
   function resetDragState() {
+    // Restore body scrolling
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+
+    // Remove the drag clone if it exists
+    if (dragClone) {
+      dragClone.remove();
+      dragClone = null;
+    }
+    // Restore original element opacity
+    if (draggedElement) {
+      draggedElement.style.opacity = '';
+    }
     draggedJobId = null;
     draggedFromColumn = null;
     dragOverColumn = null;
@@ -292,6 +335,7 @@
     draggedElement = null;
     dragOffsetX = 0;
     dragOffsetY = 0;
+    initialCardRect = null;
     stopAutoScroll();
   }
 
@@ -377,7 +421,11 @@
   ];
 </script>
 
-<div class="-mx-4 flex h-full gap-6 overflow-x-auto px-4" bind:this={scrollContainer}>
+<div
+  class="-mx-4 flex h-full gap-6 overflow-x-auto overscroll-x-contain px-4"
+  bind:this={scrollContainer}
+  style="touch-action: {isDragging ? 'none' : 'pan-x pan-y'};"
+>
   {#each columns as column}
     <div
       class="my-1 flex min-w-75 flex-1 flex-col rounded-lg p-4 {column.columnClass} {dragOverColumn ===
@@ -403,10 +451,8 @@
               : 'cursor-grab'} rounded-md border-2 p-4 text-left transition-all duration-200 hover:border-blue-500 {job.status !==
             'done'
               ? 'active:cursor-grabbing'
-              : ''} {isDragging && draggedJobId === job.id ? 'opacity-50' : ''}"
-            style={isDragging && draggedJobId === job.id
-              ? `transform: translate(${dragOffsetX}px, ${dragOffsetY}px); transition: none;`
-              : ''}
+              : ''}"
+            style="touch-action: {job.status !== 'done' ? 'none' : 'auto'};"
             draggable={job.status !== 'done'}
             ondragstart={(e) => job.status !== 'done' && handleDragStart(e, job.id, column.id)}
             ondrag={handleDrag}
