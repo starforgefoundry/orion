@@ -4,7 +4,7 @@ import type {
 } from '$lib/remotes/dtos/billing_code.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 export class BillingCodeRepository extends BaseRepository {
   async create(dto: CreateBillingCodeDto) {
@@ -58,7 +58,12 @@ export class BillingCodeRepository extends BaseRepository {
       })
       .from(schema.billingCode)
       .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
-      .where(and(eq(schema.billingCode.code, code), eq(schema.billingCode.archived, false)))
+      .where(
+        and(
+          eq(sql`upper(${schema.billingCode.code})`, code.toUpperCase()),
+          eq(schema.billingCode.archived, false),
+        ),
+      )
       .get();
 
     return billingCode;
