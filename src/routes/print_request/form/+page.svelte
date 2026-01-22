@@ -186,7 +186,7 @@
     <Field
       label="Material"
       required="indicator"
-      description={`If you would like to use a mix of materials, please indicate which parts in "Special Requests".`}
+      description={`PLA is recommended for most projects. If you would like to use a mix of materials, please indicate which parts in "Special Requests".`}
     >
       <Select data={materialOptions} bind:value={selectedMaterial} placeholder="Select Material" />
       <input hidden {...submitPrintRequestForm.fields.material.as('text')} />
