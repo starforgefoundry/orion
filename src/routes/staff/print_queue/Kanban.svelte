@@ -10,6 +10,7 @@
     Badge,
     ContextMenuButton,
     Heading,
+    LoadingSpinner,
     modalManager,
     toastManager,
     type MenuItems,
@@ -18,8 +19,8 @@
   import type { DateTime } from 'luxon';
   import RequestDetailModal from './RequestDetailModal.svelte';
 
-  let printsRequest = getPrintRequests();
-  let prints = $derived(printsRequest.current || []);
+  let printRequests = getPrintRequests();
+  let prints = $derived(printRequests.current || []);
 
   let draggedJobId: string | null = $state(null);
   let draggedFromColumn: PrintRequestStatus | null = $state(null);
@@ -437,80 +438,91 @@
   ];
 </script>
 
-<div
-  class="-mx-4 flex h-full gap-6 overflow-x-auto overscroll-x-contain px-4"
-  bind:this={scrollContainer}
-  style="touch-action: {isDragging ? 'none' : 'pan-x pan-y'};"
->
-  {#each columns as column}
-    <div
-      class="my-1 flex min-w-75 flex-1 flex-col rounded-lg p-4 {column.columnClass} {dragOverColumn ===
-      column.id
-        ? column.hoverClass
-        : ''}"
-      data-column-id={column.id}
-    >
-      <Heading size="small" class="mb-2 inline-block w-fit rounded-xl p-2 px-4 {column.titleClass}">
-        {column.title}
-      </Heading>
+{#if printRequests.loading && !printRequests.current}
+  <div class="flex w-full flex-col items-center justify-center">
+    <LoadingSpinner size="large" />
+  </div>
+{:else if printRequests.error}
+  <p class="text-danger">Error loading print requests: {printRequests.error.message}</p>
+{:else}
+  <div
+    class="-mx-4 flex h-full gap-6 overflow-x-auto overscroll-x-contain px-4"
+    bind:this={scrollContainer}
+    style="touch-action: {isDragging ? 'none' : 'pan-x pan-y'};"
+  >
+    {#each columns as column}
       <div
-        class="flex min-h-25 flex-1 flex-col gap-4 overflow-y-auto pt-2"
-        ondragover={(e) => handleDragOverContainer(e, column.id)}
-        ondragleave={handleDragLeave}
-        ondrop={(e) => handleDrop(e, column.id)}
-        role="region"
+        class="my-1 flex min-w-75 flex-1 flex-col rounded-lg p-4 {column.columnClass} {dragOverColumn ===
+        column.id
+          ? column.hoverClass
+          : ''}"
+        data-column-id={column.id}
       >
-        {#each prints.filter((p) => p.status === column.id) as job, index}
-          <div
-            class="{column.cardClass} w-full {job.status === 'done'
-              ? 'cursor-pointer'
-              : 'cursor-grab'} rounded-md border-2 p-4 text-left transition-all duration-200 hover:border-blue-500 {job.status !==
-            'done'
-              ? 'active:cursor-grabbing'
-              : ''}"
-            style="touch-action: {job.status !== 'done' ? 'none' : 'auto'};"
-            draggable={job.status !== 'done'}
-            ondragstart={(e) => job.status !== 'done' && handleDragStart(e, job.id, column.id)}
-            ondrag={handleDrag}
-            ondragover={(e) => handleDragOverCard(e, column.id, index)}
-            ondragend={resetDragState}
-            ontouchstart={(e) => job.status !== 'done' && handleTouchStart(e, job.id, column.id)}
-            ontouchmove={handleTouchMove}
-            ontouchend={(e) => handleTouchEnd(e, column.id)}
-            onclick={() => handleCardClick(job.id)}
-            onkeydown={(e) => e.key === 'Enter' && handleCardClick(job.id)}
-            role="button"
-            tabindex="0"
-            data-card-index={index}
-          >
-            <div class="flex items-start justify-between">
-              <div class="flex-1">
-                <h3 class="mb-2 text-lg font-semibold">{job.projectName}</h3>
-                <p class="mb-1 text-sm">{job.customerName}</p>
-                <p class="text-xs">{formatDate(job.submissionDate)}</p>
-                {#if job.payment}
-                  <div class="mt-2">
-                    {#if job.payment.status === 'quote'}
-                      <Badge color="secondary" size="small">Awaiting Quote</Badge>
-                    {:else if job.payment.status === 'pending'}
-                      <Badge color="info" size="small">Pending Payment</Badge>
-                    {:else if job.payment.status === 'paid'}
-                      <Badge color="success" size="small">Paid</Badge>
-                    {/if}
+        <Heading
+          size="small"
+          class="mb-2 inline-block w-fit rounded-xl p-2 px-4 {column.titleClass}"
+        >
+          {column.title}
+        </Heading>
+        <div
+          class="flex min-h-25 flex-1 flex-col gap-4 overflow-y-auto pt-2"
+          ondragover={(e) => handleDragOverContainer(e, column.id)}
+          ondragleave={handleDragLeave}
+          ondrop={(e) => handleDrop(e, column.id)}
+          role="region"
+        >
+          {#each prints.filter((p) => p.status === column.id) as job, index}
+            <div
+              class="{column.cardClass} w-full {job.status === 'done'
+                ? 'cursor-pointer'
+                : 'cursor-grab'} rounded-md border-2 p-4 text-left transition-all duration-200 hover:border-blue-500 {job.status !==
+              'done'
+                ? 'active:cursor-grabbing'
+                : ''}"
+              style="touch-action: {job.status !== 'done' ? 'none' : 'auto'};"
+              draggable={job.status !== 'done'}
+              ondragstart={(e) => job.status !== 'done' && handleDragStart(e, job.id, column.id)}
+              ondrag={handleDrag}
+              ondragover={(e) => handleDragOverCard(e, column.id, index)}
+              ondragend={resetDragState}
+              ontouchstart={(e) => job.status !== 'done' && handleTouchStart(e, job.id, column.id)}
+              ontouchmove={handleTouchMove}
+              ontouchend={(e) => handleTouchEnd(e, column.id)}
+              onclick={() => handleCardClick(job.id)}
+              onkeydown={(e) => e.key === 'Enter' && handleCardClick(job.id)}
+              role="button"
+              tabindex="0"
+              data-card-index={index}
+            >
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h3 class="mb-2 text-lg font-semibold">{job.projectName}</h3>
+                  <p class="mb-1 text-sm">{job.customerName}</p>
+                  <p class="text-xs">{formatDate(job.submissionDate)}</p>
+                  {#if job.payment}
+                    <div class="mt-2">
+                      {#if job.payment.status === 'quote'}
+                        <Badge color="secondary" size="small">Awaiting Quote</Badge>
+                      {:else if job.payment.status === 'pending'}
+                        <Badge color="info" size="small">Pending Payment</Badge>
+                      {:else if job.payment.status === 'paid'}
+                        <Badge color="success" size="small">Paid</Badge>
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+                {#if job.status === 'done'}
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <div class="flex gap-2" onclick={(e) => e.stopPropagation()}>
+                    <ContextMenuButton position="top-right" items={doneContextItems(job.id)} />
                   </div>
                 {/if}
               </div>
-              {#if job.status === 'done'}
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <div class="flex gap-2" onclick={(e) => e.stopPropagation()}>
-                  <ContextMenuButton position="top-right" items={doneContextItems(job.id)} />
-                </div>
-              {/if}
             </div>
-          </div>
-        {/each}
+          {/each}
+        </div>
       </div>
-    </div>
-  {/each}
-</div>
+    {/each}
+  </div>
+{/if}
