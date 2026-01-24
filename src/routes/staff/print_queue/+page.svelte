@@ -43,7 +43,7 @@
 <!-- Divider -->
 <hr class="border-border-500 mb-4 border-t" />
 
-{#if prints.loading}
+{#if prints.loading && !prints.current}
   <div class="flex w-full flex-col items-center justify-center">
     <LoadingSpinner size="large" />
   </div>
