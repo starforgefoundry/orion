@@ -10,7 +10,6 @@
   import {
     Badge,
     Button,
-    CodeBlock,
     Heading,
     HStack,
     Icon,
@@ -39,7 +38,6 @@
     mdiPencil,
     mdiPrinter3dNozzle,
   } from '@mdi/js';
-  import { plaintext } from 'svelte-highlight/languages';
   import PaymentModal from './PaymentModal.svelte';
   import { getPaymentStatusColor, getStatusColor } from './utils';
 
@@ -240,7 +238,11 @@
         {#if request?.specialRequests}
           <Stack class="rounded-2xl border-2 border-slate-700 p-4">
             <Heading size="small">Special Requests</Heading>
-            <CodeBlock code={request?.specialRequests} copy={false} language={plaintext} />
+            <Stack class="rounded-lg border bg-neutral-900 p-4">
+              {#each request?.specialRequests.split('\n') as line}
+                <Text class="font-mono" size="small">{line}</Text>
+              {/each}
+            </Stack>
           </Stack>
         {/if}
 
