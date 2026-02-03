@@ -98,32 +98,28 @@ export class OrganizationRepository extends BaseRepository {
   }
 
   async createCharge(dto: CreateOrgChargeDto) {
-    return await this.db.transaction(async (tx) => {
-      const payment = await tx
-        .insert(schema.payment)
-        .values({
-          type: 'org_charge',
-          total: dto.amount,
-          status: 'paid',
-          organizationId: dto.organizationId,
-          issuedDate: DateTime.now(),
-          paymentDate: DateTime.now(),
-        })
-        .returning()
-        .get();
+    const payment = await this.db
+      .insert(schema.payment)
+      .values({
+        type: 'org_charge',
+        total: dto.amount,
+        status: 'paid',
+        organizationId: dto.organizationId,
+        issuedDate: DateTime.now(),
+        paymentDate: DateTime.now(),
+      })
+      .returning()
+      .get();
 
-      const created = await tx
-        .insert(schema.organizationCharge)
-        .values({
-          organizationId: dto.organizationId,
-          description: dto.description,
-          creationDate: DateTime.now(),
-          paymentId: payment.id,
-        })
-        .returning()
-        .get();
-
-      return created;
-    });
+    return await this.db
+      .insert(schema.organizationCharge)
+      .values({
+        organizationId: dto.organizationId,
+        description: dto.description,
+        creationDate: DateTime.now(),
+        paymentId: payment.id,
+      })
+      .returning()
+      .get();
   }
 }
