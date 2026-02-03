@@ -38,7 +38,7 @@
     mdiTrashCan,
   } from '@mdi/js';
   import { DateTime } from 'luxon';
-  import { getPaymentStatusColor } from '../print_queue/utils';
+  import { getPaymentStatusColor } from '../print_requests/queue/utils';
   import CreateChargeModal from './CreateChargeModal.svelte';
 
   type Props = ModalProps & {

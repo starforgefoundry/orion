@@ -57,11 +57,15 @@
   <AppShellSidebar class="shadow-none" bind:open={sidebarManager.isOpen}>
     <div class="flex flex-col gap-1 pe-4 pt-4">
       <NavbarGroup title="3D Print Requests" />
-      <NavbarItem href={'/staff/print_queue'} title={'Print Queue'} icon={mdiPrinter3d} />
-      <NavbarItem href={'/staff/print_materials'} title={'Print Materials'} icon={mdiPaperRoll} />
-      <NavbarItem href={'/staff/print_settings'} title={'Settings'} icon={mdiCog} />
+      <NavbarItem href={'/staff/print_requests/queue'} title={'Print Queue'} icon={mdiPrinter3d} />
+      <NavbarItem
+        href={'/staff/print_requests/materials'}
+        title={'Print Materials'}
+        icon={mdiPaperRoll}
+      />
+      <NavbarItem href={'/staff/print_requests/settings'} title={'Settings'} icon={mdiCog} />
       <NavbarGroup title="Inventory" />
-      <NavbarItem href={'/staff/inventory'} title={'Items'} icon={mdiArchive} />
+      <NavbarItem href={'/staff/inventory/items'} title={'Items'} icon={mdiArchive} />
       <NavbarItem
         href={'/staff/inventory/purchase'}
         title={'Purchase List'}
