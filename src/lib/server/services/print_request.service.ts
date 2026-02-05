@@ -130,7 +130,7 @@ export class PrintRequestService extends BaseService {
 
     const event = getRequestEvent();
     const origin = event?.url?.origin || 'http://localhost:5173';
-    const printQueueUrl = `${origin}/staff/print_queue?id=${printRequestId}`;
+    const printQueueUrl = `${origin}/staff/print_requests/queue?id=${printRequestId}`;
 
     const embed = {
       title: '🖨️ New Print Request Submitted',
