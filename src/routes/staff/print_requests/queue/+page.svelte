@@ -28,7 +28,7 @@
 <svelte:window onfocus={() => getPrintRequests().refresh()} />
 
 <div class="mb-4 flex flex-row items-center justify-between">
-  <Heading>3D Print Requests</Heading>
+  <Heading size="large" class="inline-block w-fit">Request Queue</Heading>
   <IconButton
     color="secondary"
     onclick={() => (selectedMode = selectedMode === 'board' ? 'list' : 'board')}
