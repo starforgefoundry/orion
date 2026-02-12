@@ -68,7 +68,9 @@
         title={'Print Materials'}
         icon={mdiPaperRoll}
       />
-      <NavbarItem href={'/staff/print_requests/scan'} title={'Scan AMS'} icon={mdiQrcodeScan} />
+      {#if user?.email.startsWith('bwees')}
+        <NavbarItem href={'/staff/print_requests/scan'} title={'Scan AMS'} icon={mdiQrcodeScan} />
+      {/if}
       <NavbarItem href={'/staff/print_requests/settings'} title={'Settings'} icon={mdiCog} />
       <NavbarGroup title="Inventory" />
       <NavbarItem href={'/staff/inventory/items'} title={'Items'} icon={mdiArchive} />
