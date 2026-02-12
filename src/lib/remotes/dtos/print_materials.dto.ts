@@ -13,6 +13,8 @@ export const createPrintMaterialDto = v.object({
   name: v.string(),
   available: v.optional(v.boolean(), true),
   archived: v.optional(v.boolean(), false),
+  bblTagId: v.optional(v.string()),
+  bblTagData: v.optional(v.string()),
 });
 export type CreatePrintMaterialDto = v.InferInput<typeof createPrintMaterialDto>;
 
@@ -21,5 +23,7 @@ export const updatePrintMaterialDto = v.object({
   name: v.optional(v.string()),
   available: v.optional(v.boolean()),
   archived: v.optional(v.boolean()),
+  bblTagId: v.optional(v.string()),
+  bblTagData: v.optional(v.string()),
 });
 export type UpdatePrintMaterialDto = v.InferInput<typeof updatePrintMaterialDto>;

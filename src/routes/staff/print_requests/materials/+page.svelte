@@ -11,8 +11,9 @@
     getPrintMaterials,
     updatePrintMaterial,
   } from '$lib/remotes/endpoints/print_materials.remote';
+  import { processTagFile } from '$lib/utils/bbl_tag';
   import { Heading, IconButton, Input, LoadingSpinner, modalManager, Switch } from '@immich/ui';
-  import { mdiChatQuestion, mdiMagnify, mdiPlus, mdiTrashCan } from '@mdi/js';
+  import { mdiChatQuestion, mdiMagnify, mdiPlus, mdiTagText, mdiTrashCan } from '@mdi/js';
   import MaterialModal from './MaterialModal.svelte';
 
   let materials = getPrintMaterials();
@@ -22,6 +23,8 @@
       material.name.toUpperCase().includes(searchTerm.toUpperCase()),
     ) || [],
   );
+  let tagUploadInput: HTMLInputElement;
+  let tagUploadId = $state<string | null>(null);
 
   function showCreateModal() {
     modalManager.show(MaterialModal);
@@ -44,6 +47,37 @@
       await updatePrintMaterial({ id, archived: true });
     }
   }
+
+  function assignTag(id: string) {
+    tagUploadId = id;
+    tagUploadInput.click();
+  }
+
+  async function handleFileSelect(e: Event) {
+    if (!tagUploadId) return;
+
+    const target = e.target as HTMLInputElement;
+    const files = target.files;
+
+    if (!files || files.length === 0) return;
+
+    const tag = await processTagFile(files[0]);
+
+    if (tag) {
+      await updatePrintMaterial({
+        id: tagUploadId,
+        bblTagId: tag.tagId,
+        bblTagData: JSON.stringify(tag.tagData),
+      });
+    } else {
+      await modalManager.showDialog({
+        title: 'Invalid Tag File',
+        prompt: 'The selected file is not a valid BBL tag file. Please select a valid .nfc file.',
+        confirmText: 'OK',
+        icon: mdiChatQuestion,
+      });
+    }
+  }
 </script>
 
 <div class="mb-6 flex items-center justify-between">
@@ -60,6 +94,15 @@
   </div>
 </div>
 
+<input
+  bind:this={tagUploadInput}
+  type="file"
+  accept={'.nfc'}
+  onchange={handleFileSelect}
+  class="hidden"
+  multiple
+/>
+
 {#if materials.loading}
   <div class="flex justify-center">
     <LoadingSpinner size="large" />
@@ -70,21 +113,31 @@
   <Table>
     <TableHeader>
       <TableHeaderCell width="w-6/12">Name</TableHeaderCell>
-      <TableHeaderCell width="w-3/12">Availability</TableHeaderCell>
-      <TableHeaderCell width="w-3/12">Actions</TableHeaderCell>
+      <TableHeaderCell width="w-2/12">Availability</TableHeaderCell>
+      <TableHeaderCell width="w-2/12">Linked Tag ID</TableHeaderCell>
+      <TableHeaderCell width="w-2/12">Actions</TableHeaderCell>
     </TableHeader>
     <TableBody>
       {#each searchedMaterials as material}
         <TableRow>
           <TableCell width="w-6/12" align="left" class="pl-6">{material.name}</TableCell>
 
-          <TableCell width="w-3/12" class="flex justify-center">
+          <TableCell width="w-2/12" class="flex justify-center">
             <Switch
               checked={material.available}
               onCheckedChange={(value) => updateMaterialAvailability(material.id, value)}
             />
           </TableCell>
-          <TableCell width="w-3/12" class="flex justify-center gap-2">
+          <TableCell width="w-2/12" align="center">
+            {material.bblTagId ?? '-'}
+          </TableCell>
+          <TableCell width="w-2/12" class="flex justify-center gap-2">
+            <IconButton
+              icon={mdiTagText}
+              aria-label="Assign Tag"
+              color="primary"
+              onclick={() => assignTag(material.id)}
+            />
             <IconButton
               icon={mdiTrashCan}
               aria-label="Delete Material"
