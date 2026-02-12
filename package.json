@@ -55,6 +55,7 @@
     "@castlenine/svelte-qrcode": "^2.3.0",
     "@immich/ui": "^0.50.1",
     "@mdi/js": "^7.4.47",
+    "barqode": "^0.0.2",
     "drizzle-valibot": "^0.4.2",
     "jszip": "^3.10.1",
     "luxon": "^3.7.2",

@@ -21,6 +21,7 @@
     mdiMenu,
     mdiPaperRoll,
     mdiPrinter3d,
+    mdiQrcodeScan,
     mdiTicket,
   } from '@mdi/js';
 
@@ -57,12 +58,19 @@
   <AppShellSidebar class="shadow-none" bind:open={sidebarManager.isOpen}>
     <div class="flex flex-col gap-1 pe-4 pt-4">
       <NavbarGroup title="3D Print Requests" />
-      <NavbarItem href={'/staff/print_requests/queue'} title={'Print Queue'} icon={mdiPrinter3d} />
+      <NavbarItem
+        href={'/staff/print_requests/queue'}
+        title={'Request Queue'}
+        icon={mdiPrinter3d}
+      />
       <NavbarItem
         href={'/staff/print_requests/materials'}
         title={'Print Materials'}
         icon={mdiPaperRoll}
       />
+      {#if user?.email.startsWith('bwees')}
+        <NavbarItem href={'/staff/print_requests/scan'} title={'Scan AMS'} icon={mdiQrcodeScan} />
+      {/if}
       <NavbarItem href={'/staff/print_requests/settings'} title={'Settings'} icon={mdiCog} />
       <NavbarGroup title="Inventory" />
       <NavbarItem href={'/staff/inventory/items'} title={'Items'} icon={mdiArchive} />
