@@ -12,7 +12,15 @@
     updatePrintMaterial,
   } from '$lib/remotes/endpoints/print_materials.remote';
   import { processTagFile } from '$lib/utils/bbl_tag';
-  import { Heading, IconButton, Input, LoadingSpinner, modalManager, Switch } from '@immich/ui';
+  import {
+    Heading,
+    IconButton,
+    Input,
+    LoadingSpinner,
+    modalManager,
+    Switch,
+    toastManager,
+  } from '@immich/ui';
   import { mdiChatQuestion, mdiMagnify, mdiPlus, mdiTagText, mdiTrashCan } from '@mdi/js';
   import MaterialModal from './MaterialModal.svelte';
 
@@ -69,13 +77,11 @@
         bblTagId: tag.tagId,
         bblTagData: JSON.stringify(tag.tagData),
       });
+
+      tagUploadId = null;
+      toastManager.success('Tag assigned successfully');
     } else {
-      await modalManager.showDialog({
-        title: 'Invalid Tag File',
-        prompt: 'The selected file is not a valid BBL tag file. Please select a valid .nfc file.',
-        confirmText: 'OK',
-        icon: mdiChatQuestion,
-      });
+      toastManager.danger('Failed to process tag file. Please ensure it is a valid .nfc file.');
     }
   }
 </script>

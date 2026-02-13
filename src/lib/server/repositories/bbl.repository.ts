@@ -1,10 +1,17 @@
+import { env } from '$env/dynamic/private';
 import type { PrintMaterial } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { BambuMQTT } from '$lib/server/utils/bbl_mqtt';
 
 type Device = {
   name: string;
   dev_id: string;
+};
+
+type BBCChangeFilamentRequest = {
+  user_id: string;
+  auth_token: string;
+  printer_id: string;
+  filaments: any[];
 };
 
 export class BambulabRepository extends BaseRepository {
@@ -41,42 +48,24 @@ export class BambulabRepository extends BaseRepository {
     filamentTags: PrintMaterial[],
     credentials: { userId: string; authKey: string },
   ) {
-    const bblClient = new BambuMQTT(credentials.userId, credentials.authKey, printerDeviceId);
-    try {
-      await bblClient.connect();
-
-      let i = 0;
-      for (const tag of filamentTags) {
-        const parsedTagData = JSON.parse(tag.bblTagData as string);
-
-        const commandPayload = {
-          print: {
-            command: 'ams_filament_setting',
-            ams_id: 0,
-            tray_id: i++,
-            ...parsedTagData,
-          },
-        };
-
-        const completer = bblClient.waitForMessage(
-          `device/${printerDeviceId}/report`,
-          (message: any) => {
-            return message.print && message.print.command === 'ams_filament_setting';
-          },
-          10000,
-        );
-
-        bblClient.command(commandPayload);
-        await completer;
-
-        // wait 1 second between commands to avoid overwhelming the printer
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-    } catch (error) {
-      console.error('Error updating AMS settings via BBL MQTT:', error);
-      throw new Error('Failed to update AMS settings on printer');
-    } finally {
-      bblClient.disconnect();
+    if (!env.BAMBU_CONNECT_AUTH_KEY) {
+      throw new Error('BAMBU_CONNECT_AUTH_KEY not set in environment variables');
     }
+
+    const request: BBCChangeFilamentRequest = {
+      user_id: credentials.userId,
+      auth_token: credentials.authKey,
+      printer_id: printerDeviceId,
+      filaments: filamentTags.map((tag) => JSON.parse(tag.bblTagData ?? '{}')),
+    };
+
+    const rq = await fetch('https://bambu-connect.starforgefoundry.com/change_filament', {
+      headers: {
+        Authorization: `Bearer ${env.BAMBU_CONNECT_AUTH_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+      method: 'POST',
+    });
   }
 }

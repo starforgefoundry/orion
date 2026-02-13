@@ -97,7 +97,7 @@ export const printMaterial = sqliteTable('print_material', {
   available: integer('available', { mode: 'boolean' }).notNull().default(true),
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
   bblTagId: text('bbl_tag_id'),
-  bblTagData: text('bbl_tag_data', { mode: 'json' }),
+  bblTagData: text('bbl_tag_data'),
 });
 
 export type PrintMaterial = InferSelectModel<typeof printMaterial>;

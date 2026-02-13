@@ -83,6 +83,8 @@ describe('SettingsService', () => {
         maxUploadMB: 50000,
         allowedFileTypes: '.stl',
         discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/abcdefghijklmnopqrstuvwxyz',
+        bblAuthorizationToken: 'bbl-auth-token',
+        bblUserId: 'bbl-user-id',
       };
 
       const mockUpdatedSettings = {
@@ -108,6 +110,8 @@ describe('SettingsService', () => {
         allowedFileTypes: '.stl,.obj,.3mf,.step',
         requireApproval: true,
         discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/abcdefghijklmnopqrstuvwxyz',
+        bblAuthorizationToken: 'bbl-auth-token',
+        bblUserId: 'bbl-user-id',
       };
 
       const mockUpdatedSettings = {
