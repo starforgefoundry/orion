@@ -31,9 +31,10 @@ export class PrintMaterialsService extends BaseService {
 
     const printers = await this.bblRepository.getPrinters(bblAuth);
     const printerPostfix = printerId.split('SF-')[1];
-    const printerDeviceId = printers.find((p) =>
-      p.name.replace(' ', '').includes(printerPostfix),
-    )?.dev_id;
+    const printerDeviceId = printers.find((p) => {
+      const sanitizedName = p.name.replace(/ /g, '');
+      return sanitizedName.includes(printerPostfix);
+    })?.dev_id;
 
     if (!printerDeviceId) {
       throw new Error(`Printer with ID ${printerId} not found in BBL devices`);
