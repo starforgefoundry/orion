@@ -1,3 +1,4 @@
+import { BambulabRepository } from '$lib/server/repositories/bbl.repository';
 import { BillingCodeRepository } from '$lib/server/repositories/billing_code.repository';
 import { DiscordRepository } from '$lib/server/repositories/discord.repository';
 import { InventoryRepository } from '$lib/server/repositories/inventory.repository';
@@ -22,6 +23,7 @@ export class BaseService {
   protected organizationRepository: OrganizationRepository;
   protected billingCodeRepository: BillingCodeRepository;
   protected inventoryRepository: InventoryRepository;
+  protected bblRepository: BambulabRepository;
 
   constructor(
     printFilesRepository?: PrintFilesRepository,
@@ -35,6 +37,7 @@ export class BaseService {
     organizationRepository?: OrganizationRepository,
     billingCodeRepository?: BillingCodeRepository,
     inventoryRepository?: InventoryRepository,
+    bblRepository?: BambulabRepository,
   ) {
     this.printFilesRepository = printFilesRepository ?? new PrintFilesRepository();
     this.printMaterialsRepository = printMaterialsRepository ?? new PrintMaterialsRepository();
@@ -47,5 +50,6 @@ export class BaseService {
     this.organizationRepository = organizationRepository ?? new OrganizationRepository();
     this.billingCodeRepository = billingCodeRepository ?? new BillingCodeRepository();
     this.inventoryRepository = inventoryRepository ?? new InventoryRepository();
+    this.bblRepository = bblRepository ?? new BambulabRepository();
   }
 }

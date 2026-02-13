@@ -27,3 +27,8 @@ export const updatePrintMaterialDto = v.object({
   bblTagData: v.optional(v.string()),
 });
 export type UpdatePrintMaterialDto = v.InferInput<typeof updatePrintMaterialDto>;
+
+export const updateAMSDto = v.object({
+  printer_id: v.string(),
+  filaments: v.array(v.string()),
+});

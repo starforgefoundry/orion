@@ -1,6 +1,7 @@
 import { command, form, query } from '$app/server';
 import {
   createPrintMaterialDto,
+  updateAMSDto,
   updatePrintMaterialDto,
 } from '$lib/remotes/dtos/print_materials.dto';
 import { verifyAuth } from '$lib/remotes/utils';
@@ -35,4 +36,12 @@ export const updatePrintMaterial = command(updatePrintMaterialDto, async (dto) =
   await getPrintMaterials().refresh();
 
   return response;
+});
+
+export const updateAMSForPrinter = command(updateAMSDto, async (dto) => {
+  verifyAuth();
+
+  const { printer_id, ...updates } = dto;
+
+  return await printMaterialsService.updateAMS(printer_id, updates);
 });

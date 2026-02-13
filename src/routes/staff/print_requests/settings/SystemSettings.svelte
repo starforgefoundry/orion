@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SecureInput from '$lib/frontend/components/form/SecureInput.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { initForm } from '$lib/frontend/components/form/utils.svelte';
   import { printRequestSettingsForm } from '$lib/remotes/endpoints/settings.remote';
@@ -18,6 +19,8 @@
       maxUploadMB: number;
       allowedFileTypes: string;
       discordWebhookUrl: string;
+      bblAuthorizationToken: string;
+      bblUserId: string;
     };
   }
 
@@ -27,6 +30,8 @@
     maxUploadMB: printRequestSettings.maxUploadMB,
     allowedFileTypes: printRequestSettings.allowedFileTypes,
     discordWebhookUrl: printRequestSettings.discordWebhookUrl,
+    bblAuthorizationToken: printRequestSettings.bblAuthorizationToken,
+    bblUserId: printRequestSettings.bblUserId,
   }));
 
   let maxUpload = $derived(printRequestSettings.maxUploadMB);
@@ -83,6 +88,23 @@
           <TextInput
             {...printRequestSettingsForm.fields.discordWebhookUrl.as('text')}
             placeholder="https://discord.com/api/webhooks/..."
+          />
+        </Field>
+
+        <Field label="Bambu User ID" description="Bambulab user ID for accessing printer data">
+          <TextInput
+            {...printRequestSettingsForm.fields.bblUserId.as('text')}
+            placeholder="u_1234567890"
+          />
+        </Field>
+
+        <Field
+          label="Bambu Authorization Token"
+          description="Bambulab authorization token for accessing printer data"
+        >
+          <SecureInput
+            {...printRequestSettingsForm.fields.bblAuthorizationToken.as('text')}
+            placeholder="Bambulab authorization token"
           />
         </Field>
 

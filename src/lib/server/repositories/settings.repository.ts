@@ -7,6 +7,8 @@ export type SettingsMap = {
     maxUploadMB: number;
     allowedFileTypes: string;
     discordWebhookUrl: string;
+    bblAuthorizationToken: string;
+    bblUserId: string;
   };
   printRequestSquare: {
     locationId: string;
@@ -21,6 +23,8 @@ const defaults: SettingsMap = {
     maxUploadMB: 1000,
     allowedFileTypes: '.stl, .3mf, .step, .stp',
     discordWebhookUrl: '',
+    bblAuthorizationToken: '',
+    bblUserId: '',
   },
   printRequestSquare: {
     locationId: '',
@@ -38,11 +42,10 @@ export class SettingsRepository extends BaseRepository {
       .where(eq(schema.settings.key, key as string))
       .get();
 
-    if (!setting) {
-      return defaults[key];
-    }
-
-    return setting.value as SettingsMap[K];
+    return {
+      ...defaults[key],
+      ...(setting?.value as Partial<SettingsMap[K]>),
+    };
   }
 
   async setSetting<K extends keyof SettingsMap>(
