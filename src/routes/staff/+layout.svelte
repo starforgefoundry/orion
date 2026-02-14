@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { beforeNavigate } from '$app/navigation';
   import logo from '$lib/assets/logo.png';
   import UserModal from '$lib/frontend/components/UserModal.svelte';
   import { sidebarManager } from '$lib/frontend/stores/sidebar.svelte';
@@ -32,6 +33,12 @@
   function openUserModal() {
     modalManager.show(UserModal);
   }
+
+  beforeNavigate(() => {
+    if (!sidebarManager.collapsedSidebar) {
+      sidebarManager.isOpen = false;
+    }
+  });
 </script>
 
 <AppShell>
