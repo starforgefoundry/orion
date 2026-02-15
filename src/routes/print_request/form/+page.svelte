@@ -250,5 +250,13 @@
     <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled} loading={submitting}>
       {submitButtonText}
     </Button>
+
+    <Text size="small" color="muted" class="mt-4 mb-8 self-start italic">
+      If you have any issues or questions, please contact us at
+      <a href="mailto:3dprint@starforgefoundry.com" class="underline">
+        3dprint@starforgefoundry.com
+      </a>
+      .
+    </Text>
   </form>
 </div>
