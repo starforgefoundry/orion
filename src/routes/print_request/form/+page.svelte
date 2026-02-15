@@ -256,7 +256,6 @@
       <a href="mailto:3dprint@starforgefoundry.com" class="underline">
         3dprint@starforgefoundry.com
       </a>
-      .
     </Text>
   </form>
 </div>
