@@ -11,7 +11,7 @@ export const { handle, signIn, signOut } = SvelteKitAuth({
       clientId: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
       authorization: {
-        url: `https://accounts.google.com/o/oauth2/auth/authorize?response_type=code&prompt=login`,
+        url: `https://accounts.google.com/o/oauth2/v2/auth?response_type=code&prompt=login`,
       },
     }),
   ],
