@@ -13,6 +13,10 @@
   import {
     Alert,
     Button,
+    Card,
+    CardBody,
+    CardHeader,
+    CardTitle,
     Field,
     FormatBytes,
     Heading,
@@ -54,6 +58,10 @@
   let totalBytes = $derived(files.reduce((acc, file) => acc + file.file.size, 0));
   let exceedsFileSizeLimit = $derived(totalBytes > printRequestSettings.maxUploadMB * 1024 * 1024);
   let submitEnabled = $derived(files.length > 0 && !exceedsFileSizeLimit && selectedMaterial);
+
+  // Check if we should show the delay banner
+  const delayUntilDate = new Date('2026-03-16T00:00:00');
+  let showDelayBanner = $derived(new Date() < delayUntilDate);
 
   function handleNewFile(file: File) {
     files.push({
@@ -119,6 +127,18 @@
     enctype="multipart/form-data"
   >
     <img src={logo} alt="Orion Logo" class="mt-6 h-16 w-16 self-start" />
+
+    {#if showDelayBanner}
+      <Card color="warning" class="w-full">
+        <CardHeader>
+          <CardTitle>⚠️ Print Request Delays</CardTitle>
+        </CardHeader>
+        <CardBody>
+          Due to spring break, print requests will be delayed until Monday March 16th. We apologize
+          for the inconvenience and appreciate your understanding!
+        </CardBody>
+      </Card>
+    {/if}
 
     <Heading class="self-start" size="giant">Starforge 3D Print Request</Heading>
     <Text>
