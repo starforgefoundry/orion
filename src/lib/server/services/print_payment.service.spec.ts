@@ -413,6 +413,115 @@ describe('PrintPaymentService', () => {
       expect(mockRequestRepo.getById).toHaveBeenCalledWith('nonexistent-request');
     });
 
+    it('should throw error when existing payment has already been paid', async () => {
+      // Arrange
+      const dto: CreatePaymentDto = {
+        requestId: 'request-123',
+        materialCost: 5000,
+        buildPlates: 1,
+      };
+
+      const mockRequest: PrintRequestDto = {
+        id: 'request-123',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        projectName: 'Test Project',
+        status: 'in_queue',
+        isQuote: false,
+        paymentId: 'payment-123',
+        payment: {
+          id: 'payment-123',
+          status: 'paid',
+          total: 5000,
+          issuedDate: DateTime.now(),
+          paymentDate: DateTime.now(),
+        },
+        submissionDate: DateTime.now(),
+      } as PrintRequestDto;
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+
+      // Act & Assert
+      await expect(printPaymentService.upsertPayment(dto)).rejects.toThrow(
+        'Payment has already been paid',
+      );
+      expect(mockRequestRepo.getById).toHaveBeenCalledWith('request-123');
+      expect(mockSquareRepo.upsertCustomer).not.toHaveBeenCalled();
+      expect(mockSquareRepo.createOrder).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.savePayment).not.toHaveBeenCalled();
+    });
+
+    it('should allow payment creation when existing payment is pending', async () => {
+      // Arrange
+      const dto: CreatePaymentDto = {
+        requestId: 'request-123',
+        materialCost: 5000,
+        buildPlates: 1,
+      };
+
+      const mockRequest: PrintRequestDto = {
+        id: 'request-123',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        projectName: 'Test Project',
+        status: 'in_queue',
+        isQuote: false,
+        paymentId: 'payment-123',
+        payment: {
+          id: 'payment-123',
+          status: 'pending',
+          total: 5000,
+          issuedDate: DateTime.now(),
+          squareInvoiceId: 'inv-123',
+        },
+        submissionDate: DateTime.now(),
+      } as PrintRequestDto;
+
+      const mockCustomer: Customer = {
+        id: 'customer-123',
+        emailAddress: 'john@example.com',
+        givenName: 'John',
+        familyName: 'Doe',
+      };
+
+      const mockOrder: Order = {
+        id: 'order-123',
+        locationId: 'loc-123',
+        netAmountDueMoney: { amount: BigInt(5000), currency: 'USD' },
+      };
+
+      const mockInvoice: Invoice = {
+        id: 'inv-456',
+        version: 1,
+        createdAt: DateTime.now().toISO(),
+      };
+
+      const mockSquareSettings = {
+        locationId: 'loc-123',
+        printRequestItemId: 'item-123',
+        additionalBuildPlateItemId: 'plate-456',
+        memberPrintDiscountId: 'discount-789',
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+      vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
+      vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
+      vi.mocked(mockSquareRepo.sendInvoice).mockResolvedValue(undefined);
+      vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue({ id: 'payment-456', status: 'pending' });
+      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
+
+      // Act - should not throw
+      await printPaymentService.upsertPayment(dto);
+
+      // Assert - should proceed with canceling old invoice and creating new payment
+      expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-123');
+      expect(mockSquareRepo.createOrder).toHaveBeenCalled();
+      expect(mockPaymentRepo.savePayment).toHaveBeenCalled();
+    });
+
     it('should throw error when order creation fails', async () => {
       // Arrange
       const dto: CreatePaymentDto = {
