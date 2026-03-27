@@ -91,6 +91,10 @@ export class PrintPaymentService extends BaseService {
       throw new Error('Print request not found');
     }
 
+    if (request.payment?.status === 'paid') {
+      throw new Error('Payment has already been paid');
+    }
+
     const isQuote = request.isQuote && (!request.payment || request.payment?.status === 'quote');
 
     if (isQuote) {
