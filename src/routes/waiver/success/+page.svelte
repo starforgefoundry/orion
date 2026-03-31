@@ -20,7 +20,7 @@
     <a href="mailto:info@starforgefoundry.com" class="text-primary">info@starforgefoundry.com</a>.
   </Text>
 
-  <Button onclick={() => (window.location.href = '/waiver/form')} class="mt-4">
+  <Button onclick={() => (window.location.href = '/waiver')} class="mt-4">
     Sign Another Waiver
   </Button>
 </div>

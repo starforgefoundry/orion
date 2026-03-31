@@ -1,13 +1,13 @@
-import { command, form, query } from '$app/server';
-import { redirect } from '@sveltejs/kit';
+import { form, query } from '$app/server';
 import { searchWaiversDto, submitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
 import { verifyAuth } from '$lib/remotes/utils';
 import { waiverService } from '$lib/server/services/waiver.service';
+import { redirect } from '@sveltejs/kit';
 import * as v from 'valibot';
 
 export const submitWaiverForm = form(submitWaiverDto, async (dto) => {
   await waiverService.submitWaiver(dto);
-  redirect(303, '/waiver/form/success');
+  redirect(303, '/waiver/success');
 });
 
 export const searchWaivers = query(searchWaiversDto, async (dto) => {
