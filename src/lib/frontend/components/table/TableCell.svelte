@@ -13,6 +13,6 @@
   );
 </script>
 
-<td class="{width} {alignmentClass} {className}">
+<td class="{width} {alignmentClass} first:pl-4 {className}">
   {@render children()}
 </td>

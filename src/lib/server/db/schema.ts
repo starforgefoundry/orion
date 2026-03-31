@@ -193,6 +193,22 @@ export const purchaseList = sqliteTable(
 
 export type PurchaseList = InferSelectModel<typeof purchaseList>;
 
+export const waiver = sqliteTable('waiver', {
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  firstName: text('first_name').notNull(),
+  lastName: text('last_name').notNull(),
+  email: text('email').notNull(),
+  signatureUrl: text('signature_url').notNull(),
+  signedDate: luxonTimestamp('signed_date')
+    .notNull()
+    .$defaultFn(() => DateTime.now()),
+});
+
+export type Waiver = InferSelectModel<typeof waiver>;
+
 export const schema = {
   user,
   printRequest,
@@ -206,4 +222,5 @@ export const schema = {
   organizationCharge,
   inventoryItem,
   purchaseList,
+  waiver,
 };

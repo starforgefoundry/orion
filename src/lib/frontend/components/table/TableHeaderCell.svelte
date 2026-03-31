@@ -13,7 +13,7 @@
   );
 </script>
 
-<th class="{width} {alignmentClass} {className}">
+<th class="{width} {alignmentClass} first:pl-4 {className}">
   {#if children}
     {@render children()}
   {/if}
