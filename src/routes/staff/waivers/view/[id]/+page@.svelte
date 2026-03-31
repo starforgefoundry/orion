@@ -86,10 +86,7 @@
 
     <div class="mt-8 flex items-start justify-between">
       <div>
-        <p class="text-base font-bold">
-          Name: {waiver.current.firstName}
-          {waiver.current.lastName}
-        </p>
+        <p class="text-base font-bold">Name: {waiver.current.name}</p>
         <p class="text-base">Email: {waiver.current.email}</p>
         <p class="text-base">Date Signed: {signedDate()}</p>
       </div>

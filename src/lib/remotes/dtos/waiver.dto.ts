@@ -2,8 +2,7 @@ import type { Waiver } from '$lib/server/db/schema';
 import * as v from 'valibot';
 
 export const submitWaiverDto = v.object({
-  firstName: v.pipe(v.string(), v.minLength(1)),
-  lastName: v.pipe(v.string(), v.minLength(1)),
+  name: v.pipe(v.string(), v.minLength(1)),
   email: v.pipe(v.string(), v.email()),
   signature: v.file(),
 });

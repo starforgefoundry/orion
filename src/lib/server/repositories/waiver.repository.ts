@@ -7,7 +7,7 @@ import { asc, count, like, or } from 'drizzle-orm';
 export class WaiverRepository extends BaseRepository {
   async submit(dto: SubmitWaiverDto, signatureFile: File) {
     const waiverId = crypto.randomUUID();
-    const sanitizedName = `${dto.firstName}_${dto.lastName}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const sanitizedName = dto.name.replace(/[^a-zA-Z0-9_-]/g, '_');
     const dateStr = new Date().toISOString().split('T')[0];
     const filename = `waivers/${sanitizedName}_${dateStr}_${waiverId}`;
 
@@ -17,8 +17,7 @@ export class WaiverRepository extends BaseRepository {
       .insert(schema.waiver)
       .values({
         id: waiverId,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
+        name: dto.name,
         email: dto.email,
         signatureUrl,
       })
@@ -30,8 +29,7 @@ export class WaiverRepository extends BaseRepository {
     const whereClause =
       dto.query.trim() !== ''
         ? or(
-            like(schema.waiver.firstName, `%${dto.query}%`),
-            like(schema.waiver.lastName, `%${dto.query}%`),
+            like(schema.waiver.name, `%${dto.query}%`),
             like(schema.waiver.email, `%${dto.query}%`),
           )
         : undefined;
@@ -48,7 +46,7 @@ export class WaiverRepository extends BaseRepository {
       .select()
       .from(schema.waiver)
       .where(whereClause)
-      .orderBy(asc(schema.waiver.lastName), asc(schema.waiver.firstName))
+      .orderBy(asc(schema.waiver.name))
       .limit(dto.pageSize)
       .offset((dto.page - 1) * dto.pageSize)
       .execute();

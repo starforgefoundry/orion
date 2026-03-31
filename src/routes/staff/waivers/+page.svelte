@@ -89,19 +89,17 @@
 {:else if waivers.current}
   <Table>
     <TableHeader>
-      <TableHeaderCell width="w-3/12" align="left">Last Name</TableHeaderCell>
-      <TableHeaderCell width="w-2/12" align="left">First Name</TableHeaderCell>
-      <TableHeaderCell width="w-3/12" align="left">Email</TableHeaderCell>
-      <TableHeaderCell width="w-2/12" align="left">Signed Date</TableHeaderCell>
+      <TableHeaderCell width="w-3/12" align="left">Name</TableHeaderCell>
+      <TableHeaderCell width="w-4/12" align="left">Email</TableHeaderCell>
+      <TableHeaderCell width="w-3/12" align="left">Signed Date</TableHeaderCell>
       <TableHeaderCell width="w-2/12">Actions</TableHeaderCell>
     </TableHeader>
     <TableBody>
       {#each waivers.current.data as waiver}
         <TableRow>
-          <TableCell width="w-3/12" align="left">{waiver.lastName}</TableCell>
-          <TableCell width="w-2/12" align="left">{waiver.firstName}</TableCell>
-          <TableCell width="w-3/12" align="left">{waiver.email}</TableCell>
-          <TableCell width="w-2/12" align="left">{formatDate(waiver.signedDate)}</TableCell>
+          <TableCell width="w-3/12" align="left">{waiver.name}</TableCell>
+          <TableCell width="w-4/12" align="left">{waiver.email}</TableCell>
+          <TableCell width="w-3/12" align="left">{formatDate(waiver.signedDate)}</TableCell>
           <TableCell width="w-2/12" class="flex justify-center gap-2">
             <IconButton
               icon={mdiEye}

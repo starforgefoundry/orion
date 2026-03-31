@@ -198,8 +198,7 @@ export const waiver = sqliteTable('waiver', {
     .notNull()
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
-  firstName: text('first_name').notNull(),
-  lastName: text('last_name').notNull(),
+  name: text('name').notNull(),
   email: text('email').notNull(),
   signatureUrl: text('signature_url').notNull(),
   signedDate: luxonTimestamp('signed_date')

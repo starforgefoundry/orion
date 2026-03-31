@@ -84,18 +84,10 @@
 
     <hr class="my-4 w-full border-gray-300" />
 
-    <Field label="First Name" required="indicator">
+    <Field label="Name" required="indicator">
       <TextInput
-        {...submitWaiverForm.fields.firstName.as('text')}
-        placeholder="John"
-        class="max-w-xs"
-      />
-    </Field>
-
-    <Field label="Last Name" required="indicator">
-      <TextInput
-        {...submitWaiverForm.fields.lastName.as('text')}
-        placeholder="Doe"
+        {...submitWaiverForm.fields.name.as('text')}
+        placeholder="John Doe"
         class="max-w-xs"
       />
     </Field>
