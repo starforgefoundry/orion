@@ -19,15 +19,12 @@
 
 <div class="flex items-center justify-center p-4">
   <form
-    {...submitWaiverForm.enhance(() => {})}
+    {...submitWaiverForm.enhance(({ submit }) => submit())}
     class="flex w-full max-w-3xl flex-col items-center justify-center gap-4"
   >
     <img src={logo} alt="Orion Logo" class="mt-6 h-16 w-16 self-start" />
 
-    <Heading class="self-start" size="giant">Starforge Waiver</Heading>
-    <Text>
-      Please read the waiver below carefully, then sign and submit the form.
-    </Text>
+    <Heading class="self-start" size="giant">Starforge Liability Waiver</Heading>
 
     <Card class="w-full">
       <CardBody>
@@ -38,8 +35,8 @@
 
           <Text>
             For and in consideration of receiving permission to use the Starforge Foundry Inc.
-            ("Starforge") facilities, equipment and tools, I hereby COVENANT NOT TO SUE AND WAIVE ANY
-            AND ALL CLAIMS AGAINST Starforge or its volunteers, officers, agents, directors or
+            ("Starforge") facilities, equipment and tools, I hereby COVENANT NOT TO SUE AND WAIVE
+            ANY AND ALL CLAIMS AGAINST Starforge or its volunteers, officers, agents, directors or
             employees (collectively, the "RELEASEES"). I further agree to INDEMNIFY, DEFEND AND HOLD
             HARMLESS the RELEASESS from and against any and all liabilities, costs, claims, demands,
             and damages of any kind or character arising from or related to any loss, damage, or
@@ -50,23 +47,23 @@
           </Text>
 
           <Text>
-            I am fully aware of the unusual risks involved and hazards connected with any kind of use
-            of the Starforge facility, equipment, and tools, especially the operation of saws,
+            I am fully aware of the unusual risks involved and hazards connected with any kind of
+            use of the Starforge facility, equipment, and tools, especially the operation of saws,
             machines, tools and other metal and wood working equipment, and I hereby elect to
             voluntarily use the same with full knowledge that said activities may be hazardous to me
-            and my property. I VOLUNTARILY ASSUME FULL RESPONSIBILITY FOR ANY RISKS OF LOSS, PROPERTY
-            DAMAGE OR PERSONAL INJURY, INCLUDING DEATH, that may be sustained by me, or any loss or
-            damage of property owned by me, as a result of being engaged in, or around others engaged
-            in, such activities, WHETHER CAUSED IN WHOLE OR IN PART BY THE NEGLIGENCE OF RELEASEES OR
-            OTHERWISE.
+            and my property. I VOLUNTARILY ASSUME FULL RESPONSIBILITY FOR ANY RISKS OF LOSS,
+            PROPERTY DAMAGE OR PERSONAL INJURY, INCLUDING DEATH, that may be sustained by me, or any
+            loss or damage of property owned by me, as a result of being engaged in, or around
+            others engaged in, such activities, WHETHER CAUSED IN WHOLE OR IN PART BY THE NEGLIGENCE
+            OF RELEASEES OR OTHERWISE.
           </Text>
 
           <Text>
             I understand that Starforge may not maintain a current insurance policy covering any
             circumstance arising from my participation in the use of its facilities, equipment, and
-            tools. As such, I am aware that I should review my personal insurance portfolio. It is my
-            express intent that this Waiver of Liability and Hold Harmless Agreement shall bind the
-            members of my family and spouse, if I am alive, and my heirs, assigns and personal
+            tools. As such, I am aware that I should review my personal insurance portfolio. It is
+            my express intent that this Waiver of Liability and Hold Harmless Agreement shall bind
+            the members of my family and spouse, if I am alive, and my heirs, assigns and personal
             representatives, if I am deceased, and shall be deemed as a FULL RELEASE, WAIVER,
             DISCHARGE AND COVENANT NOT TO SUE THE RELEASEES.
           </Text>
@@ -114,9 +111,7 @@
     </Field>
     <input {...submitWaiverForm.fields.signature.as('text')} hidden />
 
-    <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled}>
-      Sign Waiver
-    </Button>
+    <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled}>Sign Waiver</Button>
 
     <Text size="small" color="muted" class="mt-4 mb-8 self-start italic">
       If you have any issues or questions, please contact us at

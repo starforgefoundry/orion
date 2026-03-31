@@ -1,7 +1,7 @@
 import type { Waiver } from '$lib/server/db/schema';
 import pdfjs from 'pdfjs';
-import Helvetica from 'pdfjs/font/Helvetica.js';
 import HelveticaBold from 'pdfjs/font/Helvetica-Bold.js';
+import Helvetica from 'pdfjs/font/Helvetica.js';
 
 const WAIVER_PARAGRAPHS = [
   'For and in consideration of receiving permission to use the Starforge Foundry Inc. ("Starforge") facilities, equipment and tools, I hereby COVENANT NOT TO SUE AND WAIVE ANY AND ALL CLAIMS AGAINST Starforge or its volunteers, officers, agents, directors or employees (collectively, the "RELEASEES"). I further agree to INDEMNIFY, DEFEND AND HOLD HARMLESS the RELEASESS from and against any and all liabilities, costs, claims, demands, and damages of any kind or character arising from or related to any loss, damage, or injury, including death, that may be sustained by me, or any of my personal property, while in, on or about the Starforge facility, using any equipment or tools located therein, or participating in any other activity at the Starforge facility WHETHER CAUSED IN WHOLE OR IN PART BY THE NEGLIGENCE OF THE RELEASEES OR OTHERWISE.',
@@ -11,15 +11,16 @@ const WAIVER_PARAGRAPHS = [
 ];
 
 export async function generateWaiverPdf(waiver: Waiver): Promise<Buffer> {
-  // @ts-expect-error pdfjs types expect Buffer but AFM font JSON objects work at runtime
-  const font = new pdfjs.Font(Helvetica);
-  // @ts-expect-error pdfjs types expect Buffer but AFM font JSON objects work at runtime
-  const boldFont = new pdfjs.Font(HelveticaBold);
+  const font = Helvetica as unknown as InstanceType<typeof pdfjs.Font>;
+  const boldFont = HelveticaBold as unknown as InstanceType<typeof pdfjs.Font>;
 
   const doc = new pdfjs.Document({
     font,
     fontSize: 10,
     lineHeight: 1.4,
+    padding: 60,
+    paddingTop: 50,
+    paddingBottom: 50,
   });
 
   // Title
@@ -34,15 +35,15 @@ export async function generateWaiverPdf(waiver: Waiver): Promise<Buffer> {
     textAlign: 'center',
   });
 
-  doc.text(' ', { fontSize: 6 });
+  doc.cell({ paddingBottom: 10 });
 
   // Body paragraphs
   for (const paragraph of WAIVER_PARAGRAPHS) {
     doc.text(paragraph, { fontSize: 9, textAlign: 'justify' });
-    doc.text(' ', { fontSize: 6 });
+    doc.cell({ paddingBottom: 12 });
   }
 
-  doc.text(' ', { fontSize: 12 });
+  doc.cell({ paddingBottom: 32 });
 
   // Signer information
   const signedDate =
@@ -54,7 +55,7 @@ export async function generateWaiverPdf(waiver: Waiver): Promise<Buffer> {
   doc.text(`Email: ${waiver.email}`, { fontSize: 11 });
   doc.text(`Date Signed: ${signedDate}`, { fontSize: 11 });
 
-  doc.text(' ', { fontSize: 12 });
+  doc.cell({ paddingBottom: 12 });
   doc.text('Signature:', { font: boldFont, fontSize: 11 });
 
   // Fetch and embed signature image

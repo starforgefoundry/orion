@@ -85,9 +85,8 @@
         title={'Purchase List'}
         icon={mdiCartOutline}
       />
-      <NavbarGroup title="Waivers" />
-      <NavbarItem href={'/staff/waivers'} title={'Signed Waivers'} icon={mdiFileSign} />
-      <NavbarGroup title="Payments" />
+      <NavbarGroup title="Members" />
+      <NavbarItem href={'/staff/waivers'} title={'Waivers'} icon={mdiFileSign} />
       <NavbarItem href={'/staff/organizations'} title={'Organizations'} icon={mdiAccountGroup} />
       <NavbarItem href={'/staff/billing_codes'} title={'Billing Codes'} icon={mdiTicket} />
     </div>

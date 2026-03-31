@@ -106,10 +106,10 @@
 {:else if waivers.current}
   <Table>
     <TableHeader>
-      <TableHeaderCell width="w-3/12">Last Name</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">First Name</TableHeaderCell>
-      <TableHeaderCell width="w-3/12">Email</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Signed Date</TableHeaderCell>
+      <TableHeaderCell width="w-3/12" align="left">Last Name</TableHeaderCell>
+      <TableHeaderCell width="w-2/12" align="left">First Name</TableHeaderCell>
+      <TableHeaderCell width="w-3/12" align="left">Email</TableHeaderCell>
+      <TableHeaderCell width="w-2/12" align="left">Signed Date</TableHeaderCell>
       <TableHeaderCell width="w-2/12">Actions</TableHeaderCell>
     </TableHeader>
     <TableBody>
