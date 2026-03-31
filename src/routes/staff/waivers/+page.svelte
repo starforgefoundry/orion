@@ -9,14 +9,12 @@
   } from '$lib/frontend/components/table';
   import { searchWaivers } from '$lib/remotes/endpoints/waiver.remote';
   import {
-    Button,
     Heading,
     IconButton,
     Input,
     LoadingSpinner,
-    toastManager,
   } from '@immich/ui';
-  import { mdiChevronLeft, mdiChevronRight, mdiDownload, mdiMagnify } from '@mdi/js';
+  import { mdiChevronLeft, mdiChevronRight, mdiEye, mdiMagnify } from '@mdi/js';
 
   let searchTerm = $state('');
   let page = $state(1);
@@ -65,23 +63,8 @@
     });
   }
 
-  async function downloadPdf(waiverId: string) {
-    try {
-      const response = await fetch(`/api/waivers/pdf/${waiverId}`);
-      if (!response.ok) {
-        toastManager.danger('Failed to download waiver PDF.');
-        return;
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `waiver-${waiverId}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toastManager.danger('Failed to download waiver PDF.');
-    }
+  function viewWaiver(waiverId: string) {
+    window.open(`/staff/waivers/view/${waiverId}`, '_blank');
   }
 </script>
 
@@ -121,9 +104,9 @@
           <TableCell width="w-2/12" align="left">{formatDate(waiver.signedDate)}</TableCell>
           <TableCell width="w-2/12" class="flex justify-center gap-2">
             <IconButton
-              icon={mdiDownload}
-              aria-label="Download PDF"
-              onclick={() => downloadPdf(waiver.id)}
+              icon={mdiEye}
+              aria-label="View Waiver"
+              onclick={() => viewWaiver(waiver.id)}
             />
           </TableCell>
         </TableRow>
