@@ -3,16 +3,7 @@ import { BaseService } from '$lib/server/services/base.service';
 
 export class WaiverService extends BaseService {
   async submitWaiver(dto: SubmitWaiverDto) {
-    const signatureDataUrl = dto.signature;
-    const base64Data = signatureDataUrl.split(',')[1];
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    const signatureFile = new File([bytes], 'signature.jpg', { type: 'image/jpeg' });
-
-    const waiver = await this.waiverRepository.submit(dto, signatureFile);
+    const waiver = await this.waiverRepository.submit(dto, dto.signature);
 
     return {
       status: 'success',

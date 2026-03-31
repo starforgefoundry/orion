@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button, Text } from '@immich/ui';
 
-  let { signature = $bindable('') }: { signature: string } = $props();
+  let { signature = $bindable<File | null>(null) }: { signature: File | null } = $props();
 
   let canvas: HTMLCanvasElement;
   let isDrawing = $state(false);
@@ -64,14 +64,22 @@
     exportCtx.fillStyle = '#ffffff';
     exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
     exportCtx.drawImage(canvas, 0, 0);
-    signature = exportCanvas.toDataURL('image/jpeg', 0.95);
+    exportCanvas.toBlob(
+      (blob) => {
+        if (blob) {
+          signature = new File([blob], 'signature.jpg', { type: 'image/jpeg' });
+        }
+      },
+      'image/jpeg',
+      0.95,
+    );
   }
 
   function clear() {
     const ctx = getCtx();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     hasDrawn = false;
-    signature = '';
+    signature = null;
   }
 </script>
 

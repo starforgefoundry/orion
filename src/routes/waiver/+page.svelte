@@ -5,12 +5,14 @@
   import { submitWaiverForm } from '$lib/remotes/endpoints/waiver.remote';
   import { Button, Card, CardBody, Field, Heading, Stack, Text } from '@immich/ui';
 
-  let signature = $state('');
+  let signature = $state<File | null>(null);
   $effect(() => {
-    submitWaiverForm.fields.signature.set(signature);
+    if (signature) {
+      submitWaiverForm.fields.signature.set(signature);
+    }
   });
 
-  let submitEnabled = $derived(signature !== '');
+  let submitEnabled = $derived(signature !== null);
 </script>
 
 <svelte:head>
@@ -20,6 +22,7 @@
 <div class="flex items-center justify-center p-4">
   <form
     {...submitWaiverForm.enhance(({ submit }) => submit())}
+    enctype="multipart/form-data"
     class="flex w-full max-w-3xl flex-col items-center justify-center gap-4"
   >
     <img src={logo} alt="Orion Logo" class="mt-6 h-16 w-16 self-start" />
@@ -109,7 +112,7 @@
     <Field label="Signature" required="indicator">
       <SignaturePad bind:signature />
     </Field>
-    <input {...submitWaiverForm.fields.signature.as('text')} hidden />
+    <input {...submitWaiverForm.fields.signature.as('file')} hidden />
 
     <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled}>Sign Waiver</Button>
 

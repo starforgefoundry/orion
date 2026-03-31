@@ -5,7 +5,7 @@ export const submitWaiverDto = v.object({
   firstName: v.pipe(v.string(), v.minLength(1)),
   lastName: v.pipe(v.string(), v.minLength(1)),
   email: v.pipe(v.string(), v.email()),
-  signature: v.pipe(v.string(), v.minLength(1)),
+  signature: v.file(),
 });
 
 export type SubmitWaiverDto = v.InferInput<typeof submitWaiverDto>;
