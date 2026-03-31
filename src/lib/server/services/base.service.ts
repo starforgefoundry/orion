@@ -10,6 +10,7 @@ import { PaymentRepository } from '$lib/server/repositories/print_payment.reposi
 import { PrintRequestRepository } from '$lib/server/repositories/print_request.repository';
 import { SettingsRepository } from '$lib/server/repositories/settings.repository';
 import { SquareRepository } from '$lib/server/repositories/square.repository';
+import { WaiverRepository } from '$lib/server/repositories/waiver.repository';
 
 export class BaseService {
   protected printFilesRepository: PrintFilesRepository;
@@ -24,6 +25,7 @@ export class BaseService {
   protected billingCodeRepository: BillingCodeRepository;
   protected inventoryRepository: InventoryRepository;
   protected bblRepository: BambulabRepository;
+  protected waiverRepository: WaiverRepository;
 
   constructor(
     printFilesRepository?: PrintFilesRepository,
@@ -38,6 +40,7 @@ export class BaseService {
     billingCodeRepository?: BillingCodeRepository,
     inventoryRepository?: InventoryRepository,
     bblRepository?: BambulabRepository,
+    waiverRepository?: WaiverRepository,
   ) {
     this.printFilesRepository = printFilesRepository ?? new PrintFilesRepository();
     this.printMaterialsRepository = printMaterialsRepository ?? new PrintMaterialsRepository();
@@ -51,5 +54,6 @@ export class BaseService {
     this.billingCodeRepository = billingCodeRepository ?? new BillingCodeRepository();
     this.inventoryRepository = inventoryRepository ?? new InventoryRepository();
     this.bblRepository = bblRepository ?? new BambulabRepository();
+    this.waiverRepository = waiverRepository ?? new WaiverRepository();
   }
 }

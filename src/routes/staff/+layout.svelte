@@ -19,6 +19,7 @@
     mdiArchive,
     mdiCartOutline,
     mdiCog,
+    mdiFileSign,
     mdiMenu,
     mdiPaperRoll,
     mdiPrinter3d,
@@ -84,6 +85,8 @@
         title={'Purchase List'}
         icon={mdiCartOutline}
       />
+      <NavbarGroup title="Waivers" />
+      <NavbarItem href={'/staff/waivers'} title={'Signed Waivers'} icon={mdiFileSign} />
       <NavbarGroup title="Payments" />
       <NavbarItem href={'/staff/organizations'} title={'Organizations'} icon={mdiAccountGroup} />
       <NavbarItem href={'/staff/billing_codes'} title={'Billing Codes'} icon={mdiTicket} />
