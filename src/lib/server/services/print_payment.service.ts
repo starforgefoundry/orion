@@ -151,6 +151,7 @@ export class PrintPaymentService extends BaseService {
     }
 
     let paymentRecord;
+    let publishedInvoice;
     if (createdOrder.totalMoney?.amount === BigInt(0)) {
       // No payment required, mark as paid
       paymentRecord = await this.paymentRepository.savePayment(request.id, {
@@ -178,7 +179,7 @@ export class PrintPaymentService extends BaseService {
       // Send the invoice only if this is not a quote or
       // if it was a quote being converted to an order
       if (!request.isQuote || request.payment?.status === 'quote') {
-        await this.squareRepository.sendInvoice(invoice.id!, invoice.version!);
+        publishedInvoice = await this.squareRepository.sendInvoice(invoice.id!, invoice.version!);
       }
 
       paymentRecord = await this.paymentRepository.savePayment(request.id, {
@@ -198,7 +199,7 @@ export class PrintPaymentService extends BaseService {
       });
     }
 
-    return paymentRecord;
+    return { paymentRecord, paymentUrl: publishedInvoice?.publicUrl ?? null };
   }
 
   private async handleOrganizationBilling(
