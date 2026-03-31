@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import logo from '$lib/assets/logo.png';
   import SignaturePad from '$lib/frontend/components/SignaturePad.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { submitWaiverForm } from '$lib/remotes/endpoints/waiver.remote';
-  import { Button, Card, CardBody, Field, Heading, Stack, Text, toastManager } from '@immich/ui';
+  import { Button, Card, CardBody, Field, Heading, Stack, Text } from '@immich/ui';
 
   let signature = $state('');
   $effect(() => {
@@ -12,35 +11,6 @@
   });
 
   let submitEnabled = $derived(signature !== '');
-  let submitting = $state(false);
-
-  type SubmitParameters = Parameters<Parameters<typeof submitWaiverForm.enhance>[0]>[0];
-  function handleSubmit({ form }: SubmitParameters) {
-    submitting = true;
-
-    const xhr = new XMLHttpRequest();
-    const formData = new FormData(form);
-
-    xhr.open(form.method, form.action, true);
-
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        submitting = false;
-        goto('/waiver/form/success');
-      } else {
-        toastManager.danger('Failed to submit waiver. Please try again later.');
-        submitting = false;
-      }
-    };
-
-    xhr.onerror = () => {
-      toastManager.danger('Failed to submit waiver. Please try again later.');
-      submitting = false;
-    };
-
-    xhr.setRequestHeader('Accept', 'text/html');
-    xhr.send(formData);
-  }
 </script>
 
 <svelte:head>
@@ -49,7 +19,7 @@
 
 <div class="flex items-center justify-center p-4">
   <form
-    {...submitWaiverForm.enhance(handleSubmit)}
+    {...submitWaiverForm.enhance(() => {})}
     class="flex w-full max-w-3xl flex-col items-center justify-center gap-4"
   >
     <img src={logo} alt="Orion Logo" class="mt-6 h-16 w-16 self-start" />
@@ -144,8 +114,8 @@
     </Field>
     <input {...submitWaiverForm.fields.signature.as('text')} hidden />
 
-    <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled} loading={submitting}>
-      {submitting ? 'Submitting...' : 'Sign Waiver'}
+    <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled}>
+      Sign Waiver
     </Button>
 
     <Text size="small" color="muted" class="mt-4 mb-8 self-start italic">
