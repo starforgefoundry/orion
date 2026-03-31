@@ -1,0 +1,8 @@
+{
+  "web_apps": [
+    {
+      "manifest": "https://orion.starforgefoundry.com/manifest.json",
+      "details": {}
+    }
+  ]
+}
