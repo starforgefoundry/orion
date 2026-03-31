@@ -3,7 +3,7 @@
   import { getWaiverById } from '$lib/remotes/endpoints/waiver.remote';
   import { LoadingSpinner, Text } from '@immich/ui';
 
-  let waiver = $derived(getWaiverById(page.params.id));
+  let waiver = $derived(getWaiverById(page.params.id!));
 
   let signedDate = $derived(() => {
     if (!waiver.current) return '';
