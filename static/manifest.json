@@ -2,11 +2,19 @@
   "name": "Orion",
   "short_name": "Orion",
   "description": "Starforge Orion Web Application",
+  "id": "/",
   "start_url": "/",
+  "scope": "https://orion.starforgefoundry.com/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",
   "orientation": "portrait-primary",
+  "handle_links": "preferred",
+  "scope_extensions": [
+    {
+      "origin": "https://orion.starforgefoundry.com"
+    }
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
