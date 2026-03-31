@@ -4,7 +4,7 @@ import pRetry from 'p-retry';
 import type S3mini from 's3mini';
 
 export async function uploadToS3(s3: S3mini, file: File, filename: string) {
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const buffer = Buffer.from(await new Response(file).arrayBuffer());
   await pRetry(
     async () => {
       await s3.putObject(filename, buffer);
