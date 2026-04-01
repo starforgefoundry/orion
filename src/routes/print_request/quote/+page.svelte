@@ -35,12 +35,16 @@
   async function handleApprove() {
     submitting = true;
 
-    await respondToPrintRequestQuote({
+    const response = await respondToPrintRequestQuote({
       id: request!.id,
       approve: true,
     });
 
-    await goto('/print_request/quote/approved');
+    if (response?.paymentUrl) {
+      window.location.href = response.paymentUrl;
+    } else {
+      await goto('/print_request/quote/approved');
+    }
   }
 
   async function handleCancel() {

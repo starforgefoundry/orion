@@ -66,10 +66,12 @@ export class SquareRepository extends BaseRepository {
   }
 
   async sendInvoice(invoiceId: string, invoiceVersion: number) {
-    await this.square.invoices.publish({
+    const response = await this.square.invoices.publish({
       invoiceId,
       version: invoiceVersion,
     });
+
+    return response.invoice;
   }
 
   async calculateOrder(order: CalculateOrderRequest) {

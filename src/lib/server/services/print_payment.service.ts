@@ -150,10 +150,9 @@ export class PrintPaymentService extends BaseService {
       throw new Error('Failed to create order in Square');
     }
 
-    let paymentRecord;
     if (createdOrder.totalMoney?.amount === BigInt(0)) {
       // No payment required, mark as paid
-      paymentRecord = await this.paymentRepository.savePayment(request.id, {
+      const paymentRecord = await this.paymentRepository.savePayment(request.id, {
         id: request.payment?.id,
         status: 'paid',
         issuedDate: DateTime.now(),
@@ -169,34 +168,42 @@ export class PrintPaymentService extends BaseService {
         materialCost: paymentInfo.materialCost,
         buildplateCount: paymentInfo.buildPlates,
       });
-    } else {
-      const invoice = await this.paymentRepository.createInvoice(createdOrder);
-      if (!invoice) {
-        throw new Error('Failed to create invoice in Square');
-      }
 
-      // Send the invoice only if this is not a quote or
-      // if it was a quote being converted to an order
-      if (!request.isQuote || request.payment?.status === 'quote') {
-        await this.squareRepository.sendInvoice(invoice.id!, invoice.version!);
-      }
-
-      paymentRecord = await this.paymentRepository.savePayment(request.id, {
-        id: request.payment?.id,
-        status: 'pending',
-        issuedDate: DateTime.fromISO(invoice.createdAt!),
-        orderObject: stringifySquareObject(createdOrder),
-        total: Number(createdOrder.netAmountDueMoney?.amount),
-        squareInvoiceId: invoice.id!,
-        squareOrderId: createdOrder.id!,
-        type: 'print_request',
-      });
-
-      await this.printRequestRepository.update(request.id, {
-        materialCost: paymentInfo.materialCost,
-        buildplateCount: paymentInfo.buildPlates,
-      });
+      return paymentRecord;
     }
+
+    const invoice = await this.paymentRepository.createInvoice(createdOrder);
+    if (!invoice) {
+      throw new Error('Failed to create invoice in Square');
+    }
+
+    // Send the invoice only if this is not a quote or
+    // if it was a quote being converted to an order
+    let paymentUrl: string | null = null;
+    if (!request.isQuote || request.payment?.status === 'quote') {
+      const publishedInvoice = await this.squareRepository.sendInvoice(
+        invoice.id!,
+        invoice.version!,
+      );
+      paymentUrl = publishedInvoice?.publicUrl ?? null;
+    }
+
+    const paymentRecord = await this.paymentRepository.savePayment(request.id, {
+      id: request.payment?.id,
+      status: 'pending',
+      issuedDate: DateTime.fromISO(invoice.createdAt!),
+      orderObject: stringifySquareObject(createdOrder),
+      total: Number(createdOrder.netAmountDueMoney?.amount),
+      squareInvoiceId: invoice.id!,
+      squareOrderId: createdOrder.id!,
+      paymentUrl,
+      type: 'print_request',
+    });
+
+    await this.printRequestRepository.update(request.id, {
+      materialCost: paymentInfo.materialCost,
+      buildplateCount: paymentInfo.buildPlates,
+    });
 
     return paymentRecord;
   }
