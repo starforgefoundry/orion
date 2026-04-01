@@ -1,0 +1,1 @@
+ALTER TABLE `payment` ADD `payment_url` text;

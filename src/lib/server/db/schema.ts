@@ -79,6 +79,7 @@ export const payment = sqliteTable(
 
     total: integer('total').notNull(), // in cents
     orderObject: text('order_object'),
+    paymentUrl: text('payment_url'),
   },
   (table) => [
     index('square_invoice_idx').on(table.squareInvoiceId),

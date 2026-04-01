@@ -510,7 +510,10 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
       vi.mocked(mockSquareRepo.sendInvoice).mockResolvedValue(undefined);
-      vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue({ id: 'payment-456', status: 'pending' });
+      vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue({
+        id: 'payment-456',
+        status: 'pending',
+      });
       vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
 
       // Act - should not throw
