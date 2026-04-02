@@ -1,0 +1,182 @@
+name: Preview Deployment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+jobs:
+  preview-deploy:
+    if: github.event.action != 'closed'
+    name: Deploy Preview
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Setup Mise Dependencies
+        uses: jdx/mise-action@v3
+
+      - name: Install dependencies
+        run: pnpm i
+
+      - name: Setup env variables
+        run: cp .env.example .env
+
+      - name: Create preview D1 database
+        id: create-db
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          DB_NAME="orion-preview-pr-${{ github.event.pull_request.number }}"
+
+          # Check if database already exists
+          EXISTING=$(npx wrangler d1 list --json | jq -r ".[] | select(.name == \"$DB_NAME\") | .uuid")
+
+          if [ -n "$EXISTING" ]; then
+            echo "Database already exists: $EXISTING"
+            echo "database_id=$EXISTING" >> "$GITHUB_OUTPUT"
+          else
+            OUTPUT=$(npx wrangler d1 create "$DB_NAME" --json)
+            DB_ID=$(echo "$OUTPUT" | jq -r '.uuid')
+            echo "Created database: $DB_ID"
+            echo "database_id=$DB_ID" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate preview wrangler config
+        run: |
+          cat > wrangler.preview.jsonc <<EOF
+          {
+            "\$schema": "node_modules/wrangler/config-schema.json",
+            "name": "orion-preview-pr-${{ github.event.pull_request.number }}",
+            "main": ".svelte-kit/cloudflare/_worker.js",
+            "compatibility_date": "2025-12-29",
+            "compatibility_flags": ["nodejs_als", "nodejs_compat"],
+            "assets": {
+              "binding": "ASSETS",
+              "directory": ".svelte-kit/cloudflare"
+            },
+            "observability": {
+              "enabled": true
+            },
+            "d1_databases": [
+              {
+                "binding": "DB",
+                "database_name": "orion-preview-pr-${{ github.event.pull_request.number }}",
+                "database_id": "${{ steps.create-db.outputs.database_id }}",
+                "migrations_dir": "./src/lib/server/db/migrations"
+              }
+            ]
+          }
+          EOF
+
+      - name: Migrate preview database
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 migrations apply "orion-preview-pr-${{ github.event.pull_request.number }}" --remote --config wrangler.preview.jsonc
+
+      - name: Deploy preview
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm run build
+          npx wrangler deploy --config wrangler.preview.jsonc | tee deploy_output.txt
+          PREVIEW_URL=$(grep -oP 'https://[^\s]+\.workers\.dev' deploy_output.txt | head -1)
+          echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Set preview secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          WORKER_NAME="orion-preview-pr-${{ github.event.pull_request.number }}"
+          CONFIG="--config wrangler.preview.jsonc"
+
+          echo "${{ secrets.PREVIEW_GOOGLE_CLIENT_ID }}" | npx wrangler secret put GOOGLE_CLIENT_ID $CONFIG
+          echo "${{ secrets.PREVIEW_GOOGLE_CLIENT_SECRET }}" | npx wrangler secret put GOOGLE_CLIENT_SECRET $CONFIG
+          echo "${{ secrets.PREVIEW_AUTH_SECRET }}" | npx wrangler secret put AUTH_SECRET $CONFIG
+          echo "${{ secrets.PREVIEW_S3_ENDPOINT }}" | npx wrangler secret put S3_ENDPOINT $CONFIG
+          echo "${{ secrets.PREVIEW_S3_ACCESS_KEY_ID }}" | npx wrangler secret put S3_ACCESS_KEY_ID $CONFIG
+          echo "${{ secrets.PREVIEW_S3_APPLICATION_KEY }}" | npx wrangler secret put S3_APPLICATION_KEY $CONFIG
+          echo "${{ secrets.PREVIEW_SQUARE_TOKEN }}" | npx wrangler secret put SQUARE_TOKEN $CONFIG
+          echo "${{ secrets.PREVIEW_SQUARE_URL }}" | npx wrangler secret put SQUARE_URL $CONFIG
+          echo "${{ secrets.PREVIEW_SQUARE_WEBHOOK_SIGNATURE_KEY }}" | npx wrangler secret put SQUARE_WEBHOOK_SIGNATURE_KEY $CONFIG
+          echo "${{ secrets.PREVIEW_MAILGUN_API_KEY }}" | npx wrangler secret put MAILGUN_API_KEY $CONFIG
+          echo "${{ steps.deploy.outputs.preview_url }}" | npx wrangler secret put FRONTEND_URL $CONFIG
+
+      - name: Comment preview URL on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const previewUrl = '${{ steps.deploy.outputs.preview_url }}';
+            const body = `### Preview Deployment\n\nThis PR has been deployed to a preview environment.\n\n**URL:** ${previewUrl}\n\nThis preview uses a separate D1 database and secrets from production.`;
+
+            // Check for existing preview comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.data.find(c =>
+              c.body.startsWith('### Preview Deployment')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
+
+  preview-cleanup:
+    if: github.event.action == 'closed'
+    name: Cleanup Preview
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Setup Mise Dependencies
+        uses: jdx/mise-action@v3
+
+      - name: Install dependencies
+        run: pnpm i
+
+      - name: Delete preview worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler delete --name "orion-preview-pr-${{ github.event.pull_request.number }}" --force || true
+
+      - name: Delete preview D1 database
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          DB_NAME="orion-preview-pr-${{ github.event.pull_request.number }}"
+          DB_ID=$(npx wrangler d1 list --json | jq -r ".[] | select(.name == \"$DB_NAME\") | .uuid")
+
+          if [ -n "$DB_ID" ]; then
+            npx wrangler d1 delete "$DB_ID" --skip-confirmation || true
+            echo "Deleted database: $DB_NAME ($DB_ID)"
+          else
+            echo "No database found for: $DB_NAME"
+          fi
