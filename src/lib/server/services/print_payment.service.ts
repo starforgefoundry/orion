@@ -386,7 +386,7 @@ export class PrintPaymentService extends BaseService {
     if (!dto.approve) {
       // User declined the quote, cancel the request
       await printRequestService.updatePrintRequestStatus(dto.id, { status: 'canceled' });
-      return { status: 'canceled' };
+      return null;
     }
 
     // User accepted the quote, proceed to create an order
