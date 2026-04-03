@@ -62,18 +62,16 @@
 {:else}
   <Table>
     <TableHeader>
-      <TableHeaderCell width="w-5/12">Name</TableHeaderCell>
-      <TableHeaderCell width="w-4/12">Description</TableHeaderCell>
-      <TableHeaderCell width="w-1/12">Price</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Actions</TableHeaderCell>
+      <TableHeaderCell width="w-6/12">Name</TableHeaderCell>
+      <TableHeaderCell width="w-3/12">Price</TableHeaderCell>
+      <TableHeaderCell width="w-3/12">Actions</TableHeaderCell>
     </TableHeader>
     <TableBody>
       {#each filtered as cls}
         <TableRow>
-          <TableCell width="w-5/12" align="left" class="pl-6">{cls.name}</TableCell>
-          <TableCell width="w-4/12" align="left" class="truncate">{cls.description}</TableCell>
-          <TableCell width="w-1/12" align="center">${(cls.price / 100).toFixed(2)}</TableCell>
-          <TableCell width="w-2/12" class="flex justify-center">
+          <TableCell width="w-6/12" align="left" class="pl-6">{cls.name}</TableCell>
+          <TableCell width="w-3/12" align="center">${(cls.price / 100).toFixed(2)}</TableCell>
+          <TableCell width="w-3/12" class="flex justify-center">
             <IconButton
               icon={mdiPencil}
               aria-label="Edit Catalog"
