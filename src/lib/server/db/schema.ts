@@ -7,6 +7,7 @@ export const user = sqliteTable('user', {
   email: text('email').notNull().unique().primaryKey(),
   name: text('name').notNull(),
   picture: text('picture').notNull(),
+  icalToken: text('ical_token').$defaultFn(() => crypto.randomUUID()),
 });
 
 export type User = InferSelectModel<typeof user>;
@@ -209,6 +210,88 @@ export const waiver = sqliteTable('waiver', {
 
 export type Waiver = InferSelectModel<typeof waiver>;
 
+export const classCatalog = sqliteTable('class_catalog', {
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  price: integer('price').notNull(), // in cents
+  photoUrl: text('photo_url'),
+  createdDate: luxonTimestamp('created_date')
+    .notNull()
+    .$defaultFn(() => DateTime.now()),
+});
+
+export type ClassCatalog = InferSelectModel<typeof classCatalog>;
+
+export const classInstance = sqliteTable(
+  'class_instance',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    classId: text('class_id')
+      .notNull()
+      .references(() => classCatalog.id),
+    teacherEmail: text('teacher_email')
+      .notNull()
+      .references(() => user.email),
+    date: text('date').notNull(), // YYYY-MM-DD in Central time
+    startTime: text('start_time').notNull(), // HH:mm
+    durationMinutes: integer('duration_minutes').notNull(),
+    seats: integer('seats').notNull(),
+    status: text('status', { enum: ['scheduled', 'canceled'] })
+      .notNull()
+      .default('scheduled'),
+    recurrenceGroupId: text('recurrence_group_id'),
+    createdDate: luxonTimestamp('created_date')
+      .notNull()
+      .$defaultFn(() => DateTime.now()),
+  },
+  (table) => [
+    index('class_instance_class_idx').on(table.classId),
+    index('class_instance_date_idx').on(table.date),
+    index('class_instance_recurrence_idx').on(table.recurrenceGroupId),
+  ],
+);
+
+export type ClassInstance = InferSelectModel<typeof classInstance>;
+
+export const classBooking = sqliteTable(
+  'class_booking',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    instanceId: text('instance_id')
+      .notNull()
+      .references(() => classInstance.id),
+    customerName: text('customer_name').notNull(),
+    customerEmail: text('customer_email').notNull(),
+    customerPhone: text('customer_phone').notNull(),
+    squarePaymentId: text('square_payment_id'),
+    status: text('status', { enum: ['confirmed', 'canceled'] }).notNull(),
+    bookingToken: text('booking_token')
+      .notNull()
+      .$defaultFn(() => crypto.randomUUID()),
+    quantity: integer('quantity').notNull().default(1),
+    amountPaid: integer('amount_paid').notNull().default(0), // in cents
+    createdDate: luxonTimestamp('created_date')
+      .notNull()
+      .$defaultFn(() => DateTime.now()),
+  },
+  (table) => [
+    index('class_booking_instance_idx').on(table.instanceId),
+    index('class_booking_token_idx').on(table.bookingToken),
+  ],
+);
+
+export type ClassBooking = InferSelectModel<typeof classBooking>;
+
 export const schema = {
   user,
   printRequest,
@@ -223,4 +306,7 @@ export const schema = {
   inventoryItem,
   purchaseList,
   waiver,
+  classCatalog,
+  classInstance,
+  classBooking,
 };

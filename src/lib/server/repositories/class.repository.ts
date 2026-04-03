@@ -1,0 +1,333 @@
+import { schema } from '$lib/server/db/schema';
+import { BaseRepository } from '$lib/server/repositories/base.repository';
+import { uploadToS3 } from '$lib/server/utils/s3';
+import { and, eq, gte, sum, type InferInsertModel } from 'drizzle-orm';
+
+export class ClassRepository extends BaseRepository {
+  // ── Catalog ──
+
+  async createCatalog(data: InferInsertModel<typeof schema.classCatalog>) {
+    return await this.db.insert(schema.classCatalog).values(data).returning().get();
+  }
+
+  async updateCatalog(id: string, updates: Partial<InferInsertModel<typeof schema.classCatalog>>) {
+    return await this.db
+      .update(schema.classCatalog)
+      .set(updates)
+      .where(eq(schema.classCatalog.id, id))
+      .returning()
+      .get();
+  }
+
+  async getCatalogById(id: string) {
+    return await this.db
+      .select()
+      .from(schema.classCatalog)
+      .where(eq(schema.classCatalog.id, id))
+      .get();
+  }
+
+  async getAllCatalogs() {
+    return await this.db.select().from(schema.classCatalog).all();
+  }
+
+  async getActiveCatalogs() {
+    return await this.db.select().from(schema.classCatalog).all();
+  }
+
+  async uploadClassPhoto(catalogId: string, file: File): Promise<string> {
+    const ext = file.name.split('.').pop() ?? 'jpg';
+    const key = `classes/${catalogId}/${crypto.randomUUID()}.${ext}`;
+    return await uploadToS3(this.s3, file, key);
+  }
+
+  // ── Instance ──
+
+  async createInstance(data: InferInsertModel<typeof schema.classInstance>) {
+    return await this.db.insert(schema.classInstance).values(data).returning().get();
+  }
+
+  async createInstances(data: InferInsertModel<typeof schema.classInstance>[]) {
+    if (data.length === 0) return [];
+    return await this.db.insert(schema.classInstance).values(data).returning().all();
+  }
+
+  async updateInstance(
+    id: string,
+    updates: Partial<InferInsertModel<typeof schema.classInstance>>,
+  ) {
+    return await this.db
+      .update(schema.classInstance)
+      .set(updates)
+      .where(eq(schema.classInstance.id, id))
+      .returning()
+      .get();
+  }
+
+  async getInstanceById(id: string) {
+    const result = await this.db
+      .select()
+      .from(schema.classInstance)
+      .where(eq(schema.classInstance.id, id))
+      .leftJoin(schema.user, eq(schema.classInstance.teacherEmail, schema.user.email))
+      .leftJoin(schema.classCatalog, eq(schema.classInstance.classId, schema.classCatalog.id))
+      .get();
+
+    if (!result) return null;
+
+    return {
+      ...result.class_instance,
+      teacher: result.user,
+      catalog: result.class_catalog,
+    };
+  }
+
+  async getInstancesForCatalog(classId: string) {
+    const results = await this.db
+      .select()
+      .from(schema.classInstance)
+      .where(
+        and(
+          eq(schema.classInstance.classId, classId),
+          eq(schema.classInstance.status, 'scheduled'),
+        ),
+      )
+      .leftJoin(schema.user, eq(schema.classInstance.teacherEmail, schema.user.email))
+      .all();
+
+    return results.map((r) => ({
+      ...r.class_instance,
+      teacher: r.user,
+    }));
+  }
+
+  async getAllInstances() {
+    const results = await this.db
+      .select()
+      .from(schema.classInstance)
+      .leftJoin(schema.user, eq(schema.classInstance.teacherEmail, schema.user.email))
+      .leftJoin(schema.classCatalog, eq(schema.classInstance.classId, schema.classCatalog.id))
+      .all();
+
+    return results.map((r) => ({
+      ...r.class_instance,
+      teacher: r.user,
+      catalog: r.class_catalog,
+    }));
+  }
+
+  async getScheduledInstancesByRecurrenceGroup(recurrenceGroupId: string, fromDate: string) {
+    return await this.db
+      .select()
+      .from(schema.classInstance)
+      .where(
+        and(
+          eq(schema.classInstance.recurrenceGroupId, recurrenceGroupId),
+          gte(schema.classInstance.date, fromDate),
+          eq(schema.classInstance.status, 'scheduled'),
+        ),
+      )
+      .all();
+  }
+
+  // ── Booking ──
+
+  async createBooking(data: InferInsertModel<typeof schema.classBooking>) {
+    return await this.db.insert(schema.classBooking).values(data).returning().get();
+  }
+
+  async getBookingById(id: string) {
+    const result = await this.db
+      .select()
+      .from(schema.classBooking)
+      .where(eq(schema.classBooking.id, id))
+      .leftJoin(schema.classInstance, eq(schema.classBooking.instanceId, schema.classInstance.id))
+      .leftJoin(
+        schema.classCatalog,
+        eq(schema.classInstance.classId, schema.classCatalog.id),
+      )
+      .get();
+
+    if (!result) return null;
+
+    return {
+      ...result.class_booking,
+      instance: result.class_instance,
+      catalog: result.class_catalog,
+    };
+  }
+
+  async getBookingByToken(token: string) {
+    const result = await this.db
+      .select()
+      .from(schema.classBooking)
+      .where(eq(schema.classBooking.bookingToken, token))
+      .leftJoin(schema.classInstance, eq(schema.classBooking.instanceId, schema.classInstance.id))
+      .leftJoin(
+        schema.classCatalog,
+        eq(schema.classInstance.classId, schema.classCatalog.id),
+      )
+      .get();
+
+    if (!result) return null;
+
+    return {
+      ...result.class_booking,
+      instance: result.class_instance,
+      catalog: result.class_catalog,
+    };
+  }
+
+  async updateBooking(id: string, updates: Partial<InferInsertModel<typeof schema.classBooking>>) {
+    return await this.db
+      .update(schema.classBooking)
+      .set(updates)
+      .where(eq(schema.classBooking.id, id))
+      .returning()
+      .get();
+  }
+
+  async getBookingsForInstance(instanceId: string) {
+    return await this.db
+      .select()
+      .from(schema.classBooking)
+      .where(eq(schema.classBooking.instanceId, instanceId))
+      .all();
+  }
+
+  async getConfirmedBookingsForInstance(instanceId: string) {
+    return await this.db
+      .select()
+      .from(schema.classBooking)
+      .where(
+        and(
+          eq(schema.classBooking.instanceId, instanceId),
+          eq(schema.classBooking.status, 'confirmed'),
+        ),
+      )
+      .all();
+  }
+
+  async getConfirmedBookingCount(instanceId: string): Promise<number> {
+    const result = await this.db
+      .select({ total: sum(schema.classBooking.quantity) })
+      .from(schema.classBooking)
+      .where(
+        and(
+          eq(schema.classBooking.instanceId, instanceId),
+          eq(schema.classBooking.status, 'confirmed'),
+        ),
+      )
+      .get();
+    return Number(result?.total ?? 0);
+  }
+
+  // ── iCal ──
+
+  async getUserByIcalToken(token: string) {
+    return await this.db
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.icalToken, token))
+      .get();
+  }
+
+  async getBookingsForTeacherByIcalToken(icalToken: string) {
+    const teacher = await this.getUserByIcalToken(icalToken);
+    if (!teacher) return null;
+
+    const instances = await this.db
+      .select()
+      .from(schema.classInstance)
+      .where(
+        and(
+          eq(schema.classInstance.teacherEmail, teacher.email),
+          eq(schema.classInstance.status, 'scheduled'),
+        ),
+      )
+      .all();
+
+    if (instances.length === 0) return { teacher, entries: [] };
+
+    const entries = [];
+    for (const instance of instances) {
+      const catalog = await this.getCatalogById(instance.classId);
+      const bookings = await this.getConfirmedBookingsForInstance(instance.id);
+      if (catalog && bookings.length > 0) {
+        entries.push({ instance, catalog, bookings });
+      }
+    }
+
+    return { teacher, entries };
+  }
+
+  // ── Staff / Payment ──
+
+  async getStaffUsers() {
+    return await this.db.select().from(schema.user).all();
+  }
+
+  async processSquarePayment(
+    sourceId: string,
+    amountCents: number,
+    locationId: string,
+    customerEmail: string,
+    customerName: string,
+    itemName?: string,
+    itemDescription?: string,
+  ) {
+    const customer = await this.square.customers.search({
+      query: {
+        filter: {
+          emailAddress: { exact: customerEmail },
+        },
+      },
+    });
+
+    let customerId: string | undefined;
+    const customers = customer.customers ?? [];
+    if (customers.length > 0) {
+      customerId = customers[0].id;
+    } else {
+      const [firstName, ...lastNameParts] = customerName.split(' ');
+      const created = await this.square.customers.create({
+        givenName: firstName,
+        familyName: lastNameParts.join(' '),
+        emailAddress: customerEmail,
+      });
+      customerId = created.customer?.id;
+    }
+
+    const result = await this.square.payments.create({
+      sourceId,
+      idempotencyKey: crypto.randomUUID(),
+      amountMoney: {
+        amount: BigInt(amountCents),
+        currency: 'USD',
+      },
+      locationId,
+      customerId,
+      ...(itemName ? { note: itemName } : {}),
+      ...(itemDescription
+        ? {
+            statementDescriptionIdentifier: itemName,
+          }
+        : {}),
+    });
+
+    return result.payment;
+  }
+
+  async refundPayment(paymentId: string, amountCents: number) {
+    const result = await this.square.refunds.refundPayment({
+      paymentId,
+      idempotencyKey: crypto.randomUUID(),
+      amountMoney: {
+        amount: BigInt(amountCents),
+        currency: 'USD',
+      },
+    });
+
+    return result.refund;
+  }
+}

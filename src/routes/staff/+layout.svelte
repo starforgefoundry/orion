@@ -17,6 +17,7 @@
   import {
     mdiAccountGroup,
     mdiArchive,
+    mdiCalendar,
     mdiCartOutline,
     mdiCog,
     mdiFileSign,
@@ -25,6 +26,7 @@
     mdiPrinter3d,
     mdiQrcodeScan,
     mdiTicket,
+    mdiViewList,
   } from '@mdi/js';
 
   let { children } = $props();
@@ -77,7 +79,9 @@
         icon={mdiPaperRoll}
       />
       <NavbarItem href={'/staff/print_requests/scan'} title={'Scan AMS'} icon={mdiQrcodeScan} />
-      <NavbarItem href={'/staff/print_requests/settings'} title={'Settings'} icon={mdiCog} />
+      <NavbarGroup title="Classes" />
+      <NavbarItem href={'/staff/classes/calendar'} title={'Calendar'} icon={mdiCalendar} />
+      <NavbarItem href={'/staff/classes/catalog'} title={'Catalog'} icon={mdiViewList} />
       <NavbarGroup title="Inventory" />
       <NavbarItem href={'/staff/inventory/items'} title={'Items'} icon={mdiArchive} />
       <NavbarItem
@@ -89,6 +93,8 @@
       <NavbarItem href={'/staff/waivers'} title={'Waivers'} icon={mdiFileSign} />
       <NavbarItem href={'/staff/organizations'} title={'Organizations'} icon={mdiAccountGroup} />
       <NavbarItem href={'/staff/billing_codes'} title={'Billing Codes'} icon={mdiTicket} />
+      <NavbarGroup title="" />
+      <NavbarItem href={'/staff/settings'} title={'Settings'} icon={mdiCog} />
     </div>
   </AppShellSidebar>
 

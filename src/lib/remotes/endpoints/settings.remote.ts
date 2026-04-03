@@ -1,5 +1,9 @@
 import { form, query } from '$app/server';
-import { printRequestSettings, printRequestSquareSettings } from '$lib/remotes/dtos/settings.dto';
+import {
+  classSettingsDto,
+  printRequestSettings,
+  printRequestSquareSettings,
+} from '$lib/remotes/dtos/settings.dto';
 import { verifyAuth } from '$lib/remotes/utils';
 import { settingsService } from '$lib/server/services/settings.service';
 
@@ -22,6 +26,19 @@ export const printRequestSquareSettingsForm = form(printRequestSquareSettings, a
   verifyAuth();
   const response = await settingsService.setPrintRequestSquareSettings(dto);
   getPrintRequestSquareSettings().refresh();
+
+  return response;
+});
+
+export const getClassSettings = query(() => {
+  verifyAuth();
+  return settingsService.getClassSettings();
+});
+
+export const classSettingsForm = form(classSettingsDto, async (dto) => {
+  verifyAuth();
+  const response = await settingsService.setClassSettings(dto);
+  getClassSettings().refresh();
 
   return response;
 });

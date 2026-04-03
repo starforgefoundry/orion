@@ -14,3 +14,7 @@ export const printRequestSettings = v.object({
   bblAuthorizationToken: v.string(),
   bblUserId: v.string(),
 });
+
+export const classSettingsDto = v.object({
+  discordWebhookUrl: v.string(),
+});

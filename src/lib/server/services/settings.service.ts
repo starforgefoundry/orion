@@ -21,6 +21,16 @@ export class SettingsService extends BaseService {
 
     return setting;
   }
+
+  async getClassSettings() {
+    return await this.settingsRepository.getSetting('classSettings');
+  }
+
+  async setClassSettings(value: SettingsMap['classSettings']) {
+    const setting = await this.settingsRepository.setSetting('classSettings', value);
+
+    return setting;
+  }
 }
 
 export const settingsService = new SettingsService();

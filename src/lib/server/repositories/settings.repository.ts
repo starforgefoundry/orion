@@ -16,6 +16,9 @@ export type SettingsMap = {
     printRequestItemId: string;
     additionalBuildPlateItemId: string;
   };
+  classSettings: {
+    discordWebhookUrl: string;
+  };
 };
 
 const defaults: SettingsMap = {
@@ -31,6 +34,9 @@ const defaults: SettingsMap = {
     memberPrintDiscountId: '',
     printRequestItemId: '',
     additionalBuildPlateItemId: '',
+  },
+  classSettings: {
+    discordWebhookUrl: '',
   },
 };
 

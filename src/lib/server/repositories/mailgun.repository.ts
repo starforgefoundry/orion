@@ -17,7 +17,7 @@ export class MailgunRepository extends BaseRepository {
     }
 
     for (const [key, value] of Object.entries(variables)) {
-      emailContent = emailContent.replace(`{{${key}}}`, value);
+      emailContent = emailContent.replaceAll(`{{${key}}}`, value);
     }
 
     const body = new URLSearchParams({
