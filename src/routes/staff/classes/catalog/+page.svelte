@@ -38,11 +38,11 @@
 </script>
 
 <svelte:head>
-  <title>Class Catalogs</title>
+  <title>Class Catalog</title>
 </svelte:head>
 
 <div class="mb-6 flex items-center justify-between">
-  <Heading size="large" class="inline-block w-fit">Class Catalogs</Heading>
+  <Heading size="large" class="inline-block w-fit">Class Catalog</Heading>
   <div class="flex w-1/3 items-center gap-2">
     <IconButton
       icon={mdiPlus}
@@ -51,7 +51,7 @@
       class="min-w-10"
       onclick={openCreate}
     />
-    <Input placeholder="Search Catalogs" leadingIcon={mdiMagnify} bind:value={searchTerm} />
+    <Input placeholder="Search Catalog" leadingIcon={mdiMagnify} bind:value={searchTerm} />
   </div>
 </div>
 
@@ -84,7 +84,7 @@
 
       {#if filtered.length === 0}
         <TableRow>
-          <TableCell width="w-full" class="text-center">No class catalogs found.</TableCell>
+          <TableCell width="w-full" class="text-center">No classes found.</TableCell>
         </TableRow>
       {/if}
     </TableBody>
