@@ -17,7 +17,9 @@
 
   <Text>
     If you have any questions, please contact us at
-    <a href="mailto:info@starforgefoundry.com" class="text-primary">info@starforgefoundry.com</a>.
+    <a href="mailto:contact@starforgefoundry.com" class="text-primary"
+      >contact@starforgefoundry.com</a
+    >.
   </Text>
 
   <Button onclick={() => (window.location.href = '/waiver')} class="mt-4">
