@@ -8,6 +8,7 @@ import type {
   CancelInstanceDto,
   CreateInstanceDto,
   GenerateInstancesDto,
+  ManualBookClassDto,
   UpdateInstanceDto,
   UpsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
@@ -337,6 +338,43 @@ export class ClassService {
 
     await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
     return { success: true };
+  }
+
+  async manualBookClass(dto: ManualBookClassDto) {
+    const instance = await this.classRepository.getInstanceById(dto.instanceId);
+    if (!instance) throw new Error('Class not found');
+    if (instance.status !== 'scheduled') throw new Error('This class has been canceled');
+
+    // Check seat availability
+    const confirmedCount = await this.classRepository.getConfirmedBookingCount(dto.instanceId);
+    if (confirmedCount + dto.quantity > instance.seats) {
+      throw new Error(
+        confirmedCount >= instance.seats
+          ? 'This class is fully booked'
+          : `Only ${instance.seats - confirmedCount} spot${instance.seats - confirmedCount !== 1 ? 's' : ''} remaining`,
+      );
+    }
+
+    // Create booking with no payment
+    const booking = await this.classRepository.createBooking({
+      instanceId: dto.instanceId,
+      customerName: dto.customerName,
+      customerEmail: dto.customerEmail,
+      customerPhone: dto.customerPhone,
+      squarePaymentId: null,
+      status: 'confirmed',
+      quantity: dto.quantity,
+      amountPaid: 0,
+    });
+
+    // Re-check booking count after insert (overbooking prevention)
+    const newCount = await this.classRepository.getConfirmedBookingCount(dto.instanceId);
+    if (newCount > instance.seats) {
+      await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
+      throw new Error('This class is fully booked');
+    }
+
+    return booking;
   }
 
   async sendBookingConfirmationEmail(bookingId: string) {

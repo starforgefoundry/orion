@@ -19,8 +19,9 @@
     Text,
     toastManager,
   } from '@immich/ui';
-  import { mdiCalendar, mdiCancel, mdiDelete } from '@mdi/js';
+  import { mdiAccountPlus, mdiCalendar, mdiCancel, mdiDelete } from '@mdi/js';
   import { DateTime } from 'luxon';
+  import AddBookingModal from './AddBookingModal.svelte';
   import CancelClassModal from './CancelClassModal.svelte';
 
   interface Props extends ModalProps {
@@ -43,18 +44,22 @@
 
   let cancelingBookingId = $state('');
 
-  async function handleCancelBooking(bookingId: string) {
+  async function handleCancelBooking(booking: any) {
+    const hasPaid = booking.squarePaymentId && booking.amountPaid > 0;
     const confirmed = await modalManager.showDialog({
+      icon: mdiDelete,
       title: 'Cancel Booking',
-      prompt: 'Cancel this booking and issue a full refund?',
-      confirmText: 'Cancel & Refund',
+      prompt: hasPaid
+        ? 'Cancel this booking and issue a full refund?'
+        : 'Cancel this booking? No refund will be issued.',
+      confirmText: hasPaid ? 'Cancel & Refund' : 'Cancel Booking',
       confirmColor: 'danger',
     });
     if (!confirmed) return;
 
-    cancelingBookingId = bookingId;
+    cancelingBookingId = booking.id;
     try {
-      await cancelBookingStaff({ bookingId });
+      await cancelBookingStaff({ bookingId: booking.id });
       await getInstanceDetail(instanceId).refresh();
       await getAllInstances().refresh();
     } catch (error: any) {
@@ -62,6 +67,18 @@
     } finally {
       cancelingBookingId = '';
     }
+  }
+
+  function showAddBookingModal() {
+    const available = (detail?.seats ?? 0) - totalBooked;
+    modalManager.show(AddBookingModal, {
+      instanceId,
+      availableSpots: available,
+      onBookingCreated: async () => {
+        await getInstanceDetail(instanceId).refresh();
+        await getAllInstances().refresh();
+      },
+    });
   }
 
   function showCancelModal() {
@@ -83,12 +100,7 @@
   }
 </script>
 
-<Modal
-  title={detail?.catalog?.name ?? 'Class Details'}
-  icon={mdiCalendar}
-  {onClose}
-  size="large"
->
+<Modal title={detail?.catalog?.name ?? 'Class Details'} icon={mdiCalendar} {onClose} size="large">
   <ModalBody>
     {#if detailRemote.loading}
       <LoadingSpinner class="mx-auto" size="large" />
@@ -103,8 +115,7 @@
           </div>
           <div>
             <Text color="muted" size="small">Time</Text>
-            <Text fontWeight="bold"
-              >{formatTime(detail.startTime)} ({detail.durationMinutes}m)</Text
+            <Text fontWeight="bold">{formatTime(detail.startTime)} ({detail.durationMinutes}m)</Text
             >
           </div>
           <div>
@@ -125,7 +136,20 @@
 
         {#if detail.status === 'scheduled'}
           <Stack gap={2}>
-            <Heading size="small">Bookings</Heading>
+            <div class="flex items-center justify-between">
+              <Heading size="small">Bookings</Heading>
+              {#if totalBooked < detail.seats}
+                <Button
+                  size="small"
+                  color="primary"
+                  variant="outline"
+                  leadingIcon={mdiAccountPlus}
+                  onclick={showAddBookingModal}
+                >
+                  Add Booking
+                </Button>
+              {/if}
+            </div>
             {#if confirmedBookings.length === 0}
               <Text color="muted" size="small">No bookings yet.</Text>
             {:else}
@@ -140,19 +164,25 @@
                     <Text size="small" color="muted"
                       >{booking.customerEmail} · {booking.customerPhone}</Text
                     >
-                    <Text size="small" color="muted"
-                      >${(booking.amountPaid / 100).toFixed(2)}</Text
-                    >
+                    <Text size="small" color="muted">
+                      {#if booking.amountPaid > 0}
+                        ${(booking.amountPaid / 100).toFixed(2)}
+                      {:else}
+                        Manual (no payment)
+                      {/if}
+                    </Text>
                   </div>
                   <Button
                     size="small"
                     color="danger"
                     variant="outline"
                     leadingIcon={mdiDelete}
-                    onclick={() => handleCancelBooking(booking.id)}
+                    onclick={() => handleCancelBooking(booking)}
                     loading={cancelingBookingId === booking.id}
                   >
-                    Cancel & Refund
+                    {booking.squarePaymentId && booking.amountPaid > 0
+                      ? 'Cancel & Refund'
+                      : 'Cancel'}
                   </Button>
                 </div>
               {/each}
@@ -164,9 +194,14 @@
               <Heading size="small">Canceled Bookings</Heading>
               {#each canceledBookings as booking}
                 <div class="rounded-lg border border-gray-700 p-3 opacity-50">
-                  <Text size="small"
-                    >{booking.customerName}{booking.quantity > 1 ? ` (x${booking.quantity})` : ''} - ${(booking.amountPaid / 100).toFixed(2)} (refunded)</Text
-                  >
+                  <Text size="small">
+                    {booking.customerName}{booking.quantity > 1 ? ` (x${booking.quantity})` : ''}
+                    {#if booking.amountPaid > 0}
+                      - ${(booking.amountPaid / 100).toFixed(2)} (refunded)
+                    {:else}
+                      (canceled)
+                    {/if}
+                  </Text>
                 </div>
               {/each}
             </Stack>

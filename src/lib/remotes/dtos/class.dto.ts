@@ -82,6 +82,16 @@ export const cancelBookingStaffDto = v.object({
 
 export type CancelBookingStaffDto = v.InferInput<typeof cancelBookingStaffDto>;
 
+export const manualBookClassDto = v.object({
+  instanceId: v.string(),
+  customerName: v.pipe(v.string(), v.minLength(1)),
+  customerEmail: v.pipe(v.string(), v.email()),
+  customerPhone: v.pipe(v.string(), v.minLength(1)),
+  quantity: v.pipe(v.number(), v.minValue(1)),
+});
+
+export type ManualBookClassDto = v.InferInput<typeof manualBookClassDto>;
+
 // ── Composite Types ──
 
 export type ClassInstanceWithDetails = ClassInstance & {
