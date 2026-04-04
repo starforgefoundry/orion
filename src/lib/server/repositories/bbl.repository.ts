@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import type { PrintMaterial } from '$lib/server/db/schema';
+import { schema, type PrintMaterial } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 
 type Device = {
@@ -7,10 +7,17 @@ type Device = {
   dev_id: string;
 };
 
-type BBCChangeFilamentRequest = {
+type BBCChangeFilamentRequestCloud = {
   user_id: string;
   auth_token: string;
   printer_id: string;
+  filaments: any[];
+};
+
+type BBCChangeFilamentRequestLocal = {
+  printer_ip: string;
+  access_code: string;
+  printer_serial: string;
   filaments: any[];
 };
 
@@ -34,17 +41,31 @@ export class BambulabRepository extends BaseRepository {
     return await response.json();
   }
 
-  async getPrinters(authToken: string) {
+  async getCloudPrinters(authToken: string): Promise<CloudPrinter[]> {
     const printers: { devices: Device[] } = (await this._makeRequest(
       authToken,
       'v1/iot-service/api/user/bind',
     )) as any;
 
-    return printers.devices;
+    return printers.devices.map((device) => ({
+      ...device,
+      type: 'cloud',
+    }));
   }
 
-  async updateAMS(
-    printerDeviceId: string,
+  async getLocalPrinters(): Promise<LocalPrinter[]> {
+    const printers = await this.db.select().from(schema.localBambuConnectPrinter).execute();
+    return printers.map((printer) => ({
+      name: printer.name,
+      type: 'local',
+      local_ip: printer.localIp,
+      serial: printer.serial,
+      access_code: printer.accessCode,
+    }));
+  }
+
+  async updateAMSCloud(
+    printer: CloudPrinter,
     filamentTags: PrintMaterial[],
     credentials: { userId: string; authKey: string },
   ) {
@@ -52,14 +73,35 @@ export class BambulabRepository extends BaseRepository {
       throw new Error('BAMBU_CONNECT_AUTH_KEY not set in environment variables');
     }
 
-    const request: BBCChangeFilamentRequest = {
+    const request: BBCChangeFilamentRequestCloud = {
       user_id: credentials.userId,
       auth_token: credentials.authKey,
-      printer_id: printerDeviceId,
+      printer_id: printer.dev_id,
       filaments: filamentTags.map((tag) => JSON.parse(tag.bblTagData ?? '{}')),
     };
 
-    const rq = await fetch('https://bambu-connect.starforgefoundry.com/change_filament', {
+    await fetch('https://bambu-connect.starforgefoundry.com/change_filament_cloud', {
+      headers: {
+        Authorization: `Bearer ${env.BAMBU_CONNECT_AUTH_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+      method: 'POST',
+    });
+  }
+  async updateAMSLocal(printer: LocalPrinter, filamentTags: PrintMaterial[]) {
+    if (!env.BAMBU_CONNECT_AUTH_KEY) {
+      throw new Error('BAMBU_CONNECT_AUTH_KEY not set in environment variables');
+    }
+
+    const request: BBCChangeFilamentRequestLocal = {
+      printer_ip: printer.local_ip,
+      printer_serial: printer.serial,
+      access_code: printer.access_code,
+      filaments: filamentTags.map((tag) => JSON.parse(tag.bblTagData ?? '{}')),
+    };
+
+    await fetch('https://bambu-connect.starforgefoundry.com/change_filament_local', {
       headers: {
         Authorization: `Bearer ${env.BAMBU_CONNECT_AUTH_KEY}`,
         'Content-Type': 'application/json',

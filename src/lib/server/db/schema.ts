@@ -292,6 +292,19 @@ export const classBooking = sqliteTable(
 
 export type ClassBooking = InferSelectModel<typeof classBooking>;
 
+export const localBambuConnectPrinter = sqliteTable('local_bambu_connect_printer', {
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  localIp: text('local_ip').notNull(),
+  serial: text('serial').notNull(),
+  accessCode: text('access_code').notNull(),
+});
+
+export type LocalBambuConnectPrinter = InferSelectModel<typeof localBambuConnectPrinter>;
+
 export const schema = {
   user,
   printRequest,
@@ -309,4 +322,5 @@ export const schema = {
   classCatalog,
   classInstance,
   classBooking,
+  localBambuConnectPrinter,
 };

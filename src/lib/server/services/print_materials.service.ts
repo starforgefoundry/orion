@@ -29,14 +29,17 @@ export class PrintMaterialsService extends BaseService {
       throw new Error('BBL authorization token or user ID not set in settings');
     }
 
-    const printers = await this.bblRepository.getPrinters(bblAuth);
-    const printerPostfix = printerId.split('SF-')[1];
-    const printerDeviceId = printers.find((p) => {
-      const sanitizedName = p.name.replace(/ /g, '');
-      return sanitizedName.includes(printerPostfix);
-    })?.dev_id;
+    const printers: Printer[] = await Promise.all([
+      this.bblRepository.getCloudPrinters(bblAuth),
+      this.bblRepository.getLocalPrinters(),
+    ]).then((results) => results.flat());
 
-    if (!printerDeviceId) {
+    const printerPostfix = printerId.split('SF-')[1];
+    let printer = printers.find((p) => {
+      return p.name.replace(/ /g, '').includes(printerPostfix);
+    });
+
+    if (!printer) {
       throw new Error(`Printer with ID ${printerId} not found in BBL devices`);
     }
 
@@ -47,10 +50,24 @@ export class PrintMaterialsService extends BaseService {
       throw new Error('One or more filaments not found or missing BBL tag data');
     }
 
-    await this.bblRepository.updateAMS(printerDeviceId, bblFilaments as PrintMaterial[], {
-      userId: bblUserId,
-      authKey: bblAuth,
-    });
+    if (printer.type === 'cloud') {
+      await this.bblRepository.updateAMSCloud(
+        printer as CloudPrinter,
+        bblFilaments as PrintMaterial[],
+        {
+          userId: bblUserId,
+          authKey: bblAuth,
+        },
+      );
+    } else {
+      await this.bblRepository.updateAMSLocal(
+        printer as LocalPrinter,
+        bblFilaments as PrintMaterial[],
+      );
+      // For local printers, we would need to implement a different method to update the AMS settings,
+      // as they likely don't support the same cloud API. This is a placeholder for that logic.
+      throw new Error('Updating AMS settings for local printers is not implemented');
+    }
   }
 }
 
