@@ -349,10 +349,10 @@
               />
               <IconButton
                 icon={mdiMonitorShare}
-                aria-label="Send to Bambu Studio"
+                aria-label="Send to OrcaSlicer"
                 color="success"
                 size="small"
-                href={`bambustudioopen://${encodeURIComponent(
+                href={`orcaslicer://open?file=${encodeURIComponent(
                   `${window.location.origin}/api/prints/download/${request?.id}`,
                 )}`}
               />
