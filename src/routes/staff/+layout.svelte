@@ -66,7 +66,7 @@
   </AppShellHeader>
 
   <AppShellSidebar class="shadow-none" bind:open={sidebarManager.isOpen}>
-    <div class="flex flex-col gap-1 pe-4 pt-4">
+    <div class="flex flex-col gap-1 pe-4 pt-4 pb-8">
       <NavbarGroup title="3D Print Requests" />
       <NavbarItem
         href={'/staff/print_requests/queue'}
