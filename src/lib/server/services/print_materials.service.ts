@@ -64,9 +64,6 @@ export class PrintMaterialsService extends BaseService {
         printer as LocalPrinter,
         bblFilaments as PrintMaterial[],
       );
-      // For local printers, we would need to implement a different method to update the AMS settings,
-      // as they likely don't support the same cloud API. This is a placeholder for that logic.
-      throw new Error('Updating AMS settings for local printers is not implemented');
     }
   }
 }
