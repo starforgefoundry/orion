@@ -5,19 +5,16 @@
 
   const error = page.url.searchParams.get('error');
 
-  let errorMessage = 'An unknown error occurred.';
-  let errorTitle = 'Sign-In Failed';
-
-  if (error === 'AccessDenied') {
-    errorTitle = 'Access Denied';
-    errorMessage = 'You are not authorized to access Orion.';
-  } else if (error) {
-    errorMessage = `An error occurred during authentication. Code: ${error}`;
-  }
+  let errorMessage = $state(
+    error === 'AccessDenied'
+      ? 'You are not authorized to access Orion.'
+      : 'An unknown error occurred.',
+  );
+  let errorTitle = $state(error == 'AccessDenied' ? 'Unauthorized' : 'Login Failed');
 </script>
 
 <svelte:head>
-  <title>Unauthorized | Orion</title>
+  <title>Login Error | Orion</title>
 </svelte:head>
 
 <div class="flex justify-center">
@@ -25,7 +22,7 @@
     <img class="mx-auto mt-10 mb-6 w-20" src={logo} alt="Orion" />
     <Card>
       <CardHeader>
-        <CardTitle>Login Failed</CardTitle>
+        <CardTitle>{errorTitle}</CardTitle>
       </CardHeader>
       <CardBody>
         <p>{errorMessage}</p>
