@@ -5,6 +5,7 @@ import type {
   SubmitPrintRequestDto,
   UpdatePartQuantityDto,
   UpdatePrintRequestDto,
+  UpdatePrintRequestDiscountDto,
   UpdatePrintRequestStatusDto,
 } from '$lib/remotes/dtos/print_request.dto';
 import type { PrintRequest } from '$lib/server/db/schema';
@@ -44,6 +45,40 @@ export class PrintRequestService extends BaseService {
     const updated = await this.printRequestRepository.update(id, updates);
 
     return updated;
+  }
+
+  async updatePrintRequestDiscount(id: string, dto: UpdatePrintRequestDiscountDto) {
+    const request = await this.printRequestRepository.getById(id);
+    if (!request) {
+      throw new Error('Print request not found');
+    }
+
+    const newCode = dto.billingCode?.trim() || '';
+
+    // Look up the new billing code if one was provided
+    const billingCodeData = newCode !== ''
+      ? await this.billingCodeRepository.getByCode(newCode)
+      : null;
+
+    if (newCode !== '' && !billingCodeData) {
+      throw new Error('Billing code not found');
+    }
+
+    const isNewCodeOrgBilling = !!billingCodeData?.billingCode.organizationId;
+    const existingPayment = request.payment;
+
+    // If switching to an org billing code and there's an outstanding Square invoice, cancel it
+    if (isNewCodeOrgBilling && existingPayment?.squareInvoiceId && existingPayment.status !== 'paid' && existingPayment.status !== 'canceled') {
+      await this.squareRepository.cancelInvoice(existingPayment.squareInvoiceId);
+      await this.paymentRepository.updatePayment(existingPayment.id, { status: 'canceled' });
+    }
+
+    // Update the billing code on the print request
+    await this.printRequestRepository.update(id, {
+      billingCode: newCode !== '' ? newCode : null,
+    });
+
+    return await this.printRequestRepository.getById(id);
   }
 
   async updatePrintRequestStatus(id: string, dto: UpdatePrintRequestStatusDto) {

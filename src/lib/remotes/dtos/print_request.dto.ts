@@ -43,6 +43,12 @@ export const updatePrintRequestDto = v.object({
 
 export type UpdatePrintRequestDto = v.InferInput<typeof updatePrintRequestDto>;
 
+export const updatePrintRequestDiscountDto = v.object({
+  billingCode: v.optional(v.string(), ''),
+});
+
+export type UpdatePrintRequestDiscountDto = v.InferInput<typeof updatePrintRequestDiscountDto>;
+
 export const updatePrintRequestStatusDto = v.object({
   status: v.union([
     v.literal('in_queue'),
