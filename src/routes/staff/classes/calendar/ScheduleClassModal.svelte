@@ -14,6 +14,7 @@
     Input,
     Modal,
     ModalBody,
+    NumberInput,
     Select,
     Stack,
     Text,
@@ -37,8 +38,8 @@
   let selectedTeacher: SelectItem | undefined = $state(undefined);
   let date: DateTime | undefined = $state(DateTime.now());
   let startTime = $state('');
-  let durationMinutes = $state('60');
-  let seats = $state('10');
+  let durationMinutes = $state(60);
+  let seats = $state(3);
   let recurring = $state(false);
   let endDate: DateTime | undefined = $state(undefined);
   let submitting = $state(false);
@@ -76,8 +77,8 @@
           teacherEmail: selectedTeacher.value,
           dayOfWeek: date.weekday % 7,
           startTime,
-          durationMinutes: parseInt(durationMinutes),
-          seats: parseInt(seats),
+          durationMinutes: durationMinutes,
+          seats: seats,
           startDate: dateStr,
           endDate: endDate.toISODate()!,
         });
@@ -97,8 +98,8 @@
           teacherEmail: selectedTeacher.value,
           date: dateStr,
           startTime,
-          durationMinutes: parseInt(durationMinutes),
-          seats: parseInt(seats),
+          durationMinutes: durationMinutes,
+          seats: seats,
         });
         toastManager.success('Class created');
         await getAllInstances().refresh();
@@ -119,11 +120,7 @@
         <Select data={catalogOptions} bind:value={selectedCatalog} placeholder="Select class..." />
       </Field>
       <Field label="Teacher" required="indicator">
-        <Select
-          data={staffOptions}
-          bind:value={selectedTeacher}
-          placeholder="Select teacher..."
-        />
+        <Select data={staffOptions} bind:value={selectedTeacher} placeholder="Select teacher..." />
       </Field>
       <Field label={recurring ? 'Start Date' : 'Date'} required="indicator">
         <DatePicker bind:value={date} />
@@ -133,11 +130,11 @@
           <Input type="time" bind:value={startTime} />
         </Field>
         <Field label="Duration (min)" required="indicator">
-          <Input type="number" bind:value={durationMinutes} min={1} />
+          <NumberInput bind:value={durationMinutes} min={1} />
         </Field>
       </div>
       <Field label="Seats" required="indicator">
-        <Input type="number" bind:value={seats} min={1} />
+        <NumberInput bind:value={seats} min={1} />
       </Field>
 
       <label class="flex cursor-pointer items-center gap-3">
