@@ -66,7 +66,7 @@ export const updatePrintRequestDiscount = command(
     verifyAuth();
 
     const { id, ...updates } = dto;
-    const response = await printRequestService.updatePrintRequestDiscount(id, updates);
+    const response = await printPaymentService.updatePrintRequestDiscount(id, updates);
 
     await getPrintRequests().refresh();
     await getPrintRequestById(id).refresh();
