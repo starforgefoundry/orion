@@ -14,6 +14,10 @@ import type {
 } from '$lib/remotes/dtos/class.dto';
 import { ClassRepository } from '$lib/server/repositories/class.repository';
 import { DiscordRepository } from '$lib/server/repositories/discord.repository';
+import {
+  GoogleCalendarRepository,
+  type GoogleCalendarEventInput,
+} from '$lib/server/repositories/google_calendar.repository';
 import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
 import { SettingsRepository } from '$lib/server/repositories/settings.repository';
 import { DateTime } from 'luxon';
@@ -21,6 +25,7 @@ import { DateTime } from 'luxon';
 export class ClassService {
   private classRepository: ClassRepository;
   private discordRepository: DiscordRepository;
+  private googleCalendarRepository: GoogleCalendarRepository;
   private mailgunRepository: MailgunRepository;
   private settingsRepository: SettingsRepository;
 
@@ -29,9 +34,12 @@ export class ClassService {
     mailgunRepository?: MailgunRepository,
     settingsRepository?: SettingsRepository,
     discordRepository?: DiscordRepository,
+    googleCalendarRepository?: GoogleCalendarRepository,
   ) {
     this.classRepository = classRepository ?? new ClassRepository();
     this.discordRepository = discordRepository ?? new DiscordRepository();
+    this.googleCalendarRepository =
+      googleCalendarRepository ?? new GoogleCalendarRepository();
     this.mailgunRepository = mailgunRepository ?? new MailgunRepository();
     this.settingsRepository = settingsRepository ?? new SettingsRepository();
   }
@@ -48,7 +56,26 @@ export class ClassService {
 
   async updateCatalog(dto: { id: string } & Omit<UpsertCatalogDto, 'photo'>) {
     const { id, ...updates } = dto;
-    return await this.classRepository.updateCatalog(id, updates);
+    const result = await this.classRepository.updateCatalog(id, updates);
+    // The class name shows up in every event's summary, so re-sync all
+    // scheduled instances of this catalog so Google Calendar stays current.
+    this.runInBackground(
+      this.syncInstancesForCatalog(id),
+      'sync catalog update to calendar',
+    );
+    return result;
+  }
+
+  private async syncInstancesForCatalog(catalogId: string): Promise<void> {
+    if (!this.googleCalendarRepository.isConfigured()) return;
+    const instances = await this.classRepository.getInstancesForCatalog(catalogId);
+    for (const inst of instances) {
+      try {
+        await this.syncInstanceToCalendar(inst.id);
+      } catch (err) {
+        console.error(`Failed to re-sync instance ${inst.id} after catalog update:`, err);
+      }
+    }
   }
 
   async getCatalogById(id: string) {
@@ -123,11 +150,16 @@ export class ClassService {
       current = current.plus({ days: 1 });
     }
 
-    return await this.classRepository.createInstances(instances);
+    const created = await this.classRepository.createInstances(instances);
+    this.runInBackground(
+      Promise.all(created.map((inst) => this.syncInstanceToCalendar(inst.id))),
+      'sync generated instances to calendar',
+    );
+    return created;
   }
 
   async createInstance(dto: CreateInstanceDto) {
-    return await this.classRepository.createInstance({
+    const instance = await this.classRepository.createInstance({
       classId: dto.classId,
       teacherEmail: dto.teacherEmail,
       date: dto.date,
@@ -136,6 +168,11 @@ export class ClassService {
       seats: dto.seats,
       status: 'scheduled',
     });
+    this.runInBackground(
+      this.syncInstanceToCalendar(instance.id),
+      'sync created instance to calendar',
+    );
+    return instance;
   }
 
   async updateInstance(dto: UpdateInstanceDto) {
@@ -143,7 +180,12 @@ export class ClassService {
     const filtered = Object.fromEntries(
       Object.entries(updates).filter(([, v]) => v !== undefined),
     );
-    return await this.classRepository.updateInstance(id, filtered);
+    const updated = await this.classRepository.updateInstance(id, filtered);
+    this.runInBackground(
+      this.syncInstanceToCalendar(id),
+      'sync updated instance to calendar',
+    );
+    return updated;
   }
 
   async cancelInstance(dto: CancelInstanceDto) {
@@ -183,6 +225,11 @@ export class ClassService {
     }
 
     await this.classRepository.updateInstance(instanceId, { status: 'canceled' });
+
+    this.runInBackground(
+      this.deleteInstanceFromCalendar(instanceId),
+      'remove canceled instance from calendar',
+    );
   }
 
   async getInstanceById(id: string) {
@@ -307,6 +354,11 @@ export class ClassService {
       discordPromise.catch((err) => console.error('Failed to send booking discord notification:', err));
     }
 
+    this.runInBackground(
+      this.syncInstanceToCalendar(dto.instanceId),
+      'sync booking change to calendar',
+    );
+
     return booking;
   }
 
@@ -324,6 +376,12 @@ export class ClassService {
     }
 
     await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
+
+    this.runInBackground(
+      this.syncInstanceToCalendar(booking.instanceId),
+      'sync canceled booking to calendar',
+    );
+
     return { success: true };
   }
 
@@ -337,6 +395,12 @@ export class ClassService {
     }
 
     await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
+
+    this.runInBackground(
+      this.syncInstanceToCalendar(booking.instanceId),
+      'sync staff-canceled booking to calendar',
+    );
+
     return { success: true };
   }
 
@@ -373,6 +437,11 @@ export class ClassService {
       await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
       throw new Error('This class is fully booked');
     }
+
+    this.runInBackground(
+      this.syncInstanceToCalendar(dto.instanceId),
+      'sync manual booking to calendar',
+    );
 
     return booking;
   }
@@ -466,72 +535,182 @@ export class ClassService {
     });
   }
 
-  async generateIcalFeed(icalToken: string): Promise<string | null> {
-    const data = await this.classRepository.getBookingsForTeacherByIcalToken(icalToken);
-    if (!data) return null;
+  // ── Google Calendar sync ──
 
-    const { teacher, entries } = data;
+  /**
+   * Ensures the teacher has a Google Calendar and returns its ID. If this is
+   * the first time, a new calendar is created on the service account and all
+   * of the teacher's currently-scheduled classes are backfilled as events.
+   */
+  async ensureTeacherCalendar(teacherEmail: string): Promise<string | null> {
+    if (!this.googleCalendarRepository.isConfigured()) return null;
 
-    const lines: string[] = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Starforge//Class Bookings//EN',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-      `X-WR-CALNAME:${teacher.name} - Class Bookings`,
-      'X-WR-TIMEZONE:America/Chicago',
-      'BEGIN:VTIMEZONE',
-      'TZID:America/Chicago',
-      'BEGIN:STANDARD',
-      'DTSTART:19701101T020000',
-      'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU',
-      'TZOFFSETFROM:-0500',
-      'TZOFFSETTO:-0600',
-      'TZNAME:CST',
-      'END:STANDARD',
-      'BEGIN:DAYLIGHT',
-      'DTSTART:19700308T020000',
-      'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU',
-      'TZOFFSETFROM:-0600',
-      'TZOFFSETTO:-0500',
-      'TZNAME:CDT',
-      'END:DAYLIGHT',
-      'END:VTIMEZONE',
-    ];
+    const teacher = await this.classRepository.getUserByEmail(teacherEmail);
+    if (!teacher) return null;
+    if (teacher.googleCalendarId) return teacher.googleCalendarId;
 
-    for (const { instance, catalog, bookings } of entries) {
-      const [hours, minutes] = instance.startTime.split(':').map(Number);
-      const startDt = DateTime.fromISO(instance.date, { zone: 'America/Chicago' }).set({
-        hour: hours,
-        minute: minutes,
-      });
-      const endDt = startDt.plus({ minutes: instance.durationMinutes });
+    const calendarId = await this.googleCalendarRepository.createCalendar(
+      teacher.name,
+      teacher.email,
+    );
+    await this.classRepository.setGoogleCalendarId(teacher.email, calendarId);
 
-      const totalAttendees = bookings.reduce((sum, b) => sum + (b.quantity ?? 1), 0);
-      const description = [
-        `Class: ${catalog.name}`,
-        `Number of attendees: ${totalAttendees}/${instance.seats}`,
-        ``,
-        `Attendees:`,
-        ...bookings.map((b) => `- ${b.customerName}${b.quantity > 1 ? ` (x${b.quantity})` : ''} (${b.customerPhone})`),
-      ].join('\\n');
-
-      const uid = `${instance.id}@starforgefoundry.com`;
-
-      lines.push(
-        'BEGIN:VEVENT',
-        `DTSTART;TZID=America/Chicago:${startDt.toFormat("yyyyMMdd'T'HHmmss")}`,
-        `DTEND;TZID=America/Chicago:${endDt.toFormat("yyyyMMdd'T'HHmmss")}`,
-        `SUMMARY:${catalog.name} (${totalAttendees} booked)`,
-        `DESCRIPTION:${description}`,
-        `UID:${uid}`,
-        `DTSTAMP:${DateTime.now().toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'")}`,
-        'END:VEVENT',
-      );
+    // Backfill existing scheduled instances so the new calendar is populated.
+    const instances = await this.classRepository.getScheduledInstancesForTeacher(
+      teacher.email,
+    );
+    for (const inst of instances) {
+      try {
+        await this.syncInstanceToCalendar(inst.id);
+      } catch (err) {
+        console.error(`Failed to backfill instance ${inst.id} to calendar:`, err);
+      }
     }
 
-    lines.push('END:VCALENDAR');
-    return lines.join('\r\n');
+    return calendarId;
+  }
+
+  /**
+   * Returns the shareable "add to calendar" URL for the given teacher,
+   * creating the calendar on-demand if it doesn't exist yet.
+   */
+  async getTeacherCalendarLink(teacherEmail: string): Promise<string | null> {
+    const calendarId = await this.ensureTeacherCalendar(teacherEmail);
+    if (!calendarId) return null;
+    return this.googleCalendarRepository.buildAddCalendarUrl(calendarId);
+  }
+
+  /**
+   * Creates or updates the Google Calendar event for the given class instance.
+   * Creates the teacher's calendar lazily if needed. Silently no-ops when the
+   * Google service account isn't configured.
+   */
+  async syncInstanceToCalendar(instanceId: string): Promise<void> {
+    if (!this.googleCalendarRepository.isConfigured()) return;
+
+    const instance = await this.classRepository.getInstanceById(instanceId);
+    if (!instance || !instance.teacher || !instance.catalog) return;
+
+    // If the instance was canceled, remove the event instead.
+    if (instance.status !== 'scheduled') {
+      await this.deleteInstanceFromCalendar(instanceId);
+      return;
+    }
+
+    const calendarId = await this.ensureTeacherCalendar(instance.teacherEmail);
+    if (!calendarId) return;
+
+    const bookings = await this.classRepository.getConfirmedBookingsForInstance(
+      instance.id,
+    );
+    const event = this.buildEventPayload(
+      instance.catalog.name,
+      instance.date,
+      instance.startTime,
+      instance.durationMinutes,
+      instance.seats,
+      bookings,
+    );
+
+    if (instance.googleEventId) {
+      try {
+        await this.googleCalendarRepository.updateEvent(
+          calendarId,
+          instance.googleEventId,
+          event,
+        );
+        return;
+      } catch (err) {
+        // If the event was deleted out-of-band, fall through and recreate it.
+        console.warn(
+          `Failed to update event ${instance.googleEventId}, recreating:`,
+          err,
+        );
+      }
+    }
+
+    const eventId = await this.googleCalendarRepository.createEvent(calendarId, event);
+    await this.classRepository.setGoogleEventId(instance.id, eventId);
+  }
+
+  async deleteInstanceFromCalendar(instanceId: string): Promise<void> {
+    if (!this.googleCalendarRepository.isConfigured()) return;
+
+    const instance = await this.classRepository.getInstanceById(instanceId);
+    if (!instance || !instance.teacher || !instance.googleEventId) return;
+
+    const calendarId = instance.teacher.googleCalendarId;
+    if (!calendarId) return;
+
+    try {
+      await this.googleCalendarRepository.deleteEvent(calendarId, instance.googleEventId);
+    } catch (err) {
+      console.error(`Failed to delete event ${instance.googleEventId}:`, err);
+    }
+    await this.classRepository.setGoogleEventId(instance.id, null);
+  }
+
+  private buildEventPayload(
+    className: string,
+    date: string,
+    startTime: string,
+    durationMinutes: number,
+    seats: number,
+    bookings: Array<{ customerName: string; customerPhone: string; quantity: number }>,
+  ): GoogleCalendarEventInput {
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const startDt = DateTime.fromISO(date, { zone: 'America/Chicago' }).set({
+      hour: hours,
+      minute: minutes,
+      second: 0,
+      millisecond: 0,
+    });
+    const endDt = startDt.plus({ minutes: durationMinutes });
+
+    const totalAttendees = bookings.reduce((sum, b) => sum + (b.quantity ?? 1), 0);
+    const descriptionLines = [
+      `Class: ${className}`,
+      `Number of attendees: ${totalAttendees}/${seats}`,
+    ];
+
+    if (bookings.length > 0) {
+      descriptionLines.push('', 'Attendees:');
+      for (const b of bookings) {
+        const qty = b.quantity > 1 ? ` (x${b.quantity})` : '';
+        descriptionLines.push(`- ${b.customerName}${qty} (${b.customerPhone})`);
+      }
+    }
+
+    return {
+      summary: `${className} (${totalAttendees} booked)`,
+      description: descriptionLines.join('\n'),
+      startDateTime: startDt.toISO({ suppressMilliseconds: true })!,
+      endDateTime: endDt.toISO({ suppressMilliseconds: true })!,
+      timeZone: 'America/Chicago',
+    };
+  }
+
+  /**
+   * Runs a calendar sync in the background via Cloudflare's waitUntil so API
+   * responses aren't blocked on Google API latency. Errors are logged but
+   * never propagate to the caller.
+   */
+  private runInBackground(promise: Promise<unknown>, label: string): void {
+    const wrapped = promise.catch((err) => {
+      console.error(`Background task failed (${label}):`, err);
+    });
+
+    try {
+      const ctx = getRequestEvent().platform?.ctx;
+      if (ctx) {
+        ctx.waitUntil(wrapped);
+        return;
+      }
+    } catch {
+      // Not inside a request context (e.g. during tests).
+    }
+    // Fire-and-forget outside a request context.
+    void wrapped;
   }
 }
 

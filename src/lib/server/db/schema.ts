@@ -8,6 +8,7 @@ export const user = sqliteTable('user', {
   name: text('name').notNull(),
   picture: text('picture').notNull(),
   icalToken: text('ical_token').$defaultFn(() => crypto.randomUUID()),
+  googleCalendarId: text('google_calendar_id'),
 });
 
 export type User = InferSelectModel<typeof user>;
@@ -250,6 +251,7 @@ export const classInstance = sqliteTable(
     createdDate: luxonTimestamp('created_date')
       .notNull()
       .$defaultFn(() => DateTime.now()),
+    googleEventId: text('google_event_id'),
   },
   (table) => [
     index('class_instance_class_idx').on(table.classId),

@@ -108,11 +108,9 @@ export const getStaffUsers = query(async () => {
   return await classService.getStaffUsers();
 });
 
-export const getMyIcalToken = query(async () => {
+export const getMyCalendarLink = query(async () => {
   const authUser = verifyAuth();
-  const users = await classService.getStaffUsers();
-  const dbUser = users.find((u) => u.email === authUser.email);
-  return dbUser?.icalToken ?? null;
+  return await classService.getTeacherCalendarLink(authUser.email);
 });
 
 // ── Public ──

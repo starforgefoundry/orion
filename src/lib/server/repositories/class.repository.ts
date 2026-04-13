@@ -222,43 +222,39 @@ export class ClassRepository extends BaseRepository {
     return Number(result?.total ?? 0);
   }
 
-  // ── iCal ──
+  // ── Teacher / Google Calendar ──
 
-  async getUserByIcalToken(token: string) {
-    return await this.db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.icalToken, token))
-      .get();
+  async getUserByEmail(email: string) {
+    return await this.db.select().from(schema.user).where(eq(schema.user.email, email)).get();
   }
 
-  async getBookingsForTeacherByIcalToken(icalToken: string) {
-    const teacher = await this.getUserByIcalToken(icalToken);
-    if (!teacher) return null;
+  async setGoogleCalendarId(email: string, calendarId: string) {
+    await this.db
+      .update(schema.user)
+      .set({ googleCalendarId: calendarId })
+      .where(eq(schema.user.email, email))
+      .run();
+  }
 
-    const instances = await this.db
+  async setGoogleEventId(instanceId: string, eventId: string | null) {
+    await this.db
+      .update(schema.classInstance)
+      .set({ googleEventId: eventId })
+      .where(eq(schema.classInstance.id, instanceId))
+      .run();
+  }
+
+  async getScheduledInstancesForTeacher(teacherEmail: string) {
+    return await this.db
       .select()
       .from(schema.classInstance)
       .where(
         and(
-          eq(schema.classInstance.teacherEmail, teacher.email),
+          eq(schema.classInstance.teacherEmail, teacherEmail),
           eq(schema.classInstance.status, 'scheduled'),
         ),
       )
       .all();
-
-    if (instances.length === 0) return { teacher, entries: [] };
-
-    const entries = [];
-    for (const instance of instances) {
-      const catalog = await this.getCatalogById(instance.classId);
-      const bookings = await this.getConfirmedBookingsForInstance(instance.id);
-      if (catalog && bookings.length > 0) {
-        entries.push({ instance, catalog, bookings });
-      }
-    }
-
-    return { teacher, entries };
   }
 
   // ── Staff / Payment ──
