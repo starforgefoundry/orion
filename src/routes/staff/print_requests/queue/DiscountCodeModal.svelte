@@ -34,17 +34,22 @@
     }) ?? []),
   ]);
 
-  let selected: SelectItem = $derived.by(() => {
-    if (!currentCode) return { value: '', label: 'No Discount Code' };
-    return options.find((o) => o.value === currentCode) ?? { value: '', label: 'No Discount Code' };
-  });
-
   let selectedValue = $state<SelectItem | undefined>(undefined);
+  let initialized = $state(false);
 
+  // Initialize selectedValue once billing codes have loaded so we can find
+  // the matching option for the current code
   $effect(() => {
-    if (!selectedValue) {
-      selectedValue = selected;
+    if (initialized || billingCodes.loading) return;
+    if (!currentCode) {
+      selectedValue = { value: '', label: 'No Discount Code' };
+    } else {
+      selectedValue = options.find((o) => o.value === currentCode) ?? {
+        value: '',
+        label: 'No Discount Code',
+      };
     }
+    initialized = true;
   });
 </script>
 
