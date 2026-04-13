@@ -12,6 +12,7 @@ import type {
   UpdateInstanceDto,
   UpsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
+import type { User } from '$lib/server/db/schema';
 import { ClassRepository } from '$lib/server/repositories/class.repository';
 import { DiscordRepository } from '$lib/server/repositories/discord.repository';
 import {
@@ -226,8 +227,9 @@ export class ClassService {
 
     await this.classRepository.updateInstance(instanceId, { status: 'canceled' });
 
+    // syncInstanceToCalendar detects the canceled status and deletes the event.
     this.runInBackground(
-      this.deleteInstanceFromCalendar(instanceId),
+      this.syncInstanceToCalendar(instanceId),
       'remove canceled instance from calendar',
     );
   }
@@ -538,15 +540,13 @@ export class ClassService {
   // ── Google Calendar sync ──
 
   /**
-   * Ensures the teacher has a Google Calendar and returns its ID. If this is
-   * the first time, a new calendar is created on the service account and all
-   * of the teacher's currently-scheduled classes are backfilled as events.
+   * Ensures the given teacher has a Google Calendar and returns its ID.
+   * Accepts the already-loaded `User` row (typically from a JOIN on a class
+   * query) so the sync path doesn't need to make a separate user lookup.
+   * On first-time creation, all of the teacher's currently-scheduled classes
+   * are backfilled as events.
    */
-  async ensureTeacherCalendar(teacherEmail: string): Promise<string | null> {
-    if (!this.googleCalendarRepository.isConfigured()) return null;
-
-    const teacher = await this.classRepository.getUserByEmail(teacherEmail);
-    if (!teacher) return null;
+  private async ensureCalendarForTeacher(teacher: User): Promise<string> {
     if (teacher.googleCalendarId) return teacher.googleCalendarId;
 
     const calendarId = await this.googleCalendarRepository.createCalendar(
@@ -554,16 +554,18 @@ export class ClassService {
       teacher.email,
     );
     await this.classRepository.setGoogleCalendarId(teacher.email, calendarId);
+    // Mutate the in-memory copy so subsequent calls in the same request see it.
+    teacher.googleCalendarId = calendarId;
 
     // Backfill existing scheduled instances so the new calendar is populated.
-    const instances = await this.classRepository.getScheduledInstancesForTeacher(
+    const instanceIds = await this.classRepository.getScheduledInstanceIdsForTeacher(
       teacher.email,
     );
-    for (const inst of instances) {
+    for (const id of instanceIds) {
       try {
-        await this.syncInstanceToCalendar(inst.id);
+        await this.syncInstanceToCalendar(id);
       } catch (err) {
-        console.error(`Failed to backfill instance ${inst.id} to calendar:`, err);
+        console.error(`Failed to backfill instance ${id} to calendar:`, err);
       }
     }
 
@@ -572,11 +574,13 @@ export class ClassService {
 
   /**
    * Returns the shareable "add to calendar" URL for the given teacher,
-   * creating the calendar on-demand if it doesn't exist yet.
+   * creating the calendar on-demand if it doesn't exist yet. The caller must
+   * supply the teacher's `User` row (from the authenticated session's
+   * database view) so the service doesn't do a redundant user lookup.
    */
-  async getTeacherCalendarLink(teacherEmail: string): Promise<string | null> {
-    const calendarId = await this.ensureTeacherCalendar(teacherEmail);
-    if (!calendarId) return null;
+  async getTeacherCalendarLink(teacher: User): Promise<string | null> {
+    if (!this.googleCalendarRepository.isConfigured()) return null;
+    const calendarId = await this.ensureCalendarForTeacher(teacher);
     return this.googleCalendarRepository.buildAddCalendarUrl(calendarId);
   }
 
@@ -593,12 +597,11 @@ export class ClassService {
 
     // If the instance was canceled, remove the event instead.
     if (instance.status !== 'scheduled') {
-      await this.deleteInstanceFromCalendar(instanceId);
+      await this.deleteInstanceFromCalendar(instance);
       return;
     }
 
-    const calendarId = await this.ensureTeacherCalendar(instance.teacherEmail);
-    if (!calendarId) return;
+    const calendarId = await this.ensureCalendarForTeacher(instance.teacher);
 
     const bookings = await this.classRepository.getConfirmedBookingsForInstance(
       instance.id,
@@ -633,17 +636,17 @@ export class ClassService {
     await this.classRepository.setGoogleEventId(instance.id, eventId);
   }
 
-  async deleteInstanceFromCalendar(instanceId: string): Promise<void> {
+  private async deleteInstanceFromCalendar(
+    instance: { id: string; googleEventId: string | null; teacher: User | null },
+  ): Promise<void> {
     if (!this.googleCalendarRepository.isConfigured()) return;
-
-    const instance = await this.classRepository.getInstanceById(instanceId);
-    if (!instance || !instance.teacher || !instance.googleEventId) return;
-
-    const calendarId = instance.teacher.googleCalendarId;
-    if (!calendarId) return;
+    if (!instance.teacher?.googleCalendarId || !instance.googleEventId) return;
 
     try {
-      await this.googleCalendarRepository.deleteEvent(calendarId, instance.googleEventId);
+      await this.googleCalendarRepository.deleteEvent(
+        instance.teacher.googleCalendarId,
+        instance.googleEventId,
+      );
     } catch (err) {
       console.error(`Failed to delete event ${instance.googleEventId}:`, err);
     }

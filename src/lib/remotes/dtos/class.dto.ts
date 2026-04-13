@@ -94,12 +94,24 @@ export type ManualBookClassDto = v.InferInput<typeof manualBookClassDto>;
 
 // ── Composite Types ──
 
+/**
+ * The subset of teacher info safe to return to unauthenticated callers (the
+ * public class catalog / booking pages). Keeps email, ical token, and
+ * Google Calendar identifiers out of public responses.
+ */
+export type PublicTeacher = Pick<User, 'name' | 'picture'>;
+
 export type ClassInstanceWithDetails = ClassInstance & {
   teacher: User | null;
   catalog: ClassCatalog | null;
   confirmedCount: number;
 };
 
+export type PublicClassInstance = ClassInstance & {
+  teacher: PublicTeacher | null;
+  confirmedCount: number;
+};
+
 export type ClassCatalogWithInstances = ClassCatalog & {
-  instances: (ClassInstance & { teacher: User | null; confirmedCount: number })[];
+  instances: PublicClassInstance[];
 };

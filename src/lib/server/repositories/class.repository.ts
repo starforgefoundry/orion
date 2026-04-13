@@ -82,9 +82,19 @@ export class ClassRepository extends BaseRepository {
     };
   }
 
+  /**
+   * Returns scheduled instances for a catalog alongside only the non-sensitive
+   * teacher fields (name + picture). Intended for public-facing endpoints —
+   * staff-only queries should use `getAllInstances` which returns the full
+   * user row.
+   */
   async getInstancesForCatalog(classId: string) {
     const results = await this.db
-      .select()
+      .select({
+        instance: schema.classInstance,
+        teacherName: schema.user.name,
+        teacherPicture: schema.user.picture,
+      })
       .from(schema.classInstance)
       .where(
         and(
@@ -96,8 +106,11 @@ export class ClassRepository extends BaseRepository {
       .all();
 
     return results.map((r) => ({
-      ...r.class_instance,
-      teacher: r.user,
+      ...r.instance,
+      teacher:
+        r.teacherName !== null && r.teacherPicture !== null
+          ? { name: r.teacherName, picture: r.teacherPicture }
+          : null,
     }));
   }
 
@@ -224,10 +237,6 @@ export class ClassRepository extends BaseRepository {
 
   // ── Teacher / Google Calendar ──
 
-  async getUserByEmail(email: string) {
-    return await this.db.select().from(schema.user).where(eq(schema.user.email, email)).get();
-  }
-
   async setGoogleCalendarId(email: string, calendarId: string) {
     await this.db
       .update(schema.user)
@@ -244,9 +253,9 @@ export class ClassRepository extends BaseRepository {
       .run();
   }
 
-  async getScheduledInstancesForTeacher(teacherEmail: string) {
-    return await this.db
-      .select()
+  async getScheduledInstanceIdsForTeacher(teacherEmail: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ id: schema.classInstance.id })
       .from(schema.classInstance)
       .where(
         and(
@@ -255,6 +264,7 @@ export class ClassRepository extends BaseRepository {
         ),
       )
       .all();
+    return rows.map((r) => r.id);
   }
 
   // ── Staff / Payment ──

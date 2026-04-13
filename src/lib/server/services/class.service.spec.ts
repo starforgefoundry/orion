@@ -25,10 +25,9 @@ vi.mock('$lib/server/repositories/class.repository', () => {
   MockClassRepository.prototype.getStaffUsers = vi.fn();
   MockClassRepository.prototype.processSquarePayment = vi.fn();
   MockClassRepository.prototype.refundPayment = vi.fn();
-  MockClassRepository.prototype.getUserByEmail = vi.fn();
   MockClassRepository.prototype.setGoogleCalendarId = vi.fn();
   MockClassRepository.prototype.setGoogleEventId = vi.fn();
-  MockClassRepository.prototype.getScheduledInstancesForTeacher = vi.fn();
+  MockClassRepository.prototype.getScheduledInstanceIdsForTeacher = vi.fn();
   return { ClassRepository: MockClassRepository };
 });
 
@@ -698,7 +697,12 @@ describe('ClassService', () => {
 
   describe('getTeacherCalendarLink', () => {
     it('returns null when the Google service account is not configured', async () => {
-      const result = await classService.getTeacherCalendarLink('teacher@test.com');
+      const result = await classService.getTeacherCalendarLink({
+        email: 'teacher@test.com',
+        name: 'Teacher',
+        picture: 'pic.png',
+        googleCalendarId: null,
+      });
       expect(result).toBeNull();
     });
   });

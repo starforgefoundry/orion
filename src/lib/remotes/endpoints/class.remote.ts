@@ -110,7 +110,10 @@ export const getStaffUsers = query(async () => {
 
 export const getMyCalendarLink = query(async () => {
   const authUser = verifyAuth();
-  return await classService.getTeacherCalendarLink(authUser.email);
+  const users = await classService.getStaffUsers();
+  const teacher = users.find((u) => u.email === authUser.email);
+  if (!teacher) return null;
+  return await classService.getTeacherCalendarLink(teacher);
 });
 
 // ── Public ──
