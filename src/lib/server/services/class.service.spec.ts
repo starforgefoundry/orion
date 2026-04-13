@@ -25,8 +25,22 @@ vi.mock('$lib/server/repositories/class.repository', () => {
   MockClassRepository.prototype.getStaffUsers = vi.fn();
   MockClassRepository.prototype.processSquarePayment = vi.fn();
   MockClassRepository.prototype.refundPayment = vi.fn();
-  MockClassRepository.prototype.getBookingsForTeacherByIcalToken = vi.fn();
+  MockClassRepository.prototype.setGoogleCalendarId = vi.fn();
+  MockClassRepository.prototype.setGoogleEventId = vi.fn();
+  MockClassRepository.prototype.getScheduledInstanceIdsForTeacher = vi.fn();
   return { ClassRepository: MockClassRepository };
+});
+
+vi.mock('$lib/server/repositories/google_calendar.repository', () => {
+  const MockGoogleCalendarRepository = vi.fn();
+  MockGoogleCalendarRepository.prototype.isConfigured = vi.fn(() => false);
+  MockGoogleCalendarRepository.prototype.createCalendar = vi.fn();
+  MockGoogleCalendarRepository.prototype.makeCalendarPublic = vi.fn();
+  MockGoogleCalendarRepository.prototype.createEvent = vi.fn();
+  MockGoogleCalendarRepository.prototype.updateEvent = vi.fn();
+  MockGoogleCalendarRepository.prototype.deleteEvent = vi.fn();
+  MockGoogleCalendarRepository.prototype.buildAddCalendarUrl = vi.fn();
+  return { GoogleCalendarRepository: MockGoogleCalendarRepository };
 });
 
 vi.mock('$lib/server/repositories/mailgun.repository', () => {
@@ -679,56 +693,17 @@ describe('ClassService', () => {
     });
   });
 
-  // ── iCal ──
+  // ── Google Calendar sync ──
 
-  describe('generateIcalFeed', () => {
-    it('should generate valid iCal output', async () => {
-      vi.mocked(mockClassRepo.getBookingsForTeacherByIcalToken).mockResolvedValue({
-        teacher: { name: 'Ms. Smith', email: 'smith@test.com' },
-        entries: [
-          {
-            instance: {
-              id: 'inst-1',
-              date: '2099-06-15',
-              startTime: '10:00',
-              durationMinutes: 60,
-              seats: 10,
-            },
-            catalog: { name: 'Welding Class' },
-            bookings: [{ customerName: 'Jane', customerPhone: '555-1234' }],
-          },
-        ],
+  describe('getTeacherCalendarLink', () => {
+    it('returns null when the Google service account is not configured', async () => {
+      const result = await classService.getTeacherCalendarLink({
+        email: 'teacher@test.com',
+        name: 'Teacher',
+        picture: 'pic.png',
+        googleCalendarId: null,
       });
-
-      const result = await classService.generateIcalFeed('ical-token');
-
-      expect(result).toContain('BEGIN:VCALENDAR');
-      expect(result).toContain('END:VCALENDAR');
-      expect(result).toContain('BEGIN:VEVENT');
-      expect(result).toContain('SUMMARY:Welding Class (1 booked)');
-      expect(result).toContain('X-WR-CALNAME:Ms. Smith - Class Bookings');
-      expect(result).toContain('inst-1@starforgefoundry.com');
-    });
-
-    it('should return null when ical token is invalid', async () => {
-      vi.mocked(mockClassRepo.getBookingsForTeacherByIcalToken).mockResolvedValue(null);
-
-      const result = await classService.generateIcalFeed('bad-token');
-
       expect(result).toBeNull();
-    });
-
-    it('should return calendar with no events when teacher has no entries', async () => {
-      vi.mocked(mockClassRepo.getBookingsForTeacherByIcalToken).mockResolvedValue({
-        teacher: { name: 'Ms. Smith', email: 'smith@test.com' },
-        entries: [],
-      });
-
-      const result = await classService.generateIcalFeed('ical-token');
-
-      expect(result).toContain('BEGIN:VCALENDAR');
-      expect(result).toContain('END:VCALENDAR');
-      expect(result).not.toContain('BEGIN:VEVENT');
     });
   });
 });

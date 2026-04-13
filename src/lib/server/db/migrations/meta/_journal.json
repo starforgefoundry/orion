@@ -85,6 +85,13 @@
       "when": 1775343638862,
       "tag": "0011_local_bambu_printers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1776470400000,
+      "tag": "0012_google_calendar",
+      "breakpoints": true
     }
   ]
 }
