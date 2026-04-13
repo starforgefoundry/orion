@@ -601,11 +601,22 @@ export class ClassService {
       return;
     }
 
-    const calendarId = await this.ensureCalendarForTeacher(instance.teacher);
-
     const bookings = await this.classRepository.getConfirmedBookingsForInstance(
       instance.id,
     );
+
+    // Teacher calendars only track classes with actual attendees — empty
+    // classes should not clutter the feed. Remove any existing event if we've
+    // dropped to zero bookings, and skip creating one otherwise.
+    if (bookings.length === 0) {
+      if (instance.googleEventId) {
+        await this.deleteInstanceFromCalendar(instance);
+      }
+      return;
+    }
+
+    const calendarId = await this.ensureCalendarForTeacher(instance.teacher);
+
     const event = this.buildEventPayload(
       instance.catalog.name,
       instance.date,
