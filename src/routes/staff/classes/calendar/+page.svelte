@@ -51,7 +51,7 @@
     </HStack>
   </HStack>
 
-  {#if instancesRemote.loading}
+  {#if instancesRemote.loading && !instancesRemote.current}
     <LoadingSpinner class="mx-auto" size="large" />
   {:else}
     <Card>
