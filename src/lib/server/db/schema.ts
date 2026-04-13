@@ -7,7 +7,6 @@ export const user = sqliteTable('user', {
   email: text('email').notNull().unique().primaryKey(),
   name: text('name').notNull(),
   picture: text('picture').notNull(),
-  icalToken: text('ical_token').$defaultFn(() => crypto.randomUUID()),
   googleCalendarId: text('google_calendar_id'),
 });
 

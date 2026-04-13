@@ -1102,13 +1102,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "ical_token": {
-          "name": "ical_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "google_calendar_id": {
           "name": "google_calendar_id",
           "type": "text",
