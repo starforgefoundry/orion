@@ -5,11 +5,13 @@
     getPrintRequestById,
     sendPickupNotification,
     updatePartQuantity,
+    updatePrintRequestDiscount,
     updatePrintRequestStatus,
   } from '$lib/remotes/endpoints/print_request.remote';
   import {
     Badge,
     Button,
+    ContextMenuButton,
     Heading,
     HStack,
     Icon,
@@ -22,6 +24,7 @@
     Switch,
     Text,
     toastManager,
+    type MenuItems,
   } from '@immich/ui';
   import {
     mdiAccount,
@@ -29,6 +32,7 @@
     mdiCheck,
     mdiClose,
     mdiCurrencyUsd,
+    mdiDotsVertical,
     mdiDownload,
     mdiEmail,
     mdiHelp,
@@ -37,7 +41,9 @@
     mdiPackageVariantClosed,
     mdiPencil,
     mdiPrinter3dNozzle,
+    mdiTag,
   } from '@mdi/js';
+  import DiscountCodeModal from './DiscountCodeModal.svelte';
   import PaymentModal from './PaymentModal.svelte';
   import { getPaymentStatusColor, getStatusColor } from './utils';
 
@@ -179,6 +185,48 @@
     originalQuantities = {};
     isEditingQuantities = false;
   }
+
+  async function promptDiscountCode() {
+    modalManager.show(DiscountCodeModal, {
+      currentCode: request?.billingCode ?? '',
+      onSave: async (code: string) => {
+        try {
+          await updatePrintRequestDiscount({
+            id: request!.id,
+            billingCode: code,
+          });
+          toastManager.success({
+            title: 'Discount Code Updated',
+            description: code ? `Billing code set to "${code}".` : 'Billing code removed.',
+          });
+        } catch (error: any) {
+          toastManager.danger({
+            title: 'Error',
+            description: error?.message ?? 'Failed to update discount code.',
+          });
+        }
+      },
+    });
+  }
+
+  const canEditDiscountCode = $derived(
+    request?.payment &&
+      request?.payment.status !== 'paid' &&
+      request?.payment.status !== 'canceled' &&
+      request?.status !== 'canceled',
+  );
+
+  const customerMenuItems: MenuItems = $derived(
+    [
+      canEditDiscountCode
+        ? {
+            title: 'Edit Discount Code',
+            icon: mdiTag,
+            onAction: () => promptDiscountCode(),
+          }
+        : undefined,
+    ].filter((item): item is Exclude<typeof item, undefined> => !!item),
+  );
 </script>
 
 <Modal
@@ -191,7 +239,21 @@
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <div class="flex flex-1 flex-col gap-4">
         <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-          <Heading size="medium">Customer Information</Heading>
+          <HStack class="items-center justify-between">
+            <Heading size="medium">Customer Information</Heading>
+            {#if customerMenuItems.length > 0}
+              <ContextMenuButton
+                icon={mdiDotsVertical}
+                position="top-right"
+                items={customerMenuItems}
+                size="small"
+                color="secondary"
+                variant="ghost"
+                shape="round"
+                aria-label="Customer options"
+              />
+            {/if}
+          </HStack>
           <HStack>
             <Icon icon={mdiAccount} size="24" />
             <Text>{request?.customerName}</Text>
@@ -204,6 +266,12 @@
             <HStack>
               <Icon icon={mdiAccountGroup} size="24" />
               <Text>{request?.organization.name}</Text>
+            </HStack>
+          {/if}
+          {#if request?.billingCode}
+            <HStack>
+              <Icon icon={mdiTag} size="24" />
+              <Text>{request?.billingCode}</Text>
             </HStack>
           {/if}
         </Stack>

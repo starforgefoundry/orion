@@ -57,6 +57,13 @@ vi.mock('$lib/server/repositories/mailgun.repository', () => {
   return { MailgunRepository: MockMailgunRepository };
 });
 
+vi.mock('$lib/server/repositories/billing_code.repository', () => {
+  const MockBillingCodeRepository = vi.fn();
+  MockBillingCodeRepository.prototype.getByCode = vi.fn();
+  MockBillingCodeRepository.prototype.getById = vi.fn();
+  return { BillingCodeRepository: MockBillingCodeRepository };
+});
+
 // Mock $app/server with all required exports
 vi.mock('$app/server', () => ({
   getRequestEvent: vi.fn(),
@@ -86,6 +93,7 @@ describe('PrintRequestService', () => {
   let mockDiscordRepo: any;
   let mockSettingsRepo: any;
   let mockMailgunRepo: any;
+  let mockBillingCodeRepo: any;
   let getRequestEvent: any;
 
   beforeEach(async () => {
@@ -114,6 +122,8 @@ describe('PrintRequestService', () => {
     const { DiscordRepository } = await import('$lib/server/repositories/discord.repository');
     const { SettingsRepository } = await import('$lib/server/repositories/settings.repository');
     const { MailgunRepository } = await import('$lib/server/repositories/mailgun.repository');
+    const { BillingCodeRepository } =
+      await import('$lib/server/repositories/billing_code.repository');
 
     // Access the prototype methods (these are the actual mocks)
     mockFilesRepo = PrintFilesRepository.prototype;
@@ -123,6 +133,7 @@ describe('PrintRequestService', () => {
     mockDiscordRepo = DiscordRepository.prototype;
     mockSettingsRepo = SettingsRepository.prototype;
     mockMailgunRepo = MailgunRepository.prototype;
+    mockBillingCodeRepo = BillingCodeRepository.prototype;
   });
 
   afterEach(() => {
@@ -1024,3 +1035,4 @@ describe('PrintRequestService', () => {
     });
   });
 });
+

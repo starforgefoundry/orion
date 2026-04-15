@@ -2277,4 +2277,808 @@ describe('PrintPaymentService', () => {
       });
     });
   });
+
+  describe('updatePrintRequestDiscount', () => {
+    // Shared helpers
+    const mockSquareSettings = {
+      locationId: 'loc-123',
+      printRequestItemId: 'item-123',
+      additionalBuildPlateItemId: 'plate-456',
+      memberPrintDiscountId: 'discount-member',
+    };
+
+    const mockCustomer: Customer = {
+      id: 'customer-123',
+      emailAddress: 'john@example.com',
+      givenName: 'John',
+      familyName: 'Doe',
+    };
+
+    const mockOrder: Order = {
+      id: 'order-new',
+      locationId: 'loc-123',
+      netAmountDueMoney: { amount: BigInt(5000), currency: 'USD' },
+      totalMoney: { amount: BigInt(5000), currency: 'USD' },
+    };
+
+    const mockInvoice: Invoice = {
+      id: 'inv-new',
+      version: 1,
+      createdAt: DateTime.now().toISO(),
+    };
+
+    const mockCalculatedOrder: Order = {
+      id: 'calc-order',
+      locationId: 'loc-123',
+      netAmountDueMoney: { amount: BigInt(4000), currency: 'USD' },
+    };
+
+    function setupUpsertOrderMocks() {
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
+      vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
+      vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
+      vi.mocked(mockSquareRepo.sendInvoice).mockResolvedValue(undefined);
+      vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue({ id: 'payment-new', status: 'pending' });
+      vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(mockCalculatedOrder);
+    }
+
+    // === Validation tests ===
+
+    it('should throw error when print request not found', async () => {
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(null);
+
+      await expect(
+        printPaymentService.updatePrintRequestDiscount('nonexistent', { billingCode: 'CODE' }),
+      ).rejects.toThrow('Print request not found');
+    });
+
+    it('should throw error when billing code not found', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        billingCode: null,
+        payment: null,
+        materialCost: 5000,
+        buildplateCount: 1,
+      } as unknown as PrintRequestDto;
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(null);
+
+      await expect(
+        printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'INVALID' }),
+      ).rejects.toThrow('Billing code not found');
+    });
+
+    // === No existing payment tests ===
+
+    it('no payment: should only update billing code field (no payment reprocessing)', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: null,
+        payment: null,
+        materialCost: 5000,
+        buildplateCount: 1,
+      } as unknown as PrintRequestDto;
+
+      const discountCode = {
+        billingCode: { id: 'bc-1', code: 'SAVE10', discountId: 'disc-1', organizationId: null },
+        organization: null,
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(discountCode);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'SAVE10' });
+
+      expect(mockRequestRepo.update).toHaveBeenCalledWith('req-1', { billingCode: 'SAVE10' });
+      expect(mockSquareRepo.cancelInvoice).not.toHaveBeenCalled();
+      expect(mockSquareRepo.createOrder).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.savePayment).not.toHaveBeenCalled();
+    });
+
+    // === Already finalized payment tests ===
+
+    it('paid payment: should only update billing code (no reprocessing)', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: null,
+        payment: { id: 'pay-1', status: 'paid', squareInvoiceId: 'inv-1' },
+        materialCost: 5000,
+        buildplateCount: 1,
+      } as unknown as PrintRequestDto;
+
+      const orgCode = {
+        billingCode: { id: 'bc-org', code: 'ORGCODE', discountId: null, organizationId: 'org-1' },
+        organization: { id: 'org-1', name: 'Test Org' },
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(orgCode);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'ORGCODE' });
+
+      expect(mockRequestRepo.update).toHaveBeenCalledWith('req-1', { billingCode: 'ORGCODE' });
+      expect(mockSquareRepo.cancelInvoice).not.toHaveBeenCalled();
+      expect(mockSquareRepo.createOrder).not.toHaveBeenCalled();
+    });
+
+    it('canceled payment: should only update billing code (no reprocessing)', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: 'OLD',
+        payment: { id: 'pay-1', status: 'canceled', squareInvoiceId: 'inv-1' },
+        materialCost: 5000,
+        buildplateCount: 1,
+      } as unknown as PrintRequestDto;
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(null);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: '' });
+
+      expect(mockRequestRepo.update).toHaveBeenCalledWith('req-1', { billingCode: null });
+      expect(mockSquareRepo.cancelInvoice).not.toHaveBeenCalled();
+      expect(mockSquareRepo.createOrder).not.toHaveBeenCalled();
+    });
+
+    // === Clearing discount code tests ===
+
+    it('clear code: should clear billing code and re-create Square invoice when pending invoice exists', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: 'ORGCODE',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: 'inv-old' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const updatedRequest = { ...mockRequest, billingCode: null };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)       // initial fetch
+        .mockResolvedValueOnce(updatedRequest)     // fetch after update for upsertOrder
+        .mockResolvedValueOnce(updatedRequest);    // final fetch for return
+
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: '' });
+
+      expect(mockRequestRepo.update).toHaveBeenCalledWith('req-1', { billingCode: null });
+      expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-old');
+      expect(mockSquareRepo.createOrder).toHaveBeenCalled();
+      expect(mockPaymentRepo.savePayment).toHaveBeenCalled();
+    });
+
+    it('clear code: should clear billing code and re-create Square invoice when org payment (no invoice) exists', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: 'ORGCODE',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: null, organizationId: 'org-1' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const updatedRequest = { ...mockRequest, billingCode: null };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: '' });
+
+      expect(mockSquareRepo.cancelInvoice).not.toHaveBeenCalled(); // no squareInvoiceId
+      expect(mockSquareRepo.createOrder).toHaveBeenCalled(); // new invoice created
+      expect(mockPaymentRepo.savePayment).toHaveBeenCalled();
+    });
+
+    // === No code -> Org billing code ===
+
+    it('none -> org code: should cancel Square invoice and create org billing payment', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: null,
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: 'inv-old' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const orgCode = {
+        billingCode: { id: 'bc-org', code: 'ORGCODE', discountId: null, organizationId: 'org-1' },
+        organization: { id: 'org-1', name: 'Test Org' },
+      };
+
+      const updatedRequest = { ...mockRequest, billingCode: 'ORGCODE' };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(orgCode);
+      vi.mocked(mockBillingCodeRepo.getById).mockResolvedValue(orgCode);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'ORGCODE' });
+
+      expect(mockRequestRepo.update).toHaveBeenCalledWith('req-1', { billingCode: 'ORGCODE' });
+      expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-old');
+      // upsertOrder delegates to handleOrganizationBilling which uses calculateOrder
+      expect(mockSquareRepo.calculateOrder).toHaveBeenCalled();
+      expect(mockPaymentRepo.savePayment).toHaveBeenCalledWith(
+        'req-1',
+        expect.objectContaining({ organizationId: 'org-1' }),
+      );
+    });
+
+    // === No code -> Discount-only code ===
+
+    it('none -> discount code: should cancel old invoice and create new invoice with discount applied', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: null,
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: 'inv-old' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const discountCode = {
+        billingCode: { id: 'bc-disc', code: 'SAVE20', discountId: 'disc-20', organizationId: null },
+        organization: null,
+      };
+
+      const updatedRequest = { ...mockRequest, billingCode: 'SAVE20' };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(discountCode);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'SAVE20' });
+
+      expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-old');
+      expect(mockSquareRepo.createOrder).toHaveBeenCalled();
+      // Verify discount was included in the order
+      const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
+      expect(orderCall.order.discounts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ catalogObjectId: 'disc-20' }),
+        ]),
+      );
+      expect(mockPaymentRepo.savePayment).toHaveBeenCalled();
+    });
+
+    // === Org code -> Different org code ===
+
+    it('org A -> org B: should switch organization billing to new org', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: 'ORG_A',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: null, organizationId: 'org-a' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const orgBCode = {
+        billingCode: { id: 'bc-org-b', code: 'ORG_B', discountId: null, organizationId: 'org-b' },
+        organization: { id: 'org-b', name: 'Org B' },
+      };
+
+      const updatedRequest = { ...mockRequest, billingCode: 'ORG_B' };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(orgBCode);
+      vi.mocked(mockBillingCodeRepo.getById).mockResolvedValue(orgBCode);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'ORG_B' });
+
+      expect(mockSquareRepo.cancelInvoice).not.toHaveBeenCalled(); // no squareInvoiceId
+      expect(mockPaymentRepo.savePayment).toHaveBeenCalledWith(
+        'req-1',
+        expect.objectContaining({ organizationId: 'org-b' }),
+      );
+    });
+
+    // === Org code -> Discount-only code ===
+
+    it('org code -> discount code: should switch from org billing to Square invoice with discount', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: 'ORGCODE',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: null, organizationId: 'org-1' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const discountCode = {
+        billingCode: { id: 'bc-disc', code: 'SAVE20', discountId: 'disc-20', organizationId: null },
+        organization: null,
+      };
+
+      const updatedRequest = { ...mockRequest, billingCode: 'SAVE20' };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(discountCode);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'SAVE20' });
+
+      expect(mockSquareRepo.createOrder).toHaveBeenCalled();
+      expect(mockPaymentRepo.createInvoice).toHaveBeenCalled();
+      expect(mockSquareRepo.sendInvoice).toHaveBeenCalled();
+      // Verify discount
+      const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
+      expect(orderCall.order.discounts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ catalogObjectId: 'disc-20' }),
+        ]),
+      );
+    });
+
+    // === Org code -> No code ===
+
+    it('org code -> none: should switch from org billing to regular Square invoice', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: 'ORGCODE',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: null, organizationId: 'org-1' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const updatedRequest = { ...mockRequest, billingCode: null };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: '' });
+
+      expect(mockSquareRepo.createOrder).toHaveBeenCalled();
+      expect(mockPaymentRepo.createInvoice).toHaveBeenCalled();
+      expect(mockSquareRepo.sendInvoice).toHaveBeenCalled();
+      // No discounts for a code-less request (assuming non-member)
+      const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
+      expect(orderCall.order.discounts).toHaveLength(0);
+    });
+
+    // === Discount code -> Org code ===
+
+    it('discount code -> org code: should cancel Square invoice and create org billing', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: 'SAVE20',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: 'inv-old' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const orgCode = {
+        billingCode: { id: 'bc-org', code: 'ORGCODE', discountId: 'disc-org', organizationId: 'org-1' },
+        organization: { id: 'org-1', name: 'Test Org' },
+      };
+
+      const updatedRequest = { ...mockRequest, billingCode: 'ORGCODE' };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(orgCode);
+      vi.mocked(mockBillingCodeRepo.getById).mockResolvedValue(orgCode);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'ORGCODE' });
+
+      expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-old');
+      expect(mockSquareRepo.calculateOrder).toHaveBeenCalled();
+      expect(mockPaymentRepo.savePayment).toHaveBeenCalledWith(
+        'req-1',
+        expect.objectContaining({ organizationId: 'org-1' }),
+      );
+    });
+
+    // === Discount code -> No code ===
+
+    it('discount code -> none: should cancel old invoice and create new invoice without discount', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: 'SAVE20',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: 'inv-old' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const updatedRequest = { ...mockRequest, billingCode: null };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: '' });
+
+      expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-old');
+      expect(mockSquareRepo.createOrder).toHaveBeenCalled();
+      const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
+      expect(orderCall.order.discounts).toHaveLength(0);
+    });
+
+    // === Discount code -> Different discount code ===
+
+    it('discount A -> discount B: should cancel old invoice and create new invoice with new discount', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: 'SAVE10',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: 'inv-old' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const newDiscountCode = {
+        billingCode: { id: 'bc-disc-b', code: 'SAVE30', discountId: 'disc-30', organizationId: null },
+        organization: null,
+      };
+
+      const updatedRequest = { ...mockRequest, billingCode: 'SAVE30' };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(newDiscountCode);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'SAVE30' });
+
+      expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-old');
+      expect(mockSquareRepo.createOrder).toHaveBeenCalled();
+      const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
+      expect(orderCall.order.discounts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ catalogObjectId: 'disc-30' }),
+        ]),
+      );
+    });
+
+    // === Org code with discount -> Different org code ===
+
+    it('org+discount code -> different org code: should reassign to new org', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: 'ORG_A_DISC',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: null, organizationId: 'org-a' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const orgBWithDiscount = {
+        billingCode: { id: 'bc-org-b', code: 'ORG_B_DISC', discountId: 'disc-b', organizationId: 'org-b' },
+        organization: { id: 'org-b', name: 'Org B' },
+      };
+
+      const updatedRequest = { ...mockRequest, billingCode: 'ORG_B_DISC' };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(orgBWithDiscount);
+      vi.mocked(mockBillingCodeRepo.getById).mockResolvedValue(orgBWithDiscount);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'ORG_B_DISC' });
+
+      expect(mockPaymentRepo.savePayment).toHaveBeenCalledWith(
+        'req-1',
+        expect.objectContaining({ organizationId: 'org-b' }),
+      );
+    });
+
+    // === Member discount application during code change ===
+
+    it('org code -> none (member customer): should apply member discount on new Square invoice', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'Member User',
+        email: 'member@example.com',
+        billingCode: 'ORGCODE',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: null, organizationId: 'org-1' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const updatedRequest = { ...mockRequest, billingCode: null };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      setupUpsertOrderMocks();
+      // Override to make this customer an active member
+      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: '' });
+
+      expect(squareServiceMock.checkActiveMember).toHaveBeenCalledWith('member@example.com');
+      expect(mockSquareRepo.createOrder).toHaveBeenCalled();
+      const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
+      expect(orderCall.order.discounts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ catalogObjectId: 'discount-member' }),
+        ]),
+      );
+    });
+
+    it('discount code -> none (member customer): should apply member discount, drop billing-code discount', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'Member User',
+        email: 'member@example.com',
+        billingCode: 'SAVE20',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: 'inv-old' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const updatedRequest = { ...mockRequest, billingCode: null };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      setupUpsertOrderMocks();
+      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: '' });
+
+      expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-old');
+      const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
+      // Only the member discount, not the old billing-code discount
+      expect(orderCall.order.discounts).toEqual([
+        expect.objectContaining({ catalogObjectId: 'discount-member' }),
+      ]);
+    });
+
+    it('discount code -> none (non-member): should have no discounts on new invoice', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'Non Member',
+        email: 'nonmember@example.com',
+        billingCode: 'SAVE20',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: 'inv-old' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const updatedRequest = { ...mockRequest, billingCode: null };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: '' });
+
+      const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
+      expect(orderCall.order.discounts).toHaveLength(0);
+    });
+
+    it('none -> discount code (member customer): should stack member + billing-code discounts', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'Member User',
+        email: 'member@example.com',
+        billingCode: null,
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: 'inv-old' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const discountCode = {
+        billingCode: { id: 'bc-disc', code: 'SAVE20', discountId: 'disc-20', organizationId: null },
+        organization: null,
+      };
+
+      const updatedRequest = { ...mockRequest, billingCode: 'SAVE20' };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(discountCode);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      setupUpsertOrderMocks();
+      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'SAVE20' });
+
+      const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
+      expect(orderCall.order.discounts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ catalogObjectId: 'discount-member' }),
+          expect.objectContaining({ catalogObjectId: 'disc-20' }),
+        ]),
+      );
+      expect(orderCall.order.discounts).toHaveLength(2);
+    });
+
+    it('org code -> different org code (member customer): should NOT apply member discount (org billing)', async () => {
+      // handleOrganizationBilling explicitly does NOT apply member discounts,
+      // only the billing code's associated discount (if any)
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'Member User',
+        email: 'member@example.com',
+        billingCode: 'ORG_A',
+        payment: { id: 'pay-1', status: 'pending', squareInvoiceId: null, organizationId: 'org-a' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: false,
+      } as unknown as PrintRequestDto;
+
+      const orgBCode = {
+        billingCode: { id: 'bc-org-b', code: 'ORG_B', discountId: null, organizationId: 'org-b' },
+        organization: { id: 'org-b', name: 'Org B' },
+      };
+
+      const updatedRequest = { ...mockRequest, billingCode: 'ORG_B' };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(orgBCode);
+      vi.mocked(mockBillingCodeRepo.getById).mockResolvedValue(orgBCode);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      setupUpsertOrderMocks();
+      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'ORG_B' });
+
+      // Org billing doesn't use member discount, and org-b has no discount
+      const calcCall = vi.mocked(mockSquareRepo.calculateOrder).mock.calls[0][0];
+      expect(calcCall.order.discounts).toHaveLength(0);
+    });
+
+    // === Quote status payment ===
+
+    it('quote payment + add org code: should cancel quote invoice and create org billing', async () => {
+      const mockRequest = {
+        id: 'req-1',
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        billingCode: null,
+        payment: { id: 'pay-1', status: 'quote', squareInvoiceId: 'inv-quote' },
+        materialCost: 5000,
+        buildplateCount: 1,
+        isQuote: true,
+      } as unknown as PrintRequestDto;
+
+      const orgCode = {
+        billingCode: { id: 'bc-org', code: 'ORGCODE', discountId: null, organizationId: 'org-1' },
+        organization: { id: 'org-1', name: 'Test Org' },
+      };
+
+      const updatedRequest = { ...mockRequest, billingCode: 'ORGCODE' };
+
+      vi.mocked(mockRequestRepo.getById)
+        .mockResolvedValueOnce(mockRequest)
+        .mockResolvedValueOnce(updatedRequest)
+        .mockResolvedValueOnce(updatedRequest);
+
+      vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(orgCode);
+      vi.mocked(mockBillingCodeRepo.getById).mockResolvedValue(orgCode);
+      vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
+      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
+      setupUpsertOrderMocks();
+
+      await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'ORGCODE' });
+
+      expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-quote');
+      expect(mockPaymentRepo.savePayment).toHaveBeenCalledWith(
+        'req-1',
+        expect.objectContaining({ organizationId: 'org-1' }),
+      );
+    });
+  });
 });

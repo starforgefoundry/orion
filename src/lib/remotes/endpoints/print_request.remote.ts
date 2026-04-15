@@ -5,6 +5,7 @@ import {
   submitPrintRequestDto,
   updatePartQuantityDto,
   updatePrintRequestDto,
+  updatePrintRequestDiscountDto,
   updatePrintRequestStatusDto,
 } from '$lib/remotes/dtos/print_request.dto';
 import { verifyAuth } from '$lib/remotes/utils';
@@ -54,6 +55,21 @@ export const updatePrintRequest = command(
     const response = await printRequestService.updatePrintRequest(id, updates);
 
     await getPrintRequests().refresh();
+
+    return response;
+  },
+);
+
+export const updatePrintRequestDiscount = command(
+  v.intersect([updatePrintRequestDiscountDto, v.object({ id: v.string() })]),
+  async (dto) => {
+    verifyAuth();
+
+    const { id, ...updates } = dto;
+    const response = await printPaymentService.updatePrintRequestDiscount(id, updates);
+
+    await getPrintRequests().refresh();
+    await getPrintRequestById(id).refresh();
 
     return response;
   },
