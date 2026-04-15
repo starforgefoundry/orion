@@ -53,4 +53,14 @@
       </Card>
     {/each}
   </div>
+  <Card class="mt-6 h-full overflow-hidden bg-blue-950/10">
+    <CardBody>
+      <Text class="text-center">
+        Looking for classes on other topics? Send us an email with your suggestion to
+        <a href="mailto:classes@starforgefoundry.com" class="text-blue-400">
+          classes@starforgefoundry.com
+        </a>!
+      </Text>
+    </CardBody>
+  </Card>
 {/if}
