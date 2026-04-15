@@ -209,13 +209,24 @@
     });
   }
 
-  const customerMenuItems: MenuItems = [
-    {
-      title: 'Edit Discount Code',
-      icon: mdiTag,
-      onAction: () => promptDiscountCode(),
-    },
-  ];
+  const canEditDiscountCode = $derived(
+    request?.payment &&
+      request?.payment.status !== 'paid' &&
+      request?.payment.status !== 'canceled' &&
+      request?.status !== 'canceled',
+  );
+
+  const customerMenuItems: MenuItems = $derived(
+    [
+      canEditDiscountCode
+        ? {
+            title: 'Edit Discount Code',
+            icon: mdiTag,
+            onAction: () => promptDiscountCode(),
+          }
+        : undefined,
+    ].filter((item): item is Exclude<typeof item, undefined> => !!item),
+  );
 </script>
 
 <Modal
@@ -230,16 +241,18 @@
         <Stack class="rounded-2xl border-2 border-slate-700 p-4">
           <HStack class="items-center justify-between">
             <Heading size="medium">Customer Information</Heading>
-            <ContextMenuButton
-              icon={mdiDotsVertical}
-              position="top-right"
-              items={customerMenuItems}
-              size="small"
-              color="secondary"
-              variant="ghost"
-              shape="round"
-              aria-label="Customer options"
-            />
+            {#if customerMenuItems.length > 0}
+              <ContextMenuButton
+                icon={mdiDotsVertical}
+                position="top-right"
+                items={customerMenuItems}
+                size="small"
+                color="secondary"
+                variant="ghost"
+                shape="round"
+                aria-label="Customer options"
+              />
+            {/if}
           </HStack>
           <HStack>
             <Icon icon={mdiAccount} size="24" />
