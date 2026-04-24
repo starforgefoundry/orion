@@ -120,162 +120,186 @@
   <img src={banner} alt="" class="h-full w-full object-cover" />
 </div>
 
-<div class="flex items-center justify-center p-4">
-  <form
-    {...submitPrintRequestForm.enhance(handleSubmit)}
-    class="flex w-full max-w-3xl flex-col items-center justify-center gap-4"
-    enctype="multipart/form-data"
-  >
-    <img src={logo} alt="Orion Logo" class="mt-6 h-16 w-16 self-start" />
-
-    {#if showDelayBanner}
-      <Card color="warning" class="w-full">
-        <CardHeader>
-          <CardTitle>⚠️ Print Request Delays</CardTitle>
-        </CardHeader>
-        <CardBody>
-          Due to spring break, print requests will be delayed until Monday March 16th. We apologize
-          for the inconvenience and appreciate your understanding!
-        </CardBody>
-      </Card>
-    {/if}
-
-    <Heading class="self-start" size="giant">Starforge 3D Print Request</Heading>
-    <Text>
-      Please place your 3D Printed files in the form below to request 3D Prints. Please refer to our
-      <a
-        href="https://starforge.notion.site/Starforge-Wiki-d75b4653249d4599b3c44e953cda5c6e"
-        class="underline"
-      >
-        3D Printing Guide
-      </a>
-      for more information about our printers and suggestions on modeling.
-    </Text>
-
-    <Field label="Name" required="indicator">
-      <TextInput
-        {...submitPrintRequestForm.fields.customer.name.as('text')}
-        placeholder="John Doe"
-        class="max-w-xs"
-      />
-    </Field>
-
-    <Field label="Email" required="indicator">
-      <TextInput
-        {...submitPrintRequestForm.fields.customer.email.as('text')}
-        type="email"
-        placeholder="john@example.com"
-        class="max-w-xs"
-      />
-    </Field>
-
-    <Field label="Group or Discount Code">
-      <TextInput
-        {...submitPrintRequestForm.fields.billingCode.as('text')}
-        placeholder="ORG2026"
-        class="max-w-xs"
-      />
-    </Field>
-
-    <hr class="my-4 w-full border-gray-300" />
-    <Field label="Project Title" required="indicator">
-      <TextInput
-        {...submitPrintRequestForm.fields.projectName.as('text')}
-        placeholder="My Awesome Project"
-        class="max-w-xs"
-      />
-    </Field>
-
-    <Field
-      label="I would like a quote before proceeding"
-      description="If checked, Starforge will contact you with a quote before starting your print."
-      class="border-secondary rounded-lg border-2 p-4"
+{#if !printRequestSettings.isOpen}
+  <div class="flex items-center justify-center p-4">
+    <Card color="warning" class="w-full max-w-3xl">
+      <CardHeader>
+        <CardTitle>Print Requests Are Closed</CardTitle>
+      </CardHeader>
+      <CardBody>
+        We are not accepting print requests at this time. Please check back later. If you have
+        questions, contact us at
+        <a href="mailto:3dprint@starforgefoundry.com" class="underline">
+          3dprint@starforgefoundry.com
+        </a>.
+      </CardBody>
+    </Card>
+  </div>
+{:else}
+  <div class="flex items-center justify-center p-4">
+    <form
+      {...submitPrintRequestForm.enhance(handleSubmit)}
+      class="flex w-full max-w-3xl flex-col items-center justify-center gap-4"
+      enctype="multipart/form-data"
     >
-      <Switch bind:checked={isQuote} />
-      <input {...submitPrintRequestForm.fields.isQuote.as('checkbox')} hidden />
-    </Field>
+      <img src={logo} alt="Orion Logo" class="mt-6 h-16 w-16 self-start" />
 
-    <Field label="Special Requests">
-      <TextArea
-        {...submitPrintRequestForm.fields.specialRequests.as('text')}
-        class="h-35"
-        placeholder="Enter any special instructions or requests here..."
-      />
-    </Field>
+      {#if showDelayBanner}
+        <Card color="warning" class="w-full">
+          <CardHeader>
+            <CardTitle>⚠️ Print Request Delays</CardTitle>
+          </CardHeader>
+          <CardBody>
+            Due to spring break, print requests will be delayed until Monday March 16th. We
+            apologize for the inconvenience and appreciate your understanding!
+          </CardBody>
+        </Card>
+      {/if}
 
-    <Field
-      label="Material"
-      required="indicator"
-      description={`PLA is recommended for most projects. If you would like to use a mix of materials, please indicate which parts in "Special Requests".`}
-    >
-      <Select data={materialOptions} bind:value={selectedMaterial} placeholder="Select Material" />
-      <input hidden {...submitPrintRequestForm.fields.material.as('text')} />
-    </Field>
-
-    <!-- FILE UPLOAD -->
-
-    <Stack class="w-full" gap={2}>
-      <Heading size="small" class="mt-2 self-start">Print Files</Heading>
-      <Text class="-mt-2 self-start" size="small" color="muted">
-        Upload your print files below and indicate any additional part quantities.
+      <Heading class="self-start" size="giant">Starforge 3D Print Request</Heading>
+      <Text>
+        Please place your 3D Printed files in the form below to request 3D Prints. Please refer to
+        our
+        <a
+          href="https://starforge.notion.site/Starforge-Wiki-d75b4653249d4599b3c44e953cda5c6e"
+          class="underline"
+        >
+          3D Printing Guide
+        </a>
+        for more information about our printers and suggestions on modeling.
       </Text>
-    </Stack>
 
-    {#if exceedsFileSizeLimit}
-      <Alert color="danger" class="self-start">
-        Total file size exceeds {printRequestSettings.maxUploadMB} MB limit. Please simplify your models
-        or remove them from the request.
-      </Alert>
-    {/if}
+      <Field label="Name" required="indicator">
+        <TextInput
+          {...submitPrintRequestForm.fields.customer.name.as('text')}
+          placeholder="John Doe"
+          class="max-w-xs"
+        />
+      </Field>
 
-    {#if files.length !== 0}
-      <div class="flex w-full flex-col gap-2">
-        {#each files as file, index}
-          <div class="bg-level-1 flex w-full flex-row items-center justify-between rounded-xl p-4">
-            <div>
-              <Text fontWeight="bold">{file.filename}</Text>
-              <Text size="small" color="secondary"><FormatBytes bytes={file.file.size} /></Text>
+      <Field label="Email" required="indicator">
+        <TextInput
+          {...submitPrintRequestForm.fields.customer.email.as('text')}
+          type="email"
+          placeholder="john@example.com"
+          class="max-w-xs"
+        />
+      </Field>
+
+      <Field label="Group or Discount Code">
+        <TextInput
+          {...submitPrintRequestForm.fields.billingCode.as('text')}
+          placeholder="ORG2026"
+          class="max-w-xs"
+        />
+      </Field>
+
+      <hr class="my-4 w-full border-gray-300" />
+      <Field label="Project Title" required="indicator">
+        <TextInput
+          {...submitPrintRequestForm.fields.projectName.as('text')}
+          placeholder="My Awesome Project"
+          class="max-w-xs"
+        />
+      </Field>
+
+      <Field
+        label="I would like a quote before proceeding"
+        description="If checked, Starforge will contact you with a quote before starting your print."
+        class="border-secondary rounded-lg border-2 p-4"
+      >
+        <Switch bind:checked={isQuote} />
+        <input {...submitPrintRequestForm.fields.isQuote.as('checkbox')} hidden />
+      </Field>
+
+      <Field label="Special Requests">
+        <TextArea
+          {...submitPrintRequestForm.fields.specialRequests.as('text')}
+          class="h-35"
+          placeholder="Enter any special instructions or requests here..."
+        />
+      </Field>
+
+      <Field
+        label="Material"
+        required="indicator"
+        description={`PLA is recommended for most projects. If you would like to use a mix of materials, please indicate which parts in "Special Requests".`}
+      >
+        <Select
+          data={materialOptions}
+          bind:value={selectedMaterial}
+          placeholder="Select Material"
+        />
+        <input hidden {...submitPrintRequestForm.fields.material.as('text')} />
+      </Field>
+
+      <!-- FILE UPLOAD -->
+
+      <Stack class="w-full" gap={2}>
+        <Heading size="small" class="mt-2 self-start">Print Files</Heading>
+        <Text class="-mt-2 self-start" size="small" color="muted">
+          Upload your print files below and indicate any additional part quantities.
+        </Text>
+      </Stack>
+
+      {#if exceedsFileSizeLimit}
+        <Alert color="danger" class="self-start">
+          Total file size exceeds {printRequestSettings.maxUploadMB} MB limit. Please simplify your models
+          or remove them from the request.
+        </Alert>
+      {/if}
+
+      {#if files.length !== 0}
+        <div class="flex w-full flex-col gap-2">
+          {#each files as file, index}
+            <div
+              class="bg-level-1 flex w-full flex-row items-center justify-between rounded-xl p-4"
+            >
+              <div>
+                <Text fontWeight="bold">{file.filename}</Text>
+                <Text size="small" color="secondary"><FormatBytes bytes={file.file.size} /></Text>
+              </div>
+              <div class="flex flex-row gap-2">
+                <NumberStepper
+                  value={file.quantity}
+                  min={1}
+                  onChange={(newValue) => (files[index].quantity = newValue)}
+                />
+                <IconButton
+                  color="danger"
+                  icon={mdiTrashCan}
+                  aria-label="Remove file"
+                  onclick={() => {
+                    files.splice(index, 1);
+                  }}
+                />
+              </div>
             </div>
-            <div class="flex flex-row gap-2">
-              <NumberStepper
-                value={file.quantity}
-                min={1}
-                onChange={(newValue) => (files[index].quantity = newValue)}
-              />
-              <IconButton
-                color="danger"
-                icon={mdiTrashCan}
-                aria-label="Remove file"
-                onclick={() => {
-                  files.splice(index, 1);
-                }}
-              />
-            </div>
-          </div>
-          <input {...submitPrintRequestForm.fields.files[index].filename.as('text')} hidden />
-          <input {...submitPrintRequestForm.fields.files[index].quantity.as('number')} hidden />
-          <input {...submitPrintRequestForm.fields.files[index].file.as('file')} hidden />
-        {/each}
-      </div>
-    {/if}
+            <input {...submitPrintRequestForm.fields.files[index].filename.as('text')} hidden />
+            <input {...submitPrintRequestForm.fields.files[index].quantity.as('number')} hidden />
+            <input {...submitPrintRequestForm.fields.files[index].file.as('file')} hidden />
+          {/each}
+        </div>
+      {/if}
 
-    <FileUpload
-      onUpload={handleNewFile}
-      onUnsupported={handleUnsupportedFile}
-      supportedExtensions={printRequestSettings.allowedFileTypes
-        .split(',')
-        .map((ext) => ext.trim().replace(/^\./, ''))}
-    />
+      <FileUpload
+        onUpload={handleNewFile}
+        onUnsupported={handleUnsupportedFile}
+        supportedExtensions={printRequestSettings.allowedFileTypes
+          .split(',')
+          .map((ext) => ext.trim().replace(/^\./, ''))}
+      />
 
-    <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled} loading={submitting}>
-      {submitButtonText}
-    </Button>
+      <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled} loading={submitting}>
+        {submitButtonText}
+      </Button>
 
-    <Text size="small" color="muted" class="mt-4 mb-8 self-start italic">
-      If you have any issues or questions, please contact us at
-      <a href="mailto:3dprint@starforgefoundry.com" class="underline">
-        3dprint@starforgefoundry.com
-      </a>
-    </Text>
-  </form>
-</div>
+      <Text size="small" color="muted" class="mt-4 mb-8 self-start italic">
+        If you have any issues or questions, please contact us at
+        <a href="mailto:3dprint@starforgefoundry.com" class="underline">
+          3dprint@starforgefoundry.com
+        </a>
+      </Text>
+    </form>
+  </div>
+{/if}
