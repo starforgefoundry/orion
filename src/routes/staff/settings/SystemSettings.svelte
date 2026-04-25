@@ -3,10 +3,11 @@
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { initForm } from '$lib/frontend/components/form/utils.svelte';
   import { printRequestSettingsForm } from '$lib/remotes/endpoints/settings.remote';
-  import { Field, NumberInput, Stack, toastManager } from '@immich/ui';
+  import { Field, NumberInput, Stack, Switch, toastManager } from '@immich/ui';
 
   interface Props {
     printRequestSettings: {
+      isOpen: boolean;
       maxUploadMB: number;
       allowedFileTypes: string;
       discordWebhookUrl: string;
@@ -19,12 +20,18 @@
   const { printRequestSettings, formId = 'print-request-settings' }: Props = $props();
 
   initForm(printRequestSettingsForm, () => ({
+    isOpen: printRequestSettings.isOpen,
     maxUploadMB: printRequestSettings.maxUploadMB,
     allowedFileTypes: printRequestSettings.allowedFileTypes,
     discordWebhookUrl: printRequestSettings.discordWebhookUrl,
     bblAuthorizationToken: printRequestSettings.bblAuthorizationToken,
     bblUserId: printRequestSettings.bblUserId,
   }));
+
+  let isOpen = $derived(printRequestSettings.isOpen);
+  $effect(() => {
+    printRequestSettingsForm.fields.isOpen.set(isOpen);
+  });
 
   let maxUpload = $derived(printRequestSettings.maxUploadMB);
   $effect(() => {
@@ -54,6 +61,14 @@
   {...printRequestSettingsForm.enhance(async ({ submit }) => await handleSubmit(submit))}
 >
   <Stack gap={4}>
+    <Field
+      label="Accept Print Requests"
+      description="When disabled, the public print request form is replaced with a closed message."
+    >
+      <Switch bind:checked={isOpen} />
+      <input hidden {...printRequestSettingsForm.fields.isOpen.as('checkbox')} />
+    </Field>
+
     <Field label="Max Upload Size (MB)" required="indicator">
       <NumberInput bind:value={maxUpload} />
       <input hidden {...printRequestSettingsForm.fields.maxUploadMB.as('number')} />

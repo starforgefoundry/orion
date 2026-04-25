@@ -79,6 +79,7 @@ describe('SettingsService', () => {
     it('should update print request settings', async () => {
       // Arrange
       const newSettings = {
+        isOpen: false,
         enabled: false,
         maxUploadMB: 50000,
         allowedFileTypes: '.stl',
@@ -105,6 +106,7 @@ describe('SettingsService', () => {
     it('should handle settings with all fields', async () => {
       // Arrange
       const newSettings = {
+        isOpen: true,
         enabled: true,
         maxUploadMB: 20000,
         allowedFileTypes: '.stl,.obj,.3mf,.step',
