@@ -1,7 +1,11 @@
 import { env } from '$env/dynamic/private';
 import { env as publicEnv } from '$env/dynamic/public';
 import type { CreatePaymentDto } from '$lib/remotes/dtos/print_payment.dto';
-import type { PrintRequestDto, RespondToQuoteDto, UpdatePrintRequestDiscountDto } from '$lib/remotes/dtos/print_request.dto';
+import type {
+  PrintRequestDto,
+  RespondToQuoteDto,
+  UpdatePrintRequestDiscountDto,
+} from '$lib/remotes/dtos/print_request.dto';
 import type { SettingsMap } from '$lib/server/repositories/settings.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { printRequestService } from '$lib/server/services/print_request.service';
@@ -373,9 +377,8 @@ export class PrintPaymentService extends BaseService {
     const newCode = dto.billingCode?.trim() || '';
 
     // Look up the new billing code if one was provided
-    const billingCodeData = newCode !== ''
-      ? await this.billingCodeRepository.getByCode(newCode)
-      : null;
+    const billingCodeData =
+      newCode !== '' ? await this.billingCodeRepository.getByCode(newCode) : null;
 
     if (newCode !== '' && !billingCodeData) {
       throw new Error('Billing code not found');
@@ -388,9 +391,8 @@ export class PrintPaymentService extends BaseService {
 
     // If there's an existing payment that hasn't been finalized, re-run the payment flow
     const existingPayment = request.payment;
-    const hasActivePayment = existingPayment
-      && existingPayment.status !== 'paid'
-      && existingPayment.status !== 'canceled';
+    const hasActivePayment =
+      existingPayment && existingPayment.status !== 'paid' && existingPayment.status !== 'canceled';
 
     if (hasActivePayment) {
       // Cancel any outstanding Square invoice before rebuilding payment

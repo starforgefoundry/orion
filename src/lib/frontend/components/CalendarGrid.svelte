@@ -7,7 +7,9 @@
   interface Props {
     instances: T[];
     filter?: (instance: T) => boolean;
-    dayContent: Snippet<[{ date: DateTime; dateStr: string; instances: T[]; isCurrentMonth: boolean }]>;
+    dayContent: Snippet<
+      [{ date: DateTime; dateStr: string; instances: T[]; isCurrentMonth: boolean }]
+    >;
   }
 
   let { instances, filter, dayContent }: Props = $props();
@@ -39,7 +41,12 @@
     for (let i = 0; i < end.day; i++) {
       const date = start.plus({ days: i });
       const dateStr = date.toISODate()!;
-      days.push({ date, dateStr, isCurrentMonth: true, instances: instancesByDate.get(dateStr) ?? [] });
+      days.push({
+        date,
+        dateStr,
+        isCurrentMonth: true,
+        instances: instancesByDate.get(dateStr) ?? [],
+      });
     }
 
     const remaining = 7 - (days.length % 7);
@@ -61,9 +68,19 @@
 
 <div class="flex flex-col gap-4">
   <HStack class="items-center justify-center gap-4">
-    <Button size="small" variant="ghost" leadingIcon={mdiChevronLeft} onclick={() => (currentMonth = currentMonth.minus({ months: 1 }))} />
+    <Button
+      size="small"
+      variant="ghost"
+      leadingIcon={mdiChevronLeft}
+      onclick={() => (currentMonth = currentMonth.minus({ months: 1 }))}
+    />
     <Heading size="small">{currentMonth.toFormat('MMMM yyyy')}</Heading>
-    <Button size="small" variant="ghost" leadingIcon={mdiChevronRight} onclick={() => (currentMonth = currentMonth.plus({ months: 1 }))} />
+    <Button
+      size="small"
+      variant="ghost"
+      leadingIcon={mdiChevronRight}
+      onclick={() => (currentMonth = currentMonth.plus({ months: 1 }))}
+    />
   </HStack>
 
   <!-- Desktop: grid view -->
@@ -74,14 +91,27 @@
       {/each}
     </div>
 
-    <div class="grid grid-cols-7 -m-px">
+    <div class="-m-px grid grid-cols-7">
       {#each calendarDays as calDay}
-        <div class="min-h-24 border border-gray-700 p-1.5 {calDay.isCurrentMonth ? '' : 'bg-gray-900/50 text-gray-600'}">
-          <div class="mb-1 text-left text-xs font-medium {calDay.isCurrentMonth ? 'text-gray-400' : 'text-gray-600'}">
+        <div
+          class="min-h-24 border border-gray-700 p-1.5 {calDay.isCurrentMonth
+            ? ''
+            : 'bg-gray-900/50 text-gray-600'}"
+        >
+          <div
+            class="mb-1 text-left text-xs font-medium {calDay.isCurrentMonth
+              ? 'text-gray-400'
+              : 'text-gray-600'}"
+          >
             {calDay.date.day}
           </div>
           {#if calDay.isCurrentMonth}
-            {@render dayContent({ date: calDay.date, dateStr: calDay.dateStr, instances: calDay.instances, isCurrentMonth: calDay.isCurrentMonth })}
+            {@render dayContent({
+              date: calDay.date,
+              dateStr: calDay.dateStr,
+              instances: calDay.instances,
+              isCurrentMonth: calDay.isCurrentMonth,
+            })}
           {/if}
         </div>
       {/each}
@@ -100,7 +130,12 @@
           <div class="mb-2 text-sm font-semibold text-gray-300">
             {calDay.date.toFormat('EEEE, MMMM d')}
           </div>
-          {@render dayContent({ date: calDay.date, dateStr: calDay.dateStr, instances: calDay.instances, isCurrentMonth: true })}
+          {@render dayContent({
+            date: calDay.date,
+            dateStr: calDay.dateStr,
+            instances: calDay.instances,
+            isCurrentMonth: true,
+          })}
         </div>
       {/each}
     {/if}

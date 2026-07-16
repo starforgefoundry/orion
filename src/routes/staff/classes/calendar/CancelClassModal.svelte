@@ -31,9 +31,7 @@
       {/if}
 
       <div class="flex gap-2">
-        <Button variant="outline" onclick={onClose} fullWidth>
-          Go Back
-        </Button>
+        <Button variant="outline" onclick={onClose} fullWidth>Go Back</Button>
         <Button color="danger" onclick={handleConfirm} fullWidth>
           {cancelFuture ? 'Cancel All Future' : 'Cancel Class'}
         </Button>

@@ -110,7 +110,9 @@
 
     <Text size="small" color="muted" class="mt-4 mb-8 self-start italic">
       If you have any issues or questions, please contact us at
-      <a href="mailto:contact@starforgefoundry.com" class="underline">contact@starforgefoundry.com</a>
+      <a href="mailto:contact@starforgefoundry.com" class="underline"
+        >contact@starforgefoundry.com</a
+      >
     </Text>
   </form>
 </div>

@@ -35,10 +35,7 @@
   }
 </script>
 
-<form
-  id={formId}
-  {...classSettingsForm.enhance(async ({ submit }) => await handleSubmit(submit))}
->
+<form id={formId} {...classSettingsForm.enhance(async ({ submit }) => await handleSubmit(submit))}>
   <Stack gap={4}>
     <Field
       label="Discord Webhook URL"

@@ -8,12 +8,7 @@
     TableRow,
   } from '$lib/frontend/components/table';
   import { searchWaivers } from '$lib/remotes/endpoints/waiver.remote';
-  import {
-    Heading,
-    IconButton,
-    Input,
-    LoadingSpinner,
-  } from '@immich/ui';
+  import { Heading, IconButton, Input, LoadingSpinner } from '@immich/ui';
   import { mdiChevronLeft, mdiChevronRight, mdiEye, mdiMagnify } from '@mdi/js';
 
   let searchTerm = $state('');

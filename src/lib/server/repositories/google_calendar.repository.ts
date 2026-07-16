@@ -35,9 +35,7 @@ export class GoogleCalendarRepository extends BaseRepository {
   }
 
   isConfigured(): boolean {
-    return Boolean(
-      env.GOOGLE_SERVICE_ACCOUNT_EMAIL && env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,
-    );
+    return Boolean(env.GOOGLE_SERVICE_ACCOUNT_EMAIL && env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY);
   }
 
   private async getAccessToken(): Promise<string> {
@@ -111,10 +109,7 @@ export class GoogleCalendarRepository extends BaseRepository {
     );
   }
 
-  private async apiRequest(
-    path: string,
-    init: RequestInit = {},
-  ): Promise<Response> {
+  private async apiRequest(path: string, init: RequestInit = {}): Promise<Response> {
     const token = await this.getAccessToken();
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${token}`);
@@ -150,38 +145,29 @@ export class GoogleCalendarRepository extends BaseRepository {
   }
 
   async makeCalendarPublic(calendarId: string): Promise<void> {
-    const res = await this.apiRequest(
-      `/calendars/${encodeURIComponent(calendarId)}/acl`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          role: 'reader',
-          scope: { type: 'default' },
-        }),
-      },
-    );
+    const res = await this.apiRequest(`/calendars/${encodeURIComponent(calendarId)}/acl`, {
+      method: 'POST',
+      body: JSON.stringify({
+        role: 'reader',
+        scope: { type: 'default' },
+      }),
+    });
     if (!res.ok && res.status !== 409) {
       const text = await res.text();
       throw new Error(`Failed to publish calendar (${res.status}): ${text}`);
     }
   }
 
-  async createEvent(
-    calendarId: string,
-    event: GoogleCalendarEventInput,
-  ): Promise<string> {
-    const res = await this.apiRequest(
-      `/calendars/${encodeURIComponent(calendarId)}/events`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          summary: event.summary,
-          description: event.description,
-          start: { dateTime: event.startDateTime, timeZone: event.timeZone },
-          end: { dateTime: event.endDateTime, timeZone: event.timeZone },
-        }),
-      },
-    );
+  async createEvent(calendarId: string, event: GoogleCalendarEventInput): Promise<string> {
+    const res = await this.apiRequest(`/calendars/${encodeURIComponent(calendarId)}/events`, {
+      method: 'POST',
+      body: JSON.stringify({
+        summary: event.summary,
+        description: event.description,
+        start: { dateTime: event.startDateTime, timeZone: event.timeZone },
+        end: { dateTime: event.endDateTime, timeZone: event.timeZone },
+      }),
+    });
 
     if (!res.ok) {
       const text = await res.text();

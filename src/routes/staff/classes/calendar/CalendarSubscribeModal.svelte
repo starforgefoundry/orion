@@ -30,8 +30,8 @@
     {:else}
       <Stack gap={4}>
         <Text color="muted" size="small">
-          Click the button below to add your Starforge class calendar to any Google account.
-          Events update automatically as your class schedule changes—no manual refresh needed.
+          Click the button below to add your Starforge class calendar to any Google account. Events
+          update automatically as your class schedule changes—no manual refresh needed.
         </Text>
 
         <a href={calendarUrl} target="_blank" rel="noopener noreferrer">

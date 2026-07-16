@@ -2320,7 +2320,10 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
       vi.mocked(mockSquareRepo.sendInvoice).mockResolvedValue(undefined);
-      vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue({ id: 'payment-new', status: 'pending' });
+      vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue({
+        id: 'payment-new',
+        status: 'pending',
+      });
       vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(mockCalculatedOrder);
     }
 
@@ -2449,9 +2452,9 @@ describe('PrintPaymentService', () => {
       const updatedRequest = { ...mockRequest, billingCode: null };
 
       vi.mocked(mockRequestRepo.getById)
-        .mockResolvedValueOnce(mockRequest)       // initial fetch
-        .mockResolvedValueOnce(updatedRequest)     // fetch after update for upsertOrder
-        .mockResolvedValueOnce(updatedRequest);    // final fetch for return
+        .mockResolvedValueOnce(mockRequest) // initial fetch
+        .mockResolvedValueOnce(updatedRequest) // fetch after update for upsertOrder
+        .mockResolvedValueOnce(updatedRequest); // final fetch for return
 
       vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
       vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
@@ -2576,9 +2579,7 @@ describe('PrintPaymentService', () => {
       // Verify discount was included in the order
       const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
       expect(orderCall.order.discounts).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ catalogObjectId: 'disc-20' }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ catalogObjectId: 'disc-20' })]),
       );
       expect(mockPaymentRepo.savePayment).toHaveBeenCalled();
     });
@@ -2661,9 +2662,7 @@ describe('PrintPaymentService', () => {
       // Verify discount
       const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
       expect(orderCall.order.discounts).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ catalogObjectId: 'disc-20' }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ catalogObjectId: 'disc-20' })]),
       );
     });
 
@@ -2716,7 +2715,12 @@ describe('PrintPaymentService', () => {
       } as unknown as PrintRequestDto;
 
       const orgCode = {
-        billingCode: { id: 'bc-org', code: 'ORGCODE', discountId: 'disc-org', organizationId: 'org-1' },
+        billingCode: {
+          id: 'bc-org',
+          code: 'ORGCODE',
+          discountId: 'disc-org',
+          organizationId: 'org-1',
+        },
         organization: { id: 'org-1', name: 'Test Org' },
       };
 
@@ -2791,7 +2795,12 @@ describe('PrintPaymentService', () => {
       } as unknown as PrintRequestDto;
 
       const newDiscountCode = {
-        billingCode: { id: 'bc-disc-b', code: 'SAVE30', discountId: 'disc-30', organizationId: null },
+        billingCode: {
+          id: 'bc-disc-b',
+          code: 'SAVE30',
+          discountId: 'disc-30',
+          organizationId: null,
+        },
         organization: null,
       };
 
@@ -2813,9 +2822,7 @@ describe('PrintPaymentService', () => {
       expect(mockSquareRepo.createOrder).toHaveBeenCalled();
       const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
       expect(orderCall.order.discounts).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ catalogObjectId: 'disc-30' }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ catalogObjectId: 'disc-30' })]),
       );
     });
 
@@ -2834,7 +2841,12 @@ describe('PrintPaymentService', () => {
       } as unknown as PrintRequestDto;
 
       const orgBWithDiscount = {
-        billingCode: { id: 'bc-org-b', code: 'ORG_B_DISC', discountId: 'disc-b', organizationId: 'org-b' },
+        billingCode: {
+          id: 'bc-org-b',
+          code: 'ORG_B_DISC',
+          discountId: 'disc-b',
+          organizationId: 'org-b',
+        },
         organization: { id: 'org-b', name: 'Org B' },
       };
 
@@ -2890,9 +2902,7 @@ describe('PrintPaymentService', () => {
       expect(mockSquareRepo.createOrder).toHaveBeenCalled();
       const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
       expect(orderCall.order.discounts).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ catalogObjectId: 'discount-member' }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ catalogObjectId: 'discount-member' })]),
       );
     });
 

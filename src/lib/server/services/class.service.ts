@@ -39,8 +39,7 @@ export class ClassService {
   ) {
     this.classRepository = classRepository ?? new ClassRepository();
     this.discordRepository = discordRepository ?? new DiscordRepository();
-    this.googleCalendarRepository =
-      googleCalendarRepository ?? new GoogleCalendarRepository();
+    this.googleCalendarRepository = googleCalendarRepository ?? new GoogleCalendarRepository();
     this.mailgunRepository = mailgunRepository ?? new MailgunRepository();
     this.settingsRepository = settingsRepository ?? new SettingsRepository();
   }
@@ -60,10 +59,7 @@ export class ClassService {
     const result = await this.classRepository.updateCatalog(id, updates);
     // The class name shows up in every event's summary, so re-sync all
     // scheduled instances of this catalog so Google Calendar stays current.
-    this.runInBackground(
-      this.syncInstancesForCatalog(id),
-      'sync catalog update to calendar',
-    );
+    this.runInBackground(this.syncInstancesForCatalog(id), 'sync catalog update to calendar');
     return result;
   }
 
@@ -178,14 +174,9 @@ export class ClassService {
 
   async updateInstance(dto: UpdateInstanceDto) {
     const { id, ...updates } = dto;
-    const filtered = Object.fromEntries(
-      Object.entries(updates).filter(([, v]) => v !== undefined),
-    );
+    const filtered = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
     const updated = await this.classRepository.updateInstance(id, filtered);
-    this.runInBackground(
-      this.syncInstanceToCalendar(id),
-      'sync updated instance to calendar',
-    );
+    this.runInBackground(this.syncInstanceToCalendar(id), 'sync updated instance to calendar');
     return updated;
   }
 
@@ -194,11 +185,10 @@ export class ClassService {
     if (!instance) throw new Error('Instance not found');
 
     if (dto.mode === 'this_and_future' && instance.recurrenceGroupId) {
-      const futureInstances =
-        await this.classRepository.getScheduledInstancesByRecurrenceGroup(
-          instance.recurrenceGroupId,
-          instance.date,
-        );
+      const futureInstances = await this.classRepository.getScheduledInstancesByRecurrenceGroup(
+        instance.recurrenceGroupId,
+        instance.date,
+      );
 
       for (const inst of futureInstances) {
         await this.cancelSingleInstance(inst.id);
@@ -353,7 +343,9 @@ export class ClassService {
       ctx.waitUntil(discordPromise);
     } else {
       emailPromise.catch((err) => console.error('Failed to send booking email:', err));
-      discordPromise.catch((err) => console.error('Failed to send booking discord notification:', err));
+      discordPromise.catch((err) =>
+        console.error('Failed to send booking discord notification:', err),
+      );
     }
 
     this.runInBackground(
@@ -490,9 +482,7 @@ export class ClassService {
     }
 
     const dateDt = DateTime.fromISO(booking.instance.date, { zone: 'America/Chicago' });
-    const confirmedCount = await this.classRepository.getConfirmedBookingCount(
-      booking.instance.id,
-    );
+    const confirmedCount = await this.classRepository.getConfirmedBookingCount(booking.instance.id);
 
     const embed = {
       title: '🎓 New Class Booking',
@@ -558,9 +548,7 @@ export class ClassService {
     teacher.googleCalendarId = calendarId;
 
     // Backfill existing scheduled instances so the new calendar is populated.
-    const instanceIds = await this.classRepository.getScheduledInstanceIdsForTeacher(
-      teacher.email,
-    );
+    const instanceIds = await this.classRepository.getScheduledInstanceIdsForTeacher(teacher.email);
     for (const id of instanceIds) {
       try {
         await this.syncInstanceToCalendar(id);
@@ -601,9 +589,7 @@ export class ClassService {
       return;
     }
 
-    const bookings = await this.classRepository.getConfirmedBookingsForInstance(
-      instance.id,
-    );
+    const bookings = await this.classRepository.getConfirmedBookingsForInstance(instance.id);
 
     // Teacher calendars only track classes with actual attendees — empty
     // classes should not clutter the feed. Remove any existing event if we've
@@ -628,18 +614,11 @@ export class ClassService {
 
     if (instance.googleEventId) {
       try {
-        await this.googleCalendarRepository.updateEvent(
-          calendarId,
-          instance.googleEventId,
-          event,
-        );
+        await this.googleCalendarRepository.updateEvent(calendarId, instance.googleEventId, event);
         return;
       } catch (err) {
         // If the event was deleted out-of-band, fall through and recreate it.
-        console.warn(
-          `Failed to update event ${instance.googleEventId}, recreating:`,
-          err,
-        );
+        console.warn(`Failed to update event ${instance.googleEventId}, recreating:`, err);
       }
     }
 
@@ -647,9 +626,11 @@ export class ClassService {
     await this.classRepository.setGoogleEventId(instance.id, eventId);
   }
 
-  private async deleteInstanceFromCalendar(
-    instance: { id: string; googleEventId: string | null; teacher: User | null },
-  ): Promise<void> {
+  private async deleteInstanceFromCalendar(instance: {
+    id: string;
+    googleEventId: string | null;
+    teacher: User | null;
+  }): Promise<void> {
     if (!this.googleCalendarRepository.isConfigured()) return;
     if (!instance.teacher?.googleCalendarId || !instance.googleEventId) return;
 
