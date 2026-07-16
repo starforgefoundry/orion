@@ -1,7 +1,11 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { uploadToS3 } from '$lib/server/utils/s3';
+import { s3PublicUrl, uploadToS3 } from '$lib/server/utils/s3';
 import { and, eq, gte, sum, type InferInsertModel } from 'drizzle-orm';
+
+function withPhotoUrl<T extends { photoUrl: string | null }>(catalog: T): T {
+  return { ...catalog, photoUrl: s3PublicUrl(catalog.photoUrl) };
+}
 
 export class ClassRepository extends BaseRepository {
   // ── Catalog ──
@@ -20,19 +24,22 @@ export class ClassRepository extends BaseRepository {
   }
 
   async getCatalogById(id: string) {
-    return await this.db
+    const catalog = await this.db
       .select()
       .from(schema.classCatalog)
       .where(eq(schema.classCatalog.id, id))
       .get();
+    return catalog && withPhotoUrl(catalog);
   }
 
   async getAllCatalogs() {
-    return await this.db.select().from(schema.classCatalog).all();
+    const catalogs = await this.db.select().from(schema.classCatalog).all();
+    return catalogs.map(withPhotoUrl);
   }
 
   async getActiveCatalogs() {
-    return await this.db.select().from(schema.classCatalog).all();
+    const catalogs = await this.db.select().from(schema.classCatalog).all();
+    return catalogs.map(withPhotoUrl);
   }
 
   async uploadClassPhoto(catalogId: string, file: File): Promise<string> {
@@ -78,7 +85,7 @@ export class ClassRepository extends BaseRepository {
     return {
       ...result.class_instance,
       teacher: result.user,
-      catalog: result.class_catalog,
+      catalog: result.class_catalog && withPhotoUrl(result.class_catalog),
     };
   }
 
@@ -125,7 +132,7 @@ export class ClassRepository extends BaseRepository {
     return results.map((r) => ({
       ...r.class_instance,
       teacher: r.user,
-      catalog: r.class_catalog,
+      catalog: r.class_catalog && withPhotoUrl(r.class_catalog),
     }));
   }
 
@@ -155,10 +162,7 @@ export class ClassRepository extends BaseRepository {
       .from(schema.classBooking)
       .where(eq(schema.classBooking.id, id))
       .leftJoin(schema.classInstance, eq(schema.classBooking.instanceId, schema.classInstance.id))
-      .leftJoin(
-        schema.classCatalog,
-        eq(schema.classInstance.classId, schema.classCatalog.id),
-      )
+      .leftJoin(schema.classCatalog, eq(schema.classInstance.classId, schema.classCatalog.id))
       .get();
 
     if (!result) return null;
@@ -166,7 +170,7 @@ export class ClassRepository extends BaseRepository {
     return {
       ...result.class_booking,
       instance: result.class_instance,
-      catalog: result.class_catalog,
+      catalog: result.class_catalog && withPhotoUrl(result.class_catalog),
     };
   }
 
@@ -176,10 +180,7 @@ export class ClassRepository extends BaseRepository {
       .from(schema.classBooking)
       .where(eq(schema.classBooking.bookingToken, token))
       .leftJoin(schema.classInstance, eq(schema.classBooking.instanceId, schema.classInstance.id))
-      .leftJoin(
-        schema.classCatalog,
-        eq(schema.classInstance.classId, schema.classCatalog.id),
-      )
+      .leftJoin(schema.classCatalog, eq(schema.classInstance.classId, schema.classCatalog.id))
       .get();
 
     if (!result) return null;
@@ -187,7 +188,7 @@ export class ClassRepository extends BaseRepository {
     return {
       ...result.class_booking,
       instance: result.class_instance,
-      catalog: result.class_catalog,
+      catalog: result.class_catalog && withPhotoUrl(result.class_catalog),
     };
   }
 

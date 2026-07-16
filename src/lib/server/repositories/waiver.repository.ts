@@ -1,7 +1,7 @@
 import type { SubmitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { uploadToS3 } from '$lib/server/utils/s3';
+import { s3PublicUrl, uploadToS3 } from '$lib/server/utils/s3';
 import { asc, count, like, or } from 'drizzle-orm';
 
 export class WaiverRepository extends BaseRepository {
@@ -54,7 +54,7 @@ export class WaiverRepository extends BaseRepository {
     const totalPages = Math.ceil(total / dto.pageSize);
 
     return {
-      data: results,
+      data: results.map((w) => ({ ...w, signatureUrl: s3PublicUrl(w.signatureUrl) })),
       pagination: {
         total,
         page: dto.page,
@@ -72,6 +72,7 @@ export class WaiverRepository extends BaseRepository {
       .limit(1)
       .execute();
 
-    return results[0] ?? null;
+    const waiver = results[0];
+    return waiver ? { ...waiver, signatureUrl: s3PublicUrl(waiver.signatureUrl) } : null;
   }
 }

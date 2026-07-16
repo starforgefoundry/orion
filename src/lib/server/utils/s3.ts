@@ -18,5 +18,12 @@ export async function uploadToS3(s3: S3mini, file: File, filename: string) {
     },
   );
 
-  return `https://${env.S3_ENDPOINT}/${filename}`;
+  return filename;
+}
+
+export function s3PublicUrl(key: string): string;
+export function s3PublicUrl(key: string | null | undefined): string | null;
+export function s3PublicUrl(key: string | null | undefined): string | null {
+  if (!key) return null;
+  return `${env.S3_PUBLIC_URL}/${key}`;
 }

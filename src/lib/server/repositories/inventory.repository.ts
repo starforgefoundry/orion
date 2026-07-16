@@ -1,14 +1,14 @@
 import type { UpsertInventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { uploadToS3 } from '$lib/server/utils/s3';
+import { s3PublicUrl, uploadToS3 } from '$lib/server/utils/s3';
 import { eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 
 export class InventoryRepository extends BaseRepository {
   async getAll() {
     const items = await this.db.select().from(schema.inventoryItem).all();
-    return items;
+    return items.map((item) => ({ ...item, imageUrl: s3PublicUrl(item.imageUrl) }));
   }
 
   async getById(id: string) {
@@ -17,7 +17,7 @@ export class InventoryRepository extends BaseRepository {
       .from(schema.inventoryItem)
       .where(eq(schema.inventoryItem.id, id))
       .get();
-    return item;
+    return item && { ...item, imageUrl: s3PublicUrl(item.imageUrl) };
   }
 
   async upsert(dto: UpsertInventoryItemDto) {
@@ -66,7 +66,13 @@ export class InventoryRepository extends BaseRepository {
       )
       .all();
 
-    return items;
+    return items.map((item) => ({
+      ...item,
+      inventoryItem: item.inventoryItem && {
+        ...item.inventoryItem,
+        imageUrl: s3PublicUrl(item.inventoryItem.imageUrl),
+      },
+    }));
   }
 
   async addToPurchaseList(inventoryItemId: string) {
@@ -121,14 +127,14 @@ export class InventoryRepository extends BaseRepository {
 
   async uploadImage(id: string, image: File) {
     const uploadId = crypto.randomUUID();
-    const imageUrl = await uploadToS3(this.s3, image, `inventory/${id}/${uploadId}`);
+    const key = await uploadToS3(this.s3, image, `inventory/${id}/${uploadId}`);
 
     await this.db
       .update(schema.inventoryItem)
-      .set({ imageUrl })
+      .set({ imageUrl: key })
       .where(eq(schema.inventoryItem.id, id));
 
-    return imageUrl;
+    return s3PublicUrl(key);
   }
 
   async deleteImage(id: string) {

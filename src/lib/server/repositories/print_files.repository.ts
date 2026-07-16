@@ -1,7 +1,7 @@
 import type { PrintRequestFileDto } from '$lib/remotes/dtos/print_request.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { uploadToS3 } from '$lib/server/utils/s3';
+import { s3PublicUrl, uploadToS3 } from '$lib/server/utils/s3';
 import { eq } from 'drizzle-orm';
 import pLimit from 'p-limit';
 
@@ -40,7 +40,7 @@ export class PrintFilesRepository extends BaseRepository {
       .from(schema.printRequestFile)
       .where(eq(schema.printRequestFile.printRequestId, id));
 
-    return files;
+    return files.map((file) => ({ ...file, fileUrl: s3PublicUrl(file.fileUrl) }));
   }
 
   async getByPrintRequestId(printRequestId: string) {
@@ -49,6 +49,6 @@ export class PrintFilesRepository extends BaseRepository {
       .from(schema.printRequestFile)
       .where(eq(schema.printRequestFile.printRequestId, printRequestId));
 
-    return files;
+    return files.map((file) => ({ ...file, fileUrl: s3PublicUrl(file.fileUrl) }));
   }
 }
