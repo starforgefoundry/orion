@@ -1,6 +1,8 @@
 import { env } from '$env/dynamic/private';
+import type { UpsertLocalPrinterDto } from '$lib/remotes/dtos/local_printer.dto';
 import { schema, type PrintMaterial } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
+import { eq } from 'drizzle-orm';
 
 const BAMBU_API = 'https://api.bambulab.com';
 
@@ -157,8 +159,38 @@ export class BambulabRepository extends BaseRepository {
     }));
   }
 
+  async listLocalPrinters() {
+    return await this.db.select().from(schema.localBambuConnectPrinter).execute();
+  }
+
+  async upsertLocalPrinter(dto: UpsertLocalPrinterDto) {
+    return await this.db
+      .insert(schema.localBambuConnectPrinter)
+      .values({
+        ...dto,
+        id: dto.id !== '' ? dto.id : undefined,
+      })
+      .onConflictDoUpdate({
+        target: schema.localBambuConnectPrinter.id,
+        set: {
+          name: dto.name,
+          localIp: dto.localIp,
+          serial: dto.serial,
+          accessCode: dto.accessCode,
+        },
+      })
+      .returning()
+      .get();
+  }
+
+  async deleteLocalPrinter(id: string) {
+    await this.db
+      .delete(schema.localBambuConnectPrinter)
+      .where(eq(schema.localBambuConnectPrinter.id, id));
+  }
+
   async getLocalPrinters(): Promise<LocalPrinter[]> {
-    const printers = await this.db.select().from(schema.localBambuConnectPrinter).execute();
+    const printers = await this.listLocalPrinters();
     return printers.map((printer) => ({
       name: printer.name,
       type: 'local',

@@ -7,6 +7,8 @@
   import { Button, Heading, LoadingSpinner, modalManager } from '@immich/ui';
   import BambuLoginModal from './BambuLoginModal.svelte';
   import ClassSettings from './ClassSettings.svelte';
+  import LocalPrinterModal from './LocalPrinterModal.svelte';
+  import LocalPrinterSettings from './LocalPrinterSettings.svelte';
   import SettingsSection from './SettingsSection.svelte';
   import SquareSettings from './SquareSettings.svelte';
   import SystemSettings from './SystemSettings.svelte';
@@ -37,6 +39,19 @@
     {:else}
       <SystemSettings printRequestSettings={printRequestSettings.current!} />
     {/if}
+  </SettingsSection>
+
+  <SettingsSection title="LAN Mode Printers">
+    {#snippet headerActions()}
+      <Button
+        variant="filled"
+        size="small"
+        onclick={() => modalManager.show(LocalPrinterModal, {})}
+      >
+        Add Printer
+      </Button>
+    {/snippet}
+    <LocalPrinterSettings />
   </SettingsSection>
 
   <SettingsSection title="Square">
