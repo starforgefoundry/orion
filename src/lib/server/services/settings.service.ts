@@ -12,6 +12,37 @@ export class SettingsService extends BaseService {
     return setting;
   }
 
+  async refreshBambuCredentials(credentials: {
+    account: string;
+    password: string;
+    tfaCode: string;
+  }) {
+    const login = await this.bblRepository.startLogin(credentials.account, credentials.password);
+
+    let token = login.accessToken;
+
+    if (!token) {
+      if (login.loginType !== 'tfa' || !login.tfaKey) {
+        throw new Error(
+          `This account requires "${login.loginType ?? 'unknown'}" verification, which is not supported here.`,
+        );
+      }
+
+      token = await this.bblRepository.verifyTfaCode(login.tfaKey, credentials.tfaCode);
+    }
+
+    const profile = await this.bblRepository.getProfile(token);
+    const current = await this.settingsRepository.getSetting('printRequest');
+
+    await this.settingsRepository.setSetting('printRequest', {
+      ...current,
+      bblAuthorizationToken: token,
+      bblUserId: profile.uidStr,
+    });
+
+    return { account: profile.account, name: profile.name, userId: profile.uidStr };
+  }
+
   async getPrintRequestSquareSettings() {
     return await this.settingsRepository.getSetting('printRequestSquare');
   }

@@ -16,6 +16,15 @@ export const printRequestSettings = v.object({
   bblUserId: v.string(),
 });
 
+export const bambuLoginDto = v.object({
+  account: v.pipe(v.string(), v.email('Enter a valid email address')),
+  password: v.pipe(v.string(), v.minLength(1, 'Password is required')),
+  tfaCode: v.pipe(
+    v.string(),
+    v.regex(/^\d{6}$/, 'Enter the 6-digit code from your authenticator app'),
+  ),
+});
+
 export const classSettingsDto = v.object({
   discordWebhookUrl: v.string(),
 });

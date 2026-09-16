@@ -14,6 +14,7 @@ vi.mock('$lib/remotes/endpoints/settings.remote', () => ({
 describe('SettingsService', () => {
   let settingsService: SettingsService;
   let mockSettingsRepo: any;
+  let mockBblRepo: any;
   let getPrintRequestSettings: any;
   let getPrintRequestSquareSettings: any;
 
@@ -25,6 +26,12 @@ describe('SettingsService', () => {
       setSetting: vi.fn(),
     };
 
+    mockBblRepo = {
+      startLogin: vi.fn(),
+      verifyTfaCode: vi.fn(),
+      getProfile: vi.fn(),
+    };
+
     settingsService = new SettingsService(
       undefined,
       undefined,
@@ -32,6 +39,12 @@ describe('SettingsService', () => {
       undefined,
       mockSettingsRepo,
       undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      mockBblRepo,
     );
 
     const settingsRemote = await import('$lib/remotes/endpoints/settings.remote');
@@ -72,6 +85,98 @@ describe('SettingsService', () => {
       // Assert
       expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequest');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('refreshBambuCredentials', () => {
+    const credentials = {
+      account: 'accounts@example.com',
+      password: 'hunter2',
+      tfaCode: '123456',
+    };
+
+    const existingSettings = {
+      isOpen: true,
+      maxUploadMB: 1000,
+      allowedFileTypes: '.stl',
+      discordWebhookUrl: 'https://discord.com/api/webhooks/old',
+      bblAuthorizationToken: 'stale-token',
+      bblUserId: 'stale-user',
+    };
+
+    it('should exchange the authenticator code for a token and save it', async () => {
+      // Arrange
+      vi.mocked(mockBblRepo.startLogin).mockResolvedValue({
+        loginType: 'tfa',
+        tfaKey: 'tfa-key-abc',
+      });
+      vi.mocked(mockBblRepo.verifyTfaCode).mockResolvedValue('fresh-token');
+      vi.mocked(mockBblRepo.getProfile).mockResolvedValue({
+        uidStr: '2030959428',
+        account: 'accounts@example.com',
+        name: 'Starforge',
+      });
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(existingSettings);
+
+      // Act
+      const result = await settingsService.refreshBambuCredentials(credentials);
+
+      // Assert
+      expect(mockBblRepo.verifyTfaCode).toHaveBeenCalledWith('tfa-key-abc', '123456');
+      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', {
+        ...existingSettings,
+        bblAuthorizationToken: 'fresh-token',
+        bblUserId: '2030959428',
+      });
+      expect(result).toEqual({
+        account: 'accounts@example.com',
+        name: 'Starforge',
+        userId: '2030959428',
+      });
+    });
+
+    it('should skip two-factor verification when login returns a token directly', async () => {
+      // Arrange
+      vi.mocked(mockBblRepo.startLogin).mockResolvedValue({ accessToken: 'direct-token' });
+      vi.mocked(mockBblRepo.getProfile).mockResolvedValue({
+        uidStr: '2030959428',
+        account: 'accounts@example.com',
+        name: 'Starforge',
+      });
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(existingSettings);
+
+      // Act
+      await settingsService.refreshBambuCredentials(credentials);
+
+      // Assert
+      expect(mockBblRepo.verifyTfaCode).not.toHaveBeenCalled();
+      expect(mockBblRepo.getProfile).toHaveBeenCalledWith('direct-token');
+    });
+
+    it('should reject accounts that require email verification', async () => {
+      // Arrange
+      vi.mocked(mockBblRepo.startLogin).mockResolvedValue({ loginType: 'verifyCode' });
+
+      // Act & Assert
+      await expect(settingsService.refreshBambuCredentials(credentials)).rejects.toThrow(
+        'verifyCode',
+      );
+      expect(mockSettingsRepo.setSetting).not.toHaveBeenCalled();
+    });
+
+    it('should leave saved settings untouched when the code is wrong', async () => {
+      // Arrange
+      vi.mocked(mockBblRepo.startLogin).mockResolvedValue({
+        loginType: 'tfa',
+        tfaKey: 'tfa-key-abc',
+      });
+      vi.mocked(mockBblRepo.verifyTfaCode).mockRejectedValue(new Error('Incorrect code'));
+
+      // Act & Assert
+      await expect(settingsService.refreshBambuCredentials(credentials)).rejects.toThrow(
+        'Incorrect code',
+      );
+      expect(mockSettingsRepo.setSetting).not.toHaveBeenCalled();
     });
   });
 

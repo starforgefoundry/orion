@@ -4,7 +4,8 @@
     getPrintRequestSettings,
     getPrintRequestSquareSettings,
   } from '$lib/remotes/endpoints/settings.remote';
-  import { Button, Heading, LoadingSpinner } from '@immich/ui';
+  import { Button, Heading, LoadingSpinner, modalManager } from '@immich/ui';
+  import BambuLoginModal from './BambuLoginModal.svelte';
   import ClassSettings from './ClassSettings.svelte';
   import SettingsSection from './SettingsSection.svelte';
   import SquareSettings from './SquareSettings.svelte';
@@ -22,7 +23,12 @@
 <div class="flex flex-col items-center gap-4">
   <SettingsSection title="3D Print Requests">
     {#snippet headerActions()}
-      <Button type="submit" form="print-request-settings" size="small">Save</Button>
+      <div class="flex items-center gap-2">
+        <Button variant="outline" size="small" onclick={() => modalManager.show(BambuLoginModal)}>
+          Refresh Bambu Token
+        </Button>
+        <Button type="submit" form="print-request-settings" size="small">Save</Button>
+      </div>
     {/snippet}
     {#if printRequestSettings.loading}
       <LoadingSpinner />
