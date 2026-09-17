@@ -1,5 +1,6 @@
 import { command, form, query } from '$app/server';
 import {
+  addPrintRequestCommentDto,
   respondToQuoteDto,
   searchPrintRequestsDto,
   submitPrintRequestDto,
@@ -12,6 +13,7 @@ import { verifyAuth } from '$lib/remotes/utils';
 import { printFilesService } from '$lib/server/services/print_files.service';
 import { printPaymentService } from '$lib/server/services/print_payment.service';
 import { printRequestService } from '$lib/server/services/print_request.service';
+import { printRequestCommentService } from '$lib/server/services/print_request_comment.service';
 import * as v from 'valibot';
 
 export const submitPrintRequestForm = form(submitPrintRequestDto, async (dto) => {
@@ -107,6 +109,21 @@ export const getPrintRequestFiles = query(v.string(), async (printRequestId: str
   verifyAuth();
 
   return await printFilesService.getByRequestId(printRequestId);
+});
+
+export const getPrintRequestComments = query(v.string(), async (printRequestId: string) => {
+  verifyAuth();
+
+  return await printRequestCommentService.getForRequest(printRequestId);
+});
+
+export const addPrintRequestCommentForm = form(addPrintRequestCommentDto, async (dto) => {
+  const staff = verifyAuth();
+
+  const comment = await printRequestCommentService.addComment(dto, staff.email);
+  await getPrintRequestComments(dto.printRequestId).refresh();
+
+  return comment;
 });
 
 export const sendPickupNotification = command(v.string(), async (printRequestId: string) => {

@@ -63,6 +63,47 @@ export const printRequestFile = sqliteTable('print_request_file', {
 
 export type PrintRequestFile = InferSelectModel<typeof printRequestFile>;
 
+export const printRequestComment = sqliteTable(
+  'print_request_comment',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    printRequestId: text('print_request_id')
+      .notNull()
+      .references(() => printRequest.id),
+    authorEmail: text('author_email')
+      .notNull()
+      .references(() => user.email),
+    body: text('body').notNull(),
+    createdDate: luxonTimestamp('created_date')
+      .notNull()
+      .$defaultFn(() => DateTime.now()),
+  },
+  (table) => [index('print_request_comment_request_idx').on(table.printRequestId)],
+);
+
+export type PrintRequestComment = InferSelectModel<typeof printRequestComment>;
+
+export const printRequestCommentFile = sqliteTable(
+  'print_request_comment_file',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    commentId: text('comment_id')
+      .notNull()
+      .references(() => printRequestComment.id),
+    fileName: text('file_name').notNull(),
+    fileUrl: text('file_url').notNull(),
+  },
+  (table) => [index('print_request_comment_file_comment_idx').on(table.commentId)],
+);
+
+export type PrintRequestCommentFile = InferSelectModel<typeof printRequestCommentFile>;
+
 export const payment = sqliteTable(
   'payment',
   {
@@ -310,6 +351,8 @@ export const schema = {
   user,
   printRequest,
   printRequestFile,
+  printRequestComment,
+  printRequestCommentFile,
   payment,
   printMaterial,
   settings,

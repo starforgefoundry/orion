@@ -8,6 +8,7 @@ import { PrintFilesRepository } from '$lib/server/repositories/print_files.repos
 import { PrintMaterialsRepository } from '$lib/server/repositories/print_materials.repository';
 import { PaymentRepository } from '$lib/server/repositories/print_payment.repository';
 import { PrintRequestRepository } from '$lib/server/repositories/print_request.repository';
+import { PrintRequestCommentRepository } from '$lib/server/repositories/print_request_comment.repository';
 import { SettingsRepository } from '$lib/server/repositories/settings.repository';
 import { SquareRepository } from '$lib/server/repositories/square.repository';
 import { WaiverRepository } from '$lib/server/repositories/waiver.repository';
@@ -16,6 +17,7 @@ export class BaseService {
   protected printFilesRepository: PrintFilesRepository;
   protected printMaterialsRepository: PrintMaterialsRepository;
   protected printRequestRepository: PrintRequestRepository;
+  protected printRequestCommentRepository: PrintRequestCommentRepository;
   protected paymentRepository: PaymentRepository;
   protected settingsRepository: SettingsRepository;
   protected squareRepository: SquareRepository;
@@ -41,6 +43,7 @@ export class BaseService {
     inventoryRepository?: InventoryRepository,
     bblRepository?: BambulabRepository,
     waiverRepository?: WaiverRepository,
+    printRequestCommentRepository?: PrintRequestCommentRepository,
   ) {
     this.printFilesRepository = printFilesRepository ?? new PrintFilesRepository();
     this.printMaterialsRepository = printMaterialsRepository ?? new PrintMaterialsRepository();
@@ -55,5 +58,7 @@ export class BaseService {
     this.inventoryRepository = inventoryRepository ?? new InventoryRepository();
     this.bblRepository = bblRepository ?? new BambulabRepository();
     this.waiverRepository = waiverRepository ?? new WaiverRepository();
+    this.printRequestCommentRepository =
+      printRequestCommentRepository ?? new PrintRequestCommentRepository();
   }
 }

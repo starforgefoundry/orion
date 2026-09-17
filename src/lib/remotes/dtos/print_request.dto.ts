@@ -1,8 +1,8 @@
-import {
-  schema,
-  type Payment,
-  type PrintMaterial,
-  type PrintRequestFile,
+import type {
+  Payment,
+  PrintMaterial,
+  PrintRequest,
+  PrintRequestFile,
 } from '$lib/server/db/schema';
 import * as v from 'valibot';
 
@@ -75,6 +75,25 @@ export const updatePartQuantityDto = v.object({
 
 export type UpdatePartQuantityDto = v.InferInput<typeof updatePartQuantityDto>;
 
+export const MAX_COMMENT_ATTACHMENTS = 5;
+
+export const addPrintRequestCommentDto = v.object({
+  printRequestId: v.string(),
+  body: v.pipe(v.string(), v.trim(), v.minLength(1, 'Write a comment before posting.')),
+  attachments: v.optional(
+    v.pipe(
+      v.array(v.file()),
+      v.maxLength(
+        MAX_COMMENT_ATTACHMENTS,
+        `Attach at most ${MAX_COMMENT_ATTACHMENTS} files per comment.`,
+      ),
+    ),
+    [],
+  ),
+});
+
+export type AddPrintRequestCommentDto = v.InferInput<typeof addPrintRequestCommentDto>;
+
 export const searchPrintRequestsDto = v.object({
   query: v.string(),
   page: v.optional(v.number(), 1),
@@ -83,7 +102,7 @@ export const searchPrintRequestsDto = v.object({
 
 export type SearchPrintRequestsDto = v.InferInput<typeof searchPrintRequestsDto>;
 
-export type PrintRequestDto = Omit<typeof schema.printRequest.$inferSelect, 'material'> & {
+export type PrintRequestDto = Omit<PrintRequest, 'material'> & {
   payment: Payment | null;
   material: PrintMaterial;
   files: PrintRequestFile[];

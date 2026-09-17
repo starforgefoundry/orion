@@ -45,6 +45,7 @@
   } from '@mdi/js';
   import DiscountCodeModal from './DiscountCodeModal.svelte';
   import PaymentModal from './PaymentModal.svelte';
+  import RequestComments from './RequestComments.svelte';
   import { getPaymentStatusColor, getStatusColor } from './utils';
 
   type Props = ModalProps & {
@@ -381,73 +382,77 @@
           {/if}
         </Stack>
       </div>
-      <div class="flex h-full flex-1 flex-col rounded-2xl border-2 border-slate-700 p-4">
-        <HStack class="justify-between ">
-          <Heading size="medium">Print Files</Heading>
-          <HStack gap={2}>
-            {#if isEditingQuantities}
-              <IconButton
-                icon={mdiCheck}
-                aria-label="Save Changes"
-                color="success"
-                size="small"
-                onclick={saveQuantities}
-              />
-              <IconButton
-                icon={mdiClose}
-                aria-label="Cancel"
-                color="danger"
-                size="small"
-                onclick={cancelEditingQuantities}
-              />
-            {:else}
-              <IconButton
-                icon={mdiPencil}
-                aria-label="Edit Quantities"
-                color="primary"
-                size="small"
-                onclick={startEditingQuantities}
-              />
-              <IconButton
-                icon={mdiDownload}
-                aria-label="Download Files"
-                color="primary"
-                size="small"
-                href={`${window.location.origin}/api/prints/download/${request?.id}`}
-              />
-              <IconButton
-                icon={mdiMonitorShare}
-                aria-label="Send to OrcaSlicer"
-                color="success"
-                size="small"
-                href={`orcaslicer://open?file=${encodeURIComponent(
-                  `${window.location.origin}/api/prints/download/${request?.id}`,
-                )}`}
-              />
-            {/if}
-          </HStack>
-        </HStack>
-
-        {#each request?.files as file}
-          <div class="bg-level-2 mt-2 rounded-lg border border-slate-600 p-4">
-            <HStack class="items-center justify-between gap-4">
-              <Text class="min-w-0 flex-1">{file.fileName}</Text>
+      <div class="flex h-full min-h-0 flex-1 flex-col gap-4">
+        <div class="flex flex-col rounded-2xl border-2 border-slate-700 p-4">
+          <HStack class="justify-between ">
+            <Heading size="medium">Print Files</Heading>
+            <HStack gap={2}>
               {#if isEditingQuantities}
-                <div class="shrink-0">
-                  <NumberInput
-                    bind:value={editQuantities[file.id]}
-                    min={1}
-                    max={999}
-                    step={1}
-                    class="w-24"
-                  />
-                </div>
+                <IconButton
+                  icon={mdiCheck}
+                  aria-label="Save Changes"
+                  color="success"
+                  size="small"
+                  onclick={saveQuantities}
+                />
+                <IconButton
+                  icon={mdiClose}
+                  aria-label="Cancel"
+                  color="danger"
+                  size="small"
+                  onclick={cancelEditingQuantities}
+                />
               {:else}
-                <Text fontWeight="bold" class="shrink-0">{file.quantity}x</Text>
+                <IconButton
+                  icon={mdiPencil}
+                  aria-label="Edit Quantities"
+                  color="primary"
+                  size="small"
+                  onclick={startEditingQuantities}
+                />
+                <IconButton
+                  icon={mdiDownload}
+                  aria-label="Download Files"
+                  color="primary"
+                  size="small"
+                  href={`${window.location.origin}/api/prints/download/${request?.id}`}
+                />
+                <IconButton
+                  icon={mdiMonitorShare}
+                  aria-label="Send to OrcaSlicer"
+                  color="success"
+                  size="small"
+                  href={`orcaslicer://open?file=${encodeURIComponent(
+                    `${window.location.origin}/api/prints/download/${request?.id}`,
+                  )}`}
+                />
               {/if}
             </HStack>
-          </div>
-        {/each}
+          </HStack>
+
+          {#each request?.files as file}
+            <div class="bg-level-2 mt-2 rounded-lg border border-slate-600 p-4">
+              <HStack class="items-center justify-between gap-4">
+                <Text class="min-w-0 flex-1">{file.fileName}</Text>
+                {#if isEditingQuantities}
+                  <div class="shrink-0">
+                    <NumberInput
+                      bind:value={editQuantities[file.id]}
+                      min={1}
+                      max={999}
+                      step={1}
+                      class="w-24"
+                    />
+                  </div>
+                {:else}
+                  <Text fontWeight="bold" class="shrink-0">{file.quantity}x</Text>
+                {/if}
+              </HStack>
+            </div>
+          {/each}
+        </div>
+
+        <RequestComments {requestId} />
       </div>
     </div>
   </ModalBody>
