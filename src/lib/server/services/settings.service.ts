@@ -1,15 +1,64 @@
+import type { PublicPrintRequestFormDto } from '$lib/remotes/dtos/settings.dto';
 import type { SettingsMap } from '$lib/server/repositories/settings.repository';
 import { BaseService } from '$lib/server/services/base.service';
 
+type EditablePrintRequestSettings = Omit<
+  SettingsMap['printRequest'],
+  'bblAuthorizationToken' | 'bblUserId'
+>;
+
 export class SettingsService extends BaseService {
-  async getPrintRequestSettings() {
-    return await this.settingsRepository.getSetting('printRequest');
+  async getPublicPrintRequestForm(): Promise<PublicPrintRequestFormDto> {
+    const [settings, materials] = await Promise.all([
+      this.settingsRepository.getSetting('printRequest'),
+      this.printMaterialsRepository.get(true),
+    ]);
+
+    return {
+      isOpen: settings.isOpen,
+      announcement: settings.announcement,
+      announcementUntil: settings.announcementUntil,
+      maxUploadMB: settings.maxUploadMB,
+      allowedFileTypes: settings.allowedFileTypes,
+      materials: materials.map((material) => ({ id: material.id, name: material.name })),
+    };
   }
 
-  async setPrintRequestSettings(value: SettingsMap['printRequest']) {
-    const setting = await this.settingsRepository.setSetting('printRequest', value);
+  async getPrintRequestSettings(): Promise<EditablePrintRequestSettings> {
+    const { bblAuthorizationToken, bblUserId, ...settings } =
+      await this.settingsRepository.getSetting('printRequest');
 
-    return setting;
+    return settings;
+  }
+
+  async setPrintRequestSettings(value: EditablePrintRequestSettings) {
+    const current = await this.settingsRepository.getSetting('printRequest');
+    const { bblAuthorizationToken, bblUserId, ...saved } = await this.settingsRepository.setSetting(
+      'printRequest',
+      { ...current, ...value },
+    );
+
+    return saved;
+  }
+
+  async getBambuStatus() {
+    const { bblAuthorizationToken, bblUserId } =
+      await this.settingsRepository.getSetting('printRequest');
+
+    if (!bblAuthorizationToken || !bblUserId) {
+      return { connected: false as const, reason: 'No Bambu Lab account is signed in.' };
+    }
+
+    try {
+      const profile = await this.bblRepository.getProfile(bblAuthorizationToken);
+
+      return { connected: true as const, account: profile.account, name: profile.name };
+    } catch {
+      return {
+        connected: false as const,
+        reason: 'Bambu Lab rejected the saved token. Sign in again to refresh it.',
+      };
+    }
   }
 
   async refreshBambuCredentials(credentials: {

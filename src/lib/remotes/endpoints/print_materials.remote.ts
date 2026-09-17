@@ -12,11 +12,6 @@ export const getPrintMaterials = query(async () => {
   return await printMaterialsService.getMaterials();
 });
 
-// Used for public material listing on upload form
-export const getAvailableMaterials = query(async () => {
-  return await printMaterialsService.getMaterials(true);
-});
-
 export const createPrintMaterial = command(createPrintMaterialDto, async (data) => {
   verifyAuth();
   return await printMaterialsService.createMaterial(data);

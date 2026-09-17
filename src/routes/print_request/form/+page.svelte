@@ -8,9 +8,8 @@
   import TextArea from '$lib/frontend/components/form/TextArea.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import type { PrintRequestFileDto } from '$lib/remotes/dtos/print_request.dto';
-  import { getAvailableMaterials } from '$lib/remotes/endpoints/print_materials.remote';
   import { submitPrintRequestForm } from '$lib/remotes/endpoints/print_request.remote';
-  import { getPrintRequestSettings } from '$lib/remotes/endpoints/settings.remote';
+  import { getPublicPrintRequestForm } from '$lib/remotes/endpoints/settings.remote';
   import {
     Alert,
     Button,
@@ -31,11 +30,10 @@
   } from '@immich/ui';
   import { mdiTrashCan } from '@mdi/js';
 
-  let materials = await getAvailableMaterials();
-  let printRequestSettings = await getPrintRequestSettings();
+  let printRequestSettings = await getPublicPrintRequestForm();
 
   let materialOptions: SelectItem[] = $derived(
-    materials.map((material) => ({
+    printRequestSettings.materials.map((material) => ({
       label: material.name,
       value: material.id,
     })),

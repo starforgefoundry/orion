@@ -14,9 +14,24 @@ export const printRequestSettings = v.object({
   maxUploadMB: v.number(),
   allowedFileTypes: v.string(),
   discordWebhookUrl: v.string(),
-  bblAuthorizationToken: v.string(),
-  bblUserId: v.string(),
 });
+
+// Everything in here is served to anonymous visitors of the print request form.
+export const publicPrintRequestFormDto = v.object({
+  isOpen: v.boolean(),
+  announcement: v.string(),
+  announcementUntil: v.string(),
+  maxUploadMB: v.number(),
+  allowedFileTypes: v.string(),
+  materials: v.array(
+    v.object({
+      id: v.string(),
+      name: v.string(),
+    }),
+  ),
+});
+
+export type PublicPrintRequestFormDto = v.InferInput<typeof publicPrintRequestFormDto>;
 
 export const bambuLoginDto = v.object({
   account: v.pipe(v.string(), v.email('Enter a valid email address')),

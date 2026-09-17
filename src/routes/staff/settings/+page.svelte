@@ -5,7 +5,7 @@
     getPrintRequestSquareSettings,
   } from '$lib/remotes/endpoints/settings.remote';
   import { Button, Heading, LoadingSpinner, modalManager } from '@immich/ui';
-  import BambuLoginModal from './BambuLoginModal.svelte';
+  import BambuStatus from './BambuStatus.svelte';
   import ClassSettings from './ClassSettings.svelte';
   import LocalPrinterModal from './LocalPrinterModal.svelte';
   import LocalPrinterSettings from './LocalPrinterSettings.svelte';
@@ -25,12 +25,7 @@
 <div class="flex flex-col items-center gap-4">
   <SettingsSection title="3D Print Requests">
     {#snippet headerActions()}
-      <div class="flex items-center gap-2">
-        <Button variant="outline" size="small" onclick={() => modalManager.show(BambuLoginModal)}>
-          Refresh Bambu Token
-        </Button>
-        <Button type="submit" form="print-request-settings" size="small">Save</Button>
-      </div>
+      <Button type="submit" form="print-request-settings" size="small">Save</Button>
     {/snippet}
     {#if printRequestSettings.loading}
       <LoadingSpinner />
@@ -39,6 +34,7 @@
     {:else}
       <SystemSettings printRequestSettings={printRequestSettings.current!} />
     {/if}
+    <BambuStatus />
   </SettingsSection>
 
   <SettingsSection title="LAN Mode Printers">

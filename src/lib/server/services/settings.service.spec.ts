@@ -14,6 +14,7 @@ vi.mock('$lib/remotes/endpoints/settings.remote', () => ({
 describe('SettingsService', () => {
   let settingsService: SettingsService;
   let mockSettingsRepo: any;
+  let mockPrintMaterialsRepo: any;
   let mockBblRepo: any;
   let getPrintRequestSettings: any;
   let getPrintRequestSquareSettings: any;
@@ -26,6 +27,10 @@ describe('SettingsService', () => {
       setSetting: vi.fn(),
     };
 
+    mockPrintMaterialsRepo = {
+      get: vi.fn(),
+    };
+
     mockBblRepo = {
       startLogin: vi.fn(),
       verifyTfaCode: vi.fn(),
@@ -34,7 +39,7 @@ describe('SettingsService', () => {
 
     settingsService = new SettingsService(
       undefined,
-      undefined,
+      mockPrintMaterialsRepo,
       undefined,
       undefined,
       mockSettingsRepo,
@@ -56,6 +61,47 @@ describe('SettingsService', () => {
     vi.clearAllMocks();
   });
 
+  describe('getPublicPrintRequestForm', () => {
+    beforeEach(() => {
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        isOpen: true,
+        announcement: 'Delays this week',
+        announcementUntil: '2026-09-24T17:00:00.000Z',
+        maxUploadMB: 1000,
+        allowedFileTypes: '.stl',
+        discordWebhookUrl: 'https://discord.com/api/webhooks/secret',
+        bblAuthorizationToken: 'secret-token',
+        bblUserId: 'secret-user',
+      });
+      vi.mocked(mockPrintMaterialsRepo.get).mockResolvedValue([
+        { id: 'material-1', name: 'PLA', available: true, archived: false, bblTagId: 'tag-1' },
+      ]);
+    });
+
+    it('should only expose the fields the public form renders', async () => {
+      // Act
+      const result = await settingsService.getPublicPrintRequestForm();
+
+      // Assert
+      expect(result).toEqual({
+        isOpen: true,
+        announcement: 'Delays this week',
+        announcementUntil: '2026-09-24T17:00:00.000Z',
+        maxUploadMB: 1000,
+        allowedFileTypes: '.stl',
+        materials: [{ id: 'material-1', name: 'PLA' }],
+      });
+    });
+
+    it('should only list materials marked available', async () => {
+      // Act
+      await settingsService.getPublicPrintRequestForm();
+
+      // Assert
+      expect(mockPrintMaterialsRepo.get).toHaveBeenCalledWith(true);
+    });
+  });
+
   describe('getPrintRequestSettings', () => {
     it('should return print request settings', async () => {
       // Arrange
@@ -75,16 +121,19 @@ describe('SettingsService', () => {
       expect(result).toEqual(mockSettings);
     });
 
-    it('should handle null settings', async () => {
+    it('should never hand out the Bambu credentials', async () => {
       // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(null);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        isOpen: true,
+        bblAuthorizationToken: 'secret-token',
+        bblUserId: 'secret-user',
+      });
 
       // Act
       const result = await settingsService.getPrintRequestSettings();
 
       // Assert
-      expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequest');
-      expect(result).toBeNull();
+      expect(result).toEqual({ isOpen: true });
     });
   });
 
@@ -181,84 +230,112 @@ describe('SettingsService', () => {
   });
 
   describe('setPrintRequestSettings', () => {
+    const newSettings = {
+      isOpen: false,
+      announcement: 'Prints are delayed one week.',
+      announcementUntil: '2026-09-24T17:00:00.000Z',
+      maxUploadMB: 50000,
+      allowedFileTypes: '.stl',
+      discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/abcdefghijklmnopqrstuvwxyz',
+    };
+
     it('should update print request settings', async () => {
       // Arrange
-      const newSettings = {
-        isOpen: false,
-        enabled: false,
-        announcement: '',
-        announcementUntil: '',
-        maxUploadMB: 50000,
-        allowedFileTypes: '.stl',
-        discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/abcdefghijklmnopqrstuvwxyz',
-        bblAuthorizationToken: 'bbl-auth-token',
-        bblUserId: 'bbl-user-id',
-      };
-
-      const mockUpdatedSettings = {
-        ...newSettings,
-        id: 'setting-123',
-      };
-
-      vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue(mockUpdatedSettings);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        bblAuthorizationToken: '',
+        bblUserId: '',
+      });
+      vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue(newSettings);
 
       // Act
       const result = await settingsService.setPrintRequestSettings(newSettings);
 
       // Assert
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', newSettings);
-      expect(result).toEqual(mockUpdatedSettings);
+      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', {
+        ...newSettings,
+        bblAuthorizationToken: '',
+        bblUserId: '',
+      });
+      expect(result).toEqual(newSettings);
     });
 
-    it('should handle settings with all fields', async () => {
+    it('should keep the stored Bambu credentials the form does not carry', async () => {
       // Arrange
-      const newSettings = {
-        isOpen: true,
-        enabled: true,
-        announcement: 'Prints are delayed one week.',
-        announcementUntil: '2026-09-24T17:00:00.000Z',
-        maxUploadMB: 20000,
-        allowedFileTypes: '.stl,.obj,.3mf,.step',
-        requireApproval: true,
-        discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/abcdefghijklmnopqrstuvwxyz',
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
         bblAuthorizationToken: 'bbl-auth-token',
         bblUserId: 'bbl-user-id',
-      };
-
-      const mockUpdatedSettings = {
+      });
+      vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue({
         ...newSettings,
-        id: 'setting-456',
-      };
-
-      vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue(mockUpdatedSettings);
+        bblAuthorizationToken: 'bbl-auth-token',
+        bblUserId: 'bbl-user-id',
+      });
 
       // Act
       const result = await settingsService.setPrintRequestSettings(newSettings);
 
       // Assert
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', newSettings);
-      expect(result).toEqual(mockUpdatedSettings);
+      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', {
+        ...newSettings,
+        bblAuthorizationToken: 'bbl-auth-token',
+        bblUserId: 'bbl-user-id',
+      });
+      expect(result).toEqual(newSettings);
     });
+  });
 
-    it('should handle partial updates', async () => {
+  describe('getBambuStatus', () => {
+    it('should report not connected when no credentials are stored', async () => {
       // Arrange
-      const partialSettings = {
-        enabled: true,
-      };
-
-      const mockUpdatedSettings = {
-        ...partialSettings,
-        id: 'setting-789',
-      };
-
-      vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue(mockUpdatedSettings);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        bblAuthorizationToken: '',
+        bblUserId: '',
+      });
 
       // Act
-      const result = await settingsService.setPrintRequestSettings(partialSettings as any);
+      const result = await settingsService.getBambuStatus();
 
       // Assert
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', partialSettings);
-      expect(result).toEqual(mockUpdatedSettings);
+      expect(result.connected).toBe(false);
+      expect(mockBblRepo.getProfile).not.toHaveBeenCalled();
+    });
+
+    it('should report the signed in account when the token works', async () => {
+      // Arrange
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        bblAuthorizationToken: 'bbl-auth-token',
+        bblUserId: 'bbl-user-id',
+      });
+      vi.mocked(mockBblRepo.getProfile).mockResolvedValue({
+        uidStr: 'bbl-user-id',
+        account: 'accounts@example.com',
+        name: 'Starforge',
+      });
+
+      // Act
+      const result = await settingsService.getBambuStatus();
+
+      // Assert
+      expect(result).toEqual({
+        connected: true,
+        account: 'accounts@example.com',
+        name: 'Starforge',
+      });
+    });
+
+    it('should report not connected when Bambu rejects the token', async () => {
+      // Arrange
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        bblAuthorizationToken: 'stale-token',
+        bblUserId: 'bbl-user-id',
+      });
+      vi.mocked(mockBblRepo.getProfile).mockRejectedValue(new Error('401'));
+
+      // Act
+      const result = await settingsService.getBambuStatus();
+
+      // Assert
+      expect(result.connected).toBe(false);
     });
   });
 
@@ -377,6 +454,7 @@ describe('SettingsService', () => {
       const printRequestSettings = { enabled: true };
       const squareSettings = { locationId: 'loc-isolated' };
 
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({});
       vi.mocked(mockSettingsRepo.setSetting)
         .mockResolvedValueOnce(printRequestSettings)
         .mockResolvedValueOnce(squareSettings);
@@ -411,6 +489,7 @@ describe('SettingsService', () => {
     it('should handle repository errors in setPrintRequestSettings', async () => {
       // Arrange
       const newSettings = { enabled: true };
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({});
       vi.mocked(mockSettingsRepo.setSetting).mockRejectedValue(new Error('Update failed'));
 
       // Act & Assert

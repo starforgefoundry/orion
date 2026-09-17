@@ -9,7 +9,17 @@ import { verifyAuth } from '$lib/remotes/utils';
 import { settingsService } from '$lib/server/services/settings.service';
 import { error } from '@sveltejs/kit';
 
-export const getPrintRequestSettings = query(() => settingsService.getPrintRequestSettings());
+export const getPublicPrintRequestForm = query(() => settingsService.getPublicPrintRequestForm());
+
+export const getPrintRequestSettings = query(() => {
+  verifyAuth();
+  return settingsService.getPrintRequestSettings();
+});
+
+export const getBambuStatus = query(() => {
+  verifyAuth();
+  return settingsService.getBambuStatus();
+});
 
 export const getPrintRequestSquareSettings = query(() => {
   verifyAuth();
@@ -37,7 +47,7 @@ export const refreshBambuCredentials = command(bambuLoginDto, async (dto) => {
 
   try {
     const result = await settingsService.refreshBambuCredentials(dto);
-    getPrintRequestSettings().refresh();
+    getBambuStatus().refresh();
 
     return result;
   } catch (cause) {
