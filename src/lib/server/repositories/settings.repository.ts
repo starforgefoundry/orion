@@ -5,6 +5,8 @@ import { eq } from 'drizzle-orm';
 export type SettingsMap = {
   printRequest: {
     isOpen: boolean;
+    announcement: string;
+    announcementUntil: string;
     maxUploadMB: number;
     allowedFileTypes: string;
     discordWebhookUrl: string;
@@ -25,6 +27,8 @@ export type SettingsMap = {
 const defaults: SettingsMap = {
   printRequest: {
     isOpen: true,
+    announcement: '',
+    announcementUntil: '',
     maxUploadMB: 1000,
     allowedFileTypes: '.stl, .3mf, .step, .stp',
     discordWebhookUrl: '',

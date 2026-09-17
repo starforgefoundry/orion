@@ -186,6 +186,8 @@ describe('SettingsService', () => {
       const newSettings = {
         isOpen: false,
         enabled: false,
+        announcement: '',
+        announcementUntil: '',
         maxUploadMB: 50000,
         allowedFileTypes: '.stl',
         discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/abcdefghijklmnopqrstuvwxyz',
@@ -213,6 +215,8 @@ describe('SettingsService', () => {
       const newSettings = {
         isOpen: true,
         enabled: true,
+        announcement: 'Prints are delayed one week.',
+        announcementUntil: '2026-09-24T17:00:00.000Z',
         maxUploadMB: 20000,
         allowedFileTypes: '.stl,.obj,.3mf,.step',
         requireApproval: true,

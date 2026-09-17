@@ -1,13 +1,17 @@
 <script lang="ts">
+  import { expiryFromInputValue, expiryToInputValue } from '$lib/frontend/announcement';
   import SecureInput from '$lib/frontend/components/form/SecureInput.svelte';
+  import TextArea from '$lib/frontend/components/form/TextArea.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { initForm } from '$lib/frontend/components/form/utils.svelte';
   import { printRequestSettingsForm } from '$lib/remotes/endpoints/settings.remote';
-  import { Field, NumberInput, Stack, Switch, toastManager } from '@immich/ui';
+  import { Field, Input, NumberInput, Stack, Switch, toastManager } from '@immich/ui';
 
   interface Props {
     printRequestSettings: {
       isOpen: boolean;
+      announcement: string;
+      announcementUntil: string;
       maxUploadMB: number;
       allowedFileTypes: string;
       discordWebhookUrl: string;
@@ -21,6 +25,8 @@
 
   initForm(printRequestSettingsForm, () => ({
     isOpen: printRequestSettings.isOpen,
+    announcement: printRequestSettings.announcement,
+    announcementUntil: printRequestSettings.announcementUntil,
     maxUploadMB: printRequestSettings.maxUploadMB,
     allowedFileTypes: printRequestSettings.allowedFileTypes,
     discordWebhookUrl: printRequestSettings.discordWebhookUrl,
@@ -36,6 +42,11 @@
   let maxUpload = $derived(printRequestSettings.maxUploadMB);
   $effect(() => {
     printRequestSettingsForm.fields.maxUploadMB.set(maxUpload ?? 100);
+  });
+
+  let announcementUntil = $derived(expiryToInputValue(printRequestSettings.announcementUntil));
+  $effect(() => {
+    printRequestSettingsForm.fields.announcementUntil.set(expiryFromInputValue(announcementUntil));
   });
 
   async function handleSubmit(submit: () => Promise<void>) {
@@ -67,6 +78,25 @@
     >
       <Switch bind:checked={isOpen} />
       <input hidden {...printRequestSettingsForm.fields.isOpen.as('checkbox')} />
+    </Field>
+
+    <Field
+      label="Announcement Banner"
+      description="Shown as a yellow banner at the top of the print request form. Leave blank to hide it."
+    >
+      <TextArea
+        {...printRequestSettingsForm.fields.announcement.as('text')}
+        class="h-24"
+        placeholder="Prints submitted after Friday will not be ready until the following week."
+      />
+    </Field>
+
+    <Field
+      label="Show Announcement Until"
+      description="The banner stops showing at this time. Leave blank to show it until you clear the text."
+    >
+      <Input type="datetime-local" bind:value={announcementUntil} />
+      <input hidden {...printRequestSettingsForm.fields.announcementUntil.as('text')} />
     </Field>
 
     <Field label="Max Upload Size (MB)" required="indicator">

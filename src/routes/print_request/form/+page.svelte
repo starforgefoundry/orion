@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { announcementIsActive } from '$lib/frontend/announcement';
   import banner from '$lib/assets/3dp-banner.jpeg';
   import logo from '$lib/assets/logo.png';
   import FileUpload from '$lib/frontend/components/FileUpload.svelte';
@@ -115,6 +116,14 @@
 <div class="h-64 w-full overflow-hidden">
   <img src={banner} alt="" class="h-full w-full object-cover" />
 </div>
+
+{#if announcementIsActive(printRequestSettings.announcement, printRequestSettings.announcementUntil)}
+  <div class="flex items-center justify-center px-4 pt-4">
+    <Alert color="warning" class="w-full max-w-3xl">
+      <Text class="whitespace-pre-line">{printRequestSettings.announcement}</Text>
+    </Alert>
+  </div>
+{/if}
 
 {#if !printRequestSettings.isOpen}
   <div class="flex items-center justify-center p-4">

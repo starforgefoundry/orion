@@ -9,6 +9,8 @@ export const printRequestSquareSettings = v.object({
 
 export const printRequestSettings = v.object({
   isOpen: v.optional(v.boolean(), false),
+  announcement: v.optional(v.string(), ''),
+  announcementUntil: v.optional(v.string(), ''),
   maxUploadMB: v.number(),
   allowedFileTypes: v.string(),
   discordWebhookUrl: v.string(),
