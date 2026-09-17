@@ -1,7 +1,8 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { s3PublicUrl, uploadToS3 } from '$lib/server/utils/s3';
-import { and, eq, gte, sum, type InferInsertModel } from 'drizzle-orm';
+import { and, eq, gte, sum, type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
+import { chunk } from 'lodash-es';
 
 function withPhotoUrl<T extends { photoUrl: string | null }>(catalog: T): T {
   return { ...catalog, photoUrl: s3PublicUrl(catalog.photoUrl) };
@@ -56,7 +57,12 @@ export class ClassRepository extends BaseRepository {
 
   async createInstances(data: InferInsertModel<typeof schema.classInstance>[]) {
     if (data.length === 0) return [];
-    return await this.db.insert(schema.classInstance).values(data).returning().all();
+
+    const created: InferSelectModel<typeof schema.classInstance>[] = [];
+    for (const batch of chunk(data, 3)) {
+      created.push(...(await this.db.insert(schema.classInstance).values(batch).returning().all()));
+    }
+    return created;
   }
 
   async updateInstance(
