@@ -1,13 +1,25 @@
 <script lang="ts">
   import { updateAMSForPrinter } from '$lib/remotes/endpoints/print_materials.remote';
   import { Button, HStack, Icon, LoadingSpinner, toastManager } from '@immich/ui';
-  import { mdiCheckCircle, mdiCloseCircle } from '@mdi/js';
+  import { mdiCheckCircle, mdiCloseCircle, mdiFlashlight, mdiFlashlightOff } from '@mdi/js';
   import { BarqodeStream, type DetectedBarcode } from 'barqode';
   import { onDestroy } from 'svelte';
 
+  // The five labels sit far enough from the camera that each QR lands on ~60px of sensor at
+  // 1080p. Below that the decoder stops resolving modules and the scan looks "flaky". Ask for
+  // as much resolution as the camera will give, and pin the object so barqode doesn't read it
+  // as a settings change and restart the stream on every render.
+  const CAMERA_CONSTRAINTS: MediaTrackConstraints = {
+    facingMode: 'environment',
+    width: { ideal: 2560 },
+    height: { ideal: 1440 },
+    // focusMode is widely supported on phones but missing from the DOM typings
+    advanced: [{ focusMode: 'continuous' }] as unknown as MediaTrackConstraintSet[],
+  };
+
   // TTL configuration
-  const CODE_TTL_MS = 500; // Code expires after 2 seconds if not seen
-  const CLEANUP_INTERVAL_MS = 100; // Check for expired codes every 500ms
+  const CODE_TTL_MS = 1500; // Code expires after this long without being seen
+  const CLEANUP_INTERVAL_MS = 100;
   const POSITION_THRESHOLD = 50; // Pixels - how close two codes must be to be considered the same instance
 
   interface TrackedCode {
@@ -18,6 +30,8 @@
 
   let loadingCamera = $state(true);
   let updatingAMS = $state(false);
+  let torchOn = $state(false);
+  let torchSupported = $state(false);
   let trackedCodes: TrackedCode[] = $state([]);
   let nextId = 0;
 
@@ -53,8 +67,9 @@
     clearInterval(cleanupInterval);
   });
 
-  function onCameraOn() {
+  function onCameraOn(capabilities: MediaTrackCapabilities) {
     loadingCamera = false;
+    torchSupported = 'torch' in capabilities;
   }
 
   function track(detectedCodes: DetectedBarcode[], ctx: CanvasRenderingContext2D) {
@@ -141,7 +156,13 @@
 </script>
 
 <div class="mx-auto flex max-w-2xl flex-col items-center justify-center p-4">
-  <BarqodeStream {onCameraOn} {track} paused={updatingAMS}>
+  <BarqodeStream
+    {onCameraOn}
+    {track}
+    constraints={CAMERA_CONSTRAINTS}
+    torch={torchOn}
+    paused={updatingAMS}
+  >
     {#if loadingCamera}
       <div class="flex items-center justify-center">
         <LoadingSpinner />
@@ -168,14 +189,26 @@
       {filaments.length}/4 Filaments Found
     </HStack>
 
-    <Button
-      class="mt-2"
-      disabled={filaments.length != 4 || !foundPrinter}
-      loading={updatingAMS}
-      onclick={updateAMS}
-    >
-      Update AMS
-    </Button>
+    <HStack class="mt-2">
+      {#if torchSupported}
+        <Button
+          variant="outline"
+          color="secondary"
+          onclick={() => (torchOn = !torchOn)}
+          leadingIcon={torchOn ? mdiFlashlight : mdiFlashlightOff}
+        >
+          {torchOn ? 'Light On' : 'Light Off'}
+        </Button>
+      {/if}
+
+      <Button
+        disabled={filaments.length != 4 || !foundPrinter}
+        loading={updatingAMS}
+        onclick={updateAMS}
+      >
+        Update AMS
+      </Button>
+    </HStack>
   {/if}
 
   <!-- Debug info -->
