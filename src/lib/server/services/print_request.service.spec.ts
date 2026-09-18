@@ -402,6 +402,80 @@ describe('PrintRequestService', () => {
     });
   });
 
+  describe('sendQuoteApprovedDiscordNotification', () => {
+    it('should send Discord webhook notification with the quote total in dollars', async () => {
+      // Arrange
+      const requestId = 'request-quote-approved';
+      const mockRequest = {
+        id: requestId,
+        customerName: 'John Doe',
+        email: 'john@example.com',
+        projectName: 'Test Project',
+        payment: { total: 4250 },
+      };
+
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        discordWebhookUrl: 'https://discord.com/api/webhooks/test',
+      });
+      vi.mocked(mockDiscordRepo.sendWebhookNotification).mockResolvedValue(undefined);
+
+      // Act
+      await printRequestService.sendQuoteApprovedDiscordNotification(requestId);
+
+      // Assert
+      expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequest');
+      expect(mockDiscordRepo.sendWebhookNotification).toHaveBeenCalledWith(
+        'https://discord.com/api/webhooks/test',
+        expect.objectContaining({
+          content: expect.stringContaining('quote has been approved'),
+          embeds: expect.arrayContaining([
+            expect.objectContaining({
+              title: '✅ Quote Approved',
+              fields: expect.arrayContaining([
+                expect.objectContaining({ name: 'Project Name', value: 'Test Project' }),
+                expect.objectContaining({ name: 'Customer', value: 'John Doe' }),
+                expect.objectContaining({ name: 'Total', value: '$42.50' }),
+              ]),
+            }),
+          ]),
+        }),
+      );
+    });
+
+    it('should return early when webhook URL is not configured', async () => {
+      // Arrange
+      const requestId = 'request-quote-no-webhook';
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue({
+        id: requestId,
+        customerName: 'Test User',
+        email: 'test@example.com',
+        projectName: 'Test',
+        payment: { total: 1000 },
+      });
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        discordWebhookUrl: null,
+      });
+
+      // Act
+      await printRequestService.sendQuoteApprovedDiscordNotification(requestId);
+
+      // Assert
+      expect(mockDiscordRepo.sendWebhookNotification).not.toHaveBeenCalled();
+    });
+
+    it('should throw error when request not found', async () => {
+      // Arrange
+      vi.mocked(mockRequestRepo.getById).mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        printRequestService.sendQuoteApprovedDiscordNotification('nonexistent'),
+      ).rejects.toThrow('Print request not found');
+      expect(mockDiscordRepo.sendWebhookNotification).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getPrintRequests', () => {
     it('should return all print requests from repository', async () => {
       // Arrange

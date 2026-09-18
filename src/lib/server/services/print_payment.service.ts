@@ -1,3 +1,4 @@
+import { getRequestEvent } from '$app/server';
 import { env } from '$env/dynamic/private';
 import { env as publicEnv } from '$env/dynamic/public';
 import type { CreatePaymentDto } from '$lib/remotes/dtos/print_payment.dto';
@@ -440,11 +441,19 @@ export class PrintPaymentService extends BaseService {
     }
 
     // User accepted the quote, proceed to create an order
-    return await printPaymentService.upsertOrder(request, {
+    const payment = await printPaymentService.upsertOrder(request, {
       requestId: request.id,
       materialCost: request.materialCost!,
       buildPlates: request.buildplateCount!,
     });
+
+    const notification = printRequestService
+      .sendQuoteApprovedDiscordNotification(request.id)
+      .catch((error) => console.error('Failed to send quote approved notification:', error));
+
+    getRequestEvent().platform?.ctx?.waitUntil(notification);
+
+    return payment;
   }
 }
 

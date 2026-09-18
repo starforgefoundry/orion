@@ -175,6 +175,52 @@ export class PrintRequestService extends BaseService {
       embeds: [embed],
     });
   }
+
+  async sendQuoteApprovedDiscordNotification(printRequestId: string) {
+    const request = await this.printRequestRepository.getById(printRequestId);
+    if (!request) {
+      throw new Error('Print request not found');
+    }
+
+    const settings = await this.settingsRepository.getSetting('printRequest');
+    const webhookUrl = settings.discordWebhookUrl;
+    if (!webhookUrl) {
+      console.warn('Discord webhook URL not configured for print requests');
+      return;
+    }
+
+    const event = getRequestEvent();
+    const origin = event?.url?.origin || 'http://localhost:5173';
+    const printQueueUrl = `${origin}/staff/print_requests/queue?id=${printRequestId}`;
+
+    const embed = {
+      title: '✅ Quote Approved',
+      color: 0x57f287,
+      fields: [
+        {
+          name: 'Project Name',
+          value: request.projectName,
+          inline: true,
+        },
+        {
+          name: 'Customer',
+          value: request.customerName,
+          inline: true,
+        },
+        {
+          name: 'Total',
+          value: `$${((request.payment?.total ?? 0) / 100).toFixed(2)}`,
+          inline: false,
+        },
+      ],
+      timestamp: new Date().toISOString(),
+    };
+
+    await this.discordRepository.sendWebhookNotification(webhookUrl, {
+      content: `A quote has been approved! [View in Print Queue](${printQueueUrl})`,
+      embeds: [embed],
+    });
+  }
 }
 
 export const printRequestService = new PrintRequestService();
