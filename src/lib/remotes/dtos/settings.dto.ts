@@ -33,13 +33,9 @@ export const publicPrintRequestFormDto = v.object({
 
 export type PublicPrintRequestFormDto = v.InferInput<typeof publicPrintRequestFormDto>;
 
-export const bambuLoginDto = v.object({
-  account: v.pipe(v.string(), v.email('Enter a valid email address')),
-  password: v.pipe(v.string(), v.minLength(1, 'Password is required')),
-  tfaCode: v.pipe(
-    v.string(),
-    v.regex(/^\d{6}$/, 'Enter the 6-digit code from your authenticator app'),
-  ),
+export const bambuddySettings = v.object({
+  serverUrl: v.pipe(v.string(), v.url('Enter a valid server URL')),
+  apiKey: v.string(),
 });
 
 export const classSettingsDto = v.object({

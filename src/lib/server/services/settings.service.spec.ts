@@ -15,7 +15,7 @@ describe('SettingsService', () => {
   let settingsService: SettingsService;
   let mockSettingsRepo: any;
   let mockPrintMaterialsRepo: any;
-  let mockBblRepo: any;
+  let mockBambuddyRepo: any;
   let getPrintRequestSettings: any;
   let getPrintRequestSquareSettings: any;
 
@@ -31,10 +31,9 @@ describe('SettingsService', () => {
       get: vi.fn(),
     };
 
-    mockBblRepo = {
-      startLogin: vi.fn(),
-      verifyTfaCode: vi.fn(),
-      getProfile: vi.fn(),
+    mockBambuddyRepo = {
+      getCurrentUser: vi.fn(),
+      listPrinters: vi.fn(),
     };
 
     settingsService = new SettingsService(
@@ -49,7 +48,7 @@ describe('SettingsService', () => {
       undefined,
       undefined,
       undefined,
-      mockBblRepo,
+      mockBambuddyRepo,
     );
 
     const settingsRemote = await import('$lib/remotes/endpoints/settings.remote');
@@ -70,8 +69,6 @@ describe('SettingsService', () => {
         maxUploadMB: 1000,
         allowedFileTypes: '.stl',
         discordWebhookUrl: 'https://discord.com/api/webhooks/secret',
-        bblAuthorizationToken: 'secret-token',
-        bblUserId: 'secret-user',
       });
       vi.mocked(mockPrintMaterialsRepo.get).mockResolvedValue([
         { id: 'material-1', name: 'PLA', available: true, archived: false, bblTagId: 'tag-1' },
@@ -120,113 +117,6 @@ describe('SettingsService', () => {
       expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequest');
       expect(result).toEqual(mockSettings);
     });
-
-    it('should never hand out the Bambu credentials', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        isOpen: true,
-        bblAuthorizationToken: 'secret-token',
-        bblUserId: 'secret-user',
-      });
-
-      // Act
-      const result = await settingsService.getPrintRequestSettings();
-
-      // Assert
-      expect(result).toEqual({ isOpen: true });
-    });
-  });
-
-  describe('refreshBambuCredentials', () => {
-    const credentials = {
-      account: 'accounts@example.com',
-      password: 'hunter2',
-      tfaCode: '123456',
-    };
-
-    const existingSettings = {
-      isOpen: true,
-      maxUploadMB: 1000,
-      allowedFileTypes: '.stl',
-      discordWebhookUrl: 'https://discord.com/api/webhooks/old',
-      bblAuthorizationToken: 'stale-token',
-      bblUserId: 'stale-user',
-    };
-
-    it('should exchange the authenticator code for a token and save it', async () => {
-      // Arrange
-      vi.mocked(mockBblRepo.startLogin).mockResolvedValue({
-        loginType: 'tfa',
-        tfaKey: 'tfa-key-abc',
-      });
-      vi.mocked(mockBblRepo.verifyTfaCode).mockResolvedValue('fresh-token');
-      vi.mocked(mockBblRepo.getProfile).mockResolvedValue({
-        uidStr: '2030959428',
-        account: 'accounts@example.com',
-        name: 'Starforge',
-      });
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(existingSettings);
-
-      // Act
-      const result = await settingsService.refreshBambuCredentials(credentials);
-
-      // Assert
-      expect(mockBblRepo.verifyTfaCode).toHaveBeenCalledWith('tfa-key-abc', '123456');
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', {
-        ...existingSettings,
-        bblAuthorizationToken: 'fresh-token',
-        bblUserId: '2030959428',
-      });
-      expect(result).toEqual({
-        account: 'accounts@example.com',
-        name: 'Starforge',
-        userId: '2030959428',
-      });
-    });
-
-    it('should skip two-factor verification when login returns a token directly', async () => {
-      // Arrange
-      vi.mocked(mockBblRepo.startLogin).mockResolvedValue({ accessToken: 'direct-token' });
-      vi.mocked(mockBblRepo.getProfile).mockResolvedValue({
-        uidStr: '2030959428',
-        account: 'accounts@example.com',
-        name: 'Starforge',
-      });
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(existingSettings);
-
-      // Act
-      await settingsService.refreshBambuCredentials(credentials);
-
-      // Assert
-      expect(mockBblRepo.verifyTfaCode).not.toHaveBeenCalled();
-      expect(mockBblRepo.getProfile).toHaveBeenCalledWith('direct-token');
-    });
-
-    it('should reject accounts that require email verification', async () => {
-      // Arrange
-      vi.mocked(mockBblRepo.startLogin).mockResolvedValue({ loginType: 'verifyCode' });
-
-      // Act & Assert
-      await expect(settingsService.refreshBambuCredentials(credentials)).rejects.toThrow(
-        'verifyCode',
-      );
-      expect(mockSettingsRepo.setSetting).not.toHaveBeenCalled();
-    });
-
-    it('should leave saved settings untouched when the code is wrong', async () => {
-      // Arrange
-      vi.mocked(mockBblRepo.startLogin).mockResolvedValue({
-        loginType: 'tfa',
-        tfaKey: 'tfa-key-abc',
-      });
-      vi.mocked(mockBblRepo.verifyTfaCode).mockRejectedValue(new Error('Incorrect code'));
-
-      // Act & Assert
-      await expect(settingsService.refreshBambuCredentials(credentials)).rejects.toThrow(
-        'Incorrect code',
-      );
-      expect(mockSettingsRepo.setSetting).not.toHaveBeenCalled();
-    });
   });
 
   describe('setPrintRequestSettings', () => {
@@ -241,101 +131,122 @@ describe('SettingsService', () => {
 
     it('should update print request settings', async () => {
       // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        bblAuthorizationToken: '',
-        bblUserId: '',
-      });
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({ isOpen: true });
       vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue(newSettings);
 
       // Act
       const result = await settingsService.setPrintRequestSettings(newSettings);
 
       // Assert
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', {
-        ...newSettings,
-        bblAuthorizationToken: '',
-        bblUserId: '',
-      });
-      expect(result).toEqual(newSettings);
-    });
-
-    it('should keep the stored Bambu credentials the form does not carry', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        bblAuthorizationToken: 'bbl-auth-token',
-        bblUserId: 'bbl-user-id',
-      });
-      vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue({
-        ...newSettings,
-        bblAuthorizationToken: 'bbl-auth-token',
-        bblUserId: 'bbl-user-id',
-      });
-
-      // Act
-      const result = await settingsService.setPrintRequestSettings(newSettings);
-
-      // Assert
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', {
-        ...newSettings,
-        bblAuthorizationToken: 'bbl-auth-token',
-        bblUserId: 'bbl-user-id',
-      });
+      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', newSettings);
       expect(result).toEqual(newSettings);
     });
   });
 
-  describe('getBambuStatus', () => {
-    it('should report not connected when no credentials are stored', async () => {
+  describe('getBambuddySettings', () => {
+    it('should report that a key is saved without handing it out', async () => {
       // Arrange
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        bblAuthorizationToken: '',
-        bblUserId: '',
+        serverUrl: 'https://print.example.com',
+        apiKey: 'bb_secret',
       });
 
       // Act
-      const result = await settingsService.getBambuStatus();
+      const result = await settingsService.getBambuddySettings();
+
+      // Assert
+      expect(result).toEqual({ serverUrl: 'https://print.example.com', hasApiKey: true });
+    });
+  });
+
+  describe('setBambuddySettings', () => {
+    it('should keep the saved key when the form submits a blank one', async () => {
+      // Arrange
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        serverUrl: 'https://old.example.com',
+        apiKey: 'bb_saved',
+      });
+
+      // Act
+      await settingsService.setBambuddySettings({
+        serverUrl: 'https://print.example.com',
+        apiKey: '',
+      });
+
+      // Assert
+      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('bambuddy', {
+        serverUrl: 'https://print.example.com',
+        apiKey: 'bb_saved',
+      });
+    });
+
+    it('should replace the saved key when the form submits a new one', async () => {
+      // Arrange
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
+        serverUrl: 'https://print.example.com',
+        apiKey: 'bb_saved',
+      });
+
+      // Act
+      await settingsService.setBambuddySettings({
+        serverUrl: 'https://print.example.com',
+        apiKey: 'bb_new',
+      });
+
+      // Assert
+      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('bambuddy', {
+        serverUrl: 'https://print.example.com',
+        apiKey: 'bb_new',
+      });
+    });
+  });
+
+  describe('getBambuddyStatus', () => {
+    it('should report not connected when no server is configured', async () => {
+      // Arrange
+      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({ serverUrl: '', apiKey: '' });
+
+      // Act
+      const result = await settingsService.getBambuddyStatus();
 
       // Assert
       expect(result.connected).toBe(false);
-      expect(mockBblRepo.getProfile).not.toHaveBeenCalled();
+      expect(mockBambuddyRepo.getCurrentUser).not.toHaveBeenCalled();
     });
 
-    it('should report the signed in account when the token works', async () => {
+    it('should report the signed in user and printer count', async () => {
       // Arrange
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        bblAuthorizationToken: 'bbl-auth-token',
-        bblUserId: 'bbl-user-id',
+        serverUrl: 'https://print.example.com',
+        apiKey: 'bb_secret',
       });
-      vi.mocked(mockBblRepo.getProfile).mockResolvedValue({
-        uidStr: 'bbl-user-id',
-        account: 'accounts@example.com',
-        name: 'Starforge',
+      vi.mocked(mockBambuddyRepo.getCurrentUser).mockResolvedValue({
+        username: 'starforge',
+        email: null,
       });
+      vi.mocked(mockBambuddyRepo.listPrinters).mockResolvedValue([{ id: 3 }, { id: 4 }]);
 
       // Act
-      const result = await settingsService.getBambuStatus();
+      const result = await settingsService.getBambuddyStatus();
 
       // Assert
-      expect(result).toEqual({
-        connected: true,
-        account: 'accounts@example.com',
-        name: 'Starforge',
-      });
+      expect(result).toEqual({ connected: true, username: 'starforge', printerCount: 2 });
     });
 
-    it('should report not connected when Bambu rejects the token', async () => {
+    it('should surface why Bambuddy rejected the key', async () => {
       // Arrange
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        bblAuthorizationToken: 'stale-token',
-        bblUserId: 'bbl-user-id',
+        serverUrl: 'https://print.example.com',
+        apiKey: 'bb_stale',
       });
-      vi.mocked(mockBblRepo.getProfile).mockRejectedValue(new Error('401'));
+      vi.mocked(mockBambuddyRepo.getCurrentUser).mockRejectedValue(new Error('Invalid API key'));
+      vi.mocked(mockBambuddyRepo.listPrinters).mockRejectedValue(new Error('Invalid API key'));
 
       // Act
-      const result = await settingsService.getBambuStatus();
+      const result = await settingsService.getBambuddyStatus();
 
       // Assert
-      expect(result.connected).toBe(false);
+      expect(result).toEqual({ connected: false, reason: 'Invalid API key' });
     });
   });
 

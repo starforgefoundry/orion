@@ -10,8 +10,6 @@ export type SettingsMap = {
     maxUploadMB: number;
     allowedFileTypes: string;
     discordWebhookUrl: string;
-    bblAuthorizationToken: string;
-    bblUserId: string;
   };
   printRequestSquare: {
     locationId: string;
@@ -21,6 +19,10 @@ export type SettingsMap = {
   };
   classSettings: {
     discordWebhookUrl: string;
+  };
+  bambuddy: {
+    serverUrl: string;
+    apiKey: string;
   };
 };
 
@@ -32,8 +34,6 @@ const defaults: SettingsMap = {
     maxUploadMB: 1000,
     allowedFileTypes: '.stl, .3mf, .step, .stp',
     discordWebhookUrl: '',
-    bblAuthorizationToken: '',
-    bblUserId: '',
   },
   printRequestSquare: {
     locationId: '',
@@ -43,6 +43,10 @@ const defaults: SettingsMap = {
   },
   classSettings: {
     discordWebhookUrl: '',
+  },
+  bambuddy: {
+    serverUrl: '',
+    apiKey: '',
   },
 };
 

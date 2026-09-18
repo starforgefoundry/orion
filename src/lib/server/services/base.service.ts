@@ -1,4 +1,4 @@
-import { BambulabRepository } from '$lib/server/repositories/bbl.repository';
+import { BambuddyRepository } from '$lib/server/repositories/bambuddy.repository';
 import { BillingCodeRepository } from '$lib/server/repositories/billing_code.repository';
 import { DiscordRepository } from '$lib/server/repositories/discord.repository';
 import { InventoryRepository } from '$lib/server/repositories/inventory.repository';
@@ -26,7 +26,7 @@ export class BaseService {
   protected organizationRepository: OrganizationRepository;
   protected billingCodeRepository: BillingCodeRepository;
   protected inventoryRepository: InventoryRepository;
-  protected bblRepository: BambulabRepository;
+  protected bambuddyRepository: BambuddyRepository;
   protected waiverRepository: WaiverRepository;
 
   constructor(
@@ -41,7 +41,7 @@ export class BaseService {
     organizationRepository?: OrganizationRepository,
     billingCodeRepository?: BillingCodeRepository,
     inventoryRepository?: InventoryRepository,
-    bblRepository?: BambulabRepository,
+    bambuddyRepository?: BambuddyRepository,
     waiverRepository?: WaiverRepository,
     printRequestCommentRepository?: PrintRequestCommentRepository,
   ) {
@@ -56,7 +56,7 @@ export class BaseService {
     this.organizationRepository = organizationRepository ?? new OrganizationRepository();
     this.billingCodeRepository = billingCodeRepository ?? new BillingCodeRepository();
     this.inventoryRepository = inventoryRepository ?? new InventoryRepository();
-    this.bblRepository = bblRepository ?? new BambulabRepository();
+    this.bambuddyRepository = bambuddyRepository ?? new BambuddyRepository();
     this.waiverRepository = waiverRepository ?? new WaiverRepository();
     this.printRequestCommentRepository =
       printRequestCommentRepository ?? new PrintRequestCommentRepository();

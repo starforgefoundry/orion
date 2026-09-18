@@ -2,11 +2,6 @@ import type { PublicPrintRequestFormDto } from '$lib/remotes/dtos/settings.dto';
 import type { SettingsMap } from '$lib/server/repositories/settings.repository';
 import { BaseService } from '$lib/server/services/base.service';
 
-type EditablePrintRequestSettings = Omit<
-  SettingsMap['printRequest'],
-  'bblAuthorizationToken' | 'bblUserId'
->;
-
 export class SettingsService extends BaseService {
   async getPublicPrintRequestForm(): Promise<PublicPrintRequestFormDto> {
     const [settings, materials] = await Promise.all([
@@ -24,72 +19,53 @@ export class SettingsService extends BaseService {
     };
   }
 
-  async getPrintRequestSettings(): Promise<EditablePrintRequestSettings> {
-    const { bblAuthorizationToken, bblUserId, ...settings } =
-      await this.settingsRepository.getSetting('printRequest');
-
-    return settings;
+  async getPrintRequestSettings(): Promise<SettingsMap['printRequest']> {
+    return await this.settingsRepository.getSetting('printRequest');
   }
 
-  async setPrintRequestSettings(value: EditablePrintRequestSettings) {
+  async setPrintRequestSettings(value: SettingsMap['printRequest']) {
     const current = await this.settingsRepository.getSetting('printRequest');
-    const { bblAuthorizationToken, bblUserId, ...saved } = await this.settingsRepository.setSetting(
-      'printRequest',
-      { ...current, ...value },
-    );
 
-    return saved;
+    return await this.settingsRepository.setSetting('printRequest', { ...current, ...value });
   }
 
-  async getBambuStatus() {
-    const { bblAuthorizationToken, bblUserId } =
-      await this.settingsRepository.getSetting('printRequest');
+  async getBambuddySettings() {
+    const { serverUrl, apiKey } = await this.settingsRepository.getSetting('bambuddy');
 
-    if (!bblAuthorizationToken || !bblUserId) {
-      return { connected: false as const, reason: 'No Bambu Lab account is signed in.' };
+    return { serverUrl, hasApiKey: apiKey !== '' };
+  }
+
+  async setBambuddySettings(value: { serverUrl: string; apiKey: string }) {
+    const current = await this.settingsRepository.getSetting('bambuddy');
+
+    await this.settingsRepository.setSetting('bambuddy', {
+      serverUrl: value.serverUrl,
+      apiKey: value.apiKey === '' ? current.apiKey : value.apiKey,
+    });
+
+    return await this.getBambuddySettings();
+  }
+
+  async getBambuddyStatus() {
+    const config = await this.settingsRepository.getSetting('bambuddy');
+
+    if (!config.serverUrl || !config.apiKey) {
+      return { connected: false as const, reason: 'No Bambuddy server is configured.' };
     }
 
     try {
-      const profile = await this.bblRepository.getProfile(bblAuthorizationToken);
+      const [user, printers] = await Promise.all([
+        this.bambuddyRepository.getCurrentUser(config),
+        this.bambuddyRepository.listPrinters(config),
+      ]);
 
-      return { connected: true as const, account: profile.account, name: profile.name };
-    } catch {
+      return { connected: true as const, username: user.username, printerCount: printers.length };
+    } catch (cause) {
       return {
         connected: false as const,
-        reason: 'Bambu Lab rejected the saved token. Sign in again to refresh it.',
+        reason: cause instanceof Error ? cause.message : 'Bambuddy rejected the request.',
       };
     }
-  }
-
-  async refreshBambuCredentials(credentials: {
-    account: string;
-    password: string;
-    tfaCode: string;
-  }) {
-    const login = await this.bblRepository.startLogin(credentials.account, credentials.password);
-
-    let token = login.accessToken;
-
-    if (!token) {
-      if (login.loginType !== 'tfa' || !login.tfaKey) {
-        throw new Error(
-          `This account requires "${login.loginType ?? 'unknown'}" verification, which is not supported here.`,
-        );
-      }
-
-      token = await this.bblRepository.verifyTfaCode(login.tfaKey, credentials.tfaCode);
-    }
-
-    const profile = await this.bblRepository.getProfile(token);
-    const current = await this.settingsRepository.getSetting('printRequest');
-
-    await this.settingsRepository.setSetting('printRequest', {
-      ...current,
-      bblAuthorizationToken: token,
-      bblUserId: profile.uidStr,
-    });
-
-    return { account: profile.account, name: profile.name, userId: profile.uidStr };
   }
 
   async getPrintRequestSquareSettings() {

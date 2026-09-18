@@ -1,14 +1,14 @@
 <script lang="ts">
   import {
+    getBambuddySettings,
     getClassSettings,
     getPrintRequestSettings,
     getPrintRequestSquareSettings,
   } from '$lib/remotes/endpoints/settings.remote';
-  import { Button, Heading, LoadingSpinner, modalManager } from '@immich/ui';
-  import BambuStatus from './BambuStatus.svelte';
+  import { Button, Heading, LoadingSpinner } from '@immich/ui';
+  import BambuddySettings from './BambuddySettings.svelte';
+  import BambuddyStatus from './BambuddyStatus.svelte';
   import ClassSettings from './ClassSettings.svelte';
-  import LocalPrinterModal from './LocalPrinterModal.svelte';
-  import LocalPrinterSettings from './LocalPrinterSettings.svelte';
   import SettingsSection from './SettingsSection.svelte';
   import SquareSettings from './SquareSettings.svelte';
   import SystemSettings from './SystemSettings.svelte';
@@ -16,6 +16,7 @@
   let printRequestSettings = getPrintRequestSettings();
   let squareSettings = getPrintRequestSquareSettings();
   let classSettings = getClassSettings();
+  let bambuddySettings = getBambuddySettings();
 </script>
 
 <div class="mb-6">
@@ -34,20 +35,20 @@
     {:else}
       <SystemSettings printRequestSettings={printRequestSettings.current!} />
     {/if}
-    <BambuStatus />
   </SettingsSection>
 
-  <SettingsSection title="LAN Mode Printers">
+  <SettingsSection title="Bambuddy">
     {#snippet headerActions()}
-      <Button
-        variant="filled"
-        size="small"
-        onclick={() => modalManager.show(LocalPrinterModal, {})}
-      >
-        Add Printer
-      </Button>
+      <Button type="submit" form="bambuddy-settings" size="small">Save</Button>
     {/snippet}
-    <LocalPrinterSettings />
+    {#if bambuddySettings.loading}
+      <LoadingSpinner />
+    {:else if bambuddySettings.error}
+      <p class="text-danger">Error loading Bambuddy settings.</p>
+    {:else}
+      <BambuddySettings bambuddySettings={bambuddySettings.current!} />
+    {/if}
+    <BambuddyStatus />
   </SettingsSection>
 
   <SettingsSection title="Square">

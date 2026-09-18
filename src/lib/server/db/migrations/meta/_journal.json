@@ -113,6 +113,13 @@
       "when": 1789671996077,
       "tag": "0015_comment_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1789766834059,
+      "tag": "0016_drop_local_bambu_printers",
+      "breakpoints": true
     }
   ]
 }

@@ -1,13 +1,12 @@
-import { command, form, query } from '$app/server';
+import { form, query } from '$app/server';
 import {
-  bambuLoginDto,
+  bambuddySettings,
   classSettingsDto,
   printRequestSettings,
   printRequestSquareSettings,
 } from '$lib/remotes/dtos/settings.dto';
 import { verifyAuth } from '$lib/remotes/utils';
 import { settingsService } from '$lib/server/services/settings.service';
-import { error } from '@sveltejs/kit';
 
 export const getPublicPrintRequestForm = query(() => settingsService.getPublicPrintRequestForm());
 
@@ -16,9 +15,14 @@ export const getPrintRequestSettings = query(() => {
   return settingsService.getPrintRequestSettings();
 });
 
-export const getBambuStatus = query(() => {
+export const getBambuddySettings = query(() => {
   verifyAuth();
-  return settingsService.getBambuStatus();
+  return settingsService.getBambuddySettings();
+});
+
+export const getBambuddyStatus = query(() => {
+  verifyAuth();
+  return settingsService.getBambuddyStatus();
 });
 
 export const getPrintRequestSquareSettings = query(() => {
@@ -42,19 +46,13 @@ export const printRequestSquareSettingsForm = form(printRequestSquareSettings, a
   return response;
 });
 
-export const refreshBambuCredentials = command(bambuLoginDto, async (dto) => {
+export const bambuddySettingsForm = form(bambuddySettings, async (dto) => {
   verifyAuth();
+  const response = await settingsService.setBambuddySettings(dto);
+  await getBambuddySettings().refresh();
+  await getBambuddyStatus().refresh();
 
-  try {
-    const result = await settingsService.refreshBambuCredentials(dto);
-    getBambuStatus().refresh();
-
-    return result;
-  } catch (cause) {
-    // SvelteKit replaces plain errors with "Internal Error"; the operator needs
-    // to read what Bambu Lab actually said, such as a rejected code.
-    error(400, cause instanceof Error ? cause.message : 'Bambu Lab sign in failed');
-  }
+  return response;
 });
 
 export const getClassSettings = query(() => {
