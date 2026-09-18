@@ -87,56 +87,62 @@
         </div>
       </CardHeader>
       <CardBody>
-        <CalendarGrid {instances}>
-          {#snippet dayContent({ instances: dayInstances, isCurrentMonth })}
-            {@const hasInstances = dayInstances.length > 0}
-            {#if hasInstances && isCurrentMonth}
-              <div class="flex flex-col gap-2">
-                {#each dayInstances as inst}
-                  {@const spotsLeft = inst.seats - inst.confirmedCount}
-                  {@const isPast =
-                    DateTime.fromISO(`${inst.date}T${inst.startTime}`, {
-                      zone: 'America/Chicago',
-                    }) < now}
-                  {@const isAvailable = spotsLeft > 0 && !isPast}
-                  <div
-                    class="w-full rounded p-2
+        {#if instancesRemote.loading}
+          <div class="flex min-h-64 items-center justify-center">
+            <LoadingSpinner size="large" />
+          </div>
+        {:else}
+          <CalendarGrid {instances}>
+            {#snippet dayContent({ instances: dayInstances, isCurrentMonth })}
+              {@const hasInstances = dayInstances.length > 0}
+              {#if hasInstances && isCurrentMonth}
+                <div class="flex flex-col gap-2">
+                  {#each dayInstances as inst}
+                    {@const spotsLeft = inst.seats - inst.confirmedCount}
+                    {@const isPast =
+                      DateTime.fromISO(`${inst.date}T${inst.startTime}`, {
+                        zone: 'America/Chicago',
+                      }) < now}
+                    {@const isAvailable = spotsLeft > 0 && !isPast}
+                    <div
+                      class="w-full rounded p-2
                     {isPast
-                      ? 'bg-gray-800/40 text-gray-500'
-                      : isAvailable
-                        ? 'bg-green-900/20 text-green-400'
-                        : 'bg-red-900/20 text-red-400'}"
-                  >
-                    <div>
-                      <Text>{formatTime(inst.startTime)}</Text>
+                        ? 'bg-gray-800/40 text-gray-500'
+                        : isAvailable
+                          ? 'bg-green-900/20 text-green-400'
+                          : 'bg-red-900/20 text-red-400'}"
+                    >
+                      <div>
+                        <Text>{formatTime(inst.startTime)}</Text>
 
-                      <Text class="text-xs" color="muted">
-                        {#if isPast}
-                          (past)
-                        {:else}
-                          ({spotsLeft} spots)
+                        <Text class="text-xs" color="muted">
+                          {#if isPast}
+                            (past)
+                          {:else}
+                            ({spotsLeft} spots)
+                          {/if}
+                        </Text>
+
+                        {#if isAvailable}
+                          <Button
+                            size="tiny"
+                            fullWidth
+                            onclick={() => bookInstance(inst)}
+                            class="mt-2"
+                            variant="outline"
+                            color="success"
+                          >
+                            Book
+                          </Button>
                         {/if}
-                      </Text>
-
-                      {#if isAvailable}
-                        <Button
-                          size="tiny"
-                          fullWidth
-                          onclick={() => bookInstance(inst)}
-                          class="mt-2"
-                          variant="outline"
-                          color="success"
-                        >
-                          Book
-                        </Button>
-                      {/if}
+                      </div>
                     </div>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          {/snippet}
-        </CalendarGrid>
+                  {/each}
+                </div>
+              {/if}
+            {/snippet}
+          </CalendarGrid>
+        {/if}
       </CardBody>
     </Card>
   </Stack>
