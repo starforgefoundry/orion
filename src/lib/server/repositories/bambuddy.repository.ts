@@ -29,6 +29,19 @@ export type BambuddySlotFilament = {
   tray_color: string;
   nozzle_temp_min: number;
   nozzle_temp_max: number;
+  setting_id: string;
+};
+
+export type BambuddyBuiltinFilament = {
+  filament_id: string;
+  name: string;
+};
+
+export type BambuddyColor = {
+  manufacturer: string;
+  material: string;
+  color_name: string;
+  hex_color: string;
 };
 
 type PrinterStatus = {
@@ -70,6 +83,19 @@ export class BambuddyRepository extends BaseRepository {
       );
   }
 
+  /** Bambu's stock filament table. Served from Bambuddy itself, so no Bambu Cloud login needed. */
+  async listBuiltinFilaments(config: BambuddyConfig): Promise<BambuddyBuiltinFilament[]> {
+    return (await this._request(
+      config,
+      'api/v1/cloud/builtin-filaments',
+    )) as BambuddyBuiltinFilament[];
+  }
+
+  /** The vendor / material / color combinations Bambuddy knows about. */
+  async listColors(config: BambuddyConfig): Promise<BambuddyColor[]> {
+    return (await this._request(config, 'api/v1/inventory/colors')) as BambuddyColor[];
+  }
+
   async configureAmsSlot(
     config: BambuddyConfig,
     printerId: number,
@@ -83,6 +109,7 @@ export class BambuddyRepository extends BaseRepository {
       tray_color: filament.tray_color,
       nozzle_temp_min: String(filament.nozzle_temp_min),
       nozzle_temp_max: String(filament.nozzle_temp_max),
+      setting_id: filament.setting_id,
     });
 
     await this._request(

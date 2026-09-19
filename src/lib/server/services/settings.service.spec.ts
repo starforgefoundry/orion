@@ -71,7 +71,7 @@ describe('SettingsService', () => {
         discordWebhookUrl: 'https://discord.com/api/webhooks/secret',
       });
       vi.mocked(mockPrintMaterialsRepo.get).mockResolvedValue([
-        { id: 'material-1', name: 'PLA', available: true, archived: false, bblTagId: 'tag-1' },
+        { id: 'material-1', name: 'PLA', available: true, archived: false, tagId: 'A1B2C3D4' },
       ]);
     });
 

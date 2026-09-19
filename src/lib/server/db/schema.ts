@@ -139,8 +139,12 @@ export const printMaterial = sqliteTable('print_material', {
   name: text('name').notNull(),
   available: integer('available', { mode: 'boolean' }).notNull().default(true),
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
-  bblTagId: text('bbl_tag_id'),
-  bblTagData: text('bbl_tag_data'),
+  tagId: text('tag_id').unique(),
+  filamentId: text('filament_id'),
+  vendor: text('vendor'),
+  materialType: text('material_type'),
+  colorName: text('color_name'),
+  colorHex: text('color_hex'),
 });
 
 export type PrintMaterial = InferSelectModel<typeof printMaterial>;

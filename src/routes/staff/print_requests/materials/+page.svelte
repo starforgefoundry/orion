@@ -8,82 +8,19 @@
     TableRow,
   } from '$lib/frontend/components/table';
   import {
-    getPrintMaterials,
-    updatePrintMaterial,
-  } from '$lib/remotes/endpoints/print_materials.remote';
-  import { processTagFile } from '$lib/utils/bbl_tag';
-  import {
     Heading,
     IconButton,
     Input,
     LoadingSpinner,
     modalManager,
     Switch,
-    toastManager,
+    Text,
   } from '@immich/ui';
-  import { mdiChatQuestion, mdiMagnify, mdiPlus, mdiTagText, mdiTrashCan } from '@mdi/js';
+  import { mdiMagnify, mdiPencil, mdiPlus, mdiPrinter, mdiTrashCan } from '@mdi/js';
   import MaterialModal from './MaterialModal.svelte';
+  import { MaterialsManager } from './materials.svelte';
 
-  let materials = getPrintMaterials();
-  let searchTerm = $state('');
-  let searchedMaterials = $derived(
-    materials.current?.filter((material) =>
-      material.name.toUpperCase().includes(searchTerm.toUpperCase()),
-    ) || [],
-  );
-  let tagUploadInput: HTMLInputElement;
-  let tagUploadId = $state<string | null>(null);
-
-  function showCreateModal() {
-    modalManager.show(MaterialModal);
-  }
-
-  function updateMaterialAvailability(id: string, available: boolean) {
-    updatePrintMaterial({ id, available });
-  }
-
-  async function deleteMaterial(id: string) {
-    const confirm = await modalManager.showDialog({
-      title: 'Delete Print Material',
-      prompt: 'Are you sure you want to delete this print material? This action cannot be undone.',
-      confirmText: 'Delete',
-      confirmColor: 'danger',
-      icon: mdiChatQuestion,
-    });
-
-    if (confirm) {
-      await updatePrintMaterial({ id, archived: true });
-    }
-  }
-
-  function assignTag(id: string) {
-    tagUploadId = id;
-    tagUploadInput.click();
-  }
-
-  async function handleFileSelect(e: Event) {
-    if (!tagUploadId) return;
-
-    const target = e.target as HTMLInputElement;
-    const files = target.files;
-
-    if (!files || files.length === 0) return;
-
-    const tag = await processTagFile(files[0]);
-
-    if (tag) {
-      await updatePrintMaterial({
-        id: tagUploadId,
-        bblTagId: tag.tagId,
-        bblTagData: JSON.stringify(tag.tagData),
-      });
-
-      tagUploadId = null;
-      toastManager.success('Tag assigned successfully');
-    } else {
-      toastManager.danger('Failed to process tag file. Please ensure it is a valid .nfc file.');
-    }
-  }
+  const manager = new MaterialsManager();
 </script>
 
 <div class="mb-6 flex items-center justify-between">
@@ -94,67 +31,86 @@
       variant="filled"
       aria-label="Add Print Material"
       class="min-w-10"
-      onclick={showCreateModal}
+      onclick={() => modalManager.show(MaterialModal)}
     />
-    <Input placeholder="Search Print Materials" leadingIcon={mdiMagnify} bind:value={searchTerm} />
+    <Input
+      placeholder="Search Print Materials"
+      leadingIcon={mdiMagnify}
+      bind:value={manager.searchTerm}
+    />
   </div>
 </div>
 
-<input
-  bind:this={tagUploadInput}
-  type="file"
-  accept={'.nfc'}
-  onchange={handleFileSelect}
-  class="hidden"
-  multiple
-/>
-
-{#if materials.loading}
+{#if manager.loading}
   <div class="flex justify-center">
     <LoadingSpinner size="large" />
   </div>
-{:else if materials.error}
-  <p class="text-danger">Error loading print materials: {materials.error.message}</p>
+{:else if manager.error}
+  <p class="text-danger">Error loading print materials: {manager.error.message}</p>
 {:else}
   <Table>
     <TableHeader>
-      <TableHeaderCell width="w-6/12">Name</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Availability</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Linked Tag ID</TableHeaderCell>
+      <TableHeaderCell width="w-3/12">Name</TableHeaderCell>
+      <TableHeaderCell width="w-1/12">Available</TableHeaderCell>
+      <TableHeaderCell width="w-4/12">Filament</TableHeaderCell>
+      <TableHeaderCell width="w-2/12">Tag ID</TableHeaderCell>
       <TableHeaderCell width="w-2/12">Actions</TableHeaderCell>
     </TableHeader>
     <TableBody>
-      {#each searchedMaterials as material}
+      {#each manager.results as material (material.id)}
         <TableRow>
-          <TableCell width="w-6/12" align="left" class="pl-6">{material.name}</TableCell>
+          <TableCell width="w-3/12" align="left" class="pl-6">{material.name}</TableCell>
 
-          <TableCell width="w-2/12" class="flex justify-center">
+          <TableCell width="w-1/12" class="flex justify-center">
             <Switch
               checked={material.available}
-              onCheckedChange={(value) => updateMaterialAvailability(material.id, value)}
+              onCheckedChange={(value) => manager.setAvailability(material.id, value)}
             />
           </TableCell>
-          <TableCell width="w-2/12" align="center">
-            {material.bblTagId ?? '-'}
+
+          <TableCell width="w-4/12" align="center">
+            <div class="flex items-center justify-center gap-2">
+              {#if material.colorHex}
+                <div
+                  class="size-4 shrink-0 rounded-full border border-subtle"
+                  style={`background-color: ${material.colorHex}`}
+                ></div>
+              {/if}
+              <Text color={material.filamentId ? 'primary' : 'secondary'}>
+                {manager.filamentLabel(material)}
+              </Text>
+            </div>
           </TableCell>
+
+          <TableCell width="w-2/12" align="center" class="font-mono">
+            {material.tagId ?? '-'}
+          </TableCell>
+
           <TableCell width="w-2/12" class="flex justify-center gap-2">
             <IconButton
-              icon={mdiTagText}
-              aria-label="Assign Tag"
+              icon={mdiPencil}
+              aria-label="Edit Material"
               color="primary"
-              onclick={() => assignTag(material.id)}
+              onclick={() => manager.edit(material)}
+            />
+            <IconButton
+              icon={mdiPrinter}
+              aria-label="Print Tag"
+              color="secondary"
+              disabled={!material.tagId}
+              onclick={() => manager.printTag(material)}
             />
             <IconButton
               icon={mdiTrashCan}
               aria-label="Delete Material"
               color="danger"
-              onclick={() => deleteMaterial(material.id)}
+              onclick={() => manager.archive(material.id)}
             />
           </TableCell>
         </TableRow>
       {/each}
 
-      {#if searchedMaterials.length === 0}
+      {#if manager.results.length === 0}
         <TableRow>
           <TableCell width="w-full" class="text-center">No print materials found.</TableCell>
         </TableRow>

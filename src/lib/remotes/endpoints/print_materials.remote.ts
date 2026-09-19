@@ -1,6 +1,7 @@
 import { command, form, query } from '$app/server';
 import {
   createPrintMaterialDto,
+  setMaterialSetupDto,
   updateAMSDto,
   updatePrintMaterialDto,
 } from '$lib/remotes/dtos/print_materials.dto';
@@ -31,6 +32,20 @@ export const updatePrintMaterial = command(updatePrintMaterialDto, async (dto) =
   await getPrintMaterials().refresh();
 
   return response;
+});
+
+export const setMaterialSetup = command(setMaterialSetupDto, async (dto) => {
+  verifyAuth();
+
+  const response = await printMaterialsService.setSetup(dto);
+  await getPrintMaterials().refresh();
+
+  return response;
+});
+
+export const getFilamentCatalog = query(async () => {
+  verifyAuth();
+  return await printMaterialsService.getFilamentCatalog();
 });
 
 export const updateAMSForPrinter = command(updateAMSDto, async (dto) => {

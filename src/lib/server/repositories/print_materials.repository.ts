@@ -1,7 +1,4 @@
-import type {
-  CreatePrintMaterialDto,
-  UpdatePrintMaterialDto,
-} from '$lib/remotes/dtos/print_materials.dto';
+import type { CreatePrintMaterialDto } from '$lib/remotes/dtos/print_materials.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { and, eq } from 'drizzle-orm';
@@ -9,6 +6,11 @@ import { and, eq } from 'drizzle-orm';
 export class PrintMaterialsRepository extends BaseRepository {
   async create(dto: CreatePrintMaterialDto) {
     await this.db.insert(schema.printMaterial).values(dto).returning().get();
+  }
+
+  /** Archived materials are included so a retired spool's tag ID is never handed out twice. */
+  async getAll() {
+    return await this.db.select().from(schema.printMaterial);
   }
 
   async get(available?: boolean) {
@@ -25,7 +27,7 @@ export class PrintMaterialsRepository extends BaseRepository {
     return materials;
   }
 
-  async update(id: string, updates: Omit<UpdatePrintMaterialDto, 'id'>) {
+  async update(id: string, updates: Partial<typeof schema.printMaterial.$inferInsert>) {
     const material = await this.db
       .update(schema.printMaterial)
       .set(updates)

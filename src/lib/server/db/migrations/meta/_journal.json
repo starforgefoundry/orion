@@ -120,6 +120,20 @@
       "when": 1789766834059,
       "tag": "0016_drop_local_bambu_printers",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1789831234539,
+      "tag": "0017_print_material_filament_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1789831240870,
+      "tag": "0018_drop_bbl_tag_columns",
+      "breakpoints": true
     }
   ]
 }
