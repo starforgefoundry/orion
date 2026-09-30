@@ -1,8 +1,9 @@
-import type {
-  CreatePrintMaterialDto,
-  FilamentVendorDto,
-  SetMaterialSetupDto,
-  UpdatePrintMaterialDto,
+import {
+  EMPTY_SLOT_TAG_ID,
+  type CreatePrintMaterialDto,
+  type FilamentVendorDto,
+  type SetMaterialSetupDto,
+  type UpdatePrintMaterialDto,
 } from '$lib/remotes/dtos/print_materials.dto';
 import type { PrintMaterial } from '$lib/server/db/schema';
 import type {
@@ -45,6 +46,10 @@ export class PrintMaterialsService extends BaseService {
    * them as one form. Either half may be left empty while staff are still setting a spool up.
    */
   async setSetup({ id, tagId, filament }: SetMaterialSetupDto) {
+    if (tagId === EMPTY_SLOT_TAG_ID) {
+      throw new Error(`${EMPTY_SLOT_TAG_ID} is reserved for the empty slot card`);
+    }
+
     if (tagId) {
       const clash = (await this.printMaterialsRepository.getAll()).find(
         (material) => material.tagId === tagId && material.id !== id,
@@ -141,15 +146,18 @@ export class PrintMaterialsService extends BaseService {
     }
 
     const materials = await this.getMaterials();
+    // null marks an empty slot card
     const scanned = updates.filaments.map((tagId) =>
-      materials.find((material) => material.tagId === tagId),
+      tagId === EMPTY_SLOT_TAG_ID ? null : materials.find((material) => material.tagId === tagId),
     );
 
     if (scanned.includes(undefined)) {
       throw new Error('One or more scanned tags do not match a print material');
     }
 
-    const unlinked = (scanned as PrintMaterial[]).filter((material) => !material.filamentId);
+    const unlinked = (scanned as (PrintMaterial | null)[]).filter(
+      (material) => material && !material.filamentId,
+    ) as PrintMaterial[];
 
     if (unlinked.length > 0) {
       throw new Error(`No filament is linked to ${unlinked.map((m) => m.name).join(', ')}`);
@@ -163,7 +171,12 @@ export class PrintMaterialsService extends BaseService {
       );
     }
 
-    for (const [index, material] of (scanned as PrintMaterial[]).entries()) {
+    for (const [index, material] of (scanned as (PrintMaterial | null)[]).entries()) {
+      if (!material) {
+        await this.bambuddyRepository.resetAmsSlot(config, printer.id, slots[index]);
+        continue;
+      }
+
       await this.bambuddyRepository.configureAmsSlot(
         config,
         printer.id,

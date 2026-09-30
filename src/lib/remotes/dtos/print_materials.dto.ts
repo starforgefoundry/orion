@@ -2,6 +2,9 @@ import * as v from 'valibot';
 
 export const TAG_ID_LENGTH = 8;
 
+/** Printed on the empty slot card. Scanning it in a slot's position clears that AMS slot. */
+export const EMPTY_SLOT_TAG_ID = 'EMPTY---';
+
 export const printMaterialDto = v.object({
   id: v.string(),
   name: v.string(),

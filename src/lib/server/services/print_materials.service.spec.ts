@@ -278,6 +278,36 @@ describe('PrintMaterialsService', () => {
     });
   });
 
+  describe('updateAMS', () => {
+    it('should reset slots scanned with the empty slot card', async () => {
+      const bambuddy = printMaterialsService.bambuddyRepository;
+      vi.spyOn(printMaterialsService.settingsRepository, 'getSetting').mockResolvedValue({
+        serverUrl: 'http://bambuddy',
+        apiKey: 'key',
+      });
+      vi.spyOn(bambuddy, 'listPrinters').mockResolvedValue([{ id: 7, name: 'SF 01' }]);
+      vi.spyOn(bambuddy, 'listAmsSlots').mockResolvedValue([
+        { amsId: 0, trayId: 0 },
+        { amsId: 0, trayId: 1 },
+      ]);
+      const configure = vi.spyOn(bambuddy, 'configureAmsSlot').mockResolvedValue(undefined);
+      const reset = vi.spyOn(bambuddy, 'resetAmsSlot').mockResolvedValue(undefined);
+      vi.mocked(mockMaterialsRepo.get).mockResolvedValue([
+        { name: 'PLA', tagId: 'A1B2C3D4', filamentId: 'GFA00', materialType: 'PLA' },
+      ]);
+
+      await printMaterialsService.updateAMS('SF-01', { filaments: ['EMPTY---', 'A1B2C3D4'] });
+
+      expect(reset).toHaveBeenCalledExactlyOnceWith(expect.anything(), 7, { amsId: 0, trayId: 0 });
+      expect(configure).toHaveBeenCalledExactlyOnceWith(
+        expect.anything(),
+        7,
+        { amsId: 0, trayId: 1 },
+        expect.objectContaining({ tray_info_idx: 'GFA00' }),
+      );
+    });
+  });
+
   describe('edge cases', () => {
     it('should handle repository errors in getMaterials', async () => {
       // Arrange

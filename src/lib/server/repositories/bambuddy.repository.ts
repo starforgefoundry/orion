@@ -119,6 +119,14 @@ export class BambuddyRepository extends BaseRepository {
     );
   }
 
+  async resetAmsSlot(config: BambuddyConfig, printerId: number, slot: BambuddyAmsSlot) {
+    await this._request(
+      config,
+      `api/v1/printers/${printerId}/ams/${slot.amsId}/tray/${slot.trayId}/reset`,
+      { method: 'POST' },
+    );
+  }
+
   async _request(config: BambuddyConfig, endpoint: string, options: RequestInit = {}) {
     if (!config.serverUrl || !config.apiKey) {
       throw new Error('Bambuddy server URL and API key are not configured');
