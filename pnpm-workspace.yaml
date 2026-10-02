@@ -8,3 +8,4 @@ onlyBuiltDependencies:
 
 patchedDependencies:
   '@immich/ui@0.50.1': patches/@immich__ui@0.50.1.patch
+  '@sveltejs/kit@2.50.2': patches/@sveltejs__kit@2.50.2.patch

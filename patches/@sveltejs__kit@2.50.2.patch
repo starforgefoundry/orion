@@ -1,0 +1,15 @@
+diff --git a/src/runtime/form-utils.js b/src/runtime/form-utils.js
+index 1573d5bfe5470c6845b9bfe1960b9456cd7a4f27..3facda320b959636a8a6e4b6f9dabbeff222fc61 100644
+--- a/src/runtime/form-utils.js
++++ b/src/runtime/form-utils.js
+@@ -166,7 +166,9 @@ export async function deserialize_binary_form(request) {
+ 
+ 		let i = chunks.length;
+ 		while (i <= index) {
+-			chunks[i] = reader.read().then((chunk) => chunk.value);
++			// workerd allows only one pending read at a time
++			const previous = chunks[i - 1] ?? Promise.resolve();
++			chunks[i] = previous.then(() => reader.read()).then((chunk) => chunk.value);
+ 			i++;
+ 		}
+ 		return chunks[index];
