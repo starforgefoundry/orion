@@ -9,6 +9,4 @@ bun.lockb
 /static/
 /drizzle/
 
-src/worker-configuration.d.ts
-
 src/lib/server/db/migrations/meta/
