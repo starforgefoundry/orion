@@ -57,6 +57,7 @@ export const updatePrintRequest = command(
     const response = await printRequestService.updatePrintRequest(id, updates);
 
     await getPrintRequests().refresh();
+    await getPrintRequestById(id).refresh();
 
     return response;
   },

@@ -28,6 +28,7 @@
   } from '@immich/ui';
   import {
     mdiAccount,
+    mdiAccountEdit,
     mdiAccountGroup,
     mdiCheck,
     mdiClose,
@@ -43,6 +44,7 @@
     mdiPrinter3dNozzle,
     mdiTag,
   } from '@mdi/js';
+  import CustomerEditModal from './CustomerEditModal.svelte';
   import DiscountCodeModal from './DiscountCodeModal.svelte';
   import PaymentModal from './PaymentModal.svelte';
   import RequestComments from './RequestComments.svelte';
@@ -217,8 +219,21 @@
       request?.status !== 'canceled',
   );
 
+  function editCustomer() {
+    modalManager.show(CustomerEditModal, {
+      requestId: request!.id,
+      currentName: request!.customerName,
+      currentEmail: request!.email,
+    });
+  }
+
   const customerMenuItems: MenuItems = $derived(
     [
+      {
+        title: 'Edit Customer',
+        icon: mdiAccountEdit,
+        onAction: () => editCustomer(),
+      },
       canEditDiscountCode
         ? {
             title: 'Edit Discount Code',
