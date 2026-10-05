@@ -1,1 +1,0 @@
-DROP TABLE `local_bambu_connect_printer`;

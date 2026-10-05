@@ -1,72 +1,91 @@
 import { schema } from '$lib/server/db/schema';
-import { getTableConfig, type SQLiteTable } from 'drizzle-orm/sqlite-core';
-import { readdirSync, readFileSync } from 'node:fs';
+import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { getTableConfig, type PgTable } from 'drizzle-orm/pg-core';
 import { dirname, join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import postgres from 'postgres';
+import { DateTime } from 'luxon';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
-const STATEMENT_BREAKPOINT = '--> statement-breakpoint';
+const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 
 /**
- * Replays every migration in order, which is what the D1 database has had applied to it. A column
- * that only exists in schema.ts never reaches the database, and the query that selects it fails at
- * runtime rather than at build time.
+ * A column that only exists in schema.ts never reaches the database, and the query that selects
+ * it fails at runtime rather than at build time.
  */
-function migratedDatabase() {
-  const db = new DatabaseSync(':memory:');
+describe.skipIf(!TEST_DATABASE_URL)('migrations', () => {
+  const sql = postgres(TEST_DATABASE_URL ?? '', { max: 1, onnotice: () => {} });
 
-  const files = readdirSync(MIGRATIONS_DIR)
-    .filter((file) => file.endsWith('.sql'))
-    .toSorted();
+  beforeAll(async () => {
+    await sql`DROP SCHEMA IF EXISTS public CASCADE`;
+    await sql`DROP SCHEMA IF EXISTS drizzle CASCADE`;
+    await sql`CREATE SCHEMA public`;
+    await migrate(drizzle(sql), { migrationsFolder: MIGRATIONS_DIR });
+  });
 
-  for (const file of files) {
-    const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8');
+  afterAll(async () => {
+    await sql.end();
+  });
 
-    for (const statement of sql.split(STATEMENT_BREAKPOINT)) {
-      if (statement.trim()) db.exec(statement);
-    }
+  async function migratedColumns(table: string) {
+    const rows = await sql<{ column_name: string }[]>`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = ${table}
+    `;
+    return rows.map((row) => row.column_name).toSorted();
   }
 
-  return { db, files };
-}
+  function declaredColumns(table: PgTable) {
+    return getTableConfig(table)
+      .columns.map((column) => column.name)
+      .toSorted();
+  }
 
-function migratedColumns(db: DatabaseSync, table: string) {
-  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  it.each(Object.entries(schema))(
+    '%s matches the columns the migrations create',
+    async (_, table) => {
+      const { name } = getTableConfig(table);
 
-  return rows.map((row) => row.name).toSorted();
-}
+      expect(await migratedColumns(name)).toEqual(declaredColumns(table));
+    },
+  );
 
-function declaredColumns(table: SQLiteTable) {
-  return getTableConfig(table)
-    .columns.map((column) => column.name)
-    .toSorted();
-}
-
-describe('migrations', () => {
-  const { db, files } = migratedDatabase();
-
-  it('has migration files to apply', () => {
-    expect(files.length).toBeGreaterThan(0);
-  });
-
-  it.each(Object.entries(schema))('%s matches the columns the migrations create', (_, table) => {
-    const { name } = getTableConfig(table);
-
-    expect(migratedColumns(db, name)).toEqual(declaredColumns(table));
-  });
-
-  it('creates every table the schema declares', () => {
-    const rows = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all() as {
-      name: string;
-    }[];
-    const created = new Set(rows.map((row) => row.name));
+  it('creates every table the schema declares', async () => {
+    const rows = await sql<{ table_name: string }[]>`
+      SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'
+    `;
+    const created = new Set(rows.map((row) => row.table_name));
 
     const missing = Object.values(schema)
       .map((table) => getTableConfig(table).name)
       .filter((name) => !created.has(name));
 
     expect(missing).toEqual([]);
+  });
+
+  it('round-trips timestamps without shifting them', async () => {
+    const db = drizzle(sql);
+    const signedDate = DateTime.fromISO('2026-03-08T01:30:00.123', { zone: 'America/Chicago' });
+    await db.insert(schema.waiver).values({
+      id: 'waiver-tz',
+      name: 'Jane',
+      email: 'jane@example.com',
+      signatureUrl: 'waivers/jane',
+      signedDate,
+    });
+
+    const [stored] = await db.select().from(schema.waiver).where(eq(schema.waiver.id, 'waiver-tz'));
+    await db.update(schema.waiver).set({ signedDate: stored.signedDate });
+    const [resaved] = await db
+      .select()
+      .from(schema.waiver)
+      .where(eq(schema.waiver.id, 'waiver-tz'));
+
+    expect(stored.signedDate.toMillis()).toBe(signedDate.toMillis());
+    expect(resaved.signedDate.toMillis()).toBe(signedDate.toMillis());
+    expect(resaved.signedDate.zoneName).toBe('America/Chicago');
   });
 });

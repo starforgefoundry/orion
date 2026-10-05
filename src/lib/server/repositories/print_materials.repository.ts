@@ -5,7 +5,7 @@ import { and, eq } from 'drizzle-orm';
 
 export class PrintMaterialsRepository extends BaseRepository {
   async create(dto: CreatePrintMaterialDto) {
-    await this.db.insert(schema.printMaterial).values(dto).returning().get();
+    await this.db.insert(schema.printMaterial).values(dto);
   }
 
   /** Archived materials are included so a retired spool's tag ID is never handed out twice. */
@@ -28,12 +28,11 @@ export class PrintMaterialsRepository extends BaseRepository {
   }
 
   async update(id: string, updates: Partial<typeof schema.printMaterial.$inferInsert>) {
-    const material = await this.db
+    const [material] = await this.db
       .update(schema.printMaterial)
       .set(updates)
       .where(eq(schema.printMaterial.id, id))
-      .returning()
-      .get();
+      .returning();
 
     return material;
   }

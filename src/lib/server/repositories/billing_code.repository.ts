@@ -15,7 +15,7 @@ export class BillingCodeRepository extends BaseRepository {
         organizationId: dto.organizationId || null,
         discountId: dto.discountId || null,
       };
-      const billingCode = await this.db.insert(schema.billingCode).values(values).returning().get();
+      const [billingCode] = await this.db.insert(schema.billingCode).values(values).returning();
       return billingCode;
     } catch (error) {
       console.error('Error creating billing code:', error);
@@ -37,21 +37,20 @@ export class BillingCodeRepository extends BaseRepository {
   }
 
   async getById(id: string) {
-    const code = await this.db
+    const [code] = await this.db
       .select({
         billingCode: schema.billingCode,
         organization: schema.organization,
       })
       .from(schema.billingCode)
       .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
-      .where(eq(schema.billingCode.id, id))
-      .get();
+      .where(eq(schema.billingCode.id, id));
 
     return code;
   }
 
   async getByCode(code: string) {
-    const billingCode = await this.db
+    const [billingCode] = await this.db
       .select({
         billingCode: schema.billingCode,
         organization: schema.organization,
@@ -63,8 +62,7 @@ export class BillingCodeRepository extends BaseRepository {
           eq(sql`upper(${schema.billingCode.code})`, code.toUpperCase()),
           eq(schema.billingCode.archived, false),
         ),
-      )
-      .get();
+      );
 
     return billingCode;
   }
@@ -78,12 +76,11 @@ export class BillingCodeRepository extends BaseRepository {
       }),
       ...(updates.discountId !== undefined && { discountId: updates.discountId || null }),
     };
-    const billingCode = await this.db
+    const [billingCode] = await this.db
       .update(schema.billingCode)
       .set(values)
       .where(eq(schema.billingCode.id, id))
-      .returning()
-      .get();
+      .returning();
 
     return billingCode;
   }

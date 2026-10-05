@@ -6,11 +6,11 @@ import type { Order } from 'square';
 
 export class PaymentRepository extends BaseRepository {
   async getById(paymentId: string) {
-    return await this.db
+    const [payment] = await this.db
       .select()
       .from(schema.payment)
-      .where(eq(schema.payment.id, paymentId))
-      .get();
+      .where(eq(schema.payment.id, paymentId));
+    return payment;
   }
 
   async createInvoice(order: Order) {
@@ -41,15 +41,14 @@ export class PaymentRepository extends BaseRepository {
   async savePayment(requestId: string, payment: InferInsertModel<typeof schema.payment>) {
     const { id, ...rest } = payment;
 
-    const result = await this.db
+    const [result] = await this.db
       .insert(schema.payment)
       .values(payment)
       .onConflictDoUpdate({
         target: schema.payment.id,
         set: rest,
       })
-      .returning()
-      .get();
+      .returning();
 
     await this.db
       .update(schema.printRequest)
@@ -63,7 +62,7 @@ export class PaymentRepository extends BaseRepository {
   }
 
   async createStandalonePayment(payment: InferInsertModel<typeof schema.payment>) {
-    const result = await this.db.insert(schema.payment).values(payment).returning().get();
+    const [result] = await this.db.insert(schema.payment).values(payment).returning();
 
     return result;
   }
@@ -91,12 +90,11 @@ export class PaymentRepository extends BaseRepository {
   }
 
   async getByPrintRequestId(printRequestId: string) {
-    const result = await this.db
+    const [result] = await this.db
       .select()
       .from(schema.printRequest)
       .where(eq(schema.printRequest.id, printRequestId))
-      .leftJoin(schema.payment, eq(schema.printRequest.paymentId, schema.payment.id))
-      .get();
+      .leftJoin(schema.payment, eq(schema.printRequest.paymentId, schema.payment.id));
 
     if (!result) {
       return null;

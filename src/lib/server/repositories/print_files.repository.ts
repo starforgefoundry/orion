@@ -1,35 +1,26 @@
 import type { PrintRequestFileDto } from '$lib/remotes/dtos/print_request.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { s3PublicUrl, uploadToS3 } from '$lib/server/utils/s3';
+import { fileUrl, openFile, saveFile } from '$lib/server/utils/storage';
 import { eq } from 'drizzle-orm';
-import pLimit from 'p-limit';
 
 export class PrintFilesRepository extends BaseRepository {
   async uploadFiles(printRequestId: string, files: Array<PrintRequestFileDto>) {
-    const concurrentUploads = pLimit(3);
+    if (files.length === 0) return;
 
-    const fileUploads = await Promise.all(
-      files.map((file) =>
-        concurrentUploads(async () => {
-          const uploadID = crypto.randomUUID();
+    const fileUploads = [];
+    for (const file of files) {
+      const uploadID = crypto.randomUUID();
+      const key = await saveFile(file.file, `print_requests/${printRequestId}/${uploadID}`);
 
-          const url = await uploadToS3(
-            this.s3,
-            file.file,
-            `print_requests/${printRequestId}/${uploadID}`,
-          );
-
-          return {
-            id: uploadID,
-            printRequestId: printRequestId,
-            fileName: file.filename,
-            fileUrl: url,
-            quantity: file.quantity,
-          };
-        }),
-      ),
-    );
+      fileUploads.push({
+        id: uploadID,
+        printRequestId: printRequestId,
+        fileName: file.filename,
+        fileUrl: key,
+        quantity: file.quantity,
+      });
+    }
 
     await this.db.insert(schema.printRequestFile).values(fileUploads);
   }
@@ -40,7 +31,7 @@ export class PrintFilesRepository extends BaseRepository {
       .from(schema.printRequestFile)
       .where(eq(schema.printRequestFile.printRequestId, id));
 
-    return files.map((file) => ({ ...file, fileUrl: s3PublicUrl(file.fileUrl) }));
+    return files.map((file) => ({ ...file, fileUrl: fileUrl(file.fileUrl) }));
   }
 
   async getByPrintRequestId(printRequestId: string) {
@@ -49,6 +40,17 @@ export class PrintFilesRepository extends BaseRepository {
       .from(schema.printRequestFile)
       .where(eq(schema.printRequestFile.printRequestId, printRequestId));
 
-    return files.map((file) => ({ ...file, fileUrl: s3PublicUrl(file.fileUrl) }));
+    return files.map((file) => ({ ...file, fileUrl: fileUrl(file.fileUrl) }));
+  }
+
+  async openForRequest(printRequestId: string) {
+    const files = await this.db
+      .select()
+      .from(schema.printRequestFile)
+      .where(eq(schema.printRequestFile.printRequestId, printRequestId));
+
+    return await Promise.all(
+      files.map(async (file) => ({ fileName: file.fileName, ...(await openFile(file.fileUrl)) })),
+    );
   }
 }

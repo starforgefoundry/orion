@@ -1,8 +1,8 @@
 import type { SubmitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { s3PublicUrl, uploadToS3 } from '$lib/server/utils/s3';
-import { asc, count, like, or } from 'drizzle-orm';
+import { fileUrl, saveFile } from '$lib/server/utils/storage';
+import { asc, count, eq, ilike, or } from 'drizzle-orm';
 
 export class WaiverRepository extends BaseRepository {
   async submit(dto: SubmitWaiverDto, signatureFile: File) {
@@ -11,9 +11,9 @@ export class WaiverRepository extends BaseRepository {
     const dateStr = new Date().toISOString().split('T')[0];
     const filename = `waivers/${sanitizedName}_${dateStr}_${waiverId}`;
 
-    const signatureUrl = await uploadToS3(this.s3, signatureFile, filename);
+    const signatureUrl = await saveFile(signatureFile, filename);
 
-    return await this.db
+    const [waiver] = await this.db
       .insert(schema.waiver)
       .values({
         id: waiverId,
@@ -21,16 +21,16 @@ export class WaiverRepository extends BaseRepository {
         email: dto.email,
         signatureUrl,
       })
-      .returning()
-      .get();
+      .returning();
+    return waiver;
   }
 
   async getAll(dto: { query: string; page: number; pageSize: number }) {
     const whereClause =
       dto.query.trim() !== ''
         ? or(
-            like(schema.waiver.name, `%${dto.query}%`),
-            like(schema.waiver.email, `%${dto.query}%`),
+            ilike(schema.waiver.name, `%${dto.query}%`),
+            ilike(schema.waiver.email, `%${dto.query}%`),
           )
         : undefined;
 
@@ -54,7 +54,7 @@ export class WaiverRepository extends BaseRepository {
     const totalPages = Math.ceil(total / dto.pageSize);
 
     return {
-      data: results.map((w) => ({ ...w, signatureUrl: s3PublicUrl(w.signatureUrl) })),
+      data: results.map((w) => ({ ...w, signatureUrl: fileUrl(w.signatureUrl) })),
       pagination: {
         total,
         page: dto.page,
@@ -68,11 +68,11 @@ export class WaiverRepository extends BaseRepository {
     const results = await this.db
       .select()
       .from(schema.waiver)
-      .where(like(schema.waiver.id, id))
+      .where(eq(schema.waiver.id, id))
       .limit(1)
       .execute();
 
     const waiver = results[0];
-    return waiver ? { ...waiver, signatureUrl: s3PublicUrl(waiver.signatureUrl) } : null;
+    return waiver ? { ...waiver, signatureUrl: fileUrl(waiver.signatureUrl) } : null;
   }
 }
