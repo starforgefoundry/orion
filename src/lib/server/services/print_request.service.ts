@@ -9,18 +9,15 @@ import type {
 } from '$lib/remotes/dtos/print_request.dto';
 import type { PrintRequest } from '$lib/server/db/schema';
 import { BaseService } from '$lib/server/services/base.service';
+import { runInBackground } from '$lib/server/utils/background';
 import { DateTime } from 'luxon';
 
 export class PrintRequestService extends BaseService {
   async submitPrintRequest(dto: SubmitPrintRequestDto) {
     const printRequest = await this.printRequestRepository.submit(dto);
+    await this.printFilesRepository.uploadFiles(printRequest.id, dto.files);
 
-    const ctx = getRequestEvent().platform?.ctx;
-    ctx?.waitUntil(this.printFilesRepository.uploadFiles(printRequest.id, dto.files));
-
-    // Send Discord webhook notification
-
-    ctx?.waitUntil(this.sendDiscordNotification(printRequest.id));
+    runInBackground(this.sendDiscordNotification(printRequest.id), 'send print request discord');
 
     return {
       status: 'success',
@@ -66,15 +63,7 @@ export class PrintRequestService extends BaseService {
       }
 
       // Send pickup notification email to customer
-      const ctx = getRequestEvent().platform?.ctx;
-      if (ctx) {
-        ctx.waitUntil(this.sendPickupNotification(id));
-      } else {
-        // Fallback if ctx is not available
-        this.sendPickupNotification(id).catch((error) => {
-          console.error('Failed to send pickup notification:', error);
-        });
-      }
+      runInBackground(this.sendPickupNotification(id), 'send pickup notification');
     }
 
     if (dto.status === 'canceled') {

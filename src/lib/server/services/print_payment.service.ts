@@ -1,4 +1,3 @@
-import { getRequestEvent } from '$app/server';
 import { env } from '$env/dynamic/private';
 import { env as publicEnv } from '$env/dynamic/public';
 import type { CreatePaymentDto } from '$lib/remotes/dtos/print_payment.dto';
@@ -11,6 +10,7 @@ import type { SettingsMap } from '$lib/server/repositories/settings.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { printRequestService } from '$lib/server/services/print_request.service';
 import { squareService } from '$lib/server/services/square.service';
+import { runInBackground } from '$lib/server/utils/background';
 import { stringifySquareObject } from '$lib/server/utils/square';
 import { DateTime } from 'luxon';
 import type {
@@ -447,11 +447,10 @@ export class PrintPaymentService extends BaseService {
       buildPlates: request.buildplateCount!,
     });
 
-    const notification = printRequestService
-      .sendQuoteApprovedDiscordNotification(request.id)
-      .catch((error) => console.error('Failed to send quote approved notification:', error));
-
-    getRequestEvent().platform?.ctx?.waitUntil(notification);
+    runInBackground(
+      printRequestService.sendQuoteApprovedDiscordNotification(request.id),
+      'send quote approved notification',
+    );
 
     return payment;
   }
