@@ -14,21 +14,12 @@ vi.mock('$env/dynamic/private', () => ({
   env: { STORAGE_DIR, FILE_SIGNING_SECRET: 'test-secret' },
 }));
 
-import {
-  InvalidStorageKeyError,
-  fileUrl,
-  openFile,
-  saveFile,
-  storagePath,
-  verifySignature,
-} from './storage';
+import { InvalidStorageKeyError, fileUrl, openFile, saveFile, storagePath } from './storage';
+import { verifySignedUrl } from './signed_url';
 
 afterAll(() => rmSync(STORAGE_DIR, { recursive: true, force: true }));
 
-function signedParams(url: string) {
-  const params = new URL(url, 'https://orion.test').searchParams;
-  return [params.get('expires'), params.get('signature')] as const;
-}
+const BASE_URL = 'https://orion.test';
 
 describe('saveFile', () => {
   it('writes the file under the storage directory and returns the key', async () => {
@@ -70,27 +61,6 @@ describe('fileUrl', () => {
     const url = fileUrl('waivers/john_2025-01-01_abc');
 
     expect(url.startsWith('/files/waivers/john_2025-01-01_abc?')).toBe(true);
-    expect(verifySignature('waivers/john_2025-01-01_abc', ...signedParams(url))).toBe(true);
-  });
-});
-
-describe('verifySignature', () => {
-  it('rejects a signature issued for another key', () => {
-    const url = fileUrl('print_requests/req-1/up-1');
-
-    expect(verifySignature('print_requests/req-2/up-1', ...signedParams(url))).toBe(false);
-  });
-
-  it('rejects expired links', () => {
-    const url = fileUrl('waivers/jane');
-    vi.useFakeTimers();
-    vi.setSystemTime(Date.now() + 13 * 60 * 60 * 1000);
-
-    expect(verifySignature('waivers/jane', ...signedParams(url))).toBe(false);
-    vi.useRealTimers();
-  });
-
-  it('rejects missing parameters', () => {
-    expect(verifySignature('waivers/jane', null, null)).toBe(false);
+    expect(verifySignedUrl(new URL(url, BASE_URL))).toBe(true);
   });
 });

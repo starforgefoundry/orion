@@ -1,9 +1,5 @@
-import {
-  InvalidStorageKeyError,
-  openFile,
-  requiresSignature,
-  verifySignature,
-} from '$lib/server/utils/storage';
+import { verifySignedUrl } from '$lib/server/utils/signed_url';
+import { InvalidStorageKeyError, openFile, requiresSignature } from '$lib/server/utils/storage';
 import { error, type RequestHandler } from '@sveltejs/kit';
 import { Readable } from 'node:stream';
 
@@ -18,10 +14,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
   const key = params.key ?? '';
   const signed = requiresSignature(key);
 
-  if (
-    signed &&
-    !verifySignature(key, url.searchParams.get('expires'), url.searchParams.get('signature'))
-  ) {
+  if (signed && !verifySignedUrl(url)) {
     error(403, 'This link is invalid or has expired');
   }
 

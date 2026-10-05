@@ -3,6 +3,10 @@ import { Readable } from 'node:stream';
 import { buffer } from 'node:stream/consumers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('$env/dynamic/private', () => ({
+  env: { FILE_SIGNING_SECRET: 'test-secret' },
+}));
+
 vi.mock('$lib/server/repositories/print_files.repository', () => {
   const MockPrintFilesRepository = vi.fn();
   MockPrintFilesRepository.prototype.getByPrintRequestId = vi.fn();
@@ -147,6 +151,17 @@ describe('PrintFilesService', () => {
       expect(result[0].quantity).toBe(5);
       expect(result[1].quantity).toBe(1);
       expect(result[2].quantity).toBe(3);
+    });
+  });
+
+  describe('getDownloadUrl', () => {
+    it('should return a signed link to the request ZIP', async () => {
+      const { verifySignedUrl } = await import('$lib/server/utils/signed_url');
+
+      const url = new URL(printFilesService.getDownloadUrl('request-abc'), 'https://orion.test');
+
+      expect(url.pathname).toBe('/api/prints/download/request-abc');
+      expect(verifySignedUrl(url)).toBe(true);
     });
   });
 
