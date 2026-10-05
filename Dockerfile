@@ -1,4 +1,4 @@
-FROM node:24-slim AS base
+FROM node:24-alpine AS base
 RUN npm install --global pnpm@11
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -7,12 +7,12 @@ COPY patches ./patches
 FROM base AS build
 RUN pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm build
+RUN NODE_OPTIONS=--max-old-space-size=6144 pnpm build
 
 FROM base AS prod-deps
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
-FROM node:24-slim
+FROM node:24-alpine
 WORKDIR /app
 ENV NODE_ENV=production \
     TZ=UTC \

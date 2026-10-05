@@ -87,7 +87,7 @@ Optional (works on Node, left as-is unless you want it):
 
 Scope ends at a published image; Kubernetes manifests are out of scope.
 
-- `Dockerfile`: multi-stage, `node:24-slim`, runs `node build` as `node` on port 3000. `STORAGE_DIR=/data`, `TZ=UTC` baked in.
+- `Dockerfile`: multi-stage, `node:24-alpine`, runs `node build` as `node` on port 3000. `STORAGE_DIR=/data`, `TZ=UTC` baked in. Only `drizzle-orm` and `postgres` are runtime dependencies (for the migrate script); everything else is bundled into `build/`, which needs ~4 GB heap at build time.
 - Migrations: same image, `node scripts/migrate.ts`. Run as a k8s init container or Job.
 - `.github/workflows/deploy.yml` → `image.yml`: on release-please merge, pushes `ghcr.io/starforgefoundry/orion:<version>` and `:latest`.
 - `test.yml`: `postgres:17` service, `TEST_DATABASE_URL` set. The migrations spec skips locally without it.
