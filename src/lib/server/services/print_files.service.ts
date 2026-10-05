@@ -1,6 +1,6 @@
 import { BaseService } from '$lib/server/services/base.service';
 import JSZip from 'jszip';
-import pLimit from 'p-limit';
+import { Readable } from 'node:stream';
 
 export class PrintFilesService extends BaseService {
   async getByRequestId(printRequestId: string) {
@@ -8,24 +8,14 @@ export class PrintFilesService extends BaseService {
   }
 
   async downloadRequestZIP(printRequestId: string) {
-    const files = await this.getByRequestId(printRequestId);
+    const files = await this.printFilesRepository.openForRequest(printRequestId);
 
     const zip = new JSZip();
-    const concurrentDownloads = pLimit(5);
+    for (const file of files) {
+      zip.file(file.fileName, file.stream);
+    }
 
-    await Promise.all(
-      files.map((file) =>
-        concurrentDownloads(async () => {
-          const response = await fetch(file.fileUrl);
-          const arrayBuffer = await response.arrayBuffer();
-          zip.file(file.fileName, arrayBuffer);
-        }),
-      ),
-    );
-
-    const zipBlob = await zip.generateAsync({ type: 'blob' });
-
-    return zipBlob;
+    return new Readable().wrap(zip.generateNodeStream({ streamFiles: true }));
   }
 }
 

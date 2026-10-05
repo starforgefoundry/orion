@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from '$app/state';
   import TextArea from '$lib/frontend/components/form/TextArea.svelte';
   import { initForm } from '$lib/frontend/components/form/utils.svelte';
   import { MAX_COMMENT_ATTACHMENTS } from '$lib/remotes/dtos/print_request.dto';
@@ -53,7 +54,8 @@
   }
 
   function slicerUrl(fileUrl: string) {
-    return `orcaslicer://open?file=${encodeURIComponent(fileUrl)}`;
+    const absoluteUrl = new URL(fileUrl, page.url.origin).href;
+    return `orcaslicer://open?file=${encodeURIComponent(absoluteUrl)}`;
   }
 
   function addAttachments() {
