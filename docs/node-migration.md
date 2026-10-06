@@ -139,7 +139,7 @@ Branch `feat/node-migration`, merged via PR. Merge only after cutover is ready: 
 4. Deploy the image with secrets set; `FILE_SIGNING_SECRET` is new (`openssl rand -base64 32`).
 5. Switch DNS / proxy to the Node host.
 6. Update external callbacks if the host changed:
-   - Square webhook URL (`SQUARE_WEBHOOK_NOTIFICATION_URL` is part of signature verification).
+   - Square webhook subscription URL (`$FRONTEND_URL/api/square/webhook` is part of signature verification).
    - Google OAuth redirect URIs.
 7. Smoke test, then reopen print requests.
 

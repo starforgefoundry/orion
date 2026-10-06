@@ -15,6 +15,7 @@ import {
 import { verifyAuth } from '$lib/remotes/utils';
 import { classService } from '$lib/server/services/class.service';
 import { SettingsRepository } from '$lib/server/repositories/settings.repository';
+import { squareWebSdkUrl } from '$lib/server/utils/square';
 import * as v from 'valibot';
 
 // ── Staff: Catalog ──
@@ -149,5 +150,6 @@ export const getSquareConfig = query(async () => {
   return {
     applicationId: env.SQUARE_APPLICATION_ID ?? '',
     locationId: squareSettings.locationId,
+    webSdkUrl: squareWebSdkUrl(),
   };
 });
