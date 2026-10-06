@@ -1,5 +1,6 @@
 import { getRequestEvent } from '$app/server';
 import { env } from '$env/dynamic/private';
+import { squareWebhookUrl } from '$lib/server/utils/square';
 import { WebhooksHelper } from 'square';
 
 export function verifyAuth() {
@@ -23,7 +24,7 @@ export async function verifySquareSigning(body: string) {
     requestBody: body,
     signatureHeader: signature,
     signatureKey: env.SQUARE_WEBHOOK_SIGNATURE_KEY!,
-    notificationUrl: env.SQUARE_WEBHOOK_NOTIFICATION_URL,
+    notificationUrl: squareWebhookUrl(),
   });
 
   if (!validated) {

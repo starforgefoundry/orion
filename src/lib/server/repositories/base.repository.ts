@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { getDB, type Database } from '$lib/server/db';
+import { squareApiUrl } from '$lib/server/utils/square';
 import { SquareClient } from 'square';
 
 export class BaseRepository {
@@ -22,7 +23,7 @@ export class BaseRepository {
     if (!this._square) {
       this._square = new SquareClient({
         token: env.SQUARE_TOKEN,
-        baseUrl: env.SQUARE_URL ?? 'https://connect.squareup.com',
+        baseUrl: squareApiUrl(),
       });
     }
     return this._square;

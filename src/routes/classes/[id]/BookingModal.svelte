@@ -1,6 +1,5 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { env } from '$env/dynamic/public';
   import NumberStepper from '$lib/frontend/components/form/NumberStepper.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { initForm } from '$lib/frontend/components/form/utils.svelte';
@@ -59,18 +58,14 @@
     bookClassForm.fields.quantity.set(quantity);
   });
 
-  onMount(() => {
+  onMount(async () => {
+    const config = await squareConfigRemote;
+
     if ((window as any).Square) {
       initializeSquare();
     } else {
       const script = document.createElement('script');
-
-      if (env.PUBLIC_ENV === 'dev') {
-        script.src = 'https://sandbox.web.squarecdn.com/v1/square.js';
-      } else {
-        script.src = 'https://web.squarecdn.com/v1/square.js';
-      }
-
+      script.src = config.webSdkUrl;
       script.onload = () => initializeSquare();
       document.head.appendChild(script);
     }
