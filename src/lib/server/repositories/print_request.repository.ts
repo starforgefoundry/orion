@@ -4,11 +4,11 @@ import type {
 } from '$lib/remotes/dtos/print_request.dto';
 import { schema, type PrintRequest } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { count, desc, eq, like, or } from 'drizzle-orm';
+import { count, desc, eq, ilike, or } from 'drizzle-orm';
 
 export class PrintRequestRepository extends BaseRepository {
   async submit(dto: SubmitPrintRequestDto) {
-    return await this.db
+    const [printRequest] = await this.db
       .insert(schema.printRequest)
       .values({
         email: dto.customer.email,
@@ -20,8 +20,8 @@ export class PrintRequestRepository extends BaseRepository {
         material: dto.material,
         billingCode: dto.billingCode ?? null,
       })
-      .returning()
-      .get();
+      .returning();
+    return printRequest;
   }
 
   async getAll() {
@@ -44,9 +44,9 @@ export class PrintRequestRepository extends BaseRepository {
     const whereClause =
       dto.query.trim() !== ''
         ? or(
-            like(schema.printRequest.projectName, `%${dto.query}%`),
-            like(schema.printRequest.customerName, `%${dto.query}%`),
-            like(schema.printRequest.email, `%${dto.query}%`),
+            ilike(schema.printRequest.projectName, `%${dto.query}%`),
+            ilike(schema.printRequest.customerName, `%${dto.query}%`),
+            ilike(schema.printRequest.email, `%${dto.query}%`),
           )
         : undefined;
 

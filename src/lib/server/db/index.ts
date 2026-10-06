@@ -1,7 +1,16 @@
-import { getRequestEvent } from '$app/server';
-import { drizzle } from 'drizzle-orm/d1';
+import { env } from '$env/dynamic/private';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+
+function connect() {
+  return drizzle(postgres(env.DATABASE_URL ?? ''));
+}
+
+export type Database = ReturnType<typeof connect>;
+
+let db: Database | undefined;
 
 export function getDB() {
-  const event = getRequestEvent();
-  return drizzle(event.platform!.env.DB);
+  db ??= connect();
+  return db;
 }

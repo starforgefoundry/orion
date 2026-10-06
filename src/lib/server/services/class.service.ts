@@ -1,4 +1,4 @@
-import { getRequestEvent } from '$app/server';
+import { runInBackground } from '$lib/server/utils/background';
 import { env } from '$env/dynamic/private';
 import { formatTime } from '$lib/frontend/utils';
 import type {
@@ -59,7 +59,7 @@ export class ClassService {
     const result = await this.classRepository.updateCatalog(id, updates);
     // The class name shows up in every event's summary, so re-sync all
     // scheduled instances of this catalog so Google Calendar stays current.
-    this.runInBackground(this.syncInstancesForCatalog(id), 'sync catalog update to calendar');
+    runInBackground(this.syncInstancesForCatalog(id), 'sync catalog update to calendar');
     return result;
   }
 
@@ -148,7 +148,7 @@ export class ClassService {
     }
 
     const created = await this.classRepository.createInstances(instances);
-    this.runInBackground(
+    runInBackground(
       Promise.all(created.map((inst) => this.syncInstanceToCalendar(inst.id))),
       'sync generated instances to calendar',
     );
@@ -165,10 +165,7 @@ export class ClassService {
       seats: dto.seats,
       status: 'scheduled',
     });
-    this.runInBackground(
-      this.syncInstanceToCalendar(instance.id),
-      'sync created instance to calendar',
-    );
+    runInBackground(this.syncInstanceToCalendar(instance.id), 'sync created instance to calendar');
     return instance;
   }
 
@@ -176,7 +173,7 @@ export class ClassService {
     const { id, ...updates } = dto;
     const filtered = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
     const updated = await this.classRepository.updateInstance(id, filtered);
-    this.runInBackground(this.syncInstanceToCalendar(id), 'sync updated instance to calendar');
+    runInBackground(this.syncInstanceToCalendar(id), 'sync updated instance to calendar');
     return updated;
   }
 
@@ -218,7 +215,7 @@ export class ClassService {
     await this.classRepository.updateInstance(instanceId, { status: 'canceled' });
 
     // syncInstanceToCalendar detects the canceled status and deletes the event.
-    this.runInBackground(
+    runInBackground(
       this.syncInstanceToCalendar(instanceId),
       'remove canceled instance from calendar',
     );
@@ -335,23 +332,13 @@ export class ClassService {
     }
 
     // Send confirmation email and discord notification asynchronously
-    const ctx = getRequestEvent().platform?.ctx;
-    const emailPromise = this.sendBookingConfirmationEmail(booking.id);
-    const discordPromise = this.sendBookingDiscordNotification(booking.id);
-    if (ctx) {
-      ctx.waitUntil(emailPromise);
-      ctx.waitUntil(discordPromise);
-    } else {
-      emailPromise.catch((err) => console.error('Failed to send booking email:', err));
-      discordPromise.catch((err) =>
-        console.error('Failed to send booking discord notification:', err),
-      );
-    }
-
-    this.runInBackground(
-      this.syncInstanceToCalendar(dto.instanceId),
-      'sync booking change to calendar',
+    runInBackground(this.sendBookingConfirmationEmail(booking.id), 'send booking email');
+    runInBackground(
+      this.sendBookingDiscordNotification(booking.id),
+      'send booking discord notification',
     );
+
+    runInBackground(this.syncInstanceToCalendar(dto.instanceId), 'sync booking change to calendar');
 
     return booking;
   }
@@ -371,7 +358,7 @@ export class ClassService {
 
     await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
 
-    this.runInBackground(
+    runInBackground(
       this.syncInstanceToCalendar(booking.instanceId),
       'sync canceled booking to calendar',
     );
@@ -390,7 +377,7 @@ export class ClassService {
 
     await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
 
-    this.runInBackground(
+    runInBackground(
       this.syncInstanceToCalendar(booking.instanceId),
       'sync staff-canceled booking to calendar',
     );
@@ -432,10 +419,7 @@ export class ClassService {
       throw new Error('This class is fully booked');
     }
 
-    this.runInBackground(
-      this.syncInstanceToCalendar(dto.instanceId),
-      'sync manual booking to calendar',
-    );
+    runInBackground(this.syncInstanceToCalendar(dto.instanceId), 'sync manual booking to calendar');
 
     return booking;
   }
@@ -683,29 +667,6 @@ export class ClassService {
       endDateTime: endDt.toISO({ suppressMilliseconds: true })!,
       timeZone: 'America/Chicago',
     };
-  }
-
-  /**
-   * Runs a calendar sync in the background via Cloudflare's waitUntil so API
-   * responses aren't blocked on Google API latency. Errors are logged but
-   * never propagate to the caller.
-   */
-  private runInBackground(promise: Promise<unknown>, label: string): void {
-    const wrapped = promise.catch((err) => {
-      console.error(`Background task failed (${label}):`, err);
-    });
-
-    try {
-      const ctx = getRequestEvent().platform?.ctx;
-      if (ctx) {
-        ctx.waitUntil(wrapped);
-        return;
-      }
-    } catch {
-      // Not inside a request context (e.g. during tests).
-    }
-    // Fire-and-forget outside a request context.
-    void wrapped;
   }
 }
 

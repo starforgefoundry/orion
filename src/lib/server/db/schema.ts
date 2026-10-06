@@ -1,9 +1,9 @@
 import { type InferSelectModel } from 'drizzle-orm';
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { boolean, foreignKey, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 import { DateTime } from 'luxon';
 import { luxonTimestamp } from './custom/luxon';
 
-export const user = sqliteTable('user', {
+export const user = pgTable('user', {
   email: text('email').notNull().unique().primaryKey(),
   name: text('name').notNull(),
   picture: text('picture').notNull(),
@@ -12,7 +12,7 @@ export const user = sqliteTable('user', {
 
 export type User = InferSelectModel<typeof user>;
 
-export const printRequest = sqliteTable('print_request', {
+export const printRequest = pgTable('print_request', {
   id: text('id')
     .notNull()
     .primaryKey()
@@ -31,7 +31,7 @@ export const printRequest = sqliteTable('print_request', {
     enum: ['in_queue', 'printing', 'done', 'picked_up', 'canceled'],
   }).notNull(),
 
-  isQuote: integer('is_quote', { mode: 'boolean' }).notNull().default(false),
+  isQuote: boolean('is_quote').notNull().default(false),
 
   material: text('material')
     .notNull()
@@ -48,7 +48,7 @@ export const printRequest = sqliteTable('print_request', {
 
 export type PrintRequest = InferSelectModel<typeof printRequest>;
 
-export const printRequestFile = sqliteTable('print_request_file', {
+export const printRequestFile = pgTable('print_request_file', {
   id: text('id')
     .notNull()
     .primaryKey()
@@ -63,7 +63,7 @@ export const printRequestFile = sqliteTable('print_request_file', {
 
 export type PrintRequestFile = InferSelectModel<typeof printRequestFile>;
 
-export const printRequestComment = sqliteTable(
+export const printRequestComment = pgTable(
   'print_request_comment',
   {
     id: text('id')
@@ -86,25 +86,31 @@ export const printRequestComment = sqliteTable(
 
 export type PrintRequestComment = InferSelectModel<typeof printRequestComment>;
 
-export const printRequestCommentFile = sqliteTable(
+export const printRequestCommentFile = pgTable(
   'print_request_comment_file',
   {
     id: text('id')
       .notNull()
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    commentId: text('comment_id')
-      .notNull()
-      .references(() => printRequestComment.id),
+    commentId: text('comment_id').notNull(),
     fileName: text('file_name').notNull(),
     fileUrl: text('file_url').notNull(),
   },
-  (table) => [index('print_request_comment_file_comment_idx').on(table.commentId)],
+  (table) => [
+    index('print_request_comment_file_comment_idx').on(table.commentId),
+    // The generated name exceeds Postgres' 63 character identifier limit
+    foreignKey({
+      name: 'print_request_comment_file_comment_id_fk',
+      columns: [table.commentId],
+      foreignColumns: [printRequestComment.id],
+    }),
+  ],
 );
 
 export type PrintRequestCommentFile = InferSelectModel<typeof printRequestCommentFile>;
 
-export const payment = sqliteTable(
+export const payment = pgTable(
   'payment',
   {
     id: text('id')
@@ -131,14 +137,14 @@ export const payment = sqliteTable(
 
 export type Payment = InferSelectModel<typeof payment>;
 
-export const printMaterial = sqliteTable('print_material', {
+export const printMaterial = pgTable('print_material', {
   id: text('id')
     .notNull()
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
-  available: integer('available', { mode: 'boolean' }).notNull().default(true),
-  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+  available: boolean('available').notNull().default(true),
+  archived: boolean('archived').notNull().default(false),
   tagId: text('tag_id').unique(),
   filamentId: text('filament_id'),
   vendor: text('vendor'),
@@ -149,19 +155,19 @@ export const printMaterial = sqliteTable('print_material', {
 
 export type PrintMaterial = InferSelectModel<typeof printMaterial>;
 
-export const settings = sqliteTable('settings', {
+export const settings = pgTable('settings', {
   key: text('key').notNull().primaryKey(),
-  value: text('value', { mode: 'json' }).notNull(),
+  value: jsonb('value').notNull(),
 });
 
-export const squareWebhookLog = sqliteTable('square_webhook_log', {
+export const squareWebhookLog = pgTable('square_webhook_log', {
   id: text('id').notNull().primaryKey(),
-  payload: text('payload', { mode: 'json' }).notNull(),
+  payload: jsonb('payload').notNull(),
 });
 
 export type SquareWebhookLog = InferSelectModel<typeof squareWebhookLog>;
 
-export const billingCode = sqliteTable('billing_code', {
+export const billingCode = pgTable('billing_code', {
   id: text('id')
     .notNull()
     .primaryKey()
@@ -170,24 +176,24 @@ export const billingCode = sqliteTable('billing_code', {
   description: text('description').notNull(),
   organizationId: text('organization_id').references(() => organization.id),
   discountId: text('discount_id'),
-  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+  archived: boolean('archived').notNull().default(false),
 });
 
 export type BillingCode = InferSelectModel<typeof billingCode>;
 
-export const organization = sqliteTable('organization', {
+export const organization = pgTable('organization', {
   id: text('id')
     .notNull()
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
   email: text('email').notNull(),
-  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+  archived: boolean('archived').notNull().default(false),
 });
 
 export type Organization = InferSelectModel<typeof organization>;
 
-export const organizationCharge = sqliteTable(
+export const organizationCharge = pgTable(
   'organization_charge',
   {
     id: text('id')
@@ -208,7 +214,7 @@ export const organizationCharge = sqliteTable(
 
 export type OrganizationCharge = InferSelectModel<typeof organizationCharge>;
 
-export const inventoryItem = sqliteTable('inventory_item', {
+export const inventoryItem = pgTable('inventory_item', {
   id: text('id')
     .notNull()
     .primaryKey()
@@ -222,7 +228,7 @@ export const inventoryItem = sqliteTable('inventory_item', {
 
 export type InventoryItem = InferSelectModel<typeof inventoryItem>;
 
-export const purchaseList = sqliteTable(
+export const purchaseList = pgTable(
   'purchase_list',
   {
     id: text('id')
@@ -240,7 +246,7 @@ export const purchaseList = sqliteTable(
 
 export type PurchaseList = InferSelectModel<typeof purchaseList>;
 
-export const waiver = sqliteTable('waiver', {
+export const waiver = pgTable('waiver', {
   id: text('id')
     .notNull()
     .primaryKey()
@@ -255,7 +261,7 @@ export const waiver = sqliteTable('waiver', {
 
 export type Waiver = InferSelectModel<typeof waiver>;
 
-export const classCatalog = sqliteTable('class_catalog', {
+export const classCatalog = pgTable('class_catalog', {
   id: text('id')
     .notNull()
     .primaryKey()
@@ -271,7 +277,7 @@ export const classCatalog = sqliteTable('class_catalog', {
 
 export type ClassCatalog = InferSelectModel<typeof classCatalog>;
 
-export const classInstance = sqliteTable(
+export const classInstance = pgTable(
   'class_instance',
   {
     id: text('id')
@@ -306,7 +312,7 @@ export const classInstance = sqliteTable(
 
 export type ClassInstance = InferSelectModel<typeof classInstance>;
 
-export const classBooking = sqliteTable(
+export const classBooking = pgTable(
   'class_booking',
   {
     id: text('id')

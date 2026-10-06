@@ -3,6 +3,7 @@
   import type { ModalProps } from '$lib/frontend/components/utils';
   import {
     getPrintRequestById,
+    getPrintRequestDownloadUrl,
     sendPickupNotification,
     updatePartQuantity,
     updatePrintRequestDiscount,
@@ -69,6 +70,8 @@
 
   let requestRemote = $derived(getPrintRequestById(requestId));
   let request = $derived(requestRemote.current);
+  let downloadPath = $derived(getPrintRequestDownloadUrl(requestId).current);
+  let downloadUrl = $derived(downloadPath && new URL(downloadPath, window.location.origin).href);
   let billingType = $derived.by(() => {
     if (!request) {
       return 'N/A';
@@ -430,16 +433,14 @@
                   aria-label="Download Files"
                   color="primary"
                   size="small"
-                  href={`${window.location.origin}/api/prints/download/${request?.id}`}
+                  href={downloadUrl}
                 />
                 <IconButton
                   icon={mdiMonitorShare}
                   aria-label="Send to OrcaSlicer"
                   color="success"
                   size="small"
-                  href={`orcaslicer://open?file=${encodeURIComponent(
-                    `${window.location.origin}/api/prints/download/${request?.id}`,
-                  )}`}
+                  href={downloadUrl && `orcaslicer://open?file=${encodeURIComponent(downloadUrl)}`}
                 />
               {/if}
             </HStack>

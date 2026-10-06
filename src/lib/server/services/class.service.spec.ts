@@ -55,10 +55,6 @@ vi.mock('$lib/server/repositories/settings.repository', () => {
   return { SettingsRepository: MockSettingsRepository };
 });
 
-vi.mock('$app/server', () => ({
-  getRequestEvent: vi.fn(() => ({ platform: { ctx: { waitUntil: vi.fn() } } })),
-}));
-
 vi.mock('$env/dynamic/private', () => ({
   env: { FRONTEND_URL: 'https://example.com' },
 }));

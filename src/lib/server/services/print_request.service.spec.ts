@@ -1,6 +1,5 @@
 import type { SubmitPrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMockRequestEvent } from './test-utils';
 
 // Mock the repositories
 vi.mock('$lib/server/repositories/print_files.repository', () => {
@@ -105,7 +104,7 @@ describe('PrintRequestService', () => {
     getRequestEvent = getReqEvent;
 
     // Set up the mock request event
-    vi.mocked(getRequestEvent).mockReturnValue(createMockRequestEvent());
+    vi.mocked(getRequestEvent).mockReturnValue({});
 
     // Import the service - this will create new instances of the mocked repositories
     const { printRequestService: service } =
@@ -249,28 +248,22 @@ describe('PrintRequestService', () => {
       expect(result.printRequestId).toBe(mockPrintRequest.id);
     });
 
-    it('should use platform context waitUntil for file uploads', async () => {
+    it('should store uploaded files before returning', async () => {
       // Arrange
-      const mockWaitUntil = vi.fn();
-      vi.mocked(getRequestEvent).mockReturnValue({
-        platform: {
-          ctx: {
-            waitUntil: mockWaitUntil,
-          },
-        },
-      });
-
-      const mockCustomer = { id: 'customer-1', name: 'Test', email: 'test@test.com' };
       const mockPrintRequest = { id: 'request-1', customer: 'customer-1' };
       const dto: SubmitPrintRequestDto = {
         customer: { name: 'Test', email: 'test@test.com' },
         projectName: 'Test',
         material: 'mat-1',
-        files: [],
+        files: [{ file: new File(['data'], 'part.stl'), filename: 'part.stl', quantity: 1 }],
       };
 
+      let uploaded = false;
       vi.mocked(mockRequestRepo.submit).mockResolvedValue(mockPrintRequest);
-      vi.mocked(mockFilesRepo.uploadFiles).mockResolvedValue(undefined);
+      vi.mocked(mockFilesRepo.uploadFiles).mockImplementation(async () => {
+        await Promise.resolve();
+        uploaded = true;
+      });
       // Mock getById for Discord notification
       vi.mocked(mockRequestRepo.getById).mockResolvedValue({
         ...mockPrintRequest,
@@ -285,7 +278,8 @@ describe('PrintRequestService', () => {
       await printRequestService.submitPrintRequest(dto);
 
       // Assert
-      expect(mockWaitUntil).toHaveBeenCalled();
+      expect(mockFilesRepo.uploadFiles).toHaveBeenCalledWith('request-1', dto.files);
+      expect(uploaded).toBe(true);
     });
   });
 

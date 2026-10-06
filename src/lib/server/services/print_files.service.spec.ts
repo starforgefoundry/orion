@@ -1,11 +1,16 @@
+import JSZip from 'jszip';
+import { Readable } from 'node:stream';
+import { buffer } from 'node:stream/consumers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock fetch globally
-global.fetch = vi.fn();
+vi.mock('$env/dynamic/private', () => ({
+  env: { FILE_SIGNING_SECRET: 'test-secret' },
+}));
 
 vi.mock('$lib/server/repositories/print_files.repository', () => {
   const MockPrintFilesRepository = vi.fn();
   MockPrintFilesRepository.prototype.getByPrintRequestId = vi.fn();
+  MockPrintFilesRepository.prototype.openForRequest = vi.fn();
   return { PrintFilesRepository: MockPrintFilesRepository };
 });
 
@@ -149,166 +154,51 @@ describe('PrintFilesService', () => {
     });
   });
 
+  describe('getDownloadUrl', () => {
+    it('should return a signed link to the request ZIP', async () => {
+      const { verifySignedUrl } = await import('$lib/server/utils/signed_url');
+
+      const url = new URL(printFilesService.getDownloadUrl('request-abc'), 'https://orion.test');
+
+      expect(url.pathname).toBe('/api/prints/download/request-abc');
+      expect(verifySignedUrl(url)).toBe(true);
+    });
+  });
+
   describe('downloadRequestZIP', () => {
-    it('should fetch files and create a zip blob', async () => {
-      // Arrange
-      const printRequestId = 'request-abc';
-      const mockFiles = [
-        {
-          id: 'file-1',
-          printRequestId: 'request-abc',
-          fileName: 'model.stl',
-          fileUrl: 'https://s3.example.com/model.stl',
-          quantity: 1,
-        },
-      ];
+    function storedFile(fileName: string, contents: string) {
+      return { fileName, size: contents.length, stream: Readable.from([Buffer.from(contents)]) };
+    }
 
-      const mockFileContent = new ArrayBuffer(8);
-      const mockResponse = {
-        arrayBuffer: vi.fn().mockResolvedValue(mockFileContent),
-      };
+    async function unzip(zip: Readable) {
+      return await JSZip.loadAsync(await buffer(zip));
+    }
 
-      vi.mocked(mockFilesRepo.getByPrintRequestId).mockResolvedValue(mockFiles);
-      vi.mocked(global.fetch).mockResolvedValue(mockResponse as any);
+    it('should zip every stored file for the request', async () => {
+      vi.mocked(mockFilesRepo.openForRequest).mockResolvedValue([
+        storedFile('part1.stl', 'first'),
+        storedFile('part2.stl', 'second'),
+      ]);
 
-      // Act
-      const result = await printFilesService.downloadRequestZIP(printRequestId);
+      const archive = await unzip(await printFilesService.downloadRequestZIP('request-multi'));
 
-      // Assert
-      expect(mockFilesRepo.getByPrintRequestId).toHaveBeenCalledWith(printRequestId);
-      expect(global.fetch).toHaveBeenCalledWith('https://s3.example.com/model.stl');
-      expect(result).toBeInstanceOf(Blob);
+      expect(mockFilesRepo.openForRequest).toHaveBeenCalledWith('request-multi');
+      expect(await archive.file('part1.stl')?.async('string')).toBe('first');
+      expect(await archive.file('part2.stl')?.async('string')).toBe('second');
     });
 
-    it('should create zip with multiple files', async () => {
-      // Arrange
-      const printRequestId = 'request-multi';
-      const mockFiles = [
-        {
-          id: 'file-1',
-          printRequestId: 'request-multi',
-          fileName: 'part1.stl',
-          fileUrl: 'https://s3.example.com/part1.stl',
-          quantity: 1,
-        },
-        {
-          id: 'file-2',
-          printRequestId: 'request-multi',
-          fileName: 'part2.stl',
-          fileUrl: 'https://s3.example.com/part2.stl',
-          quantity: 2,
-        },
-      ];
+    it('should produce an empty archive when the request has no files', async () => {
+      vi.mocked(mockFilesRepo.openForRequest).mockResolvedValue([]);
 
-      const mockFileContent = new ArrayBuffer(8);
-      const mockResponse = {
-        arrayBuffer: vi.fn().mockResolvedValue(mockFileContent),
-      };
+      const archive = await unzip(await printFilesService.downloadRequestZIP('request-empty'));
 
-      vi.mocked(mockFilesRepo.getByPrintRequestId).mockResolvedValue(mockFiles);
-      vi.mocked(global.fetch).mockResolvedValue(mockResponse as any);
-
-      // Act
-      const result = await printFilesService.downloadRequestZIP(printRequestId);
-
-      // Assert
-      expect(global.fetch).toHaveBeenCalledTimes(2);
-      expect(global.fetch).toHaveBeenCalledWith('https://s3.example.com/part1.stl');
-      expect(global.fetch).toHaveBeenCalledWith('https://s3.example.com/part2.stl');
-      expect(result).toBeInstanceOf(Blob);
+      expect(Object.keys(archive.files)).toHaveLength(0);
     });
 
-    it('should handle empty file list', async () => {
-      // Arrange
-      const printRequestId = 'request-empty';
-      vi.mocked(mockFilesRepo.getByPrintRequestId).mockResolvedValue([]);
+    it('should propagate missing file errors', async () => {
+      vi.mocked(mockFilesRepo.openForRequest).mockRejectedValue(new Error('ENOENT'));
 
-      // Act
-      const result = await printFilesService.downloadRequestZIP(printRequestId);
-
-      // Assert
-      expect(mockFilesRepo.getByPrintRequestId).toHaveBeenCalledWith(printRequestId);
-      expect(global.fetch).not.toHaveBeenCalled();
-      expect(result).toBeInstanceOf(Blob);
-    });
-
-    it('should fetch each file URL correctly', async () => {
-      // Arrange
-      const printRequestId = 'request-urls';
-      const mockFiles = [
-        {
-          id: 'file-1',
-          printRequestId: 'request-urls',
-          fileName: 'design.stl',
-          fileUrl: 'https://bucket.s3.amazonaws.com/designs/file1.stl',
-          quantity: 3,
-        },
-      ];
-
-      const mockFileContent = new ArrayBuffer(16);
-      const mockResponse = {
-        arrayBuffer: vi.fn().mockResolvedValue(mockFileContent),
-      };
-
-      vi.mocked(mockFilesRepo.getByPrintRequestId).mockResolvedValue(mockFiles);
-      vi.mocked(global.fetch).mockResolvedValue(mockResponse as any);
-
-      // Act
-      await printFilesService.downloadRequestZIP(printRequestId);
-
-      // Assert
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://bucket.s3.amazonaws.com/designs/file1.stl',
-      );
-    });
-
-    it('should handle file download errors gracefully', async () => {
-      // Arrange
-      const printRequestId = 'request-error';
-      const mockFiles = [
-        {
-          id: 'file-1',
-          printRequestId: 'request-error',
-          fileName: 'broken.stl',
-          fileUrl: 'https://s3.example.com/broken.stl',
-          quantity: 1,
-        },
-      ];
-
-      vi.mocked(mockFilesRepo.getByPrintRequestId).mockResolvedValue(mockFiles);
-      vi.mocked(global.fetch).mockRejectedValue(new Error('Network error'));
-
-      // Act & Assert
-      await expect(printFilesService.downloadRequestZIP(printRequestId)).rejects.toThrow(
-        'Network error',
-      );
-    });
-
-    it('should handle concurrent downloads with limit', async () => {
-      // Arrange
-      const printRequestId = 'request-concurrent';
-      const mockFiles = Array.from({ length: 10 }, (_, i) => ({
-        id: `file-${i}`,
-        printRequestId: 'request-concurrent',
-        fileName: `part${i}.stl`,
-        fileUrl: `https://s3.example.com/part${i}.stl`,
-        quantity: 1,
-      }));
-
-      const mockFileContent = new ArrayBuffer(8);
-      const mockResponse = {
-        arrayBuffer: vi.fn().mockResolvedValue(mockFileContent),
-      };
-
-      vi.mocked(mockFilesRepo.getByPrintRequestId).mockResolvedValue(mockFiles);
-      vi.mocked(global.fetch).mockResolvedValue(mockResponse as any);
-
-      // Act
-      const result = await printFilesService.downloadRequestZIP(printRequestId);
-
-      // Assert
-      expect(global.fetch).toHaveBeenCalledTimes(10);
-      expect(result).toBeInstanceOf(Blob);
+      await expect(printFilesService.downloadRequestZIP('request-error')).rejects.toThrow('ENOENT');
     });
   });
 });

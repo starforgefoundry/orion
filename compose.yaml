@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: orion
+      POSTGRES_PASSWORD: orion
+      POSTGRES_DB: orion
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: pg_isready -U orion
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  # Runs the production image locally: docker compose --profile app up --build
+  migrate:
+    profiles: [app]
+    build: .
+    command: node scripts/migrate.ts
+    environment:
+      DATABASE_URL: postgres://orion:orion@postgres:5432/orion
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    profiles: [app]
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgres://orion:orion@postgres:5432/orion
+      ORIGIN: http://localhost:3000
+      BODY_SIZE_LIMIT: 1G
+    ports:
+      - 3000:3000
+    volumes:
+      - ./storage:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres:

@@ -112,6 +112,12 @@ export const getPrintRequestFiles = query(v.string(), async (printRequestId: str
   return await printFilesService.getByRequestId(printRequestId);
 });
 
+export const getPrintRequestDownloadUrl = query(v.string(), async (printRequestId: string) => {
+  verifyAuth();
+
+  return printFilesService.getDownloadUrl(printRequestId);
+});
+
 export const getPrintRequestComments = query(v.string(), async (printRequestId: string) => {
   verifyAuth();
 

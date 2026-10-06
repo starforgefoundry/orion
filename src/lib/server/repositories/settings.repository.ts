@@ -52,11 +52,10 @@ const defaults: SettingsMap = {
 
 export class SettingsRepository extends BaseRepository {
   async getSetting<K extends keyof SettingsMap>(key: K) {
-    const setting = await this.db
+    const [setting] = await this.db
       .select()
       .from(schema.settings)
-      .where(eq(schema.settings.key, key as string))
-      .get();
+      .where(eq(schema.settings.key, key as string));
 
     return {
       ...defaults[key],
@@ -68,7 +67,7 @@ export class SettingsRepository extends BaseRepository {
     key: K,
     value: SettingsMap[K],
   ): Promise<SettingsMap[K]> {
-    const updated = await this.db
+    const [updated] = await this.db
       .insert(schema.settings)
       .values({
         key: key as string,
@@ -80,8 +79,7 @@ export class SettingsRepository extends BaseRepository {
           value: value,
         },
       })
-      .returning()
-      .get();
+      .returning();
 
     return updated.value as SettingsMap[K];
   }

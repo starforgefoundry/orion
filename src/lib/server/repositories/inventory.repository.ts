@@ -1,27 +1,26 @@
 import type { UpsertInventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { s3PublicUrl, uploadToS3 } from '$lib/server/utils/s3';
+import { fileUrl, saveFile } from '$lib/server/utils/storage';
 import { eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 
 export class InventoryRepository extends BaseRepository {
   async getAll() {
-    const items = await this.db.select().from(schema.inventoryItem).all();
-    return items.map((item) => ({ ...item, imageUrl: s3PublicUrl(item.imageUrl) }));
+    const items = await this.db.select().from(schema.inventoryItem);
+    return items.map((item) => ({ ...item, imageUrl: fileUrl(item.imageUrl) }));
   }
 
   async getById(id: string) {
-    const item = await this.db
+    const [item] = await this.db
       .select()
       .from(schema.inventoryItem)
-      .where(eq(schema.inventoryItem.id, id))
-      .get();
-    return item && { ...item, imageUrl: s3PublicUrl(item.imageUrl) };
+      .where(eq(schema.inventoryItem.id, id));
+    return item && { ...item, imageUrl: fileUrl(item.imageUrl) };
   }
 
   async upsert(dto: UpsertInventoryItemDto) {
-    const item = await this.db
+    const [item] = await this.db
       .insert(schema.inventoryItem)
       .values({
         ...dto,
@@ -37,8 +36,7 @@ export class InventoryRepository extends BaseRepository {
           description: dto.description,
         },
       })
-      .returning()
-      .get();
+      .returning();
     return item;
   }
 
@@ -63,32 +61,30 @@ export class InventoryRepository extends BaseRepository {
       .leftJoin(
         schema.inventoryItem,
         eq(schema.purchaseList.inventoryItemId, schema.inventoryItem.id),
-      )
-      .all();
+      );
 
     return items.map((item) => ({
       ...item,
       inventoryItem: item.inventoryItem && {
         ...item.inventoryItem,
-        imageUrl: s3PublicUrl(item.inventoryItem.imageUrl),
+        imageUrl: fileUrl(item.inventoryItem.imageUrl),
       },
     }));
   }
 
   async addToPurchaseList(inventoryItemId: string) {
     // check if item exists
-    const inventoryItem = await this.db
+    const [inventoryItem] = await this.db
       .select()
       .from(schema.inventoryItem)
-      .where(eq(schema.inventoryItem.id, inventoryItemId))
-      .get();
+      .where(eq(schema.inventoryItem.id, inventoryItemId));
 
     if (!inventoryItem) {
       throw new Error('Inventory item not found');
     }
 
     try {
-      const item = await this.db
+      const [item] = await this.db
         .insert(schema.purchaseList)
         .values({
           inventoryItemId,
@@ -100,8 +96,7 @@ export class InventoryRepository extends BaseRepository {
             addedDate: DateTime.now(),
           },
         })
-        .returning()
-        .get();
+        .returning();
       return item;
     } catch (e) {
       console.log(e);
@@ -116,25 +111,24 @@ export class InventoryRepository extends BaseRepository {
   }
 
   async isPurchaseListed(inventoryItemId: string) {
-    const item = await this.db
+    const [item] = await this.db
       .select()
       .from(schema.purchaseList)
-      .where(eq(schema.purchaseList.inventoryItemId, inventoryItemId))
-      .get();
+      .where(eq(schema.purchaseList.inventoryItemId, inventoryItemId));
 
     return !!item;
   }
 
   async uploadImage(id: string, image: File) {
     const uploadId = crypto.randomUUID();
-    const key = await uploadToS3(this.s3, image, `inventory/${id}/${uploadId}`);
+    const key = await saveFile(image, `inventory/${id}/${uploadId}`);
 
     await this.db
       .update(schema.inventoryItem)
       .set({ imageUrl: key })
       .where(eq(schema.inventoryItem.id, id));
 
-    return s3PublicUrl(key);
+    return fileUrl(key);
   }
 
   async deleteImage(id: string) {

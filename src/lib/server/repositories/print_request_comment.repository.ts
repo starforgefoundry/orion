@@ -1,8 +1,7 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { s3PublicUrl, uploadToS3 } from '$lib/server/utils/s3';
+import { fileUrl, saveFile } from '$lib/server/utils/storage';
 import { desc, eq, inArray } from 'drizzle-orm';
-import pLimit from 'p-limit';
 
 function extensionOf(fileName: string) {
   const dot = fileName.lastIndexOf('.');
@@ -19,30 +18,23 @@ type NewComment = {
 export class PrintRequestCommentRepository extends BaseRepository {
   async create(comment: NewComment) {
     const id = crypto.randomUUID();
-    const concurrentUploads = pLimit(3);
+    const attachments = [];
+    for (const attachment of comment.attachments) {
+      const fileId = crypto.randomUUID();
+      const key = await saveFile(
+        attachment,
+        `print_requests/${comment.printRequestId}/comments/${fileId}${extensionOf(attachment.name)}`,
+      );
 
-    const attachments = await Promise.all(
-      comment.attachments.map((attachment) =>
-        concurrentUploads(async () => {
-          const fileId = crypto.randomUUID();
+      attachments.push({
+        id: fileId,
+        commentId: id,
+        fileName: attachment.name,
+        fileUrl: key,
+      });
+    }
 
-          const fileUrl = await uploadToS3(
-            this.s3,
-            attachment,
-            `print_requests/${comment.printRequestId}/comments/${fileId}${extensionOf(attachment.name)}`,
-          );
-
-          return {
-            id: fileId,
-            commentId: id,
-            fileName: attachment.name,
-            fileUrl,
-          };
-        }),
-      ),
-    );
-
-    const created = await this.db
+    const [created] = await this.db
       .insert(schema.printRequestComment)
       .values({
         id,
@@ -50,8 +42,7 @@ export class PrintRequestCommentRepository extends BaseRepository {
         authorEmail: comment.authorEmail,
         body: comment.body,
       })
-      .returning()
-      .get();
+      .returning();
 
     if (attachments.length > 0) {
       await this.db.insert(schema.printRequestCommentFile).values(attachments);
@@ -89,7 +80,7 @@ export class PrintRequestCommentRepository extends BaseRepository {
 
     return attachments.map((attachment) => ({
       ...attachment,
-      fileUrl: s3PublicUrl(attachment.fileUrl),
+      fileUrl: fileUrl(attachment.fileUrl),
     }));
   }
 }

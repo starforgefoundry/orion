@@ -10,7 +10,7 @@ import { DateTime } from 'luxon';
 
 export class OrganizationRepository extends BaseRepository {
   async create(dto: CreateOrganizationDto) {
-    const organization = await this.db.insert(schema.organization).values(dto).returning().get();
+    const [organization] = await this.db.insert(schema.organization).values(dto).returning();
     return organization;
   }
 
@@ -22,20 +22,19 @@ export class OrganizationRepository extends BaseRepository {
   }
 
   async getById(id: string) {
-    return await this.db
+    const [organization] = await this.db
       .select()
       .from(schema.organization)
-      .where(eq(schema.organization.id, id))
-      .get();
+      .where(eq(schema.organization.id, id));
+    return organization;
   }
 
   async update(id: string, updates: Omit<UpdateOrganizationDto, 'id'>) {
-    const organization = await this.db
+    const [organization] = await this.db
       .update(schema.organization)
       .set(updates)
       .where(eq(schema.organization.id, id))
-      .returning()
-      .get();
+      .returning();
 
     return organization;
   }
@@ -98,7 +97,7 @@ export class OrganizationRepository extends BaseRepository {
   }
 
   async createCharge(dto: CreateOrgChargeDto) {
-    const payment = await this.db
+    const [payment] = await this.db
       .insert(schema.payment)
       .values({
         type: 'org_charge',
@@ -108,10 +107,9 @@ export class OrganizationRepository extends BaseRepository {
         issuedDate: DateTime.now(),
         paymentDate: DateTime.now(),
       })
-      .returning()
-      .get();
+      .returning();
 
-    return await this.db
+    const [charge] = await this.db
       .insert(schema.organizationCharge)
       .values({
         organizationId: dto.organizationId,
@@ -119,7 +117,7 @@ export class OrganizationRepository extends BaseRepository {
         creationDate: DateTime.now(),
         paymentId: payment.id,
       })
-      .returning()
-      .get();
+      .returning();
+    return charge;
   }
 }

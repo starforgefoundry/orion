@@ -142,15 +142,14 @@ export class SquareRepository extends BaseRepository {
   }
 
   async logWebhook(webhookData: SquareWebhook<any>) {
-    const log = await this.db
+    const [log] = await this.db
       .insert(schema.squareWebhookLog)
       .values({
         id: webhookData.event_id,
         payload: webhookData,
       })
       .onConflictDoNothing()
-      .returning()
-      .get();
+      .returning();
 
     return log as SquareWebhookLog | undefined;
   }
