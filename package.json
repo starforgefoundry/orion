@@ -48,7 +48,6 @@
     "prettier": "^3.7.4",
     "prettier-plugin-svelte": "^3.4.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
-    "square": "^43.2.1",
     "svelte": "^5.54.0",
     "svelte-check": "^4.3.5",
     "svelte-highlight": "^7.9.0",
@@ -61,6 +60,7 @@
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",
-    "postgres": "^3.4.9"
+    "postgres": "^3.4.9",
+    "square": "^43.2.1"
   }
 }
