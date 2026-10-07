@@ -1,4 +1,5 @@
 import { goto } from '$app/navigation';
+import { downloadFilamentCard } from '$lib/frontend/filament-card/download';
 import {
   getPrintMaterials,
   updatePrintMaterial,
@@ -10,6 +11,7 @@ import MaterialEditModal from './MaterialEditModal.svelte';
 
 export class MaterialsManager {
   searchTerm = $state('');
+  downloadingCardId = $state<string | null>(null);
 
   private materials = getPrintMaterials();
 
@@ -41,6 +43,20 @@ export class MaterialsManager {
 
   async setAvailability(id: string, available: boolean) {
     await updatePrintMaterial({ id, available });
+  }
+
+  async downloadCard(material: PrintMaterial) {
+    if (!material.tagId) return;
+
+    this.downloadingCardId = material.id;
+    try {
+      await downloadFilamentCard(
+        { qrData: material.tagId, label: material.name },
+        `card_${material.name.replaceAll(' ', '-')}.3mf`,
+      );
+    } finally {
+      this.downloadingCardId = null;
+    }
   }
 
   printTag(material: PrintMaterial) {

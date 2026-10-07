@@ -16,7 +16,7 @@
     Switch,
     Text,
   } from '@immich/ui';
-  import { mdiMagnify, mdiPencil, mdiPlus, mdiPrinter, mdiTrashCan } from '@mdi/js';
+  import { mdiCubeOutline, mdiMagnify, mdiPencil, mdiPlus, mdiPrinter, mdiTrashCan } from '@mdi/js';
   import MaterialModal from './MaterialModal.svelte';
   import { MaterialsManager } from './materials.svelte';
 
@@ -99,6 +99,13 @@
               color="secondary"
               disabled={!material.tagId}
               onclick={() => manager.printTag(material)}
+            />
+            <IconButton
+              icon={mdiCubeOutline}
+              aria-label="Download Filament Card"
+              color="secondary"
+              disabled={!material.tagId || manager.downloadingCardId === material.id}
+              onclick={() => manager.downloadCard(material)}
             />
             <IconButton
               icon={mdiTrashCan}
