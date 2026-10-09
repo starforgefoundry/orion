@@ -26,13 +26,13 @@
     Switch,
     Text,
     toastManager,
-    type SelectItem,
+    type SelectOption,
   } from '@immich/ui';
   import { mdiTrashCan } from '@mdi/js';
 
   let printRequestSettings = await getPublicPrintRequestForm();
 
-  let materialOptions: SelectItem[] = $derived(
+  let materialOptions: SelectOption[] = $derived(
     printRequestSettings.materials.map((material) => ({
       label: material.name,
       value: material.id,
@@ -49,9 +49,9 @@
     submitPrintRequestForm.fields.files.set(files);
   });
 
-  let selectedMaterial: SelectItem | undefined = $state(undefined);
+  let selectedMaterial: string | undefined = $state(undefined);
   $effect(() => {
-    submitPrintRequestForm.fields.material.set(selectedMaterial?.value ?? '');
+    submitPrintRequestForm.fields.material.set(selectedMaterial ?? '');
   });
 
   let totalBytes = $derived(files.reduce((acc, file) => acc + file.file.size, 0));
@@ -217,7 +217,7 @@
         description={`PLA is recommended for most projects. If you would like to use a mix of materials, please indicate which parts in "Special Requests".`}
       >
         <Select
-          data={materialOptions}
+          options={materialOptions}
           bind:value={selectedMaterial}
           placeholder="Select Material"
         />

@@ -1,14 +1,18 @@
 <script lang="ts">
+  import { getBillingCodes, updateBillingCode } from '$lib/remotes/endpoints/billing_code.remote';
   import {
+    Heading,
+    IconButton,
+    Input,
+    LoadingSpinner,
+    modalManager,
     Table,
     TableBody,
     TableCell,
     TableHeader,
-    TableHeaderCell,
+    TableHeading,
     TableRow,
-  } from '$lib/frontend/components/table';
-  import { getBillingCodes, updateBillingCode } from '$lib/remotes/endpoints/billing_code.remote';
-  import { Heading, IconButton, Input, LoadingSpinner, modalManager } from '@immich/ui';
+  } from '@immich/ui';
   import { mdiChatQuestion, mdiMagnify, mdiPlus, mdiTrashCan } from '@mdi/js';
   import BillingCodeModal from './BillingCodeModal.svelte';
 
@@ -64,35 +68,37 @@
 {:else if billingCodes.error}
   <p class="text-danger">Error loading billing codes: {billingCodes.error.message}</p>
 {:else}
-  <Table>
+  <Table striped class="mt-4">
     <TableHeader>
-      <TableHeaderCell width="w-2/12">Code</TableHeaderCell>
-      <TableHeaderCell width="w-3/12">Description</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Organization</TableHeaderCell>
-      <TableHeaderCell width="w-3/12">Discount</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Actions</TableHeaderCell>
+      <TableHeading class="w-2/12">Code</TableHeading>
+      <TableHeading class="w-3/12">Description</TableHeading>
+      <TableHeading class="w-2/12">Organization</TableHeading>
+      <TableHeading class="w-3/12">Discount</TableHeading>
+      <TableHeading class="w-2/12">Actions</TableHeading>
     </TableHeader>
     <TableBody>
       {#each searchedCodes as code}
         <TableRow>
-          <TableCell width="w-2/12" align="left" class="pl-6 font-mono">{code.code}</TableCell>
-          <TableCell width="w-3/12" align="left">{code.description}</TableCell>
-          <TableCell width="w-2/12" align="left">{code.organizationName || '-'}</TableCell>
-          <TableCell width="w-3/12" align="left">{code.discountName || '-'}</TableCell>
-          <TableCell width="w-2/12" class="flex justify-center gap-2">
-            <IconButton
-              icon={mdiTrashCan}
-              aria-label="Delete Billing Code"
-              color="danger"
-              onclick={() => handleDeleteCode(code.id)}
-            />
+          <TableCell class="w-2/12 px-4 text-left font-mono">{code.code}</TableCell>
+          <TableCell class="w-3/12 px-4 text-left">{code.description}</TableCell>
+          <TableCell class="w-2/12 px-4 text-left">{code.organizationName || '-'}</TableCell>
+          <TableCell class="w-3/12 px-4 text-left">{code.discountName || '-'}</TableCell>
+          <TableCell class="w-2/12">
+            <div class="flex justify-center gap-2">
+              <IconButton
+                icon={mdiTrashCan}
+                aria-label="Delete Billing Code"
+                color="danger"
+                onclick={() => handleDeleteCode(code.id)}
+              />
+            </div>
           </TableCell>
         </TableRow>
       {/each}
 
       {#if searchedCodes.length === 0}
         <TableRow>
-          <TableCell width="w-full" class="text-center">No billing codes found.</TableCell>
+          <TableCell class="w-full text-center">No billing codes found.</TableCell>
         </TableRow>
       {/if}
     </TableBody>

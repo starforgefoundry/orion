@@ -9,7 +9,7 @@
     ModalBody,
     Select,
     Stack,
-    type SelectItem,
+    type SelectOption,
   } from '@immich/ui';
   import { mdiTag } from '@mdi/js';
 
@@ -22,7 +22,7 @@
 
   let billingCodes = getBillingCodes();
 
-  let options: SelectItem[] = $derived([
+  let options: SelectOption[] = $derived([
     { value: '', label: 'No Discount Code' },
     ...(billingCodes.current?.map((bc) => {
       let label = bc.code;
@@ -34,23 +34,7 @@
     }) ?? []),
   ]);
 
-  let selectedValue = $state<SelectItem | undefined>(undefined);
-  let initialized = $state(false);
-
-  // Initialize selectedValue once billing codes have loaded so we can find
-  // the matching option for the current code
-  $effect(() => {
-    if (initialized || billingCodes.loading) return;
-    if (!currentCode) {
-      selectedValue = { value: '', label: 'No Discount Code' };
-    } else {
-      selectedValue = options.find((o) => o.value === currentCode) ?? {
-        value: '',
-        label: 'No Discount Code',
-      };
-    }
-    initialized = true;
-  });
+  let selectedValue = $derived(currentCode);
 </script>
 
 <Modal title="Edit Discount Code" icon={mdiTag} {onClose}>
@@ -62,13 +46,13 @@
     {:else}
       <Stack gap={4}>
         <Field label="Discount Code">
-          <Select data={options} bind:value={selectedValue} placeholder="Select a billing code" />
+          <Select {options} bind:value={selectedValue} placeholder="Select a billing code" />
         </Field>
         <Button
           variant="filled"
           fullWidth
           onclick={() => {
-            onSave(selectedValue?.value ?? '');
+            onSave(selectedValue);
             onClose();
           }}
         >

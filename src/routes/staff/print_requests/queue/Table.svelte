@@ -1,16 +1,18 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import Pagination from '$lib/frontend/components/Pagination.svelte';
+  import { searchPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
   import {
+    Badge,
+    Input,
+    modalManager,
     Table,
     TableBody,
     TableCell,
     TableHeader,
-    TableHeaderCell,
+    TableHeading,
     TableRow,
-  } from '$lib/frontend/components/table';
-  import { searchPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
-  import { Badge, Input, modalManager } from '@immich/ui';
+  } from '@immich/ui';
   import { mdiMagnify } from '@mdi/js';
   import RequestDetailModal from './RequestDetailModal.svelte';
   import { getPaymentStatusColor, getStatusColor } from './utils';
@@ -32,6 +34,12 @@
   function handleRowClick(requestId: string) {
     goto(`?id=${requestId}`, { replaceState: true, noScroll: true, keepFocus: true });
     modalManager.open(RequestDetailModal, { requestId });
+  }
+
+  function handleRowKeydown(event: KeyboardEvent, requestId: string) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    handleRowClick(requestId);
   }
 
   function formatPrice(cents: number): string {
@@ -64,26 +72,32 @@
   onblur={search}
 />
 
-<Table>
+<Table striped class="mt-4">
   <TableHeader>
-    <TableHeaderCell width="w-3/12" align="left" class="px-4">Request Name</TableHeaderCell>
-    <TableHeaderCell width="w-3/12" align="left" class="px-4">Customer Name</TableHeaderCell>
-    <TableHeaderCell width="w-2/12">Request Status</TableHeaderCell>
-    <TableHeaderCell width="w-2/12">Payment Status</TableHeaderCell>
-    <TableHeaderCell width="w-2/12">Price</TableHeaderCell>
+    <TableHeading class="w-3/12 text-left">Request Name</TableHeading>
+    <TableHeading class="w-3/12 text-left">Customer Name</TableHeading>
+    <TableHeading class="w-2/12">Request Status</TableHeading>
+    <TableHeading class="w-2/12">Payment Status</TableHeading>
+    <TableHeading class="w-2/12">Price</TableHeading>
   </TableHeader>
 
   <TableBody>
     {#each prints as print}
-      <TableRow hoverable clickable onclick={() => handleRowClick(print.id)}>
-        <TableCell width="w-3/12" align="left" class="px-4">{print.projectName}</TableCell>
-        <TableCell width="w-3/12" align="left" class="px-4">{print.customerName}</TableCell>
-        <TableCell width="w-2/12">
+      <TableRow
+        class="cursor-pointer hover:bg-primary/10"
+        role="button"
+        tabindex={0}
+        onclick={() => handleRowClick(print.id)}
+        onkeydown={(e) => handleRowKeydown(e, print.id)}
+      >
+        <TableCell class="w-3/12 px-4 text-left">{print.projectName}</TableCell>
+        <TableCell class="w-3/12 px-4 text-left">{print.customerName}</TableCell>
+        <TableCell class="w-2/12">
           <div class="px-2 py-1">
             <Badge color={getStatusColor(print.status)}>{formatStatus(print.status)}</Badge>
           </div>
         </TableCell>
-        <TableCell width="w-2/12">
+        <TableCell class="w-2/12">
           <div class="px-2 py-1">
             {#if print.payment}
               <Badge color={getPaymentStatusColor(print.payment.status)}
@@ -94,7 +108,7 @@
             {/if}
           </div>
         </TableCell>
-        <TableCell width="w-2/12">
+        <TableCell class="w-2/12">
           {#if print.payment?.total}
             {formatPrice(print.payment.total)}
           {:else}

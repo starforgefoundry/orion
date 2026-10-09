@@ -1,13 +1,5 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHeader,
-    TableHeaderCell,
-    TableRow,
-  } from '$lib/frontend/components/table';
   import type { InventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
   import {
     addToPurchaseList,
@@ -21,6 +13,12 @@
     Input,
     LoadingSpinner,
     modalManager,
+    Table,
+    TableBody,
+    TableCell,
+    TableHeader,
+    TableHeading,
+    TableRow,
     toastManager,
   } from '@immich/ui';
   import {
@@ -151,51 +149,53 @@
 {:else if inventoryItems.error}
   <p class="text-danger">Error loading inventory items: {inventoryItems.error.message}</p>
 {:else}
-  <Table>
+  <Table striped class="mt-4">
     <TableHeader>
-      <TableHeaderCell width="w-1/12"></TableHeaderCell>
-      <TableHeaderCell width="w-3/12">Name</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Vendor</TableHeaderCell>
-      <TableHeaderCell width="w-4/12">Description</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Actions</TableHeaderCell>
+      <TableHeading class="w-1/12"></TableHeading>
+      <TableHeading class="w-3/12">Name</TableHeading>
+      <TableHeading class="w-2/12">Vendor</TableHeading>
+      <TableHeading class="w-4/12">Description</TableHeading>
+      <TableHeading class="w-2/12">Actions</TableHeading>
     </TableHeader>
     <TableBody>
       {#each searchedItems as item, index}
         <TableRow>
-          <TableCell width="w-1/12" class="pl-6">
+          <TableCell class="w-1/12">
             <Checkbox
               checked={selectedItems.has(item.id)}
               onCheckedChange={(newValue) => handleCheckboxChange(item.id, index, newValue)}
             />
           </TableCell>
-          <TableCell width="w-3/12" align="left">{item.name}</TableCell>
-          <TableCell width="w-2/12" align="left">{item.vendor}</TableCell>
-          <TableCell width="w-4/12" align="left" class="truncate">{item.description}</TableCell>
-          <TableCell width="w-2/12" class="flex justify-center gap-2">
-            <IconButton
-              icon={mdiPlus}
-              color="success"
-              aria-label="Add Item to Purchase List"
-              onclick={() => handleAddToPurchaseList(item)}
-            />
-            <IconButton
-              icon={mdiPencil}
-              aria-label="Edit Item"
-              onclick={() => showEditModal(item)}
-            />
-            <IconButton
-              icon={mdiTrashCan}
-              aria-label="Delete Item"
-              color="danger"
-              onclick={() => handleDeleteItem(item.id)}
-            />
+          <TableCell class="w-3/12 px-4 text-left">{item.name}</TableCell>
+          <TableCell class="w-2/12 px-4 text-left">{item.vendor}</TableCell>
+          <TableCell class="w-4/12 truncate px-4 text-left">{item.description}</TableCell>
+          <TableCell class="w-2/12">
+            <div class="flex justify-center gap-2">
+              <IconButton
+                icon={mdiPlus}
+                color="success"
+                aria-label="Add Item to Purchase List"
+                onclick={() => handleAddToPurchaseList(item)}
+              />
+              <IconButton
+                icon={mdiPencil}
+                aria-label="Edit Item"
+                onclick={() => showEditModal(item)}
+              />
+              <IconButton
+                icon={mdiTrashCan}
+                aria-label="Delete Item"
+                color="danger"
+                onclick={() => handleDeleteItem(item.id)}
+              />
+            </div>
           </TableCell>
         </TableRow>
       {/each}
 
       {#if searchedItems.length === 0}
         <TableRow>
-          <TableCell width="w-full" class="text-center">No inventory items found.</TableCell>
+          <TableCell class="w-full text-center">No inventory items found.</TableCell>
         </TableRow>
       {/if}
     </TableBody>

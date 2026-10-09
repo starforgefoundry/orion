@@ -1,19 +1,17 @@
 <script lang="ts">
   import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHeader,
-    TableHeaderCell,
-    TableRow,
-  } from '$lib/frontend/components/table';
-  import {
     Heading,
     IconButton,
     Input,
     LoadingSpinner,
     modalManager,
     Switch,
+    Table,
+    TableBody,
+    TableCell,
+    TableHeader,
+    TableHeading,
+    TableRow,
     Text,
   } from '@immich/ui';
   import { mdiCubeOutline, mdiMagnify, mdiPencil, mdiPlus, mdiPrinter, mdiTrashCan } from '@mdi/js';
@@ -48,27 +46,29 @@
 {:else if manager.error}
   <p class="text-danger">Error loading print materials: {manager.error.message}</p>
 {:else}
-  <Table>
+  <Table striped class="mt-4">
     <TableHeader>
-      <TableHeaderCell width="w-3/12">Name</TableHeaderCell>
-      <TableHeaderCell width="w-1/12">Available</TableHeaderCell>
-      <TableHeaderCell width="w-4/12">Filament</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Tag ID</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Actions</TableHeaderCell>
+      <TableHeading class="w-3/12">Name</TableHeading>
+      <TableHeading class="w-1/12">Available</TableHeading>
+      <TableHeading class="w-4/12">Filament</TableHeading>
+      <TableHeading class="w-2/12">Tag ID</TableHeading>
+      <TableHeading class="w-2/12">Actions</TableHeading>
     </TableHeader>
     <TableBody>
       {#each manager.results as material (material.id)}
         <TableRow>
-          <TableCell width="w-3/12" align="left" class="pl-6">{material.name}</TableCell>
+          <TableCell class="w-3/12 px-4 text-left">{material.name}</TableCell>
 
-          <TableCell width="w-1/12" class="flex justify-center">
-            <Switch
-              checked={material.available}
-              onCheckedChange={(value) => manager.setAvailability(material.id, value)}
-            />
+          <TableCell class="w-1/12">
+            <div class="flex justify-center">
+              <Switch
+                checked={material.available}
+                onCheckedChange={(value) => manager.setAvailability(material.id, value)}
+              />
+            </div>
           </TableCell>
 
-          <TableCell width="w-4/12" align="center">
+          <TableCell class="w-4/12">
             <div class="flex items-center justify-center gap-2">
               {#if material.colorHex}
                 <div
@@ -82,44 +82,46 @@
             </div>
           </TableCell>
 
-          <TableCell width="w-2/12" align="center" class="font-mono">
+          <TableCell class="w-2/12 font-mono">
             {material.tagId ?? '-'}
           </TableCell>
 
-          <TableCell width="w-2/12" class="flex justify-center gap-2">
-            <IconButton
-              icon={mdiPencil}
-              aria-label="Edit Material"
-              color="primary"
-              onclick={() => manager.edit(material)}
-            />
-            <IconButton
-              icon={mdiPrinter}
-              aria-label="Print Tag"
-              color="secondary"
-              disabled={!material.tagId}
-              onclick={() => manager.printTag(material)}
-            />
-            <IconButton
-              icon={mdiCubeOutline}
-              aria-label="Download Filament Card"
-              color="secondary"
-              disabled={!material.tagId || manager.downloadingCardId === material.id}
-              onclick={() => manager.downloadCard(material)}
-            />
-            <IconButton
-              icon={mdiTrashCan}
-              aria-label="Delete Material"
-              color="danger"
-              onclick={() => manager.archive(material.id)}
-            />
+          <TableCell class="w-2/12">
+            <div class="flex justify-center gap-2">
+              <IconButton
+                icon={mdiPencil}
+                aria-label="Edit Material"
+                color="primary"
+                onclick={() => manager.edit(material)}
+              />
+              <IconButton
+                icon={mdiPrinter}
+                aria-label="Print Tag"
+                color="secondary"
+                disabled={!material.tagId}
+                onclick={() => manager.printTag(material)}
+              />
+              <IconButton
+                icon={mdiCubeOutline}
+                aria-label="Download Filament Card"
+                color="secondary"
+                disabled={!material.tagId || manager.downloadingCardId === material.id}
+                onclick={() => manager.downloadCard(material)}
+              />
+              <IconButton
+                icon={mdiTrashCan}
+                aria-label="Delete Material"
+                color="danger"
+                onclick={() => manager.archive(material.id)}
+              />
+            </div>
           </TableCell>
         </TableRow>
       {/each}
 
       {#if manager.results.length === 0}
         <TableRow>
-          <TableCell width="w-full" class="text-center">No print materials found.</TableCell>
+          <TableCell class="w-full text-center">No print materials found.</TableCell>
         </TableRow>
       {/if}
     </TableBody>

@@ -1,13 +1,5 @@
 <script lang="ts">
   import Pagination from '$lib/frontend/components/Pagination.svelte';
-  import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHeader,
-    TableHeaderCell,
-    TableRow,
-  } from '$lib/frontend/components/table';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import {
     archiveOrganization,
@@ -27,6 +19,12 @@
     ModalBody,
     modalManager,
     Stack,
+    Table,
+    TableBody,
+    TableCell,
+    TableHeader,
+    TableHeading,
+    TableRow,
   } from '@immich/ui';
   import {
     mdiAccountGroup,
@@ -267,31 +265,29 @@
         </div>
 
         {#if activeTab === 'charges'}
-          <Table>
+          <Table striped class="mt-4">
             <TableHeader class="bg-level-3">
-              <TableHeaderCell width="w-6/12" align="left" class="px-4">
-                Description
-              </TableHeaderCell>
-              <TableHeaderCell width="w-3/12" align="left" class="px-4">Date</TableHeaderCell>
-              <TableHeaderCell width="w-3/12" align="right" class="px-4">Amount</TableHeaderCell>
+              <TableHeading class="w-6/12 text-left">Description</TableHeading>
+              <TableHeading class="w-3/12 text-left">Date</TableHeading>
+              <TableHeading class="w-3/12 text-right">Amount</TableHeading>
             </TableHeader>
             <TableBody class="border border-gray-700">
               {#each paginatedCharges() as charge}
                 <TableRow class="border-b border-gray-700">
-                  <TableCell width="w-6/12" align="left" class="px-4">
+                  <TableCell class="w-6/12 px-4 text-left">
                     {charge.description}
                   </TableCell>
-                  <TableCell width="w-3/12" align="left" class="px-4">
+                  <TableCell class="w-3/12 px-4 text-left">
                     {DateTime.fromISO(charge.date).toLocaleString(DateTime.DATE_SHORT)}
                   </TableCell>
-                  <TableCell width="w-3/12" align="right" class="px-4">
+                  <TableCell class="w-3/12 px-4 text-right">
                     {formatCurrency(charge.amount)}
                   </TableCell>
                 </TableRow>
               {/each}
               {#if organizationDetail.current.charges.length === 0}
                 <TableRow>
-                  <TableCell width="w-full" class="text-center">No charges found.</TableCell>
+                  <TableCell class="w-full text-center">No charges found.</TableCell>
                 </TableRow>
               {/if}
             </TableBody>
@@ -303,43 +299,37 @@
             onPageChange={(page) => (chargesCurrentPage = page)}
           />
         {:else if activeTab === 'balance_payments'}
-          <Table>
+          <Table striped class="mt-4">
             <TableHeader class="bg-level-3">
-              <TableHeaderCell width="w-3/12" align="left" class="px-4">
-                Issued Date
-              </TableHeaderCell>
-              <TableHeaderCell width="w-3/12" align="left" class="px-4">
-                Payment Date
-              </TableHeaderCell>
-              <TableHeaderCell width="w-3/12">Status</TableHeaderCell>
-              <TableHeaderCell width="w-3/12" align="right" class="px-4">Amount</TableHeaderCell>
+              <TableHeading class="w-3/12 text-left">Issued Date</TableHeading>
+              <TableHeading class="w-3/12 text-left">Payment Date</TableHeading>
+              <TableHeading class="w-3/12">Status</TableHeading>
+              <TableHeading class="w-3/12 text-right">Amount</TableHeading>
             </TableHeader>
             <TableBody class="border border-gray-700">
               {#each organizationDetail.current.balancePayments as payment}
                 <TableRow>
-                  <TableCell width="w-3/12" align="left" class="px-4">
+                  <TableCell class="w-3/12 px-4 text-left">
                     {payment.issuedDate.toLocaleString(DateTime.DATE_SHORT)}
                   </TableCell>
-                  <TableCell width="w-3/12" align="left" class="px-4">
+                  <TableCell class="w-3/12 px-4 text-left">
                     {payment.paymentDate
                       ? payment.paymentDate.toLocaleString(DateTime.DATE_SHORT)
                       : '-'}
                   </TableCell>
-                  <TableCell width="w-3/12">
+                  <TableCell class="w-3/12">
                     <Badge color={getPaymentStatusColor(payment.status)}
                       >{formatStatus(payment.status)}</Badge
                     >
                   </TableCell>
-                  <TableCell width="w-3/12" align="right" class="px-4">
+                  <TableCell class="w-3/12 px-4 text-right">
                     {formatCurrency(payment.total)}
                   </TableCell>
                 </TableRow>
               {/each}
               {#if organizationDetail.current.balancePayments.length === 0}
                 <TableRow>
-                  <TableCell width="w-full" class="text-center">
-                    No balance payments found.
-                  </TableCell>
+                  <TableCell class="w-full text-center">No balance payments found.</TableCell>
                 </TableRow>
               {/if}
             </TableBody>

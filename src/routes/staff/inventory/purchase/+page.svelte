@@ -1,14 +1,18 @@
 <script lang="ts">
+  import { getPurchaseList, removeFromPurchaseList } from '$lib/remotes/endpoints/inventory.remote';
   import {
+    Button,
+    Heading,
+    IconButton,
+    LoadingSpinner,
     Table,
     TableBody,
     TableCell,
     TableHeader,
-    TableHeaderCell,
+    TableHeading,
     TableRow,
-  } from '$lib/frontend/components/table';
-  import { getPurchaseList, removeFromPurchaseList } from '$lib/remotes/endpoints/inventory.remote';
-  import { Button, Heading, IconButton, LoadingSpinner, toastManager } from '@immich/ui';
+    toastManager,
+  } from '@immich/ui';
   import { mdiCheck, mdiOpenInNew } from '@mdi/js';
 
   let purchaseList = getPurchaseList();
@@ -60,18 +64,18 @@
           <h3 class="text-lg font-bold">{vendor}</h3>
         </div>
 
-        <Table>
+        <Table striped class="mt-4">
           <TableHeader>
-            <TableHeaderCell width="w-4/12">Item</TableHeaderCell>
-            <TableHeaderCell width="w-5/12">Description</TableHeaderCell>
-            <TableHeaderCell width="w-2/12">Added</TableHeaderCell>
-            <TableHeaderCell width="w-1/12">Actions</TableHeaderCell>
+            <TableHeading class="w-4/12">Item</TableHeading>
+            <TableHeading class="w-5/12">Description</TableHeading>
+            <TableHeading class="w-2/12">Added</TableHeading>
+            <TableHeading class="w-1/12">Actions</TableHeading>
           </TableHeader>
           <TableBody>
             {#each items as item}
               {#if item.inventoryItem}
                 <TableRow>
-                  <TableCell width="w-4/12" align="left" class="pl-6">
+                  <TableCell class="w-4/12 px-4 text-left">
                     <button
                       class="text-primary hover:underline"
                       onclick={() => openUrl(item.inventoryItem!.url)}
@@ -79,19 +83,21 @@
                       {item.inventoryItem.name}
                     </button>
                   </TableCell>
-                  <TableCell width="w-5/12" align="left" class="truncate">
+                  <TableCell class="w-5/12 truncate px-4 text-left">
                     {item.inventoryItem.description}
                   </TableCell>
-                  <TableCell width="w-2/12" align="left">
+                  <TableCell class="w-2/12 px-4 text-left">
                     {item.addedDate ? new Date(item.addedDate).toLocaleDateString() : 'N/A'}
                   </TableCell>
-                  <TableCell width="w-1/12" class="flex justify-center">
-                    <IconButton
-                      icon={mdiCheck}
-                      aria-label="Mark as Purchased"
-                      color="success"
-                      onclick={() => handleRemoveFromList(item.inventoryItemId)}
-                    />
+                  <TableCell class="w-1/12">
+                    <div class="flex justify-center">
+                      <IconButton
+                        icon={mdiCheck}
+                        aria-label="Mark as Purchased"
+                        color="success"
+                        onclick={() => handleRemoveFromList(item.inventoryItemId)}
+                      />
+                    </div>
                   </TableCell>
                 </TableRow>
               {/if}

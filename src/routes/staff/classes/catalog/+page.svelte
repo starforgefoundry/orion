@@ -1,14 +1,18 @@
 <script lang="ts">
+  import { getCatalogs } from '$lib/remotes/endpoints/class.remote';
   import {
+    Heading,
+    IconButton,
+    Input,
+    LoadingSpinner,
+    modalManager,
     Table,
     TableBody,
     TableCell,
     TableHeader,
-    TableHeaderCell,
+    TableHeading,
     TableRow,
-  } from '$lib/frontend/components/table';
-  import { getCatalogs } from '$lib/remotes/endpoints/class.remote';
-  import { Heading, IconButton, Input, LoadingSpinner, modalManager } from '@immich/ui';
+  } from '@immich/ui';
   import { mdiMagnify, mdiPencil, mdiPlus } from '@mdi/js';
   import ClassModal from './ClassModal.svelte';
 
@@ -60,31 +64,33 @@
     <LoadingSpinner size="large" />
   </div>
 {:else}
-  <Table>
+  <Table striped class="mt-4">
     <TableHeader>
-      <TableHeaderCell width="w-6/12" align="left">Name</TableHeaderCell>
-      <TableHeaderCell width="w-3/12">Price</TableHeaderCell>
-      <TableHeaderCell width="w-3/12">Actions</TableHeaderCell>
+      <TableHeading class="w-6/12 text-left">Name</TableHeading>
+      <TableHeading class="w-3/12">Price</TableHeading>
+      <TableHeading class="w-3/12">Actions</TableHeading>
     </TableHeader>
     <TableBody>
       {#each filtered as cls}
         <TableRow>
-          <TableCell width="w-6/12" align="left" class="pl-6">{cls.name}</TableCell>
-          <TableCell width="w-3/12" align="center">${(cls.price / 100).toFixed(2)}</TableCell>
-          <TableCell width="w-3/12" class="flex justify-center">
-            <IconButton
-              icon={mdiPencil}
-              aria-label="Edit Catalog"
-              color="primary"
-              onclick={() => openEdit(cls)}
-            />
+          <TableCell class="w-6/12 px-4 text-left">{cls.name}</TableCell>
+          <TableCell class="w-3/12">${(cls.price / 100).toFixed(2)}</TableCell>
+          <TableCell class="w-3/12">
+            <div class="flex justify-center">
+              <IconButton
+                icon={mdiPencil}
+                aria-label="Edit Catalog"
+                color="primary"
+                onclick={() => openEdit(cls)}
+              />
+            </div>
           </TableCell>
         </TableRow>
       {/each}
 
       {#if filtered.length === 0}
         <TableRow>
-          <TableCell width="w-full" class="text-center">No classes found.</TableCell>
+          <TableCell class="w-full text-center">No classes found.</TableCell>
         </TableRow>
       {/if}
     </TableBody>

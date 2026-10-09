@@ -9,7 +9,7 @@
     Select,
     Stack,
     toastManager,
-    type SelectItem,
+    type SelectOption,
   } from '@immich/ui';
   import SquareInfoModal from './SquareInfoModal.svelte';
 
@@ -42,7 +42,7 @@
     squareLocations.map((loc) => ({
       label: loc.name,
       value: loc.id,
-    })) as SelectItem[],
+    })) as SelectOption[],
   );
 
   let catalogRequest = getSquareCatalog();
@@ -53,7 +53,7 @@
       .map((item) => ({
         label: item.itemData?.name || 'Unnamed Item',
         value: item.itemData?.variations?.[0]?.id || '',
-      })) as SelectItem[],
+      })) as SelectOption[],
   );
   let squareDiscountOptions = $derived(
     squareCatalog
@@ -61,29 +61,7 @@
       .map((item) => ({
         label: item.discountData?.name || 'Unnamed Discount',
         value: item.id,
-      })) as SelectItem[],
-  );
-
-  let selectedLocation = $derived(
-    squareLocationOptions.find(
-      (loc) => loc.value === printRequestSquareSettingsForm.fields.locationId.value(),
-    ),
-  );
-  let selectedMaterialItem = $derived(
-    squareItemOptions.find(
-      (item) => item.value === printRequestSquareSettingsForm.fields.printRequestItemId.value(),
-    ),
-  );
-  let selectedBuildPlateItem = $derived(
-    squareItemOptions.find(
-      (item) =>
-        item.value === printRequestSquareSettingsForm.fields.additionalBuildPlateItemId.value(),
-    ),
-  );
-  let selectedMemberDiscount = $derived(
-    squareDiscountOptions.find(
-      (disc) => disc.value === printRequestSquareSettingsForm.fields.memberPrintDiscountId.value(),
-    ),
+      })) as SelectOption[],
   );
 
   async function handleSubmit(submit: () => Promise<void>) {
@@ -122,41 +100,42 @@
     <Stack gap={4}>
       <Field label="Location" required="indicator">
         <Select
-          bind:value={selectedLocation}
-          data={squareLocationOptions}
+          value={printRequestSquareSettingsForm.fields.locationId.value()}
+          options={squareLocationOptions}
           placeholder="Square Location"
-          onChange={(e) => printRequestSquareSettingsForm.fields.locationId.set(e.value)}
+          onChange={(value) => printRequestSquareSettingsForm.fields.locationId.set(value)}
         />
         <input hidden {...printRequestSquareSettingsForm.fields.locationId.as('text')} />
       </Field>
 
       <Field label="Member Print Discount Item" required="indicator">
         <Select
-          bind:value={selectedMemberDiscount}
-          data={squareDiscountOptions}
+          value={printRequestSquareSettingsForm.fields.memberPrintDiscountId.value()}
+          options={squareDiscountOptions}
           placeholder="Select Discount"
-          onChange={(e) => printRequestSquareSettingsForm.fields.memberPrintDiscountId.set(e.value)}
+          onChange={(value) =>
+            printRequestSquareSettingsForm.fields.memberPrintDiscountId.set(value)}
         />
         <input hidden {...printRequestSquareSettingsForm.fields.memberPrintDiscountId.as('text')} />
       </Field>
 
       <Field label="Print Request Item" required="indicator">
         <Select
-          bind:value={selectedMaterialItem}
-          data={squareItemOptions}
+          value={printRequestSquareSettingsForm.fields.printRequestItemId.value()}
+          options={squareItemOptions}
           placeholder="Select Item"
-          onChange={(e) => printRequestSquareSettingsForm.fields.printRequestItemId.set(e.value)}
+          onChange={(value) => printRequestSquareSettingsForm.fields.printRequestItemId.set(value)}
         />
         <input hidden {...printRequestSquareSettingsForm.fields.printRequestItemId.as('text')} />
       </Field>
 
       <Field label="Additional Build Plate Item" required="indicator">
         <Select
-          bind:value={selectedBuildPlateItem}
-          data={squareItemOptions}
+          value={printRequestSquareSettingsForm.fields.additionalBuildPlateItemId.value()}
+          options={squareItemOptions}
           placeholder="Select Item"
-          onChange={(e) =>
-            printRequestSquareSettingsForm.fields.additionalBuildPlateItemId.set(e.value)}
+          onChange={(value) =>
+            printRequestSquareSettingsForm.fields.additionalBuildPlateItemId.set(value)}
         />
         <input
           hidden

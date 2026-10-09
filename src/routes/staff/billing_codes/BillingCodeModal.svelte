@@ -12,7 +12,7 @@
     ModalBody,
     Select,
     Stack,
-    type SelectItem,
+    type SelectOption,
   } from '@immich/ui';
   import { mdiTicket } from '@mdi/js';
 
@@ -23,7 +23,7 @@
   let organizations = getOrganizations();
   let catalogRequest = getSquareCatalog();
 
-  let organizationOptions: SelectItem[] = $derived([
+  let organizationOptions: SelectOption[] = $derived([
     { value: '', label: 'No Organization' },
     ...(organizations.current?.map((organization) => ({
       value: organization.id,
@@ -32,7 +32,7 @@
   ]);
 
   let squareCatalog = $derived(catalogRequest.current ?? []);
-  let squareDiscountOptions: SelectItem[] = $derived([
+  let squareDiscountOptions: SelectOption[] = $derived([
     { value: '', label: 'No Discount' },
     ...squareCatalog
       .filter((item) => item.type === 'DISCOUNT')
@@ -42,18 +42,18 @@
       })),
   ]);
 
-  let selectedOrganization: SelectItem = $state({ value: '', label: 'No Organization' });
-  let selectedDiscount: SelectItem = $state({ value: '', label: 'No Discount' });
+  let selectedOrganization = $state('');
+  let selectedDiscount = $state('');
 
   $effect(() => {
-    createBillingCode.fields.organizationId.set(selectedOrganization?.value ?? '');
+    createBillingCode.fields.organizationId.set(selectedOrganization);
   });
 
   $effect(() => {
-    createBillingCode.fields.discountId.set(selectedDiscount?.value ?? '');
+    createBillingCode.fields.discountId.set(selectedDiscount);
   });
 
-  let validSubmit = $derived(selectedOrganization.value !== '' || selectedDiscount.value !== '');
+  let validSubmit = $derived(selectedOrganization !== '' || selectedDiscount !== '');
 </script>
 
 <Modal title="Create Billing Code" icon={mdiTicket} {onClose}>
@@ -81,7 +81,7 @@
 
           <Field label="Bill to Organization">
             <Select
-              data={organizationOptions}
+              options={organizationOptions}
               bind:value={selectedOrganization}
               placeholder="Select an organization"
             />
@@ -90,7 +90,7 @@
 
           <Field label="Apply Discount">
             <Select
-              data={squareDiscountOptions}
+              options={squareDiscountOptions}
               bind:value={selectedDiscount}
               placeholder="Select a discount"
             />

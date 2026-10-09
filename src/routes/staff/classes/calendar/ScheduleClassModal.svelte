@@ -19,7 +19,6 @@
     Stack,
     Text,
     toastManager,
-    type SelectItem,
   } from '@immich/ui';
   import { mdiCalendar } from '@mdi/js';
   import { DateTime } from 'luxon';
@@ -34,8 +33,8 @@
   const staff = $derived(staffRemote.current ?? []);
   const staffOptions = $derived(staff.map((u) => ({ label: u.name, value: u.email })));
 
-  let selectedCatalog: SelectItem | undefined = $state(undefined);
-  let selectedTeacher: SelectItem | undefined = $state(undefined);
+  let selectedCatalog: string | undefined = $state(undefined);
+  let selectedTeacher: string | undefined = $state(undefined);
   let date: DateTime | undefined = $state(DateTime.now());
   let startTime = $state('');
   let durationMinutes = $state(60);
@@ -73,8 +72,8 @@
       submitting = true;
       try {
         await generateInstances({
-          classId: selectedCatalog.value,
-          teacherEmail: selectedTeacher.value,
+          classId: selectedCatalog,
+          teacherEmail: selectedTeacher,
           dayOfWeek: date.weekday % 7,
           startTime,
           durationMinutes: durationMinutes,
@@ -94,8 +93,8 @@
       submitting = true;
       try {
         await createInstance({
-          classId: selectedCatalog.value,
-          teacherEmail: selectedTeacher.value,
+          classId: selectedCatalog,
+          teacherEmail: selectedTeacher,
           date: dateStr,
           startTime,
           durationMinutes: durationMinutes,
@@ -117,10 +116,18 @@
   <ModalBody>
     <Stack gap={4}>
       <Field label="Class" required="indicator">
-        <Select data={catalogOptions} bind:value={selectedCatalog} placeholder="Select class..." />
+        <Select
+          options={catalogOptions}
+          bind:value={selectedCatalog}
+          placeholder="Select class..."
+        />
       </Field>
       <Field label="Teacher" required="indicator">
-        <Select data={staffOptions} bind:value={selectedTeacher} placeholder="Select teacher..." />
+        <Select
+          options={staffOptions}
+          bind:value={selectedTeacher}
+          placeholder="Select teacher..."
+        />
       </Field>
       <Field label={recurring ? 'Start Date' : 'Date'} required="indicator">
         <DatePicker bind:value={date} />

@@ -1,14 +1,18 @@
 <script lang="ts">
+  import { getOrganizations } from '$lib/remotes/endpoints/organization.remote';
   import {
+    Heading,
+    IconButton,
+    Input,
+    LoadingSpinner,
+    modalManager,
     Table,
     TableBody,
     TableCell,
     TableHeader,
-    TableHeaderCell,
+    TableHeading,
     TableRow,
-  } from '$lib/frontend/components/table';
-  import { getOrganizations } from '$lib/remotes/endpoints/organization.remote';
-  import { Heading, IconButton, Input, LoadingSpinner, modalManager } from '@immich/ui';
+  } from '@immich/ui';
   import { mdiEye, mdiMagnify, mdiPlus } from '@mdi/js';
   import CreateOrganizationModal from './CreateOrganizationModal.svelte';
   import OrganizationDetailModal from './OrganizationDetailModal.svelte';
@@ -53,18 +57,18 @@
 {:else if organizations.error}
   <p class="text-danger">Error loading organizations: {organizations.error.message}</p>
 {:else}
-  <Table>
+  <Table striped class="mt-4">
     <TableHeader>
-      <TableHeaderCell width="w-4/12" align="left" class="px-6">Name</TableHeaderCell>
-      <TableHeaderCell width="w-6/12" align="left" class="px-6">Email</TableHeaderCell>
-      <TableHeaderCell width="w-2/12" align="left" class="px-6">Actions</TableHeaderCell>
+      <TableHeading class="w-4/12 text-left">Name</TableHeading>
+      <TableHeading class="w-6/12 text-left">Email</TableHeading>
+      <TableHeading class="w-2/12 text-left">Actions</TableHeading>
     </TableHeader>
     <TableBody>
       {#each searchedOrganizations as organization}
         <TableRow>
-          <TableCell width="w-4/12" align="left" class="px-6">{organization.name}</TableCell>
-          <TableCell width="w-6/12" align="left" class="px-6">{organization.email}</TableCell>
-          <TableCell width="w-2/12" align="left" class="px-6">
+          <TableCell class="w-4/12 px-4 text-left">{organization.name}</TableCell>
+          <TableCell class="w-6/12 px-4 text-left">{organization.email}</TableCell>
+          <TableCell class="w-2/12 px-4 text-left">
             <IconButton
               aria-label="View Organization Details"
               icon={mdiEye}
@@ -76,7 +80,7 @@
 
       {#if searchedOrganizations.length === 0}
         <TableRow>
-          <TableCell width="w-full" class="text-center">No organizations found.</TableCell>
+          <TableCell class="w-full text-center">No organizations found.</TableCell>
         </TableRow>
       {/if}
     </TableBody>

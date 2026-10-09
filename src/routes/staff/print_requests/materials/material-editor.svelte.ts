@@ -4,15 +4,9 @@ import {
   setMaterialSetup,
 } from '$lib/remotes/endpoints/print_materials.remote';
 import type { PrintMaterial } from '$lib/server/db/schema';
-import { toastManager, type SelectItem } from '@immich/ui';
+import { toastManager } from '@immich/ui';
 
 type Color = { name: string; hex: string };
-
-// Select renders the box from the chosen item's own `label`, not from the matching entry in its
-// data, so an option without one shows an empty box while still ticking in the list.
-function option(value: string): SelectItem {
-  return { value, label: value };
-}
 
 /** Walks the vendor → material → color chain, clearing whatever a change upstream invalidates. */
 export class MaterialEditor {
@@ -55,28 +49,16 @@ export class MaterialEditor {
     return this.tagValid && this.filamentValid;
   }
 
-  get vendorOptions(): SelectItem[] {
-    return (this.catalog.current ?? []).map((entry) => option(entry.vendor));
+  get vendorOptions(): string[] {
+    return (this.catalog.current ?? []).map((entry) => entry.vendor);
   }
 
-  get materialOptions(): SelectItem[] {
-    return (this.currentVendor?.materials ?? []).map((entry) => option(entry.material));
+  get materialOptions(): string[] {
+    return (this.currentVendor?.materials ?? []).map((entry) => entry.material);
   }
 
-  get colorOptions(): SelectItem[] {
-    return this.colors.map((color) => option(color.name));
-  }
-
-  get selectedVendor() {
-    return this.vendorOptions.find((item) => item.value === this.vendor);
-  }
-
-  get selectedMaterial() {
-    return this.materialOptions.find((item) => item.value === this.materialType);
-  }
-
-  get selectedColor() {
-    return this.colorOptions.find((item) => item.value === this.colorName);
+  get colorOptions(): string[] {
+    return this.colors.map((color) => color.name);
   }
 
   get colorHex() {

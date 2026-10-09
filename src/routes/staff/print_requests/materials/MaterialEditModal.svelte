@@ -65,29 +65,29 @@
         {:else}
           <Field label="Vendor">
             <Select
-              data={editor.vendorOptions}
-              value={editor.selectedVendor}
+              options={editor.vendorOptions}
+              value={editor.vendor ?? undefined}
               placeholder="Select a vendor"
-              onChange={(item) => editor.selectVendor(item.value)}
+              onChange={(value) => editor.selectVendor(value)}
             />
           </Field>
 
           <Field label="Material Type">
             <Select
-              data={editor.materialOptions}
-              value={editor.selectedMaterial}
+              options={editor.materialOptions}
+              value={editor.materialType ?? undefined}
               placeholder={editor.vendor ? 'Select a material' : 'Pick a vendor first'}
-              onChange={(item) => editor.selectMaterial(item.value)}
+              onChange={(value) => editor.selectMaterial(value)}
             />
           </Field>
 
           <div class="flex items-end gap-2">
             <Field label="Color" class="grow">
               <Select
-                data={editor.colorOptions}
-                value={editor.selectedColor}
+                options={editor.colorOptions}
+                value={editor.colorName ?? undefined}
                 placeholder={editor.materialType ? 'Select a color' : 'Pick a material first'}
-                onChange={(item) => editor.selectColor(item.value)}
+                onChange={(value) => editor.selectColor(value)}
               />
             </Field>
             {#if editor.colorHex}

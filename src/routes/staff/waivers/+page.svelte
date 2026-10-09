@@ -1,14 +1,17 @@
 <script lang="ts">
+  import { searchWaivers } from '$lib/remotes/endpoints/waiver.remote';
   import {
+    Heading,
+    IconButton,
+    Input,
+    LoadingSpinner,
     Table,
     TableBody,
     TableCell,
     TableHeader,
-    TableHeaderCell,
+    TableHeading,
     TableRow,
-  } from '$lib/frontend/components/table';
-  import { searchWaivers } from '$lib/remotes/endpoints/waiver.remote';
-  import { Heading, IconButton, Input, LoadingSpinner } from '@immich/ui';
+  } from '@immich/ui';
   import { mdiChevronLeft, mdiChevronRight, mdiEye, mdiMagnify } from '@mdi/js';
 
   let searchTerm = $state('');
@@ -82,32 +85,34 @@
 {:else if waivers.error}
   <p class="text-danger">Error loading waivers: {waivers.error.message}</p>
 {:else if waivers.current}
-  <Table>
+  <Table striped class="mt-4">
     <TableHeader>
-      <TableHeaderCell width="w-3/12" align="left">Name</TableHeaderCell>
-      <TableHeaderCell width="w-4/12" align="left">Email</TableHeaderCell>
-      <TableHeaderCell width="w-3/12" align="left">Signed Date</TableHeaderCell>
-      <TableHeaderCell width="w-2/12">Actions</TableHeaderCell>
+      <TableHeading class="w-3/12 text-left">Name</TableHeading>
+      <TableHeading class="w-4/12 text-left">Email</TableHeading>
+      <TableHeading class="w-3/12 text-left">Signed Date</TableHeading>
+      <TableHeading class="w-2/12">Actions</TableHeading>
     </TableHeader>
     <TableBody>
       {#each waivers.current.data as waiver}
         <TableRow>
-          <TableCell width="w-3/12" align="left">{waiver.name}</TableCell>
-          <TableCell width="w-4/12" align="left">{waiver.email}</TableCell>
-          <TableCell width="w-3/12" align="left">{formatDate(waiver.signedDate)}</TableCell>
-          <TableCell width="w-2/12" class="flex justify-center gap-2">
-            <IconButton
-              icon={mdiEye}
-              aria-label="View Waiver"
-              onclick={() => viewWaiver(waiver.id)}
-            />
+          <TableCell class="w-3/12 px-4 text-left">{waiver.name}</TableCell>
+          <TableCell class="w-4/12 px-4 text-left">{waiver.email}</TableCell>
+          <TableCell class="w-3/12 px-4 text-left">{formatDate(waiver.signedDate)}</TableCell>
+          <TableCell class="w-2/12">
+            <div class="flex justify-center gap-2">
+              <IconButton
+                icon={mdiEye}
+                aria-label="View Waiver"
+                onclick={() => viewWaiver(waiver.id)}
+              />
+            </div>
           </TableCell>
         </TableRow>
       {/each}
 
       {#if waivers.current.data.length === 0}
         <TableRow>
-          <TableCell width="w-full" class="text-center">No waivers found.</TableCell>
+          <TableCell class="w-full text-center">No waivers found.</TableCell>
         </TableRow>
       {/if}
     </TableBody>
