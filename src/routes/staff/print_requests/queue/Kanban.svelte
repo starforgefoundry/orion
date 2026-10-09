@@ -20,7 +20,7 @@
   import RequestDetailModal from './RequestDetailModal.svelte';
 
   let printRequests = getPrintRequests();
-  let prints = $derived(printRequests.current || []);
+  let prints = $derived((printRequests.current || []).filter((p) => p.payment?.status !== 'quote'));
 
   let draggedJobId: string | null = $state(null);
   let draggedFromColumn: PrintRequestStatus | null = $state(null);
@@ -501,9 +501,7 @@
                   <p class="text-xs">{formatDate(job.submissionDate)}</p>
                   {#if job.payment}
                     <div class="mt-2">
-                      {#if job.payment.status === 'quote'}
-                        <Badge color="secondary" size="small">Awaiting Quote</Badge>
-                      {:else if job.payment.status === 'pending'}
+                      {#if job.payment.status === 'pending'}
                         <Badge color="info" size="small">Pending Payment</Badge>
                       {:else if job.payment.status === 'paid'}
                         <Badge color="success" size="small">Paid</Badge>
