@@ -52,8 +52,6 @@ jobs:
             ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository }}:sha-${{ steps.version.outputs.sha }}
             ghcr.io/${{ github.repository }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   deploy:
     if: github.event_name == 'pull_request'
