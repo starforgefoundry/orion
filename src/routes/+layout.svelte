@@ -1,6 +1,6 @@
 <script lang="ts">
   import favicon from '$lib/assets/logo.png';
-  import { toastManager } from '@immich/ui';
+  import { toastManager, TooltipProvider } from '@immich/ui';
   import { onMount } from 'svelte';
   import '../app.css';
 
@@ -16,4 +16,6 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-{@render children()}
+<TooltipProvider>
+  {@render children()}
+</TooltipProvider>
