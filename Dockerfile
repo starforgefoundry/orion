@@ -2,7 +2,6 @@ FROM node:24-alpine AS base
 RUN npm install --global pnpm@11
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY patches ./patches
 
 FROM base AS build
 RUN pnpm install --frozen-lockfile
