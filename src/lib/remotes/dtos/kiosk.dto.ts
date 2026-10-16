@@ -2,6 +2,7 @@ import { submitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
 import { ACCESS_BASIS, type AccessBasis } from '$lib/member_enums';
 import * as v from 'valibot';
 
+export const KIOSK_PATH = '/kiosk';
 export const KIOSK_PAIR_PATH = '/kiosk/pair';
 export const KIOSK_PAIR_TOKEN_PARAM = 'token';
 export const KIOSK_DEVICE_COOKIE = 'kiosk_device';

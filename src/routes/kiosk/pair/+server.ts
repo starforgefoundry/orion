@@ -1,11 +1,14 @@
-import { KIOSK_DEVICE_COOKIE, KIOSK_PAIR_TOKEN_PARAM } from '$lib/remotes/dtos/kiosk.dto';
+import {
+  KIOSK_DEVICE_COOKIE,
+  KIOSK_PAIR_TOKEN_PARAM,
+  KIOSK_PATH,
+} from '$lib/remotes/dtos/kiosk.dto';
 import { kioskService } from '$lib/server/services/kiosk.service';
 import { error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
 // Browsers cap cookie lifetimes at 400 days.
 const DEVICE_COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
-const KIOSK_PATH = '/kiosk';
 const FORBIDDEN = 403;
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
