@@ -13,7 +13,7 @@ import type { CarBayBooking } from '$lib/server/db/schema';
 import { CarBaySlotTakenError } from '$lib/server/repositories/car_bay.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
-import { stringifySquareObject } from '$lib/server/utils/square';
+import { hasActiveMembership, stringifySquareObject } from '$lib/server/utils/square';
 import {
   CAR_BAY_PUBLIC_HORIZON_DAYS,
   CAR_BAY_REMINDER_LEAD_HOURS,
@@ -163,16 +163,21 @@ export class CarBayService extends BaseService {
     return period;
   }
 
+  async isMember(customerEmail: string) {
+    return hasActiveMembership(await this.squareRepository.getMembershipsByEmail(customerEmail));
+  }
+
   async book(dto: BookCarBayDto, now: DateTime = DateTime.now()) {
     const period = await this.validateRequest(dto.request, dto.customerEmail, now, {
       enforceHorizon: true,
     });
 
-    const [rates, squareSettings] = await Promise.all([
+    const [rates, squareSettings, isMember] = await Promise.all([
       this.settingsRepository.getSetting('carBayRates'),
       this.settingsRepository.getSetting('printRequestSquare'),
+      this.isMember(dto.customerEmail),
     ]);
-    const lineItems = bookingLineItems(dto.request, rates, dto.isMember);
+    const lineItems = bookingLineItems(dto.request, rates, isMember);
     const total = lineItemsTotal(lineItems);
 
     const customer = await this.squareRepository.upsertCustomer(
@@ -216,7 +221,7 @@ export class CarBayService extends BaseService {
         startAt: period.startAt,
         endAt: period.endAt,
         blockedUntil: blockedUntil(period.endAt),
-        ...this.customerColumns(dto),
+        ...this.customerColumns({ ...dto, isMember }),
         amountPaid: total,
         squarePaymentId: payment.id,
         squareOrderId: order.id,

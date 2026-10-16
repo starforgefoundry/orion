@@ -4,6 +4,7 @@ import {
   cancelCarBayBookingDto,
   carBayBookingIdDto,
   carBayRangeDto,
+  customerEmailDto,
   sendCarBayOverrunInvoiceDto,
   staffBookCarBayDto,
   staffCancelCarBayBookingDto,
@@ -30,6 +31,10 @@ async function withRuleErrors<T>(action: () => Promise<T>) {
 
 export const getCarBaySchedule = query(async () => {
   return await carBayService.getPublicSchedule();
+});
+
+export const getCarBayMembership = query(customerEmailDto, async (customerEmail) => {
+  return await carBayService.isMember(customerEmail);
 });
 
 export const bookCarBay = command(bookCarBayDto, async (dto) => {

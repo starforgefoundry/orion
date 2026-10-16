@@ -32,7 +32,7 @@
   async function handleSubmit() {
     submitting = true;
     const ok = await submitWithToast(
-      () => staffBookCarBay({ request: form.request, ...form.customer() }),
+      () => staffBookCarBay({ request: form.request, ...form.customer(), isMember: form.isMember }),
       { success: 'Booking added', error: 'Failed to add booking' },
     );
     submitting = false;

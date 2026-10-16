@@ -4,12 +4,12 @@
   import { Spinner } from '$lib/components/ui/spinner';
   import { CarBayBookingForm } from '$lib/frontend/car-bay-booking-form.svelte';
   import CarBayBookingFields from '$lib/frontend/components/CarBayBookingFields.svelte';
-  import FormField from '$lib/frontend/components/form/FormField.svelte';
+  import Section from '$lib/frontend/components/Section.svelte';
   import Modal from '$lib/frontend/components/Modal.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { errorDescription } from '$lib/frontend/form-submit';
   import { squareCard, type SquareCard } from '$lib/frontend/square-card';
-  import { bookCarBay } from '$lib/remotes/endpoints/car_bay.remote';
+  import { bookCarBay, getCarBayMembership } from '$lib/remotes/endpoints/car_bay.remote';
   import { getSquareConfig } from '$lib/remotes/endpoints/class.remote';
   import {
     formatDollars,
@@ -33,12 +33,21 @@
 
   let { onClose, tier, date, startHour, bookings, rates, onUnavailable }: Props = $props();
 
-  const form = untrack(
+  const form: CarBayBookingForm = untrack(
     () =>
       new CarBayBookingForm(
-        { bookings: () => bookings(), rates: () => rates, enforceHorizon: true },
+        {
+          bookings: () => bookings(),
+          rates: () => rates,
+          enforceHorizon: true,
+          membership: () => membershipQuery?.current,
+        },
         { tier, date, startHour },
       ),
+  );
+
+  const membershipQuery = $derived(
+    form.checkedEmail ? getCarBayMembership(form.checkedEmail) : undefined,
   );
 
   const squareConfig = $derived(getSquareConfig().current);
@@ -78,7 +87,7 @@
   <form id="car-bay-checkout" class="flex flex-col gap-4" onsubmit={handleSubmit}>
     <CarBayBookingFields {form} />
 
-    <FormField label="Payment">
+    <Section title="Payment">
       {#if squareConfig}
         <div {@attach squareCard(squareConfig, (created) => (card = created))}></div>
       {/if}
@@ -90,12 +99,11 @@
           <Spinner class="size-5 text-muted-foreground" />
         </div>
       {/if}
-    </FormField>
-
-    <p class="text-xs text-muted-foreground">
-      Cancel 12 or more hours before your start time for a full refund. Cancellations inside 12
-      hours and no-shows are not refunded.
-    </p>
+      <p class="text-xs text-muted-foreground">
+        Cancel at least 12 hours before your start time and we refund you in full. Later
+        cancellations and no-shows don't get a refund.
+      </p>
+    </Section>
   </form>
 
   {#snippet footer()}

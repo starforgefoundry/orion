@@ -18,7 +18,11 @@ type BookingFormContext = {
   bookings: () => CarBayPeriod[];
   rates: () => CarBayRates | undefined;
   enforceHorizon: boolean;
+  /** Looked up from Square for customers; `undefined` while the lookup is pending. */
+  membership?: () => boolean | undefined;
 };
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type BookingFormStart = { tier: CarBayTier; date: string; startHour: number };
 
@@ -95,9 +99,33 @@ export class CarBayBookingForm {
       : [],
   );
 
+  checkedEmail = $state('');
+
+  #lookedUpMembership() {
+    return this.#context.membership?.();
+  }
+
+  checksMembership = $derived(this.#hasMembershipLookup());
+
+  #hasMembershipLookup() {
+    return this.#context.membership !== undefined;
+  }
+
+  emailChecked = $derived(
+    this.checkedEmail !== '' && this.checkedEmail === this.customerEmail.trim().toLowerCase(),
+  );
+
+  membershipPending = $derived(
+    this.checksMembership && (!this.emailChecked || this.#lookedUpMembership() === undefined),
+  );
+
+  memberRate = $derived(
+    this.checksMembership ? (this.#lookedUpMembership() ?? false) : this.isMember,
+  );
+
   lineItems = $derived.by(() => {
     const rates = this.#context.rates();
-    return rates ? bookingLineItems(this.request, rates, this.isMember) : [];
+    return rates ? bookingLineItems(this.request, rates, this.memberRate) : [];
   });
 
   total = $derived(lineItemsTotal(this.lineItems));
@@ -108,14 +136,18 @@ export class CarBayBookingForm {
       this.customerPhone.trim() !== '',
   );
 
-  canSubmit = $derived(this.fits && this.hasCustomer);
+  canSubmit = $derived(this.fits && this.hasCustomer && !this.membershipPending);
+
+  confirmEmail() {
+    const email = this.customerEmail.trim().toLowerCase();
+    this.checkedEmail = EMAIL_PATTERN.test(email) ? email : '';
+  }
 
   customer() {
     return {
       customerName: this.customerName,
       customerEmail: this.customerEmail,
       customerPhone: this.customerPhone,
-      isMember: this.isMember,
     };
   }
 }

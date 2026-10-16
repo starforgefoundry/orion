@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import type { Subscription } from 'square';
 
 const SQUARE_PRODUCTION_API_URL = 'https://connect.squareup.com';
 const SQUARE_SANDBOX_API_URL = 'https://connect.squareupsandbox.com';
@@ -38,4 +39,8 @@ export function stringifySquareObject(obj: any): string {
   return JSON.stringify(obj, (_key, value) =>
     typeof value === 'bigint' ? value.toString() : value,
   );
+}
+
+export function hasActiveMembership(memberships: Subscription[] | undefined) {
+  return (memberships ?? []).some((membership) => membership.status === 'ACTIVE');
 }

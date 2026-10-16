@@ -48,8 +48,8 @@
     const confirmed = await modalManager.confirm({
       title: 'Cancel Booking',
       prompt: willRefund
-        ? 'Cancel this booking? You will receive a full refund.'
-        : `Cancel this booking? Cancellations within ${CAR_BAY_REFUND_CUTOFF_HOURS} hours of the start time are not refunded.`,
+        ? "Cancel this booking? You'll get a full refund."
+        : `Cancel this booking? It starts in less than ${CAR_BAY_REFUND_CUTOFF_HOURS} hours, so there's no refund.`,
       confirmText: 'Cancel Booking',
       cancelText: 'Keep Booking',
       variant: 'destructive',
@@ -103,16 +103,16 @@
     </Section>
 
     <p class="rounded-lg border bg-muted/50 p-4 text-sm">
-      You may move your own vehicle outside at the end of your reservation at no charge — but it may
-      only be stored on the property for up to 3 days from your booking's start date.
+      You can move your own car outside when your booking ends, free of charge. It can stay on the
+      property for up to 3 days from your booking's start date.
     </p>
 
     {#if isConfirmed}
       <Separator />
       <p class="text-sm text-muted-foreground">
         {booking.refundable
-          ? `Canceling now issues a full refund. Refunds end ${CAR_BAY_REFUND_CUTOFF_HOURS} hours before your start time.`
-          : `Your booking starts within ${CAR_BAY_REFUND_CUTOFF_HOURS} hours, so canceling now is not refunded.`}
+          ? `Cancel now and we refund you in full. Refunds stop ${CAR_BAY_REFUND_CUTOFF_HOURS} hours before your start time.`
+          : `Your booking starts in less than ${CAR_BAY_REFUND_CUTOFF_HOURS} hours, so canceling now won't get a refund.`}
       </p>
       <Button
         variant="destructive"

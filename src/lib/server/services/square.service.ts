@@ -1,4 +1,5 @@
 import { BaseService } from '$lib/server/services/base.service';
+import { hasActiveMembership } from '$lib/server/utils/square';
 
 export class SquareService extends BaseService {
   async getLocations() {
@@ -10,13 +11,7 @@ export class SquareService extends BaseService {
   }
 
   async checkActiveMember(customerEmail: string) {
-    const memberships = await this.squareRepository.getMembershipsByEmail(customerEmail);
-    if (!memberships || memberships.length === 0) {
-      return false;
-    }
-
-    const activeMemberships = memberships.filter((membership) => membership.status === 'ACTIVE');
-    return activeMemberships.length > 0;
+    return hasActiveMembership(await this.squareRepository.getMembershipsByEmail(customerEmail));
   }
 
   async processWebhook(webhookData: any) {

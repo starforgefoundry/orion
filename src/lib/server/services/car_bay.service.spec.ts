@@ -67,6 +67,7 @@ describe('CarBayService', () => {
     };
     squareRepo = {
       upsertCustomer: vi.fn(async () => ({ id: 'cust-1' })),
+      getMembershipsByEmail: vi.fn(async () => [{ status: 'ACTIVE' }]),
       createOrder: vi.fn(async () => ({
         id: 'order-1',
         locationId: 'loc-1',
@@ -130,11 +131,22 @@ describe('CarBayService', () => {
       );
     });
 
-    it('charges the non-member rate when the customer is not a member', async () => {
-      await service.book({ ...dto, isMember: false }, NOW);
+    it('charges the non-member rate when Square has no active membership', async () => {
+      squareRepo.getMembershipsByEmail.mockResolvedValue([{ status: 'CANCELED' }]);
+      await service.book(dto, NOW);
 
       expect(squareRepo.createPayment).toHaveBeenCalledWith(
         expect.objectContaining({ amountMoney: { amount: 1800n, currency: 'USD' } }),
+      );
+    });
+
+    it('ignores a member claim the customer sends themselves', async () => {
+      squareRepo.getMembershipsByEmail.mockResolvedValue(undefined);
+      await service.book({ ...dto, isMember: true } as typeof dto, NOW);
+
+      expect(squareRepo.getMembershipsByEmail).toHaveBeenCalledWith('jane@example.com');
+      expect(carBayRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ isMember: false, amountPaid: 1800 }),
       );
     });
 

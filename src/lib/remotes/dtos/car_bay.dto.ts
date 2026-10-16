@@ -16,11 +16,12 @@ export const carBayRequestDto = v.variant('tier', [
   v.object({ tier: v.literal(CAR_BAY_TIER.FULL_DAY), date: isoDate, days: wholeNumber }),
 ]);
 
+export const customerEmailDto = v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email());
+
 const customerFields = {
   customerName: v.pipe(v.string(), v.trim(), v.minLength(1)),
-  customerEmail: v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
+  customerEmail: customerEmailDto,
   customerPhone: v.pipe(v.string(), v.trim(), v.minLength(1)),
-  isMember: v.boolean(),
 };
 
 export const bookCarBayDto = v.object({
@@ -34,6 +35,7 @@ export type BookCarBayDto = v.InferOutput<typeof bookCarBayDto>;
 export const staffBookCarBayDto = v.object({
   request: carBayRequestDto,
   ...customerFields,
+  isMember: v.boolean(),
 });
 
 export type StaffBookCarBayDto = v.InferOutput<typeof staffBookCarBayDto>;

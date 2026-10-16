@@ -28,11 +28,7 @@
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { submitWithToast } from '$lib/frontend/form-submit';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
-  import {
-    getCarBayBookingDetail,
-    markCarBayNoShow,
-    staffCancelCarBayBooking,
-  } from '$lib/remotes/endpoints/car_bay.remote';
+  import { getCarBayBookingDetail, markCarBayNoShow } from '$lib/remotes/endpoints/car_bay.remote';
   import {
     CAR_BAY_REFUND_CUTOFF_HOURS,
     CAR_BAY_TIER_NAMES,
@@ -45,6 +41,7 @@
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import UserXIcon from '@lucide/svelte/icons/user-x';
   import { DateTime } from 'luxon';
+  import CancelBookingModal from './CancelBookingModal.svelte';
   import OverrunInvoiceModal from './OverrunInvoiceModal.svelte';
 
   interface Props extends ModalProps {
@@ -70,22 +67,14 @@
     if (ok) await onChanged();
   }
 
-  async function cancel(refund: boolean) {
-    const confirmed = await modalManager.confirm({
-      title: 'Cancel Booking',
-      prompt: refund
-        ? `Cancel this booking and refund ${formatDollars(detail?.amountPaid ?? 0)}?`
-        : 'Cancel this booking without a refund?',
-      confirmText: refund ? 'Cancel & Refund' : 'Cancel Booking',
-      cancelText: 'Keep Booking',
-      variant: 'destructive',
+  async function cancel() {
+    if (!detail) return;
+    const canceled = await modalManager.show(CancelBookingModal, {
+      bookingId,
+      amountPaid: detail.amountPaid,
+      refundable: detail.refundable,
     });
-    if (!confirmed) return;
-
-    await runAction(() => staffCancelCarBayBooking({ bookingId, refund }), {
-      success: 'Booking canceled',
-      error: 'Failed to cancel booking',
-    });
+    if (canceled) await onChanged();
   }
 
   async function markNoShow() {
@@ -124,16 +113,10 @@
         <UserXIcon />
         No-show
       </Button>
-      <Button variant="destructive" onclick={() => cancel(false)} disabled={busy}>
+      <Button variant="destructive" onclick={cancel} disabled={busy}>
         <BanIcon />
-        Cancel
+        Cancel Booking
       </Button>
-      {#if isPaid}
-        <Button variant="destructive" onclick={() => cancel(true)} disabled={busy}>
-          <BanIcon />
-          Cancel & Refund
-        </Button>
-      {/if}
     {/if}
   </div>
 {/snippet}
