@@ -12,11 +12,18 @@
 
   let { checking, onScan }: Props = $props();
 
+  // Phone screens blow out at normal exposure and the QR code washes away.
+  const EXPOSURE_COMPENSATION_EV = -2;
+
   // Kept as a constant so barqode doesn't restart the stream on every render.
   const CAMERA_CONSTRAINTS: MediaTrackConstraints = {
     facingMode: 'user',
     width: { ideal: 1920 },
     height: { ideal: 1080 },
+    // exposureCompensation is missing from the DOM typings
+    advanced: [
+      { exposureMode: 'continuous', exposureCompensation: EXPOSURE_COMPENSATION_EV },
+    ] as unknown as MediaTrackConstraintSet[],
   };
 
   let loadingCamera = $state(true);
