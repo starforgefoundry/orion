@@ -1,6 +1,13 @@
+<script lang="ts" module>
+  const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+  const MAX_MOBILE_DOTS = 3;
+</script>
+
 <script lang="ts" generics="T extends { date: string }">
-  import { Button, Heading, HStack } from '@immich/ui';
-  import { mdiChevronLeft, mdiChevronRight } from '@mdi/js';
+  import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import { cn } from '$lib/frontend/cn';
+  import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
+  import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
   import { DateTime } from 'luxon';
   import type { Snippet } from 'svelte';
 
@@ -12,9 +19,14 @@
     >;
   }
 
+  type CalendarDay = { date: DateTime; dateStr: string; isCurrentMonth: boolean; instances: T[] };
+
   let { instances, filter, dayContent }: Props = $props();
 
+  const todayStr = DateTime.now().toISODate();
+
   let currentMonth = $state(DateTime.now());
+  let selectedDateStr = $state(todayStr);
 
   const instancesByDate = $derived.by(() => {
     const map = new Map<string, T[]>();
@@ -31,7 +43,7 @@
     const start = currentMonth.startOf('month');
     const end = currentMonth.endOf('month');
     const startWeekday = start.weekday % 7;
-    const days: { date: DateTime; dateStr: string; isCurrentMonth: boolean; instances: T[] }[] = [];
+    const days: CalendarDay[] = [];
 
     for (let i = 0; i < startWeekday; i++) {
       const date = start.minus({ days: startWeekday - i });
@@ -60,84 +72,110 @@
     return days;
   });
 
-  /** Days in current month that have instances (for mobile list view) */
-  const daysWithInstances = $derived(
-    calendarDays.filter((d) => d.isCurrentMonth && d.instances.length > 0),
+  const selectedDay = $derived(
+    calendarDays.find((d) => d.isCurrentMonth && d.dateStr === selectedDateStr),
   );
+
+  function changeMonth(months: number) {
+    currentMonth = currentMonth.plus({ months });
+    const isThisMonth = currentMonth.hasSame(DateTime.now(), 'month');
+    selectedDateStr = isThisMonth ? todayStr : currentMonth.startOf('month').toISODate()!;
+  }
 </script>
 
-<div class="flex flex-col gap-4">
-  <HStack class="items-center justify-center gap-4">
-    <Button
-      size="small"
-      variant="ghost"
-      leadingIcon={mdiChevronLeft}
-      onclick={() => (currentMonth = currentMonth.minus({ months: 1 }))}
-    />
-    <Heading size="small">{currentMonth.toFormat('MMMM yyyy')}</Heading>
-    <Button
-      size="small"
-      variant="ghost"
-      leadingIcon={mdiChevronRight}
-      onclick={() => (currentMonth = currentMonth.plus({ months: 1 }))}
-    />
-  </HStack>
+{#snippet renderDay(calDay: CalendarDay)}
+  {@render dayContent({
+    date: calDay.date,
+    dateStr: calDay.dateStr,
+    instances: calDay.instances,
+    isCurrentMonth: calDay.isCurrentMonth,
+  })}
+{/snippet}
 
-  <!-- Desktop: grid view -->
-  <div class="hidden overflow-hidden rounded-lg border border-gray-700 md:block">
-    <div class="grid grid-cols-7 border-b border-gray-700">
-      {#each ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as day}
-        <div class="p-2 text-center text-xs font-semibold text-gray-400">{day}</div>
+<div class="flex flex-col gap-3">
+  <div class="flex items-center justify-center gap-2">
+    <IconButton
+      icon={ChevronLeftIcon}
+      aria-label="Previous month"
+      onclick={() => changeMonth(-1)}
+    />
+    <h2 class="w-36 text-center text-sm font-semibold">{currentMonth.toFormat('MMMM yyyy')}</h2>
+    <IconButton icon={ChevronRightIcon} aria-label="Next month" onclick={() => changeMonth(1)} />
+  </div>
+
+  <div class="overflow-hidden rounded-lg border">
+    <div class="grid grid-cols-7 border-b bg-muted/50">
+      {#each WEEKDAYS as day (day)}
+        <div class="py-1.5 text-center text-xs font-medium text-muted-foreground">
+          <span class="md:hidden">{day.charAt(0)}</span>
+          <span class="hidden md:inline">{day}</span>
+        </div>
       {/each}
     </div>
 
-    <div class="-m-px grid grid-cols-7">
-      {#each calendarDays as calDay}
+    <div class="grid grid-cols-7 gap-px bg-border">
+      {#each calendarDays as calDay (calDay.dateStr)}
+        {@const isSelected = calDay.dateStr === selectedDay?.dateStr}
+        {@const isToday = calDay.dateStr === todayStr}
         <div
-          class="min-h-24 border border-gray-700 p-1.5 {calDay.isCurrentMonth
-            ? ''
-            : 'bg-gray-900/50 text-gray-600'}"
+          class={cn(
+            'min-w-0 bg-background md:min-h-24',
+            !calDay.isCurrentMonth &&
+              'bg-[color-mix(in_oklch,var(--muted)_30%,var(--background))] text-muted-foreground',
+          )}
         >
-          <div
-            class="mb-1 text-left text-xs font-medium {calDay.isCurrentMonth
-              ? 'text-gray-400'
-              : 'text-gray-600'}"
+          <button
+            type="button"
+            class="flex h-12 w-full flex-col items-center justify-center gap-1 disabled:cursor-default md:hidden"
+            disabled={!calDay.isCurrentMonth}
+            aria-pressed={isSelected}
+            aria-label={calDay.date.toFormat('EEEE, MMMM d')}
+            onclick={() => (selectedDateStr = calDay.dateStr)}
           >
-            {calDay.date.day}
+            <span
+              class={cn(
+                'grid size-6 place-items-center rounded-full text-xs',
+                isToday && 'font-semibold text-primary',
+                isSelected && 'bg-primary text-primary-foreground',
+              )}
+            >
+              {calDay.date.day}
+            </span>
+            <span class="flex h-1 gap-0.5">
+              {#each calDay.instances.slice(0, MAX_MOBILE_DOTS) as _, i (i)}
+                <span class="size-1 rounded-full bg-primary"></span>
+              {/each}
+            </span>
+          </button>
+
+          <div class="hidden p-1.5 md:block">
+            <div
+              class={cn(
+                'mb-1 text-xs font-medium text-muted-foreground',
+                isToday && 'font-semibold text-primary',
+              )}
+            >
+              {calDay.date.day}
+            </div>
+            {#if calDay.isCurrentMonth}
+              {@render renderDay(calDay)}
+            {/if}
           </div>
-          {#if calDay.isCurrentMonth}
-            {@render dayContent({
-              date: calDay.date,
-              dateStr: calDay.dateStr,
-              instances: calDay.instances,
-              isCurrentMonth: calDay.isCurrentMonth,
-            })}
-          {/if}
         </div>
       {/each}
     </div>
   </div>
 
-  <!-- Mobile: list view -->
-  <div class="flex flex-col gap-2 md:hidden">
-    {#if daysWithInstances.length === 0}
-      <div class="rounded-lg border border-gray-700 p-4 text-center text-sm text-gray-400">
-        No classes this month.
-      </div>
-    {:else}
-      {#each daysWithInstances as calDay}
-        <div class="rounded-lg border border-gray-700 p-3">
-          <div class="mb-2 text-sm font-semibold text-gray-300">
-            {calDay.date.toFormat('EEEE, MMMM d')}
-          </div>
-          {@render dayContent({
-            date: calDay.date,
-            dateStr: calDay.dateStr,
-            instances: calDay.instances,
-            isCurrentMonth: true,
-          })}
-        </div>
-      {/each}
-    {/if}
-  </div>
+  {#if selectedDay}
+    <div class="flex flex-col gap-2 md:hidden">
+      <h3 class="text-sm font-medium">{selectedDay.date.toFormat('EEEE, MMMM d')}</h3>
+      {#if selectedDay.instances.length === 0}
+        <p class="rounded-lg border p-3 text-center text-sm text-muted-foreground">
+          Nothing scheduled.
+        </p>
+      {:else}
+        {@render renderDay(selectedDay)}
+      {/if}
+    </div>
+  {/if}
 </div>

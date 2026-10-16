@@ -1,129 +1,110 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import * as Table from '$lib/components/ui/table';
   import Pagination from '$lib/frontend/components/Pagination.svelte';
+  import StatusIndicator from '$lib/frontend/components/StatusIndicator.svelte';
+  import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { searchPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
-  import {
-    Badge,
-    Input,
-    modalManager,
-    Table,
-    TableBody,
-    TableCell,
-    TableHeader,
-    TableHeading,
-    TableRow,
-  } from '@immich/ui';
-  import { mdiMagnify } from '@mdi/js';
+  import SearchIcon from '@lucide/svelte/icons/search';
   import RequestDetailModal from './RequestDetailModal.svelte';
-  import { getPaymentStatusColor, getStatusColor } from './utils';
+  import { formatPrice, PAYMENT_STATUS_DISPLAY, REQUEST_STATUS_DISPLAY } from './utils';
 
   let searchField = $state('');
   let searchState = $state('');
   let page = $state(1);
-  let printsRequest = $derived(
-    searchPrintRequests({
-      query: searchState,
-      page: page,
-    }),
-  );
+  let printsRequest = $derived(searchPrintRequests({ query: searchState, page }));
 
   let prints = $derived(printsRequest.current?.data || []);
   let pagination = $derived(printsRequest.current?.pagination);
-  $inspect(pagination);
 
-  function handleRowClick(requestId: string) {
+  function openRequest(requestId: string) {
     goto(`?id=${requestId}`, { replaceState: true, noScroll: true, keepFocus: true });
-    modalManager.open(RequestDetailModal, { requestId });
+    modalManager.show(RequestDetailModal, { requestId });
   }
 
   function handleRowKeydown(event: KeyboardEvent, requestId: string) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
-    handleRowClick(requestId);
-  }
-
-  function formatPrice(cents: number): string {
-    return `$${(cents / 100).toFixed(2)}`;
-  }
-
-  function formatStatus(status: string): string {
-    return status
-      .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+    openRequest(requestId);
   }
 
   function search() {
     searchState = searchField;
     page = 1;
   }
-
-  function handlePageChange(newPage: number) {
-    page = newPage;
-  }
 </script>
 
-<Input
-  placeholder="Search Print Requests"
-  class=" w-1/3 self-end"
+<TextInput
+  icon={SearchIcon}
+  placeholder="Search print requests"
+  class="mb-3 sm:max-w-xs"
   bind:value={searchField}
-  leadingIcon={mdiMagnify}
   onkeydown={(e) => e.key === 'Enter' && search()}
   onblur={search}
 />
 
-<Table striped class="mt-4">
-  <TableHeader>
-    <TableHeading class="w-3/12 text-left">Request Name</TableHeading>
-    <TableHeading class="w-3/12 text-left">Customer Name</TableHeading>
-    <TableHeading class="w-2/12">Request Status</TableHeading>
-    <TableHeading class="w-2/12">Payment Status</TableHeading>
-    <TableHeading class="w-2/12">Price</TableHeading>
-  </TableHeader>
-
-  <TableBody>
-    {#each prints as print}
-      <TableRow
-        class="cursor-pointer hover:bg-primary/10"
-        role="button"
-        tabindex={0}
-        onclick={() => handleRowClick(print.id)}
-        onkeydown={(e) => handleRowKeydown(e, print.id)}
-      >
-        <TableCell class="w-3/12 px-4 text-left">{print.projectName}</TableCell>
-        <TableCell class="w-3/12 px-4 text-left">{print.customerName}</TableCell>
-        <TableCell class="w-2/12">
-          <div class="px-2 py-1">
-            <Badge color={getStatusColor(print.status)}>{formatStatus(print.status)}</Badge>
-          </div>
-        </TableCell>
-        <TableCell class="w-2/12">
-          <div class="px-2 py-1">
+<div class="overflow-hidden rounded-lg border">
+  <Table.Root>
+    <Table.Header class="bg-muted/50">
+      <Table.Row>
+        <Table.Head>Request</Table.Head>
+        <Table.Head class="hidden md:table-cell">Customer</Table.Head>
+        <Table.Head>Status</Table.Head>
+        <Table.Head class="hidden sm:table-cell">Payment</Table.Head>
+        <Table.Head class="text-right">Price</Table.Head>
+      </Table.Row>
+    </Table.Header>
+    <Table.Body>
+      {#each prints as print (print.id)}
+        <Table.Row
+          class="cursor-pointer"
+          tabindex={0}
+          onclick={() => openRequest(print.id)}
+          onkeydown={(e) => handleRowKeydown(e, print.id)}
+        >
+          <Table.Cell class="max-w-48">
+            <div class="truncate font-medium">{print.projectName}</div>
+            <div class="truncate text-xs text-muted-foreground md:hidden">
+              {print.customerName}
+            </div>
+          </Table.Cell>
+          <Table.Cell class="hidden max-w-48 truncate md:table-cell"
+            >{print.customerName}</Table.Cell
+          >
+          <Table.Cell>
+            <StatusIndicator display={REQUEST_STATUS_DISPLAY[print.status]} />
+          </Table.Cell>
+          <Table.Cell class="hidden sm:table-cell">
             {#if print.payment}
-              <Badge color={getPaymentStatusColor(print.payment.status)}
-                >{formatStatus(print.payment.status)}</Badge
-              >
+              <StatusIndicator display={PAYMENT_STATUS_DISPLAY[print.payment.status]} />
             {:else}
-              <span class="text-muted">—</span>
+              <span class="text-muted-foreground">—</span>
             {/if}
-          </div>
-        </TableCell>
-        <TableCell class="w-2/12">
-          {#if print.payment?.total}
-            {formatPrice(print.payment.total)}
-          {:else}
-            <span class="text-muted">—</span>
-          {/if}
-        </TableCell>
-      </TableRow>
-    {/each}
-  </TableBody>
-</Table>
+          </Table.Cell>
+          <Table.Cell class="text-right tabular-nums">
+            {#if print.payment?.total}
+              {formatPrice(print.payment.total)}
+            {:else}
+              <span class="text-muted-foreground">—</span>
+            {/if}
+          </Table.Cell>
+        </Table.Row>
+      {:else}
+        <Table.Row>
+          <Table.Cell colspan={5} class="h-20 text-center text-muted-foreground">
+            No print requests found.
+          </Table.Cell>
+        </Table.Row>
+      {/each}
+    </Table.Body>
+  </Table.Root>
+</div>
 
 {#if pagination}
   <Pagination
     currentPage={pagination.page}
     totalPages={pagination.totalPages}
-    onPageChange={handlePageChange}
+    onPageChange={(newPage) => (page = newPage)}
   />
 {/if}

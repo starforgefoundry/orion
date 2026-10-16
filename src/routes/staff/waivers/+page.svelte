@@ -1,18 +1,14 @@
 <script lang="ts">
+  import * as Table from '$lib/components/ui/table';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import PageHeader from '$lib/frontend/components/PageHeader.svelte';
+  import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { searchWaivers } from '$lib/remotes/endpoints/waiver.remote';
-  import {
-    Heading,
-    IconButton,
-    Input,
-    LoadingSpinner,
-    Table,
-    TableBody,
-    TableCell,
-    TableHeader,
-    TableHeading,
-    TableRow,
-  } from '@immich/ui';
-  import { mdiChevronLeft, mdiChevronRight, mdiEye, mdiMagnify } from '@mdi/js';
+  import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
+  import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+  import EyeIcon from '@lucide/svelte/icons/eye';
+  import SearchIcon from '@lucide/svelte/icons/search';
 
   let searchTerm = $state('');
   let page = $state(1);
@@ -66,62 +62,68 @@
   }
 </script>
 
-<div class="mb-6 flex items-center justify-between">
-  <Heading size="large" class="inline-block w-fit">Signed Waivers</Heading>
-  <div class="flex w-1/2 items-center gap-2">
-    <Input
-      placeholder="Search waivers..."
-      leadingIcon={mdiMagnify}
-      value={searchTerm}
-      oninput={(e) => handleSearch(e.currentTarget.value)}
-    />
-  </div>
-</div>
+<PageHeader title="Signed Waivers" />
+
+<TextInput
+  icon={SearchIcon}
+  placeholder="Search waivers..."
+  class="mb-3 sm:max-w-xs"
+  value={searchTerm}
+  oninput={(e) => handleSearch(e.currentTarget.value)}
+/>
 
 {#if waivers.loading}
-  <div class="flex justify-center">
-    <LoadingSpinner size="large" />
+  <div class="flex justify-center py-8">
+    <Spinner class="size-6" />
   </div>
 {:else if waivers.error}
-  <p class="text-danger">Error loading waivers: {waivers.error.message}</p>
+  <p class="text-sm text-destructive">Error loading waivers: {waivers.error.message}</p>
 {:else if waivers.current}
-  <Table striped class="mt-4">
-    <TableHeader>
-      <TableHeading class="w-3/12 text-left">Name</TableHeading>
-      <TableHeading class="w-4/12 text-left">Email</TableHeading>
-      <TableHeading class="w-3/12 text-left">Signed Date</TableHeading>
-      <TableHeading class="w-2/12">Actions</TableHeading>
-    </TableHeader>
-    <TableBody>
-      {#each waivers.current.data as waiver}
-        <TableRow>
-          <TableCell class="w-3/12 px-4 text-left">{waiver.name}</TableCell>
-          <TableCell class="w-4/12 px-4 text-left">{waiver.email}</TableCell>
-          <TableCell class="w-3/12 px-4 text-left">{formatDate(waiver.signedDate)}</TableCell>
-          <TableCell class="w-2/12">
-            <div class="flex justify-center gap-2">
+  <div class="overflow-hidden rounded-lg border">
+    <Table.Root>
+      <Table.Header class="bg-muted/50">
+        <Table.Row>
+          <Table.Head>Name</Table.Head>
+          <Table.Head class="hidden md:table-cell">Email</Table.Head>
+          <Table.Head class="hidden sm:table-cell">Signed Date</Table.Head>
+          <Table.Head class="w-12"><span class="sr-only">Actions</span></Table.Head>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
+        {#each waivers.current.data as waiver (waiver.id)}
+          <Table.Row>
+            <Table.Cell class="max-w-48">
+              <div class="truncate font-medium">{waiver.name}</div>
+              <div class="truncate text-xs text-muted-foreground md:hidden">{waiver.email}</div>
+              <div class="truncate text-xs text-muted-foreground sm:hidden">
+                {formatDate(waiver.signedDate)}
+              </div>
+            </Table.Cell>
+            <Table.Cell class="hidden max-w-64 truncate md:table-cell">{waiver.email}</Table.Cell>
+            <Table.Cell class="hidden sm:table-cell">{formatDate(waiver.signedDate)}</Table.Cell>
+            <Table.Cell class="text-right">
               <IconButton
-                icon={mdiEye}
+                icon={EyeIcon}
                 aria-label="View Waiver"
                 onclick={() => viewWaiver(waiver.id)}
               />
-            </div>
-          </TableCell>
-        </TableRow>
-      {/each}
-
-      {#if waivers.current.data.length === 0}
-        <TableRow>
-          <TableCell class="w-full text-center">No waivers found.</TableCell>
-        </TableRow>
-      {/if}
-    </TableBody>
-  </Table>
+            </Table.Cell>
+          </Table.Row>
+        {:else}
+          <Table.Row>
+            <Table.Cell colspan={4} class="h-20 text-center text-muted-foreground">
+              No waivers found.
+            </Table.Cell>
+          </Table.Row>
+        {/each}
+      </Table.Body>
+    </Table.Root>
+  </div>
 
   {#if waivers.current.pagination.totalPages > 1}
-    <div class="mt-4 flex items-center justify-center gap-4">
+    <div class="mt-3 flex items-center justify-center gap-3">
       <IconButton
-        icon={mdiChevronLeft}
+        icon={ChevronLeftIcon}
         aria-label="Previous page"
         disabled={page <= 1}
         onclick={handlePrevPage}
@@ -130,7 +132,7 @@
         Page {waivers.current.pagination.page} of {waivers.current.pagination.totalPages}
       </span>
       <IconButton
-        icon={mdiChevronRight}
+        icon={ChevronRightIcon}
         aria-label="Next page"
         disabled={page >= waivers.current.pagination.totalPages}
         onclick={handleNextPage}

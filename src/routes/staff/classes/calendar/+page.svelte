@@ -1,19 +1,14 @@
 <script lang="ts">
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
   import CalendarGrid from '$lib/frontend/components/CalendarGrid.svelte';
+  import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import PageHeader from '$lib/frontend/components/PageHeader.svelte';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { formatTime, parseTime } from '$lib/frontend/utils';
   import { getAllInstances } from '$lib/remotes/endpoints/class.remote';
-  import {
-    Button,
-    Card,
-    CardBody,
-    Heading,
-    HStack,
-    IconButton,
-    LoadingSpinner,
-    modalManager,
-    Stack,
-  } from '@immich/ui';
-  import { mdiCalendarSync, mdiPlus } from '@mdi/js';
+  import CalendarSyncIcon from '@lucide/svelte/icons/calendar-sync';
+  import PlusIcon from '@lucide/svelte/icons/plus';
   import CalendarSubscribeModal from './CalendarSubscribeModal.svelte';
   import InstanceDetailModal from './InstanceDetailModal.svelte';
   import ScheduleClassModal from './ScheduleClassModal.svelte';
@@ -30,58 +25,51 @@
   }
 </script>
 
-<svelte:head>
-  <title>Classes</title>
-</svelte:head>
-
 <svelte:window onfocus={() => getAllInstances().refresh()} />
 
-<Stack gap={4}>
-  <HStack class="items-center justify-between">
-    <Heading>Classes</Heading>
-    <HStack gap={2}>
-      <IconButton
-        icon={mdiCalendarSync}
-        variant="outline"
-        aria-label="Subscribe to calendar"
-        onclick={() => modalManager.show(CalendarSubscribeModal, {})}
-      />
+<PageHeader title="Classes">
+  {#snippet actions()}
+    <IconButton
+      icon={CalendarSyncIcon}
+      variant="outline"
+      size="icon"
+      aria-label="Subscribe to calendar"
+      onclick={() => modalManager.show(CalendarSubscribeModal, {})}
+    />
+    <Button onclick={openCreateInstance}>
+      <PlusIcon />
+      Schedule Class
+    </Button>
+  {/snippet}
+</PageHeader>
 
-      <Button leadingIcon={mdiPlus} onclick={openCreateInstance}>Schedule Class</Button>
-    </HStack>
-  </HStack>
-
-  {#if instancesRemote.loading && !instancesRemote.current}
-    <LoadingSpinner class="mx-auto" size="large" />
-  {:else}
-    <Card>
-      <CardBody>
-        <CalendarGrid {instances} filter={(inst) => inst.status === 'scheduled'}>
-          {#snippet dayContent({ instances: dayInstances })}
-            {@const sortedDayInstances = dayInstances.sort(
-              (a, b) => parseTime(a.startTime).getTime() - parseTime(b.startTime).getTime(),
-            )}
-            <div class="flex flex-col gap-2">
-              {#each sortedDayInstances as inst}
-                <button
-                  class=" w-full cursor-pointer rounded bg-gray-700/50 p-1 px-2 text-left text-xs hover:bg-gray-600/50"
-                  onclick={() => openInstanceDetail(inst.id)}
-                >
-                  <div class="mb-1 flex justify-between">
-                    <span class="font-medium">{formatTime(inst.startTime)}</span>
-                    <span class="text-gray-500">
-                      {inst.confirmedCount ?? 0}/{inst.seats}
-                    </span>
-                  </div>
-                  <span class=" text-gray-400">
-                    {inst.catalog?.name}
-                  </span>
-                </button>
-              {/each}
+{#if instancesRemote.loading && !instancesRemote.current}
+  <div class="flex justify-center py-10">
+    <Spinner class="size-6" />
+  </div>
+{:else}
+  <CalendarGrid {instances} filter={(inst) => inst.status === 'scheduled'}>
+    {#snippet dayContent({ instances: dayInstances })}
+      {@const sortedDayInstances = dayInstances.sort(
+        (a, b) => parseTime(a.startTime).getTime() - parseTime(b.startTime).getTime(),
+      )}
+      <div class="flex flex-col gap-1">
+        {#each sortedDayInstances as inst (inst.id)}
+          <button
+            type="button"
+            class="w-full cursor-pointer rounded-md bg-muted px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent md:px-1.5 md:py-1"
+            onclick={() => openInstanceDetail(inst.id)}
+          >
+            <div class="flex justify-between gap-1">
+              <span class="font-medium">{formatTime(inst.startTime)}</span>
+              <span class="text-muted-foreground tabular-nums">
+                {inst.confirmedCount ?? 0}/{inst.seats}
+              </span>
             </div>
-          {/snippet}
-        </CalendarGrid>
-      </CardBody>
-    </Card>
-  {/if}
-</Stack>
+            <div class="truncate text-muted-foreground">{inst.catalog?.name}</div>
+          </button>
+        {/each}
+      </div>
+    {/snippet}
+  </CalendarGrid>
+{/if}

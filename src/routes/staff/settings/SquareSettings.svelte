@@ -1,17 +1,14 @@
 <script lang="ts">
+  import { Spinner } from '$lib/components/ui/spinner';
+  import FormField from '$lib/frontend/components/form/FormField.svelte';
+  import HiddenField from '$lib/frontend/components/form/HiddenField.svelte';
+  import OptionSelect, {
+    type SelectOption,
+  } from '$lib/frontend/components/form/OptionSelect.svelte';
   import { initForm } from '$lib/frontend/components/form/utils.svelte';
+  import { enhanceWithToast } from '$lib/frontend/form-submit';
   import { printRequestSquareSettingsForm } from '$lib/remotes/endpoints/settings.remote';
   import { getSquareCatalog, getSquareLocations } from '$lib/remotes/endpoints/square.remote';
-  import {
-    Field,
-    LoadingSpinner,
-    modalManager,
-    Select,
-    Stack,
-    toastManager,
-    type SelectOption,
-  } from '@immich/ui';
-  import SquareInfoModal from './SquareInfoModal.svelte';
 
   interface Props {
     squareSettings: {
@@ -32,116 +29,102 @@
     additionalBuildPlateItemId: squareSettings.additionalBuildPlateItemId,
   }));
 
-  function showSquareInfoModal() {
-    modalManager.show(SquareInfoModal);
-  }
+  let locationId = $derived(squareSettings.locationId);
+  let memberPrintDiscountId = $derived(squareSettings.memberPrintDiscountId);
+  let printRequestItemId = $derived(squareSettings.printRequestItemId);
+  let additionalBuildPlateItemId = $derived(squareSettings.additionalBuildPlateItemId);
 
   let locationRequest = getSquareLocations();
   let squareLocations = $derived(locationRequest.current ?? []);
-  let squareLocationOptions = $derived(
+  let squareLocationOptions: SelectOption[] = $derived(
     squareLocations.map((loc) => ({
-      label: loc.name,
-      value: loc.id,
-    })) as SelectOption[],
+      label: loc.name ?? '',
+      value: loc.id ?? '',
+    })),
   );
 
   let catalogRequest = getSquareCatalog();
   let squareCatalog = $derived(catalogRequest.current ?? []);
-  let squareItemOptions = $derived(
+  let squareItemOptions: SelectOption[] = $derived(
     squareCatalog
       .filter((item) => item.type === 'ITEM')
       .map((item) => ({
         label: item.itemData?.name || 'Unnamed Item',
         value: item.itemData?.variations?.[0]?.id || '',
-      })) as SelectOption[],
+      })),
   );
-  let squareDiscountOptions = $derived(
+  let squareDiscountOptions: SelectOption[] = $derived(
     squareCatalog
       .filter((item) => item.type === 'DISCOUNT')
       .map((item) => ({
         label: item.discountData?.name || 'Unnamed Discount',
         value: item.id,
-      })) as SelectOption[],
+      })),
   );
-
-  async function handleSubmit(submit: () => Promise<void>) {
-    try {
-      await submit();
-      toastManager.show({
-        title: 'Settings Saved',
-        description: 'Settings have been updated successfully.',
-        color: 'success',
-      });
-    } catch (error) {
-      toastManager.show({
-        title: 'Error Saving Settings',
-        description: 'An error occurred while saving settings. Please try again.',
-        color: 'danger',
-      });
-    }
-  }
 </script>
 
 {#if locationRequest.loading || catalogRequest.loading}
-  <LoadingSpinner />
+  <Spinner />
 {:else if locationRequest.error}
-  <div class="flex items-center justify-center">
-    <p class="text-danger">Error loading Square locations: {locationRequest.error.message}</p>
-  </div>
+  <p class="text-sm text-destructive">
+    Error loading Square locations: {locationRequest.error.message}
+  </p>
 {:else if catalogRequest.error}
-  <div class="flex items-center justify-center">
-    <p class="text-danger">Error loading Square catalog: {catalogRequest.error.message}</p>
-  </div>
+  <p class="text-sm text-destructive">
+    Error loading Square catalog: {catalogRequest.error.message}
+  </p>
 {:else}
   <form
     id={formId}
-    {...printRequestSquareSettingsForm.enhance(async ({ submit }) => await handleSubmit(submit))}
+    class="flex flex-col gap-5"
+    {...enhanceWithToast(printRequestSquareSettingsForm, {
+      success: 'Settings saved',
+      error: 'Error saving settings',
+    })}
   >
-    <Stack gap={4}>
-      <Field label="Location" required="indicator">
-        <Select
-          value={printRequestSquareSettingsForm.fields.locationId.value()}
-          options={squareLocationOptions}
-          placeholder="Square Location"
-          onChange={(value) => printRequestSquareSettingsForm.fields.locationId.set(value)}
-        />
-        <input hidden {...printRequestSquareSettingsForm.fields.locationId.as('text')} />
-      </Field>
+    <FormField label="Location" required>
+      <OptionSelect
+        options={squareLocationOptions}
+        bind:value={locationId}
+        placeholder="Square Location"
+      />
+      <HiddenField field={printRequestSquareSettingsForm.fields.locationId} value={locationId} />
+    </FormField>
 
-      <Field label="Member Print Discount Item" required="indicator">
-        <Select
-          value={printRequestSquareSettingsForm.fields.memberPrintDiscountId.value()}
-          options={squareDiscountOptions}
-          placeholder="Select Discount"
-          onChange={(value) =>
-            printRequestSquareSettingsForm.fields.memberPrintDiscountId.set(value)}
-        />
-        <input hidden {...printRequestSquareSettingsForm.fields.memberPrintDiscountId.as('text')} />
-      </Field>
+    <FormField label="Member Print Discount Item" required>
+      <OptionSelect
+        options={squareDiscountOptions}
+        bind:value={memberPrintDiscountId}
+        placeholder="Select Discount"
+      />
+      <HiddenField
+        field={printRequestSquareSettingsForm.fields.memberPrintDiscountId}
+        value={memberPrintDiscountId}
+      />
+    </FormField>
 
-      <Field label="Print Request Item" required="indicator">
-        <Select
-          value={printRequestSquareSettingsForm.fields.printRequestItemId.value()}
-          options={squareItemOptions}
-          placeholder="Select Item"
-          onChange={(value) => printRequestSquareSettingsForm.fields.printRequestItemId.set(value)}
-        />
-        <input hidden {...printRequestSquareSettingsForm.fields.printRequestItemId.as('text')} />
-      </Field>
+    <FormField label="Print Request Item" required>
+      <OptionSelect
+        options={squareItemOptions}
+        bind:value={printRequestItemId}
+        placeholder="Select Item"
+      />
+      <HiddenField
+        field={printRequestSquareSettingsForm.fields.printRequestItemId}
+        value={printRequestItemId}
+      />
+    </FormField>
 
-      <Field label="Additional Build Plate Item" required="indicator">
-        <Select
-          value={printRequestSquareSettingsForm.fields.additionalBuildPlateItemId.value()}
-          options={squareItemOptions}
-          placeholder="Select Item"
-          onChange={(value) =>
-            printRequestSquareSettingsForm.fields.additionalBuildPlateItemId.set(value)}
-        />
-        <input
-          hidden
-          {...printRequestSquareSettingsForm.fields.additionalBuildPlateItemId.as('text')}
-        />
-      </Field>
-    </Stack>
+    <FormField label="Additional Build Plate Item" required>
+      <OptionSelect
+        options={squareItemOptions}
+        bind:value={additionalBuildPlateItemId}
+        placeholder="Select Item"
+      />
+      <HiddenField
+        field={printRequestSquareSettingsForm.fields.additionalBuildPlateItemId}
+        value={additionalBuildPlateItemId}
+      />
+    </FormField>
   </form>
 {/if}

@@ -1,46 +1,34 @@
 <script lang="ts">
-  import { Card, CardBody, Heading, IconButton } from '@immich/ui';
-  import { mdiChevronDown, mdiChevronRight } from '@mdi/js';
+  import { Button } from '$lib/components/ui/button';
   import type { Snippet } from 'svelte';
 
   interface Props {
     title: string;
+    description: string;
+    formId?: string;
+    actions?: Snippet;
     children: Snippet;
-    headerActions?: Snippet;
   }
 
-  let { title, children, headerActions }: Props = $props();
-
-  let open = $state(false);
+  let { title, description, formId, actions, children }: Props = $props();
 </script>
 
-<Card class=" max-w-3xl">
-  <CardBody>
-    <div class="flex w-full items-center justify-between">
-      <button class="flex items-center gap-2 text-left" onclick={() => (open = !open)}>
-        <IconButton
-          icon={open ? mdiChevronDown : mdiChevronRight}
-          variant="ghost"
-          color="secondary"
-          size="small"
-          aria-label={open ? 'Collapse' : 'Expand'}
-          onclick={(e: MouseEvent) => {
-            e.stopPropagation();
-            open = !open;
-          }}
-        />
-        <Heading size="medium">{title}</Heading>
-      </button>
-
-      {#if open && headerActions}
-        {@render headerActions()}
-      {/if}
+<section class="rounded-xl border bg-card">
+  <header class="flex items-start justify-between gap-4 border-b p-4 sm:px-6">
+    <div class="min-w-0">
+      <h2 class="text-base font-semibold">{title}</h2>
+      <p class="mt-1 text-sm text-muted-foreground">{description}</p>
     </div>
+    {@render actions?.()}
+  </header>
 
-    {#if open}
-      <div class="mt-4">
-        {@render children()}
-      </div>
-    {/if}
-  </CardBody>
-</Card>
+  <div class="p-4 sm:p-6">
+    {@render children()}
+  </div>
+
+  {#if formId}
+    <footer class="flex justify-end border-t bg-muted/30 px-4 py-3 sm:px-6">
+      <Button type="submit" form={formId}>Save Changes</Button>
+    </footer>
+  {/if}
+</section>

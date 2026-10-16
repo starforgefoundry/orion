@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { Textarea, type TextareaProps } from '@immich/ui';
+  import { Textarea } from '$lib/components/ui/textarea';
+  import type { HTMLTextareaAttributes } from 'svelte/elements';
 
-  interface Props extends Omit<TextareaProps, 'value'> {
-    value: string | number;
-  }
+  type Props = Omit<HTMLTextareaAttributes, 'value'> & {
+    value?: string | number | null;
+  };
 
-  let props: Props = $props();
+  let { value = $bindable(), ...props }: Props = $props();
 </script>
 
-<Textarea {...props} value={props.value as string} />
+<Textarea bind:value {...props} />

@@ -1,31 +1,32 @@
 <script lang="ts">
+  import { Spinner } from '$lib/components/ui/spinner';
   import { getBambuddyStatus } from '$lib/remotes/endpoints/settings.remote';
-  import { Icon, LoadingSpinner, Text } from '@immich/ui';
-  import { mdiAlertCircleOutline, mdiCheckCircleOutline } from '@mdi/js';
+  import CircleAlertIcon from '@lucide/svelte/icons/circle-alert';
+  import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
 
   const status = getBambuddyStatus();
 </script>
 
-<div class="bg-level-1 mt-4 flex items-center gap-2 rounded-xl p-4">
+<div class="flex items-center gap-2 rounded-md bg-muted/50 p-3 text-sm">
   {#if status.loading}
-    <LoadingSpinner size="small" />
-    <Text color="muted">Checking Bambuddy connection…</Text>
+    <Spinner />
+    <span class="text-muted-foreground">Checking Bambuddy connection…</span>
   {:else if status.error || !status.current}
-    <Icon icon={mdiAlertCircleOutline} class="text-danger" size="1.5em" />
-    <Text color="danger">Could not check the Bambuddy connection.</Text>
+    <CircleAlertIcon class="size-5 shrink-0 text-destructive" />
+    <span class="text-destructive">Could not check the Bambuddy connection.</span>
   {:else if status.current.connected}
-    <Icon icon={mdiCheckCircleOutline} class="text-success" size="1.5em" />
-    <div>
-      <Text fontWeight="bold">Bambuddy connected</Text>
-      <Text size="small" color="muted">
+    <CircleCheckIcon class="size-5 shrink-0 text-success" />
+    <div class="min-w-0">
+      <p class="font-medium">Bambuddy connected</p>
+      <p class="text-xs text-muted-foreground">
         Signed in as {status.current.username} · {status.current.printerCount} printers
-      </Text>
+      </p>
     </div>
   {:else}
-    <Icon icon={mdiAlertCircleOutline} class="text-warning" size="1.5em" />
-    <div>
-      <Text fontWeight="bold">Bambuddy not connected</Text>
-      <Text size="small" color="muted">{status.current.reason}</Text>
+    <CircleAlertIcon class="size-5 shrink-0 text-warning" />
+    <div class="min-w-0">
+      <p class="font-medium">Bambuddy not connected</p>
+      <p class="text-xs text-muted-foreground">{status.current.reason}</p>
     </div>
   {/if}
 </div>

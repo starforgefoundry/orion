@@ -1,9 +1,9 @@
 <script lang="ts">
+  import { Spinner } from '$lib/components/ui/spinner';
+  import Modal from '$lib/frontend/components/Modal.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { getSquareCatalog, getSquareLocations } from '$lib/remotes/endpoints/square.remote';
-  import { CodeBlock, HStack, LoadingSpinner, Modal, ModalBody } from '@immich/ui';
-  import { mdiSquare } from '@mdi/js';
-  import { json } from 'svelte-highlight/languages';
+  import InfoIcon from '@lucide/svelte/icons/info';
 
   let { onClose }: ModalProps = $props();
 
@@ -11,30 +11,29 @@
   let squareCatalog = getSquareCatalog();
 </script>
 
-<Modal title="Square Info" size="giant" icon={mdiSquare} {onClose}>
-  <ModalBody>
-    {#if squareLocations.loading || squareCatalog.loading}
-      <div class="flex w-full justify-center">
-        <LoadingSpinner />
+<Modal title="Square Info" size="full" icon={InfoIcon} {onClose}>
+  {#if squareLocations.loading || squareCatalog.loading}
+    <div class="flex justify-center py-8">
+      <Spinner class="size-6" />
+    </div>
+  {:else}
+    <div class="grid gap-3 lg:grid-cols-2">
+      <div class="min-w-0">
+        <h3 class="mb-2 text-sm font-medium">Locations</h3>
+        <pre class="overflow-x-auto rounded-md bg-muted p-3 text-xs"><code
+            >{JSON.stringify(squareLocations.current, null, 2)}</code
+          ></pre>
       </div>
-    {:else}
-      <HStack class="mb-4">
-        <div class="w-1/2 self-start">
-          <h3 class="mb-2 text-lg font-semibold">Locations</h3>
-          <CodeBlock language={json} code={JSON.stringify(squareLocations.current, null, 2)} />
-        </div>
-        <div class="w-1/2 self-start">
-          <h3 class="mb-2 text-lg font-semibold">Catalog</h3>
-          <CodeBlock
-            language={json}
-            code={JSON.stringify(
+      <div class="min-w-0">
+        <h3 class="mb-2 text-sm font-medium">Catalog</h3>
+        <pre class="overflow-x-auto rounded-md bg-muted p-3 text-xs"><code
+            >{JSON.stringify(
               squareCatalog.current,
               (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
               2,
-            )}
-          />
-        </div>
-      </HStack>
-    {/if}
-  </ModalBody>
+            )}</code
+          ></pre>
+      </div>
+    </div>
+  {/if}
 </Modal>

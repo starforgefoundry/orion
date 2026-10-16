@@ -1,5 +1,5 @@
-export interface ModalProps {
-  onClose: () => void;
+export interface ModalProps<R = unknown> {
+  onClose: (result?: R) => void;
 }
 
 export type CreateOrUpdate<T> = { type: 'new' } | { type: 'edit'; item: T };

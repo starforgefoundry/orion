@@ -1,55 +1,59 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import * as Alert from '$lib/components/ui/alert';
+  import { Button } from '$lib/components/ui/button';
+  import { Input } from '$lib/components/ui/input';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import * as Tabs from '$lib/components/ui/tabs';
+  import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import * as Item from '$lib/components/ui/item';
+  import { cn } from '$lib/frontend/cn';
+  import Modal from '$lib/frontend/components/Modal.svelte';
+  import Section from '$lib/frontend/components/Section.svelte';
+  import StatusIndicator from '$lib/frontend/components/StatusIndicator.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
+  import type { PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
   import {
     getPrintRequestById,
+    getPrintRequestComments,
     getPrintRequestDownloadUrl,
-    sendPickupNotification,
-    updatePartQuantity,
     updatePrintRequestDiscount,
-    updatePrintRequestStatus,
   } from '$lib/remotes/endpoints/print_request.remote';
-  import {
-    Badge,
-    Button,
-    ContextMenuButton,
-    Heading,
-    HStack,
-    Icon,
-    IconButton,
-    Modal,
-    ModalBody,
-    modalManager,
-    NumberInput,
-    Stack,
-    Switch,
-    Text,
-    toastManager,
-    type MenuItems,
-  } from '@immich/ui';
-  import {
-    mdiAccount,
-    mdiAccountEdit,
-    mdiAccountGroup,
-    mdiCheck,
-    mdiClose,
-    mdiCurrencyUsd,
-    mdiDotsVertical,
-    mdiDownload,
-    mdiEmail,
-    mdiHelp,
-    mdiMonitorShare,
-    mdiOpenInNew,
-    mdiPackageVariantClosed,
-    mdiPencil,
-    mdiPrinter3dNozzle,
-    mdiTag,
-  } from '@mdi/js';
+  import PackageCheckIcon from '@lucide/svelte/icons/package-check';
+  import CheckIcon from '@lucide/svelte/icons/check';
+  import DollarSignIcon from '@lucide/svelte/icons/dollar-sign';
+  import DownloadIcon from '@lucide/svelte/icons/download';
+  import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
+  import FileWarningIcon from '@lucide/svelte/icons/file-warning';
+  import MailIcon from '@lucide/svelte/icons/mail';
+  import MonitorUpIcon from '@lucide/svelte/icons/monitor-up';
+  import PencilIcon from '@lucide/svelte/icons/pencil';
+  import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
+  import TagIcon from '@lucide/svelte/icons/tag';
+  import UserPenIcon from '@lucide/svelte/icons/user-pen';
+  import XIcon from '@lucide/svelte/icons/x';
+  import UserIcon from '@lucide/svelte/icons/user';
+  import SpoolIcon from '@lucide/svelte/icons/spool';
+  import ReceiptIcon from '@lucide/svelte/icons/receipt';
+  import FileBoxIcon from '@lucide/svelte/icons/file-box';
+  import { DateTime } from 'luxon';
+  import { toast } from 'svelte-sonner';
+  import { MediaQuery } from 'svelte/reactivity';
   import CustomerEditModal from './CustomerEditModal.svelte';
   import DiscountCodeModal from './DiscountCodeModal.svelte';
   import PaymentModal from './PaymentModal.svelte';
+  import { QuantityEditor } from './quantity-editor.svelte';
   import RequestComments from './RequestComments.svelte';
-  import { getPaymentStatusColor, getStatusColor } from './utils';
+  import {
+    cancelRequest,
+    changeStatus,
+    isAwaitingPayment,
+    isClosed,
+    sendPickupEmail,
+    STATUS,
+  } from './request-actions';
+  import { formatPrice, PAYMENT_STATUS_DISPLAY, REQUEST_STATUS_DISPLAY } from './utils';
 
   type Props = ModalProps & {
     requestId: string;
@@ -57,419 +61,373 @@
 
   const { requestId, onClose }: Props = $props();
 
-  // Wrap onClose to also clear the query param
-  const handleClose = () => {
-    goto('?', { replaceState: true, noScroll: true, keepFocus: true });
-    onClose();
-  };
+  const TABS = { DETAILS: 'details', FILES: 'files', COMMENTS: 'comments' } as const;
+  type Tab = (typeof TABS)[keyof typeof TABS];
 
-  // Track editing state
-  let isEditingQuantities = $state(false);
-  let editQuantities = $state<Record<string, number>>({});
-  let originalQuantities = $state<Record<string, number>>({});
+  const isDesktop = new MediaQuery('min-width: 1024px');
+  const quantityEditor = new QuantityEditor();
 
-  let requestRemote = $derived(getPrintRequestById(requestId));
-  let request = $derived(requestRemote.current);
+  let activeTab = $state<Tab>(TABS.DETAILS);
+  let isUpdatingStatus = $state(false);
+
+  let request = $derived(getPrintRequestById(requestId).current);
+  let commentCount = $derived(getPrintRequestComments(requestId).current?.length ?? 0);
   let downloadPath = $derived(getPrintRequestDownloadUrl(requestId).current);
   let downloadUrl = $derived(downloadPath && new URL(downloadPath, window.location.origin).href);
-  let billingType = $derived.by(() => {
-    if (!request) {
-      return 'N/A';
-    }
+  let slicerUrl = $derived(
+    downloadUrl && `orcaslicer://open?file=${encodeURIComponent(downloadUrl)}`,
+  );
 
-    if (request.isQuote && (!request.payment || request.payment?.status === 'quote')) {
-      return 'Quote';
-    }
+  let billingType = $derived(
+    request?.isQuote && (!request.payment || request.payment.status === 'quote')
+      ? 'Quote'
+      : 'Payment',
+  );
 
-    return 'Payment';
+  const canEditPayment = $derived(
+    !!request?.payment &&
+      request.status !== STATUS.CANCELED &&
+      request.payment.status !== 'paid' &&
+      request.payment.status !== 'canceled',
+  );
+  const canCreatePayment = $derived(
+    !!request && !request.payment && request.status !== STATUS.CANCELED,
+  );
+  const canCancel = $derived(
+    !!request &&
+      !isClosed(request) &&
+      request.status !== STATUS.DONE &&
+      request.payment?.status !== 'paid',
+  );
+
+  const quoteNotice = $derived.by(() => {
+    if (!request?.isQuote || request.status === STATUS.CANCELED) return undefined;
+    if (!request.payment) {
+      return {
+        title: 'Quote requested',
+        description: 'Create a quote for the customer to approve before printing.',
+      };
+    }
+    if (request.payment.status === 'quote') {
+      return {
+        title: 'Quote sent, awaiting approval',
+        description: 'Hold off on printing until the customer approves the quote.',
+      };
+    }
+    return undefined;
   });
 
-  async function createPayment() {
-    modalManager.show(PaymentModal, {
-      request: request!,
-      billingType,
-    });
-  }
+  const hasFooterActions = $derived(
+    canCancel || canEditPayment || canCreatePayment || request?.status === STATUS.DONE,
+  );
 
-  async function editPayment() {
-    modalManager.show(PaymentModal, {
-      request: request!,
-      prefill: {
-        buildPlates: request?.buildplateCount ?? 1,
-        materialCost: request?.materialCost ?? 0,
-      },
-      billingType,
-      isEdit: true,
-    });
-  }
-
-  async function cancelRequest() {
-    const cancel = await modalManager.showDialog({
-      title: 'Cancel Print Request',
-      prompt: 'Are you sure you want to cancel this print request? This action cannot be undone.',
-      confirmText: 'Cancel Request',
-      confirmColor: 'danger',
-      icon: mdiHelp,
-    });
-
-    if (cancel) {
-      await updatePrintRequestStatus({
-        id: request?.id ?? '',
-        status: 'canceled',
-      });
-
-      onClose();
-    }
-  }
-
-  async function markPickedUp() {
-    // Check if payment is paid
-    if (request?.payment && request.payment.status !== 'paid') {
-      await modalManager.showDialog({
-        title: 'Payment Required',
-        prompt:
-          'This print request cannot be marked as picked up because the payment has not been completed. Please ensure the payment is marked as paid before marking as picked up.',
-        confirmText: 'OK',
-        confirmColor: 'primary',
-        icon: mdiPackageVariantClosed,
-      });
-      return;
-    }
-
-    await updatePrintRequestStatus({
-      id: request?.id ?? '',
-      status: 'picked_up',
-    });
-
+  function handleClose() {
+    goto('?', { replaceState: true, noScroll: true, keepFocus: true });
     onClose();
   }
 
-  async function sendPickupEmail() {
+  async function setStatus(status: PrintRequestStatus) {
+    if (!request) return;
+    isUpdatingStatus = true;
     try {
-      await sendPickupNotification(request?.id ?? '');
-      toastManager.success({
-        title: 'Pickup Notification Sent',
-        description: 'The pickup notification email has been sent to the customer.',
-      });
-    } catch (error) {
-      toastManager.danger({
-        title: 'Error Sending Email',
-        description:
-          'An error occurred while sending the pickup notification email. Please try again later.',
-      });
+      const changed = await changeStatus(request, status);
+      if (changed && status === STATUS.PICKED_UP) handleClose();
+    } finally {
+      isUpdatingStatus = false;
     }
   }
 
-  function startEditingQuantities() {
-    // Initialize quantities for all files
-    if (request?.files) {
-      request.files.forEach((file) => {
-        editQuantities[file.id] = file.quantity;
-        originalQuantities[file.id] = file.quantity;
-      });
-    }
-    isEditingQuantities = true;
+  async function cancel() {
+    if (request && (await cancelRequest(request))) handleClose();
   }
 
-  function cancelEditingQuantities() {
-    editQuantities = {};
-    originalQuantities = {};
-    isEditingQuantities = false;
+  function openPayment() {
+    if (!request) return;
+    modalManager.show(PaymentModal, {
+      request,
+      billingType,
+      ...(canEditPayment && {
+        prefill: {
+          buildPlates: request.buildplateCount ?? 1,
+          materialCost: request.materialCost ?? 0,
+        },
+        isEdit: true,
+      }),
+    });
   }
 
-  async function saveQuantities() {
-    // Only update quantities that changed
-    const updates = Object.entries(editQuantities).filter(
-      ([fileId, newQuantity]) => originalQuantities[fileId] !== newQuantity,
-    );
-
-    for (const [fileId, quantity] of updates) {
-      await updatePartQuantity({ id: request!.id, partId: fileId, quantity });
-    }
-
-    editQuantities = {};
-    originalQuantities = {};
-    isEditingQuantities = false;
+  function editCustomer() {
+    if (!request) return;
+    modalManager.show(CustomerEditModal, {
+      requestId: request.id,
+      currentName: request.customerName,
+      currentEmail: request.email,
+    });
   }
 
-  async function promptDiscountCode() {
+  function editDiscountCode() {
+    if (!request) return;
+    const id = request.id;
     modalManager.show(DiscountCodeModal, {
-      currentCode: request?.billingCode ?? '',
+      currentCode: request.billingCode ?? '',
       onSave: async (code: string) => {
         try {
-          await updatePrintRequestDiscount({
-            id: request!.id,
-            billingCode: code,
-          });
-          toastManager.success({
-            title: 'Discount Code Updated',
+          await updatePrintRequestDiscount({ id, billingCode: code });
+          toast.success('Discount code updated', {
             description: code ? `Billing code set to "${code}".` : 'Billing code removed.',
           });
-        } catch (error: any) {
-          toastManager.danger({
-            title: 'Error',
-            description: error?.message ?? 'Failed to update discount code.',
+        } catch (error) {
+          toast.error('Failed to update discount code', {
+            description: (error as Error)?.message,
           });
         }
       },
     });
   }
-
-  const canEditDiscountCode = $derived(
-    request?.payment &&
-      request?.payment.status !== 'paid' &&
-      request?.payment.status !== 'canceled' &&
-      request?.status !== 'canceled',
-  );
-
-  function editCustomer() {
-    modalManager.show(CustomerEditModal, {
-      requestId: request!.id,
-      currentName: request!.customerName,
-      currentEmail: request!.email,
-    });
-  }
-
-  const customerMenuItems: MenuItems = $derived(
-    [
-      {
-        title: 'Edit Customer',
-        icon: mdiAccountEdit,
-        onAction: () => editCustomer(),
-      },
-      canEditDiscountCode
-        ? {
-            title: 'Edit Discount Code',
-            icon: mdiTag,
-            onAction: () => promptDiscountCode(),
-          }
-        : undefined,
-    ].filter((item): item is Exclude<typeof item, undefined> => !!item),
-  );
 </script>
 
-<Modal
-  title={request?.projectName ?? ''}
-  size="giant"
-  onClose={handleClose}
-  icon={mdiPrinter3dNozzle}
->
-  <ModalBody>
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <div class="flex flex-1 flex-col gap-4">
-        <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-          <HStack class="items-center justify-between">
-            <Heading size="medium">Customer Information</Heading>
-            {#if customerMenuItems.length > 0}
-              <ContextMenuButton
-                icon={mdiDotsVertical}
-                position="top-right"
-                items={customerMenuItems}
-                size="small"
-                color="secondary"
-                variant="ghost"
-                shape="round"
-                aria-label="Customer options"
+{#snippet overviewPanel()}
+  {#if request}
+    <div class="flex flex-col gap-4">
+      <Item.Group class="gap-0 rounded-lg border has-data-[size=sm]:gap-0">
+        <Item.Root size="sm" class="rounded-none border-0 border-b border-border last:border-b-0">
+          <Item.Media class="size-9 translate-y-0! self-center! rounded-md bg-muted">
+            <UserIcon class="size-4" />
+          </Item.Media>
+          <Item.Content class="min-w-0 gap-0.5">
+            <Item.Title class="max-w-full truncate">{request.customerName}</Item.Title>
+            <Item.Description class="truncate [&>a]:no-underline">
+              <a href={`mailto:${request.email}`} class="text-primary hover:underline">
+                {request.email}
+              </a>
+              {#if request.organization}· {request.organization.name}{/if}
+            </Item.Description>
+          </Item.Content>
+          <Item.Actions class="flex-col items-end gap-0.5 text-right">
+            <span class="text-sm">{request.submissionDate.toLocaleString(DateTime.DATE_MED)}</span>
+            <span class="text-xs text-muted-foreground">{request.submissionDate.toRelative()}</span>
+          </Item.Actions>
+          <Item.Actions>
+            <IconButton icon={UserPenIcon} aria-label="Edit customer" onclick={editCustomer} />
+          </Item.Actions>
+        </Item.Root>
+
+        <Item.Root size="sm" class="rounded-none border-0 border-b border-border last:border-b-0">
+          <Item.Media class="size-9 translate-y-0! self-center! rounded-md bg-muted">
+            {#if request.material.colorHex}
+              <span
+                class="size-5 rounded-full border"
+                style={`background-color: ${request.material.colorHex}`}
+              ></span>
+            {:else}
+              <SpoolIcon class="size-4" />
+            {/if}
+          </Item.Media>
+          <Item.Content class="min-w-0 gap-0.5">
+            <Item.Title class="max-w-full truncate">{request.material.name}</Item.Title>
+            {#if request.materialCost && request.materialCost >= 0}
+              <Item.Description>
+                {formatPrice(request.materialCost)} material · {request.buildplateCount}
+                {request.buildplateCount === 1 ? 'plate' : 'plates'}
+              </Item.Description>
+            {/if}
+          </Item.Content>
+        </Item.Root>
+
+        <Item.Root size="sm" class="rounded-none border-0 border-b border-border last:border-b-0">
+          <Item.Media class="size-9 translate-y-0! self-center! rounded-md bg-muted">
+            <ReceiptIcon class="size-4" />
+          </Item.Media>
+          <Item.Content class="min-w-0 gap-0.5">
+            {#if request.payment}
+              <Item.Title>
+                <span class="tabular-nums">{formatPrice(request.payment.total)}</span>
+                <StatusIndicator display={PAYMENT_STATUS_DISPLAY[request.payment.status]} />
+              </Item.Title>
+              <Item.Description class="truncate [&>a]:no-underline">
+                {billingType} issued {request.payment.issuedDate.toLocaleString(DateTime.DATE_MED)}
+                {#if request.billingCode}· <span class="font-mono">{request.billingCode}</span>{/if}
+              </Item.Description>
+            {:else}
+              <Item.Title class="text-muted-foreground"
+                >No {billingType.toLowerCase()} yet</Item.Title
+              >
+              {#if request.billingCode}
+                <Item.Description class="font-mono">{request.billingCode}</Item.Description>
+              {/if}
+            {/if}
+          </Item.Content>
+          <Item.Actions>
+            {#if canEditPayment}
+              <IconButton
+                icon={TagIcon}
+                aria-label="Edit discount code"
+                onclick={editDiscountCode}
               />
             {/if}
-          </HStack>
-          <HStack>
-            <Icon icon={mdiAccount} size="24" />
-            <Text>{request?.customerName}</Text>
-          </HStack>
-          <HStack>
-            <Icon icon={mdiEmail} size="24" />
-            <Text color="primary"><a href={`mailto:${request?.email}`}>{request?.email}</a></Text>
-          </HStack>
-          {#if request?.organization}
-            <HStack>
-              <Icon icon={mdiAccountGroup} size="24" />
-              <Text>{request?.organization.name}</Text>
-            </HStack>
-          {/if}
-          {#if request?.billingCode}
-            <HStack>
-              <Icon icon={mdiTag} size="24" />
-              <Text>{request?.billingCode}</Text>
-            </HStack>
-          {/if}
-        </Stack>
-        <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-          <Stack>
-            <HStack class="justify-between">
-              <Text>Status</Text>
-              <Badge color={getStatusColor(request?.status ?? 'pending')}>
-                {request?.status.replace('_', ' ').toUpperCase()}
-              </Badge>
-            </HStack>
-            <HStack class="justify-between">
-              <Text>Quote Requested</Text>
-              <Switch disabled checked={request?.isQuote} />
-            </HStack>
-            <HStack class="justify-between">
-              <Text>Print Material</Text>
-              <Text>{request?.material.name}</Text>
-            </HStack>
-            {#if request?.materialCost && request?.materialCost >= 0}
-              <HStack class="justify-between">
-                <Text>Build Plates</Text>
-                <Text>{request?.buildplateCount}</Text>
-              </HStack>
-              <HStack class="justify-between">
-                <Text>Material Cost</Text>
-                <Text>${(request?.materialCost / 100).toFixed(2)}</Text>
-              </HStack>
+            {#if request.payment?.squareInvoiceId}
+              <IconButton
+                icon={ExternalLinkIcon}
+                aria-label="View invoice in Square"
+                href={`https://app.squareup.com/dashboard/invoices/${request.payment.squareInvoiceId}`}
+                target="_blank"
+              />
             {/if}
-          </Stack>
-        </Stack>
-        {#if request?.specialRequests}
-          <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-            <Heading size="small">Special Requests</Heading>
-            <Stack class="rounded-lg border bg-neutral-900 p-4">
-              {#each request?.specialRequests.split('\n') as line}
-                <Text class="font-mono" size="small">{line}</Text>
-              {/each}
-            </Stack>
-          </Stack>
-        {/if}
+          </Item.Actions>
+        </Item.Root>
+      </Item.Group>
 
-        {#if request?.payment}
-          <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-            <HStack class="items-center justify-between">
-              <Heading size="small">Payment Information</Heading>
-              {#if request.payment.squareInvoiceId}
-                <IconButton
-                  icon={mdiOpenInNew}
-                  aria-label="View Invoice"
-                  color="primary"
-                  variant="ghost"
-                  shape="round"
-                  href={`https://app.squareup.com/dashboard/invoices/${request.payment.squareInvoiceId}`}
-                />
-              {/if}
-            </HStack>
-
-            <HStack class="justify-between">
-              <Text>Issued Date</Text>
-              <Text fontWeight="bold">{request.payment.issuedDate.toLocaleString()}</Text>
-            </HStack>
-
-            <HStack class="justify-between">
-              <Text>Status</Text>
-              <Badge color={getPaymentStatusColor(request.payment.status)}
-                >{request.payment.status.toUpperCase()}</Badge
-              >
-            </HStack>
-
-            <HStack class="justify-between">
-              <Text>Total</Text>
-              <Text fontWeight="bold">${(request.payment.total / 100).toFixed(2)}</Text>
-            </HStack>
-          </Stack>
-        {/if}
-        {#if request?.payment}
-          {#if request?.status !== 'canceled' && request.payment.status !== 'paid' && request.payment.status !== 'canceled'}
-            <Button leadingIcon={mdiCurrencyUsd} fullWidth color="primary" onclick={editPayment}>
-              Edit {billingType}
-            </Button>
-          {/if}
-        {:else if request?.status !== 'canceled'}
-          <Button leadingIcon={mdiCurrencyUsd} fullWidth color="success" onclick={createPayment}>
-            Create {billingType}
-          </Button>
-        {/if}
-        <Stack gap={2}>
-          {#if request?.status === 'done'}
-            <Button leadingIcon={mdiEmail} fullWidth color="primary" onclick={sendPickupEmail}>
-              Send Pickup Email
-            </Button>
-            <Button
-              leadingIcon={mdiPackageVariantClosed}
-              fullWidth
-              color="success"
-              onclick={markPickedUp}
-            >
-              Picked up
-            </Button>
-          {/if}
-
-          {#if request?.status !== 'canceled' && request?.status !== 'done' && request?.payment?.status !== 'paid'}
-            <Button leadingIcon={mdiClose} fullWidth color="danger" onclick={cancelRequest}>
-              Cancel Request
-            </Button>
-          {/if}
-        </Stack>
-      </div>
-      <div class="flex h-full min-h-0 flex-1 flex-col gap-4">
-        <div class="flex flex-col rounded-2xl border-2 border-slate-700 p-4">
-          <HStack class="justify-between ">
-            <Heading size="medium">Print Files</Heading>
-            <HStack gap={2}>
-              {#if isEditingQuantities}
-                <IconButton
-                  icon={mdiCheck}
-                  aria-label="Save Changes"
-                  color="success"
-                  size="small"
-                  onclick={saveQuantities}
-                />
-                <IconButton
-                  icon={mdiClose}
-                  aria-label="Cancel"
-                  color="danger"
-                  size="small"
-                  onclick={cancelEditingQuantities}
-                />
-              {:else}
-                <IconButton
-                  icon={mdiPencil}
-                  aria-label="Edit Quantities"
-                  color="primary"
-                  size="small"
-                  onclick={startEditingQuantities}
-                />
-                <IconButton
-                  icon={mdiDownload}
-                  aria-label="Download Files"
-                  color="primary"
-                  size="small"
-                  href={downloadUrl}
-                />
-                <IconButton
-                  icon={mdiMonitorShare}
-                  aria-label="Send to OrcaSlicer"
-                  color="success"
-                  size="small"
-                  href={downloadUrl && `orcaslicer://open?file=${encodeURIComponent(downloadUrl)}`}
-                />
-              {/if}
-            </HStack>
-          </HStack>
-
-          {#each request?.files as file}
-            <div class="bg-level-2 mt-2 rounded-lg border border-slate-600 p-4">
-              <HStack class="items-center justify-between gap-4">
-                <Text class="min-w-0 flex-1">{file.fileName}</Text>
-                {#if isEditingQuantities}
-                  <div class="shrink-0">
-                    <NumberInput
-                      bind:value={editQuantities[file.id]}
-                      min={1}
-                      max={999}
-                      step={1}
-                      class="w-24"
-                    />
-                  </div>
-                {:else}
-                  <Text fontWeight="bold" class="shrink-0">{file.quantity}x</Text>
-                {/if}
-              </HStack>
-            </div>
-          {/each}
+      {#if request.specialRequests}
+        <div class="rounded-lg border-l-4 border-primary bg-muted/40 px-4 py-3">
+          <h3 class="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Special Requests
+          </h3>
+          <p class="text-base whitespace-pre-line">{request.specialRequests}</p>
         </div>
-
-        <RequestComments {requestId} />
-      </div>
+      {/if}
     </div>
-  </ModalBody>
+  {/if}
+{/snippet}
+
+{#snippet filesPanel()}
+  <Section title={`Files (${request?.files.length ?? 0})`}>
+    {#snippet actions()}
+      {#if quantityEditor.isEditing}
+        <Button size="sm" variant="ghost" onclick={() => quantityEditor.cancel()}>Cancel</Button>
+        <Button size="sm" onclick={() => quantityEditor.save(requestId)}>
+          <CheckIcon />
+          Save
+        </Button>
+      {:else}
+        <IconButton
+          icon={PencilIcon}
+          aria-label="Edit quantities"
+          onclick={() => request && quantityEditor.start(request.files)}
+        />
+        <IconButton icon={DownloadIcon} aria-label="Download files" href={downloadUrl} />
+        <IconButton
+          icon={MonitorUpIcon}
+          aria-label="Open in OrcaSlicer"
+          href={slicerUrl}
+          class="bg-success/15 text-success hover:bg-success/25 hover:text-success dark:hover:bg-success/25"
+        />
+      {/if}
+    {/snippet}
+    <ul class="-my-1 divide-y">
+      {#each request?.files ?? [] as file (file.id)}
+        <li class="flex min-h-12 items-center gap-3 py-2 text-base">
+          <FileBoxIcon class="size-5 shrink-0 text-muted-foreground" />
+          <span class="min-w-0 flex-1 truncate">{file.fileName}</span>
+          {#if quantityEditor.isEditing}
+            <Input
+              type="number"
+              inputmode="numeric"
+              bind:value={quantityEditor.quantities[file.id]}
+              min={1}
+              max={999}
+              class="h-9 w-20"
+            />
+          {:else}
+            <span
+              class={cn(
+                'shrink-0 rounded-md px-2 py-0.5 text-sm font-semibold tabular-nums',
+                file.quantity > 1 ? 'bg-warning/15 text-warning' : 'bg-muted',
+              )}
+            >
+              ×{file.quantity}
+            </span>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  </Section>
+{/snippet}
+
+{#snippet footerActions()}
+  <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
+    {#if canCancel}
+      <Button
+        variant="ghost"
+        class="text-destructive hover:text-destructive sm:mr-auto"
+        onclick={cancel}
+      >
+        <XIcon />
+        Cancel Request
+      </Button>
+    {/if}
+    {#if request?.status === STATUS.DONE}
+      <Button variant="outline" onclick={() => sendPickupEmail(requestId)}>
+        <MailIcon />
+        Send Pickup Reminder
+      </Button>
+    {/if}
+    {#if canEditPayment || canCreatePayment}
+      <Button variant="outline" onclick={openPayment}>
+        <DollarSignIcon />
+        {canEditPayment ? 'Edit' : 'Create'}
+        {billingType}
+      </Button>
+    {/if}
+    {#if request?.status === STATUS.DONE}
+      <Button
+        disabled={isUpdatingStatus || isAwaitingPayment(request)}
+        onclick={() => setStatus(STATUS.PICKED_UP)}
+      >
+        {#if isUpdatingStatus}<Spinner />{:else}<PackageCheckIcon />{/if}
+        {isAwaitingPayment(request) ? 'Awaiting Payment' : 'Mark Picked Up'}
+      </Button>
+    {/if}
+  </div>
+{/snippet}
+
+<Modal
+  title={request?.projectName ?? 'Print Request'}
+  size="full"
+  icon={Printer3dIcon}
+  onClose={handleClose}
+  footer={hasFooterActions ? footerActions : undefined}
+  class="flex flex-col gap-4 max-lg:px-3 lg:p-5"
+>
+  {#snippet headerActions()}
+    {#if request}
+      <StatusIndicator display={REQUEST_STATUS_DISPLAY[request.status]} size="lg" />
+    {/if}
+  {/snippet}
+
+  {#if !request}
+    <div class="flex justify-center py-10"><Spinner class="size-6" /></div>
+  {:else}
+    {#if quoteNotice}
+      <Alert.Root variant="warning">
+        <FileWarningIcon />
+        <Alert.Title>{quoteNotice.title}</Alert.Title>
+        <Alert.Description>{quoteNotice.description}</Alert.Description>
+      </Alert.Root>
+    {/if}
+
+    {#if isDesktop.current}
+      <div class="grid grid-cols-[3fr_2fr] gap-4">
+        <div class="flex min-w-0 flex-col gap-4">
+          {@render overviewPanel()}
+          {@render filesPanel()}
+        </div>
+        <div class="flex min-h-[30rem] flex-col">
+          <RequestComments {requestId} />
+        </div>
+      </div>
+    {:else}
+      <Tabs.Root bind:value={activeTab} class="flex min-h-0 flex-1 flex-col">
+        <Tabs.List class="w-full">
+          <Tabs.Trigger value={TABS.DETAILS}>Details</Tabs.Trigger>
+          <Tabs.Trigger value={TABS.FILES}>Files ({request.files.length})</Tabs.Trigger>
+          <Tabs.Trigger value={TABS.COMMENTS}>Comments ({commentCount})</Tabs.Trigger>
+        </Tabs.List>
+        <Tabs.Content value={TABS.DETAILS}>{@render overviewPanel()}</Tabs.Content>
+        <Tabs.Content value={TABS.FILES}>{@render filesPanel()}</Tabs.Content>
+        <Tabs.Content value={TABS.COMMENTS} class="flex min-h-[60dvh] flex-col">
+          <RequestComments {requestId} />
+        </Tabs.Content>
+      </Tabs.Root>
+    {/if}
+  {/if}
 </Modal>

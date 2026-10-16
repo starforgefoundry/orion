@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Input } from '@immich/ui';
-  import { mdiCurrencyUsd } from '@mdi/js';
+  import TextInput from './TextInput.svelte';
+  import DollarSignIcon from '@lucide/svelte/icons/dollar-sign';
 
   interface Props {
     value?: number;
@@ -62,10 +62,10 @@
   }
 </script>
 
-<Input
+<TextInput
   type="text"
   inputmode="decimal"
-  leadingIcon={mdiCurrencyUsd}
+  icon={DollarSignIcon}
   value={displayValue}
   oninput={handleInput}
   onblur={handleBlur}

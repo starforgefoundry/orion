@@ -1,296 +1,387 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
+  import * as Alert from '$lib/components/ui/alert';
+  import { Button } from '$lib/components/ui/button';
+  import * as Field from '$lib/components/ui/field';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import { Switch } from '$lib/components/ui/switch';
   import { announcementIsActive } from '$lib/frontend/announcement';
   import banner from '$lib/assets/3dp-banner.jpeg';
   import logo from '$lib/assets/logo.png';
-  import FileUpload from '$lib/frontend/components/FileUpload.svelte';
+  import FileDropArea from '$lib/frontend/components/FileDropArea.svelte';
+  import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import Section from '$lib/frontend/components/Section.svelte';
+  import FormField from '$lib/frontend/components/form/FormField.svelte';
+  import HiddenField from '$lib/frontend/components/form/HiddenField.svelte';
+  import OptionSelect from '$lib/frontend/components/form/OptionSelect.svelte';
   import NumberStepper from '$lib/frontend/components/form/NumberStepper.svelte';
   import TextArea from '$lib/frontend/components/form/TextArea.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
-  import type { PrintRequestFileDto } from '$lib/remotes/dtos/print_request.dto';
   import { submitPrintRequestForm } from '$lib/remotes/endpoints/print_request.remote';
   import { getPublicPrintRequestForm } from '$lib/remotes/endpoints/settings.remote';
-  import {
-    Alert,
-    Button,
-    Card,
-    CardBody,
-    CardHeader,
-    CardTitle,
-    Field,
-    FormatBytes,
-    Heading,
-    IconButton,
-    Select,
-    Stack,
-    Switch,
-    Text,
-    toastManager,
-    type SelectOption,
-  } from '@immich/ui';
-  import { mdiTrashCan } from '@mdi/js';
+  import { cn } from '$lib/frontend/cn';
+  import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
+  import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
+  import FileBoxIcon from '@lucide/svelte/icons/file-box';
+  import FilePlusIcon from '@lucide/svelte/icons/file-plus';
+  import PlusIcon from '@lucide/svelte/icons/plus';
+  import TrashIcon from '@lucide/svelte/icons/trash';
+  import { toast } from 'svelte-sonner';
+  import { PrintRequestFormManager, STEPS } from './print-request-form.svelte';
+  import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
+
+  const BYTES_PER_UNIT = 1024;
+  const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte'] as const;
+
+  function formatBytes(bytes: number) {
+    const exponent =
+      bytes > 0
+        ? Math.min(Math.floor(Math.log(bytes) / Math.log(BYTES_PER_UNIT)), BYTE_UNITS.length - 1)
+        : 0;
+    return new Intl.NumberFormat(undefined, {
+      style: 'unit',
+      unit: BYTE_UNITS[exponent],
+      unitDisplay: 'short',
+      maximumFractionDigits: 1,
+    }).format(bytes / BYTES_PER_UNIT ** exponent);
+  }
 
   let printRequestSettings = await getPublicPrintRequestForm();
 
-  let materialOptions: SelectOption[] = $derived(
+  const manager = new PrintRequestFormManager(printRequestSettings.maxUploadMB);
+
+  const materialOptions = $derived(
     printRequestSettings.materials.map((material) => ({
       label: material.name,
       value: material.id,
     })),
   );
 
-  let isQuote = $state(false);
+  const supportedExtensions = $derived(
+    printRequestSettings.allowedFileTypes.split(',').map((ext) => ext.trim().replace(/^\./, '')),
+  );
+
   $effect(() => {
-    submitPrintRequestForm.fields.isQuote.set(isQuote);
+    submitPrintRequestForm.fields.files.set(manager.files);
   });
 
-  let files = $state<PrintRequestFileDto[]>([]);
-  $effect(() => {
-    submitPrintRequestForm.fields.files.set(files);
-  });
+  const CONTACT_EMAIL = '3dprint@starforgefoundry.com';
+  const PRINTING_GUIDE_URL =
+    'https://starforge.notion.site/Starforge-Wiki-d75b4653249d4599b3c44e953cda5c6e';
 
-  let selectedMaterial: string | undefined = $state(undefined);
-  $effect(() => {
-    submitPrintRequestForm.fields.material.set(selectedMaterial ?? '');
-  });
+  const HOW_IT_WORKS = [
+    {
+      title: 'Tell us who you are',
+      description: 'We use your email to send updates and invoices.',
+    },
+    {
+      title: 'Upload your models',
+      description: 'Add your files, pick a material and note any special requests.',
+    },
+    {
+      title: 'We print it',
+      description: 'Staff review your request and reach out with a quote if you asked for one.',
+    },
+    { title: 'Pick it up', description: "You'll get an email when your print is ready." },
+  ];
 
-  let totalBytes = $derived(files.reduce((acc, file) => acc + file.file.size, 0));
-  let exceedsFileSizeLimit = $derived(totalBytes > printRequestSettings.maxUploadMB * 1024 * 1024);
-  let submitEnabled = $derived(files.length > 0 && !exceedsFileSizeLimit && selectedMaterial);
-
-  function handleNewFile(file: File) {
-    files.push({
-      file,
-      filename: file.name,
-      quantity: 1,
-    });
-  }
-
-  function handleUnsupportedFile(file: File) {
-    toastManager.danger(`Unsupported file type: ${file.name}`);
-  }
-
-  let submitting = $state(false);
-  let progress = $state(0);
-  let submitButtonText = $derived(submitting ? `Submitting... (${progress}%)` : 'Submit Request');
-
-  type SubmitParameters = Parameters<Parameters<typeof submitPrintRequestForm.enhance>[0]>[0];
-  function handleSubmit({ form }: SubmitParameters) {
-    submitting = true;
-    progress = 0;
-
-    const xhr = new XMLHttpRequest();
-    const formData = new FormData(form);
-
-    xhr.open(form.method, form.action, true);
-
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        progress = Math.round((event.loaded / event.total) * 100);
-      }
-    };
-
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        progress = 100;
-        submitting = false;
-        goto('/print_request/form/success');
-      } else {
-        toastManager.danger('Failed to submit print request. Please try again later.');
-        submitting = false;
-        progress = 0;
-      }
-    };
-
-    xhr.setRequestHeader('Accept', 'text/html');
-    xhr.send(formData);
-  }
+  const STEP_LIST = [
+    { id: STEPS.CONTACT, label: 'Your Info' },
+    { id: STEPS.PROJECT, label: 'Project & Files' },
+  ];
 </script>
 
 <svelte:head>
   <title>3D Print Request</title>
 </svelte:head>
 
-<div class="h-64 w-full overflow-hidden">
-  <img src={banner} alt="" class="h-full w-full object-cover" />
-</div>
-
-{#if announcementIsActive(printRequestSettings.announcement, printRequestSettings.announcementUntil)}
-  <div class="flex items-center justify-center px-4 pt-4">
-    <Alert color="warning" class="w-full max-w-3xl">
-      <Text class="whitespace-pre-line">{printRequestSettings.announcement}</Text>
-    </Alert>
+<header class="relative h-48 w-full overflow-hidden sm:h-60">
+  <img src={banner} alt="" class="absolute inset-0 h-full w-full object-cover" />
+  <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10"></div>
+  <div class="relative mx-auto flex h-full max-w-6xl items-end px-4 pb-6">
+    <div class="flex items-center gap-4">
+      <img src={logo} alt="Starforge" class="size-12 shrink-0 sm:size-14" />
+      <h1 class="min-w-0 text-2xl font-semibold text-white sm:text-3xl">3D Print Request Form</h1>
+    </div>
   </div>
-{/if}
+</header>
 
-{#if !printRequestSettings.isOpen}
-  <div class="flex items-center justify-center p-4">
-    <Card class="w-full max-w-3xl">
-      <CardHeader>
-        <CardTitle>Print Requests Are Closed</CardTitle>
-      </CardHeader>
-      <CardBody>
+<div class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6">
+  {#if announcementIsActive(printRequestSettings.announcement, printRequestSettings.announcementUntil)}
+    <Alert.Root variant="warning">
+      <TriangleAlertIcon />
+      <Alert.Description class="whitespace-pre-line">
+        {printRequestSettings.announcement}
+      </Alert.Description>
+    </Alert.Root>
+  {/if}
+
+  {#if !printRequestSettings.isOpen}
+    <Section title="Print Requests Are Closed">
+      <p class="text-sm">
         We are not accepting print requests at this time. Please check back later. If you have
         questions, contact us at
-        <a href="mailto:3dprint@starforgefoundry.com" class="underline">
-          3dprint@starforgefoundry.com
+        <a href={`mailto:${CONTACT_EMAIL}`} class="underline">
+          {CONTACT_EMAIL}
         </a>.
-      </CardBody>
-    </Card>
-  </div>
-{:else}
-  <div class="flex items-center justify-center p-4">
+      </p>
+    </Section>
+  {:else}
+    <ol class="flex items-center gap-3 text-sm" aria-label="Form steps">
+      {#each STEP_LIST as step, index (step.id)}
+        {@const isActive = manager.step === step.id}
+        {#if index > 0}<li aria-hidden="true" class="h-px w-8 bg-border"></li>{/if}
+        <li
+          class={cn('flex items-center gap-2', isActive ? 'font-medium' : 'text-muted-foreground')}
+          aria-current={isActive ? 'step' : undefined}
+        >
+          <span
+            class={cn(
+              'grid size-6 place-items-center rounded-full border text-xs',
+              isActive && 'border-primary bg-primary text-primary-foreground',
+            )}
+          >
+            {index + 1}
+          </span>
+          {step.label}
+        </li>
+      {/each}
+    </ol>
+
+    <!-- Both steps live in one form (step 1 is only hidden) so every field is submitted. -->
     <form
-      {...submitPrintRequestForm.enhance(handleSubmit)}
-      class="flex w-full max-w-3xl flex-col items-center justify-center gap-4"
+      {...submitPrintRequestForm.enhance((parameters) => manager.submit(parameters))}
       enctype="multipart/form-data"
     >
-      <img src={logo} alt="Orion Logo" class="mt-6 h-16 w-16 self-start" />
+      <div class={cn('grid gap-6 lg:grid-cols-2', manager.step !== STEPS.CONTACT && 'hidden')}>
+        <section class="flex flex-col gap-4 rounded-xl border bg-card p-5 sm:p-6">
+          <h2 class="text-base font-semibold">Your Info</h2>
+          <FormField label="Name" required>
+            <TextInput
+              {...submitPrintRequestForm.fields.customer.name.as('text')}
+              placeholder="John Doe"
+              autocomplete="name"
+            />
+          </FormField>
 
-      <Heading class="self-start" size="giant">Starforge 3D Print Request</Heading>
-      <Text>
-        Please place your 3D Printed files in the form below to request 3D Prints. Please refer to
-        our
-        <a
-          href="https://starforge.notion.site/Starforge-Wiki-d75b4653249d4599b3c44e953cda5c6e"
-          class="underline"
-        >
-          3D Printing Guide
-        </a>
-        for more information about our printers and suggestions on modeling.
-      </Text>
+          <FormField label="Email" required description="We'll send updates about your print here.">
+            <TextInput
+              {...submitPrintRequestForm.fields.customer.email.as('text')}
+              type="email"
+              placeholder="john@example.com"
+              autocomplete="email"
+            />
+          </FormField>
 
-      <Field label="Name" required="indicator">
-        <TextInput
-          {...submitPrintRequestForm.fields.customer.name.as('text')}
-          placeholder="John Doe"
-          class="max-w-xs"
-        />
-      </Field>
+          <FormField label="Group or Discount Code">
+            <TextInput
+              {...submitPrintRequestForm.fields.billingCode.as('text')}
+              placeholder="ORG2026"
+            />
+          </FormField>
 
-      <Field label="Email" required="indicator">
-        <TextInput
-          {...submitPrintRequestForm.fields.customer.email.as('text')}
-          type="email"
-          placeholder="john@example.com"
-          class="max-w-xs"
-        />
-      </Field>
+          <Button
+            size="lg"
+            class="mt-2 sm:self-end"
+            disabled={!manager.contactValid}
+            onclick={() => manager.next()}
+          >
+            Continue
+            <ArrowRightIcon />
+          </Button>
+        </section>
 
-      <Field label="Group or Discount Code">
-        <TextInput
-          {...submitPrintRequestForm.fields.billingCode.as('text')}
-          placeholder="ORG2026"
-          class="max-w-xs"
-        />
-      </Field>
+        <aside class="flex flex-col gap-5 rounded-xl bg-muted/40 p-5 sm:p-6">
+          <h2 class="text-base font-semibold">How it works</h2>
+          <ol class="flex flex-col gap-4">
+            {#each HOW_IT_WORKS as item, index (item.title)}
+              <li class="flex gap-3">
+                <span
+                  class="grid size-7 shrink-0 place-items-center rounded-full bg-primary/15 text-sm font-semibold text-primary"
+                >
+                  {index + 1}
+                </span>
+                <div>
+                  <p class="text-sm font-medium">{item.title}</p>
+                  <p class="text-sm text-muted-foreground">{item.description}</p>
+                </div>
+              </li>
+            {/each}
+          </ol>
+          <div class="mt-auto flex flex-col gap-1 border-t pt-4 text-sm text-muted-foreground">
+            <a href={PRINTING_GUIDE_URL} class="text-primary underline" target="_blank">
+              Read the 3D Printing Guide
+            </a>
+            <span>
+              Questions? <a href={`mailto:${CONTACT_EMAIL}`} class="underline">{CONTACT_EMAIL}</a>
+            </span>
+          </div>
+        </aside>
+      </div>
 
-      <hr class="my-4 w-full border-gray-300" />
-      <Field label="Project Title" required="indicator">
-        <TextInput
-          {...submitPrintRequestForm.fields.projectName.as('text')}
-          placeholder="My Awesome Project"
-          class="max-w-xs"
-        />
-      </Field>
+      <div class={cn('flex flex-col gap-6', manager.step !== STEPS.PROJECT && 'hidden')}>
+        <div class="grid gap-6 lg:grid-cols-2">
+          <div class="flex flex-col gap-3">
+            <section class="flex flex-col gap-4 rounded-xl border bg-card p-5 sm:p-6">
+              <h2 class="text-base font-semibold">Project Details</h2>
 
-      <Field
-        label="I would like a quote before proceeding"
-        description="If checked, Starforge will contact you with a quote before starting your print."
-        class="border-secondary rounded-lg border-2 p-4"
-      >
-        <Switch bind:checked={isQuote} />
-        <input {...submitPrintRequestForm.fields.isQuote.as('checkbox')} hidden />
-      </Field>
-
-      <Field label="Special Requests">
-        <TextArea
-          {...submitPrintRequestForm.fields.specialRequests.as('text')}
-          class="h-35"
-          placeholder="Enter any special instructions or requests here..."
-        />
-      </Field>
-
-      <Field
-        label="Material"
-        required="indicator"
-        description={`PLA is recommended for most projects. If you would like to use a mix of materials, please indicate which parts in "Special Requests".`}
-      >
-        <Select
-          options={materialOptions}
-          bind:value={selectedMaterial}
-          placeholder="Select Material"
-        />
-        <input hidden {...submitPrintRequestForm.fields.material.as('text')} />
-      </Field>
-
-      <!-- FILE UPLOAD -->
-
-      <Stack class="w-full" gap={2}>
-        <Heading size="small" class="mt-2 self-start">Print Files</Heading>
-        <Text class="-mt-2 self-start" size="small" color="muted">
-          Upload your print files below and indicate any additional part quantities.
-        </Text>
-      </Stack>
-
-      {#if exceedsFileSizeLimit}
-        <Alert color="danger" class="self-start">
-          Total file size exceeds {printRequestSettings.maxUploadMB} MB limit. Please simplify your models
-          or remove them from the request.
-        </Alert>
-      {/if}
-
-      {#if files.length !== 0}
-        <div class="flex w-full flex-col gap-2">
-          {#each files as file, index}
-            <div
-              class="bg-level-1 flex w-full flex-row items-center justify-between rounded-xl p-4"
-            >
-              <div>
-                <Text fontWeight="bold">{file.filename}</Text>
-                <Text size="small" color="secondary"><FormatBytes bytes={file.file.size} /></Text>
-              </div>
-              <div class="flex flex-row gap-2">
-                <NumberStepper
-                  value={file.quantity}
-                  min={1}
-                  onChange={(newValue) => (files[index].quantity = newValue)}
+              <FormField label="Project Title" required>
+                <TextInput
+                  {...submitPrintRequestForm.fields.projectName.as('text')}
+                  placeholder="My Awesome Project"
                 />
-                <IconButton
-                  color="danger"
-                  icon={mdiTrashCan}
-                  aria-label="Remove file"
-                  onclick={() => {
-                    files.splice(index, 1);
-                  }}
+              </FormField>
+
+              <FormField
+                label="Material"
+                required
+                description={`PLA is recommended for most projects. To mix materials, note which parts in "Special Requests".`}
+              >
+                <OptionSelect
+                  options={materialOptions}
+                  bind:value={manager.material}
+                  placeholder="Select material"
                 />
+                <HiddenField
+                  field={submitPrintRequestForm.fields.material}
+                  value={manager.material}
+                />
+              </FormField>
+
+              <FormField label="Special Requests">
+                <TextArea
+                  {...submitPrintRequestForm.fields.specialRequests.as('text')}
+                  class="min-h-32"
+                  placeholder="Infill, supports, which parts use which material…"
+                />
+              </FormField>
+            </section>
+            <Field.Field orientation="horizontal" class="rounded-xl border bg-card p-5 sm:px-6">
+              <Field.Content>
+                <Field.Label for="is-quote">Get a quote first</Field.Label>
+                <Field.Description>
+                  We'll email you a price to approve before anything is printed.
+                </Field.Description>
+              </Field.Content>
+              <Switch id="is-quote" bind:checked={manager.isQuote} />
+              <HiddenField field={submitPrintRequestForm.fields.isQuote} value={manager.isQuote} />
+            </Field.Field>
+          </div>
+          <FileDropArea
+            onUpload={(file) => manager.addFile(file)}
+            onUnsupported={(file) => toast.error(`Unsupported file type: ${file.name}`)}
+            {supportedExtensions}
+            class="flex flex-col gap-4 rounded-xl border bg-card p-5 sm:p-6"
+          >
+            {#snippet children({ open })}
+              <div class="flex items-baseline justify-between gap-2">
+                <h2 class="text-base font-semibold">Print Files</h2>
+                <span
+                  class={cn(
+                    'text-sm tabular-nums',
+                    manager.exceedsSizeLimit ? 'text-destructive' : 'text-muted-foreground',
+                  )}
+                >
+                  {formatBytes(manager.totalBytes)} / {printRequestSettings.maxUploadMB} MB
+                </span>
               </div>
-            </div>
-            <input {...submitPrintRequestForm.fields.files[index].filename.as('text')} hidden />
-            <input {...submitPrintRequestForm.fields.files[index].quantity.as('number')} hidden />
-            <input {...submitPrintRequestForm.fields.files[index].file.as('file')} hidden />
-          {/each}
+
+              {#if manager.exceedsSizeLimit}
+                <Alert.Root variant="destructive">
+                  <TriangleAlertIcon />
+                  <Alert.Description>
+                    Total file size exceeds the {printRequestSettings.maxUploadMB} MB limit. Simplify
+                    your models or remove some files.
+                  </Alert.Description>
+                </Alert.Root>
+              {/if}
+
+              {#if manager.files.length === 0}
+                <button
+                  type="button"
+                  class="flex min-h-64 flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 text-center transition-colors hover:border-primary/70 hover:bg-muted/30 focus-visible:border-ring focus-visible:outline-none"
+                  onclick={open}
+                >
+                  <FilePlusIcon class="size-10 text-muted-foreground" />
+                  <span class="text-base">
+                    <span class="font-medium">Click to upload</span>
+                    <span class="text-muted-foreground">or drag and drop</span>
+                  </span>
+                  <span class="text-sm text-muted-foreground">
+                    {supportedExtensions.join(', ')} · up to {printRequestSettings.maxUploadMB} MB total
+                  </span>
+                </button>
+              {:else}
+                <ul class="max-h-96 divide-y overflow-y-auto rounded-lg border">
+                  {#each manager.files as file, index (file)}
+                    <li class="flex items-center gap-2 p-2 pl-3">
+                      <FileBoxIcon class="size-5 shrink-0 text-muted-foreground" />
+                      <div class="min-w-0 flex-1">
+                        <p class="truncate text-sm font-medium">{file.filename}</p>
+                        <p class="text-xs text-muted-foreground">{formatBytes(file.file.size)}</p>
+                      </div>
+                      <NumberStepper
+                        value={file.quantity}
+                        min={1}
+                        onChange={(quantity) => manager.setQuantity(index, quantity)}
+                      />
+                      <IconButton
+                        icon={TrashIcon}
+                        aria-label="Remove file"
+                        class="text-destructive"
+                        onclick={() => manager.removeFile(index)}
+                      />
+                      <input
+                        {...submitPrintRequestForm.fields.files[index].filename.as('text')}
+                        hidden
+                      />
+                      <input
+                        {...submitPrintRequestForm.fields.files[index].quantity.as('number')}
+                        hidden
+                      />
+                      <input
+                        {...submitPrintRequestForm.fields.files[index].file.as('file')}
+                        hidden
+                      />
+                    </li>
+                  {/each}
+                </ul>
+
+                <button
+                  type="button"
+                  class="flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground transition-colors hover:border-primary/70 hover:text-foreground focus-visible:border-ring focus-visible:outline-none"
+                  onclick={open}
+                >
+                  <PlusIcon class="size-4" />
+                  Add more files
+                  <span class="text-xs">or drop them anywhere here</span>
+                </button>
+              {/if}
+            {/snippet}
+          </FileDropArea>
         </div>
-      {/if}
 
-      <FileUpload
-        onUpload={handleNewFile}
-        onUnsupported={handleUnsupportedFile}
-        supportedExtensions={printRequestSettings.allowedFileTypes
-          .split(',')
-          .map((ext) => ext.trim().replace(/^\./, ''))}
-      />
-
-      <Button type="submit" class="mt-2 self-start" disabled={!submitEnabled} loading={submitting}>
-        {submitButtonText}
-      </Button>
-
-      <Text size="small" color="muted" class="mt-4 mb-8 self-start italic">
-        If you have any issues or questions, please contact us at
-        <a href="mailto:3dprint@starforgefoundry.com" class="underline">
-          3dprint@starforgefoundry.com
-        </a>
-      </Text>
+        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+          <Button variant="outline" size="lg" onclick={() => manager.back()}>
+            <ArrowLeftIcon />
+            Back
+          </Button>
+          <Button type="submit" size="lg" disabled={!manager.canSubmit}>
+            {#if manager.submitting}
+              <Spinner />
+              Submitting… ({manager.progress}%)
+            {:else}
+              Submit Request
+            {/if}
+          </Button>
+        </div>
+      </div>
     </form>
-  </div>
-{/if}
+  {/if}
+
+  {#if manager.step !== STEPS.CONTACT}
+    <p class="text-sm text-muted-foreground">
+      Questions? Contact us at
+      <a href={`mailto:${CONTACT_EMAIL}`} class="underline">{CONTACT_EMAIL}</a>
+    </p>
+  {/if}
+</div>

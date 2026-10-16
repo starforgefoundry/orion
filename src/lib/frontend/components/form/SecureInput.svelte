@@ -1,11 +1,27 @@
 <script lang="ts">
-  import { PasswordInput, type InputProps } from '@immich/ui';
+  import * as InputGroup from '$lib/components/ui/input-group';
+  import EyeIcon from '@lucide/svelte/icons/eye';
+  import EyeOffIcon from '@lucide/svelte/icons/eye-off';
+  import type { HTMLInputAttributes } from 'svelte/elements';
 
-  type Props = Omit<InputProps, 'value'> & {
-    value: string | number;
+  type Props = Omit<HTMLInputAttributes, 'value' | 'type' | 'files'> & {
+    value?: string | number | null;
   };
 
-  let props: Props = $props();
+  let { value = $bindable(), class: className, ...props }: Props = $props();
+
+  let revealed = $state(false);
 </script>
 
-<PasswordInput {...props} value={props.value as string} />
+<InputGroup.Root class={className}>
+  <InputGroup.Input type={revealed ? 'text' : 'password'} bind:value {...props} />
+  <InputGroup.Addon align="inline-end">
+    <InputGroup.Button
+      size="icon-xs"
+      aria-label={revealed ? 'Hide value' : 'Show value'}
+      onclick={() => (revealed = !revealed)}
+    >
+      {#if revealed}<EyeOffIcon />{:else}<EyeIcon />{/if}
+    </InputGroup.Button>
+  </InputGroup.Addon>
+</InputGroup.Root>

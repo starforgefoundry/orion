@@ -1,108 +1,148 @@
 <script lang="ts">
-  import { Button, Text } from '@immich/ui';
+  import { Button } from '$lib/components/ui/button';
+  import EraserIcon from '@lucide/svelte/icons/eraser';
+
+  type Point = { x: number; y: number };
+
+  // The saved image is printed with the waiver, so it is always black ink on white.
+  const EXPORT_WIDTH = 900;
+  const EXPORT_HEIGHT = 300;
+  const EXPORT_INK = '#000000';
+  const EXPORT_PAPER = '#ffffff';
+  const EXPORT_QUALITY = 0.95;
+  const LINE_WIDTH_RATIO = 0.02;
+  const MIN_LINE_WIDTH = 2;
 
   let { signature = $bindable<File | null>(null) }: { signature: File | null } = $props();
 
-  let canvas: HTMLCanvasElement;
-  let isDrawing = $state(false);
-  let hasDrawn = $state(false);
+  let canvas = $state<HTMLCanvasElement>();
+  let strokes = $state.raw<Point[][]>([]);
+  let activeStroke: Point[] | null = null;
 
-  function getCtx() {
-    return canvas.getContext('2d')!;
+  const hasDrawn = $derived(strokes.length > 0);
+
+  function drawStrokes(
+    context: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    ink: string,
+  ) {
+    context.lineWidth = Math.max(MIN_LINE_WIDTH, height * LINE_WIDTH_RATIO);
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.strokeStyle = ink;
+
+    for (const stroke of strokes) {
+      context.beginPath();
+      stroke.forEach((point, index) => {
+        const x = point.x * width;
+        const y = point.y * height;
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      });
+      if (stroke.length === 1) context.lineTo(stroke[0].x * width + 0.1, stroke[0].y * height);
+      context.stroke();
+    }
   }
 
-  function getPosition(event: MouseEvent | TouchEvent) {
+  function render() {
+    if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = rect.width * ratio;
+    canvas.height = rect.height * ratio;
 
-    if ('touches' in event) {
-      const touch = event.touches[0];
-      return {
-        x: (touch.clientX - rect.left) * scaleX,
-        y: (touch.clientY - rect.top) * scaleY,
-      };
-    }
+    const context = canvas.getContext('2d')!;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    drawStrokes(context, canvas.width, canvas.height, getComputedStyle(canvas).color);
+  }
 
+  $effect(() => {
+    void strokes.length;
+    render();
+  });
+
+  $effect(() => {
+    if (!canvas) return;
+    const observer = new ResizeObserver(render);
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  });
+
+  function pointFrom(event: PointerEvent): Point {
+    const rect = canvas!.getBoundingClientRect();
     return {
-      x: (event.clientX - rect.left) * scaleX,
-      y: (event.clientY - rect.top) * scaleY,
+      x: (event.clientX - rect.left) / rect.width,
+      y: (event.clientY - rect.top) / rect.height,
     };
   }
 
-  function startDrawing(event: MouseEvent | TouchEvent) {
-    event.preventDefault();
-    isDrawing = true;
-    hasDrawn = true;
-    const ctx = getCtx();
-    const pos = getPosition(event);
-    ctx.beginPath();
-    ctx.moveTo(pos.x, pos.y);
+  function handlePointerDown(event: PointerEvent) {
+    canvas!.setPointerCapture(event.pointerId);
+    activeStroke = [pointFrom(event)];
+    strokes = [...strokes, activeStroke];
   }
 
-  function draw(event: MouseEvent | TouchEvent) {
-    if (!isDrawing) return;
-    event.preventDefault();
-    const ctx = getCtx();
-    const pos = getPosition(event);
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#000000';
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
+  function handlePointerMove(event: PointerEvent) {
+    if (!activeStroke) return;
+    activeStroke.push(pointFrom(event));
+    render();
   }
 
-  function stopDrawing() {
-    if (!isDrawing) return;
-    isDrawing = false;
-    // Fill white background before export so JPEG has a white bg
+  function handlePointerUp() {
+    if (!activeStroke) return;
+    activeStroke = null;
+    exportSignature();
+  }
+
+  function exportSignature() {
     const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = canvas.width;
-    exportCanvas.height = canvas.height;
-    const exportCtx = exportCanvas.getContext('2d')!;
-    exportCtx.fillStyle = '#ffffff';
-    exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-    exportCtx.drawImage(canvas, 0, 0);
+    exportCanvas.width = EXPORT_WIDTH;
+    exportCanvas.height = EXPORT_HEIGHT;
+    const context = exportCanvas.getContext('2d')!;
+    context.fillStyle = EXPORT_PAPER;
+    context.fillRect(0, 0, EXPORT_WIDTH, EXPORT_HEIGHT);
+    drawStrokes(context, EXPORT_WIDTH, EXPORT_HEIGHT, EXPORT_INK);
+
     exportCanvas.toBlob(
       (blob) => {
-        if (blob) {
-          signature = new File([blob], 'signature.jpg', { type: 'image/jpeg' });
-        }
+        if (blob) signature = new File([blob], 'signature.jpg', { type: 'image/jpeg' });
       },
       'image/jpeg',
-      0.95,
+      EXPORT_QUALITY,
     );
   }
 
   function clear() {
-    const ctx = getCtx();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    hasDrawn = false;
+    strokes = [];
     signature = null;
   }
 </script>
 
-<div class="flex w-full max-w-lg flex-col gap-2">
-  <div class="rounded-lg border-2 border-gray-300 bg-white">
-    <canvas
-      bind:this={canvas}
-      width={600}
-      height={200}
-      class="w-full cursor-crosshair touch-none"
-      onmousedown={startDrawing}
-      onmousemove={draw}
-      onmouseup={stopDrawing}
-      onmouseleave={stopDrawing}
-      ontouchstart={startDrawing}
-      ontouchmove={draw}
-      ontouchend={stopDrawing}
-    ></canvas>
-  </div>
-  <div class="flex items-center justify-between">
-    <Text size="small" color="muted">Draw your signature above</Text>
-    {#if hasDrawn}
-      <Button size="small" color="secondary" variant="ghost" onclick={clear}>Clear</Button>
-    {/if}
-  </div>
+<div class="relative overflow-hidden rounded-lg border bg-muted/30">
+  <canvas
+    bind:this={canvas}
+    class="block aspect-[3/1] w-full cursor-crosshair touch-none text-foreground"
+    aria-label="Signature pad"
+    onpointerdown={handlePointerDown}
+    onpointermove={handlePointerMove}
+    onpointerup={handlePointerUp}
+    onpointercancel={handlePointerUp}
+  ></canvas>
+
+  <div class="pointer-events-none absolute inset-x-6 bottom-[22%] border-b border-dashed"></div>
+  {#if !hasDrawn}
+    <span
+      class="pointer-events-none absolute bottom-[24%] left-6 text-sm text-muted-foreground select-none"
+    >
+      Sign here
+    </span>
+  {/if}
+
+  {#if hasDrawn}
+    <Button size="sm" variant="ghost" class="absolute top-1.5 right-1.5" onclick={clear}>
+      <EraserIcon />
+      Clear
+    </Button>
+  {/if}
 </div>

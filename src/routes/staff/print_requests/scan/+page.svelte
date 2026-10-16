@@ -1,9 +1,15 @@
 <script lang="ts">
   import { updateAMSForPrinter } from '$lib/remotes/endpoints/print_materials.remote';
-  import { Button, HStack, Icon, LoadingSpinner, toastManager } from '@immich/ui';
-  import { mdiCheckCircle, mdiCloseCircle, mdiFlashlight, mdiFlashlightOff } from '@mdi/js';
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import PageHeader from '$lib/frontend/components/PageHeader.svelte';
+  import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
+  import CircleXIcon from '@lucide/svelte/icons/circle-x';
+  import FlashlightIcon from '@lucide/svelte/icons/flashlight';
+  import FlashlightOffIcon from '@lucide/svelte/icons/flashlight-off';
   import { BarqodeStream, type DetectedBarcode } from 'barqode';
   import { onDestroy } from 'svelte';
+  import { toast } from 'svelte-sonner';
 
   // The five labels sit far enough from the camera that each QR lands on ~60px of sensor at
   // 1080p. Below that the decoder stops resolving modules and the scan looks "flaky". Ask for
@@ -16,6 +22,8 @@
     // focusMode is widely supported on phones but missing from the DOM typings
     advanced: [{ focusMode: 'continuous' }] as unknown as MediaTrackConstraintSet[],
   };
+
+  const AMS_SLOT_COUNT = 4;
 
   // TTL configuration
   const CODE_TTL_MS = 1500; // Code expires after this long without being seen
@@ -38,6 +46,7 @@
   // Derived states based on currently active codes
   let activeCodes = $derived(trackedCodes.map((tracked) => tracked.code));
   let foundPrinter = $derived(activeCodes.find((c) => c.rawValue.startsWith('SF-')));
+  let hasAllFilaments = $derived.by(() => filaments.length === AMS_SLOT_COUNT);
   let filaments = $derived(
     activeCodes.filter((c) => !c.rawValue.startsWith('SF-') && c.rawValue.length == 8),
   );
@@ -131,8 +140,8 @@
   }
 
   async function updateAMS() {
-    updatingAMS = true;
     if (!foundPrinter) return;
+    updatingAMS = true;
 
     try {
       const sortedFilaments = trackedCodes
@@ -146,80 +155,82 @@
         filaments: sortedFilaments,
       });
 
-      toastManager.success('AMS updated successfully');
-    } catch (error) {
-      toastManager.danger('Failed to update AMS');
+      toast.success('AMS updated successfully');
+    } catch {
+      toast.error('Failed to update AMS');
     } finally {
       updatingAMS = false;
     }
   }
 </script>
 
-<div class="mx-auto flex max-w-2xl flex-col items-center justify-center p-4">
-  <BarqodeStream
-    {onCameraOn}
-    {track}
-    constraints={CAMERA_CONSTRAINTS}
-    torch={torchOn}
-    paused={updatingAMS}
-  >
-    {#if loadingCamera}
-      <div class="flex items-center justify-center">
-        <LoadingSpinner />
+<PageHeader title="Scan AMS" />
+
+<!-- Sized to the viewport so the video never pushes the controls off screen. -->
+<div
+  class="mx-auto -mt-2 flex h-[calc(100dvh-8.5rem)] w-full max-w-2xl flex-col gap-3 sm:h-[calc(100dvh-9rem)] md:h-[calc(100dvh-6rem)] lg:h-[calc(100dvh-7rem)]"
+>
+  <div class="relative min-h-0 flex-1 overflow-hidden rounded-lg border bg-black">
+    <BarqodeStream
+      {onCameraOn}
+      {track}
+      constraints={CAMERA_CONSTRAINTS}
+      torch={torchOn}
+      paused={updatingAMS}
+    >
+      {#if loadingCamera}
+        <div class="flex h-full items-center justify-center text-white">
+          <Spinner class="size-6" />
+        </div>
+      {/if}
+    </BarqodeStream>
+
+    {#if !loadingCamera}
+      <div
+        class="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap gap-1.5 bg-gradient-to-b from-black/70 to-transparent p-2 pb-6 text-xs font-medium text-white"
+      >
+        <span class="flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1">
+          {#if foundPrinter}
+            <CircleCheckIcon class="size-3.5 text-success" />
+            Printer {foundPrinter.rawValue.split('-')[1]}
+          {:else}
+            <CircleXIcon class="size-3.5 text-destructive" />
+            No printer
+          {/if}
+        </span>
+        <span class="flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1">
+          {#if hasAllFilaments}
+            <CircleCheckIcon class="size-3.5 text-success" />
+          {:else}
+            <CircleXIcon class="size-3.5 text-destructive" />
+          {/if}
+          {filaments.length}/{AMS_SLOT_COUNT} filaments
+        </span>
       </div>
     {/if}
-  </BarqodeStream>
+  </div>
 
-  {#if !loadingCamera}
-    <HStack class="mt-4">
-      {#if foundPrinter}
-        <Icon icon={mdiCheckCircle} class="text-success" />
-        Printer Found: {foundPrinter.rawValue.split('-')[1]}
-      {:else}
-        <Icon icon={mdiCloseCircle} class="text-danger" />
-        No Printer Found
-      {/if}
-    </HStack>
-    <HStack>
-      {#if filaments.length == 4}
-        <Icon icon={mdiCheckCircle} class="text-success" />
-      {:else}
-        <Icon icon={mdiCloseCircle} class="text-danger" />
-      {/if}
-      {filaments.length}/4 Filaments Found
-    </HStack>
-
-    <HStack class="mt-2">
-      {#if torchSupported}
-        <Button
-          variant="outline"
-          color="secondary"
-          onclick={() => (torchOn = !torchOn)}
-          leadingIcon={torchOn ? mdiFlashlight : mdiFlashlightOff}
-        >
-          {torchOn ? 'Light On' : 'Light Off'}
-        </Button>
-      {/if}
-
+  <div class="flex shrink-0 gap-2 pb-[env(safe-area-inset-bottom)]">
+    {#if torchSupported}
       <Button
-        disabled={filaments.length != 4 || !foundPrinter}
-        loading={updatingAMS}
-        onclick={updateAMS}
+        variant="outline"
+        size="icon-lg"
+        aria-label={torchOn ? 'Turn light off' : 'Turn light on'}
+        aria-pressed={torchOn}
+        onclick={() => (torchOn = !torchOn)}
       >
-        Update AMS
+        {#if torchOn}<FlashlightIcon />{:else}<FlashlightOffIcon />{/if}
       </Button>
-    </HStack>
-  {/if}
+    {/if}
 
-  <!-- Debug info -->
-  <!-- <div class="mt-4 w-full rounded border p-2 text-xs">
-    <div class="font-semibold">Tracked Codes ({trackedCodes.length}):</div>
-    {#each trackedCodes as tracked}
-      <div class="mt-1">
-        {tracked.id}: {tracked.code.rawValue} @ ({Math.round(getCenter(tracked.code).x)}, {Math.round(
-          getCenter(tracked.code).y,
-        )})
-      </div>
-    {/each}
-  </div> -->
+    <Button
+      size="lg"
+      class="flex-1"
+      disabled={!hasAllFilaments || !foundPrinter || updatingAMS}
+      onclick={updateAMS}
+    >
+      {#if updatingAMS}<Spinner />{/if}
+      Update AMS
+    </Button>
+  </div>
 </div>

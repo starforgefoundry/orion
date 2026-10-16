@@ -1,21 +1,14 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import { cn } from '$lib/frontend/cn';
   import CalendarGrid from '$lib/frontend/components/CalendarGrid.svelte';
+  import Section from '$lib/frontend/components/Section.svelte';
+  import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { formatTime } from '$lib/frontend/utils';
   import { getCatalogById, getClassInstances } from '$lib/remotes/endpoints/class.remote';
-  import {
-    Badge,
-    Button,
-    Card,
-    CardBody,
-    CardHeader,
-    CardTitle,
-    Heading,
-    LoadingSpinner,
-    modalManager,
-    Stack,
-    Text,
-  } from '@immich/ui';
   import { DateTime } from 'luxon';
   import BookingModal from './BookingModal.svelte';
 
@@ -46,104 +39,91 @@
 </svelte:head>
 
 {#if catalogRemote.loading}
-  <LoadingSpinner class="mx-auto mt-12" size="large" />
+  <Spinner class="mx-auto mt-12 size-8" />
 {:else if !catalog}
-  <Card>
-    <CardBody>
-      <Text color="danger" fontWeight="bold">Class not found.</Text>
-    </CardBody>
-  </Card>
+  <p class="rounded-lg border p-6 text-center text-sm font-medium text-destructive">
+    Class not found.
+  </p>
 {:else}
-  <Stack gap={6}>
+  <div class="flex flex-col gap-4">
     {#if catalog.photoUrl}
-      <div class="h-64 w-full overflow-hidden rounded-xl">
-        <img src={catalog.photoUrl} alt={catalog.name} class="h-full w-full object-cover" />
-      </div>
+      <img
+        src={catalog.photoUrl}
+        alt={catalog.name}
+        class="h-44 w-full rounded-lg object-cover sm:h-64"
+      />
     {/if}
 
-    <div class="flex flex-row justify-between">
-      <div>
-        <Heading size="large">{catalog.name}</Heading>
-        <Text class="mt-2" color="muted">{catalog.description}</Text>
+    <div class="flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <h2 class="text-xl font-semibold">{catalog.name}</h2>
+        <p class="mt-1 text-sm text-muted-foreground">{catalog.description}</p>
       </div>
-      <Badge color="success" class="self-start" size="large">
+      <StatusBadge tone="success" class="shrink-0 text-sm">
         ${(catalog.price / 100).toFixed(2)}
-      </Badge>
+      </StatusBadge>
     </div>
 
-    <!-- Calendar -->
-    <Card>
-      <CardHeader>
-        <div class="flex items-center justify-between gap-2">
-          <CardTitle>Select a Date</CardTitle>
-          <div class="flex gap-4 text-xs text-gray-400">
-            <span class="flex items-center gap-1">
-              <span class="inline-block h-3 w-3 rounded bg-green-600/40"></span> Available
-            </span>
-            <span class="flex items-center gap-1">
-              <span class="inline-block h-3 w-3 rounded bg-red-600/40"></span> Full
-            </span>
-          </div>
+    <Section title="Select a Date">
+      {#snippet actions()}
+        <div class="flex gap-3 pr-2 text-xs text-muted-foreground">
+          <span class="flex items-center gap-1">
+            <span class="inline-block size-2.5 rounded-sm bg-success/40"></span> Available
+          </span>
+          <span class="flex items-center gap-1">
+            <span class="inline-block size-2.5 rounded-sm bg-destructive/40"></span> Full
+          </span>
         </div>
-      </CardHeader>
-      <CardBody>
-        {#if instancesRemote.loading}
-          <div class="flex min-h-64 items-center justify-center">
-            <LoadingSpinner size="large" />
-          </div>
-        {:else}
-          <CalendarGrid {instances}>
-            {#snippet dayContent({ instances: dayInstances, isCurrentMonth })}
-              {@const hasInstances = dayInstances.length > 0}
-              {#if hasInstances && isCurrentMonth}
-                <div class="flex flex-col gap-2">
-                  {#each dayInstances as inst}
-                    {@const spotsLeft = inst.seats - inst.confirmedCount}
-                    {@const isPast =
-                      DateTime.fromISO(`${inst.date}T${inst.startTime}`, {
-                        zone: 'America/Chicago',
-                      }) < now}
-                    {@const isAvailable = spotsLeft > 0 && !isPast}
-                    <div
-                      class="w-full rounded p-2
-                    {isPast
-                        ? 'bg-gray-800/40 text-gray-500'
+      {/snippet}
+      {#if instancesRemote.loading}
+        <div class="flex min-h-64 items-center justify-center">
+          <Spinner class="size-8" />
+        </div>
+      {:else}
+        <CalendarGrid {instances}>
+          {#snippet dayContent({ instances: dayInstances, isCurrentMonth })}
+            {#if dayInstances.length > 0 && isCurrentMonth}
+              <div class="flex flex-col gap-1.5">
+                {#each dayInstances as inst}
+                  {@const spotsLeft = inst.seats - inst.confirmedCount}
+                  {@const isPast =
+                    DateTime.fromISO(`${inst.date}T${inst.startTime}`, {
+                      zone: 'America/Chicago',
+                    }) < now}
+                  {@const isAvailable = spotsLeft > 0 && !isPast}
+                  <div
+                    class={cn(
+                      'flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md p-1.5 text-xs',
+                      isPast
+                        ? 'bg-muted text-muted-foreground'
                         : isAvailable
-                          ? 'bg-green-900/20 text-green-400'
-                          : 'bg-red-900/20 text-red-400'}"
-                    >
-                      <div>
-                        <Text>{formatTime(inst.startTime)}</Text>
-
-                        <Text class="text-xs" color="muted">
-                          {#if isPast}
-                            (past)
-                          {:else}
-                            ({spotsLeft} spots)
-                          {/if}
-                        </Text>
-
-                        {#if isAvailable}
-                          <Button
-                            size="tiny"
-                            fullWidth
-                            onclick={() => bookInstance(inst)}
-                            class="mt-2"
-                            variant="outline"
-                            color="success"
-                          >
-                            Book
-                          </Button>
-                        {/if}
+                          ? 'bg-success/15 text-success'
+                          : 'bg-destructive/15 text-destructive',
+                    )}
+                  >
+                    <div class="min-w-0 flex-1">
+                      <div class="text-sm font-medium">{formatTime(inst.startTime)}</div>
+                      <div class="opacity-80">
+                        {isPast ? '(past)' : `(${spotsLeft} spots)`}
                       </div>
                     </div>
-                  {/each}
-                </div>
-              {/if}
-            {/snippet}
-          </CalendarGrid>
-        {/if}
-      </CardBody>
-    </Card>
-  </Stack>
+                    {#if isAvailable}
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        class="md:w-full"
+                        onclick={() => bookInstance(inst)}
+                      >
+                        Book
+                      </Button>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          {/snippet}
+        </CalendarGrid>
+      {/if}
+    </Section>
+  </div>
 {/if}

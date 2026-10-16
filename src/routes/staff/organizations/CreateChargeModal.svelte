@@ -1,10 +1,14 @@
 <script lang="ts">
+  import { Switch } from '$lib/components/ui/switch';
+  import ModalForm from '$lib/frontend/components/ModalForm.svelte';
+  import FormField from '$lib/frontend/components/form/FormField.svelte';
+  import HiddenField from '$lib/frontend/components/form/HiddenField.svelte';
   import PriceInput from '$lib/frontend/components/form/PriceInput.svelte';
   import TextArea from '$lib/frontend/components/form/TextArea.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
+  import { enhanceWithToast } from '$lib/frontend/form-submit';
   import { createOrganizationChargeForm } from '$lib/remotes/endpoints/organization.remote';
-  import { Button, Field, Modal, ModalBody, Stack, Switch } from '@immich/ui';
-  import { mdiCashPlus } from '@mdi/js';
+  import HandCoinsIcon from '@lucide/svelte/icons/hand-coins';
 
   interface Props extends ModalProps {
     orgId: string;
@@ -15,45 +19,41 @@
   let amountInput = $state(0);
   let isCredit = $state(false);
   let amount = $derived(amountInput * (isCredit ? -1 : 1));
-  $effect(() => {
-    createOrganizationChargeForm.fields.amount.set(amount);
-  });
 </script>
 
-<Modal {onClose} title="Create Organization Charge" icon={mdiCashPlus}>
-  <ModalBody>
-    <form {...createOrganizationChargeForm} onsubmit={() => onClose()}>
-      <input
-        hidden
-        {...createOrganizationChargeForm.fields.organizationId.as('text')}
-        value={orgId}
-      />
+<ModalForm
+  {onClose}
+  title="Create Organization Charge"
+  icon={HandCoinsIcon}
+  submitLabel="Create Charge"
+  canSubmit={amountInput !== 0}
+  submitting={createOrganizationChargeForm.pending > 0}
+  form={enhanceWithToast(
+    createOrganizationChargeForm,
+    { success: 'Charge created', error: 'Failed to create charge' },
+    onClose,
+  )}
+>
+  <input hidden {...createOrganizationChargeForm.fields.organizationId.as('text')} value={orgId} />
 
-      <Stack gap={4}>
-        <Field label="Amount" required="indicator">
-          <PriceInput bind:value={amountInput} multiplier={100} />
-          <input {...createOrganizationChargeForm.fields.amount.as('number')} hidden />
-        </Field>
+  <FormField label="Amount" required>
+    <PriceInput bind:value={amountInput} multiplier={100} />
+    <HiddenField field={createOrganizationChargeForm.fields.amount} value={amount} />
+  </FormField>
 
-        <Field
-          label="Credit Charge"
-          description="Toggle if this charge is a credit to the organization."
-        >
-          <Switch bind:checked={isCredit} />
-        </Field>
+  <FormField
+    label="Credit Charge"
+    for="charge-is-credit"
+    description="Toggle if this charge is a credit to the organization."
+  >
+    <Switch id="charge-is-credit" bind:checked={isCredit} />
+  </FormField>
 
-        <Field label="Description" required="indicator">
-          <TextArea
-            required
-            placeholder="Description for the charge"
-            {...createOrganizationChargeForm.fields.description.as('text')}
-          />
-        </Field>
-
-        <Button type="submit" variant="filled" fullWidth disabled={amountInput === 0}>
-          Create Charge
-        </Button>
-      </Stack>
-    </form>
-  </ModalBody>
-</Modal>
+  <FormField label="Description" required>
+    <TextArea
+      required
+      placeholder="Description for the charge"
+      {...createOrganizationChargeForm.fields.description.as('text')}
+    />
+  </FormField>
+</ModalForm>

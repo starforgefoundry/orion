@@ -1,29 +1,40 @@
 import { TAG_ID_LENGTH } from '$lib/remotes/dtos/print_materials.dto';
 import {
+  createPrintMaterial,
   getFilamentCatalog,
   setMaterialSetup,
+  updatePrintMaterial,
 } from '$lib/remotes/endpoints/print_materials.remote';
 import type { PrintMaterial } from '$lib/server/db/schema';
-import { toastManager } from '@immich/ui';
+import { toast } from 'svelte-sonner';
 
 type Color = { name: string; hex: string };
 
-/** Walks the vendor → material → color chain, clearing whatever a change upstream invalidates. */
+/** Creates or edits a material. Walks the vendor → material → color chain, clearing whatever a change upstream invalidates. */
 export class MaterialEditor {
+  name = $state('');
+  available = $state(true);
   tagId = $state('');
   vendor = $state<string | null>(null);
   materialType = $state<string | null>(null);
   colorName = $state<string | null>(null);
+  saving = $state(false);
+
+  readonly isNew: boolean;
 
   private catalog = getFilamentCatalog();
-  private materialId: string;
+  // Set after the first successful create so a retry after a failed setup step doesn't create a duplicate.
+  private materialId = $state<string>();
 
-  constructor(material: PrintMaterial) {
-    this.materialId = material.id;
-    this.tagId = material.tagId ?? '';
-    this.vendor = material.vendor;
-    this.materialType = material.materialType;
-    this.colorName = material.colorName;
+  constructor(material?: PrintMaterial) {
+    this.isNew = !material;
+    this.materialId = material?.id;
+    this.name = material?.name ?? '';
+    this.available = material?.available ?? true;
+    this.tagId = material?.tagId ?? '';
+    this.vendor = material?.vendor ?? null;
+    this.materialType = material?.materialType ?? null;
+    this.colorName = material?.colorName ?? null;
   }
 
   get loading() {
@@ -32,6 +43,10 @@ export class MaterialEditor {
 
   get error() {
     return this.catalog.error;
+  }
+
+  get nameValid() {
+    return this.name.trim().length > 0;
   }
 
   get tagValid() {
@@ -46,7 +61,7 @@ export class MaterialEditor {
   }
 
   get canSave() {
-    return this.tagValid && this.filamentValid;
+    return this.nameValid && this.tagValid && this.filamentValid && !this.saving;
   }
 
   get vendorOptions(): string[] {
@@ -57,8 +72,11 @@ export class MaterialEditor {
     return (this.currentVendor?.materials ?? []).map((entry) => entry.material);
   }
 
-  get colorOptions(): string[] {
-    return this.colors.map((color) => color.name);
+  get colors(): Color[] {
+    return (
+      this.currentVendor?.materials.find((entry) => entry.material === this.materialType)?.colors ??
+      []
+    );
   }
 
   get colorHex() {
@@ -80,42 +98,54 @@ export class MaterialEditor {
     this.colorName = colorName;
   }
 
+  clearFilament() {
+    this.vendor = null;
+    this.materialType = null;
+    this.colorName = null;
+  }
+
   async save() {
     if (!this.canSave) return false;
 
-    const colorHex = this.colorHex;
-
+    this.saving = true;
     try {
+      const details = { name: this.name.trim(), available: this.available };
+
+      if (this.materialId) {
+        await updatePrintMaterial({ id: this.materialId, ...details });
+      } else {
+        this.materialId = (await createPrintMaterial(details)).id;
+      }
+
       await setMaterialSetup({
         id: this.materialId,
         tagId: this.tagId.trim() || null,
-        filament:
-          this.vendor && this.materialType && this.colorName && colorHex
-            ? {
-                vendor: this.vendor,
-                materialType: this.materialType,
-                colorName: this.colorName,
-                colorHex,
-              }
-            : null,
+        filament: this.filament,
       });
 
-      toastManager.success('Material saved');
+      toast.success(this.isNew ? 'Material created' : 'Material saved');
       return true;
     } catch (error) {
-      toastManager.danger(error instanceof Error ? error.message : 'Failed to save the material');
+      toast.error(error instanceof Error ? error.message : 'Failed to save the material');
       return false;
+    } finally {
+      this.saving = false;
     }
+  }
+
+  private get filament() {
+    const colorHex = this.colorHex;
+    if (!this.vendor || !this.materialType || !this.colorName || !colorHex) return null;
+
+    return {
+      vendor: this.vendor,
+      materialType: this.materialType,
+      colorName: this.colorName,
+      colorHex,
+    };
   }
 
   private get currentVendor() {
     return (this.catalog.current ?? []).find((entry) => entry.vendor === this.vendor);
-  }
-
-  get colors(): Color[] {
-    return (
-      this.currentVendor?.materials.find((entry) => entry.material === this.materialType)?.colors ??
-      []
-    );
   }
 }

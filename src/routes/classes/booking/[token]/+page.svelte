@@ -2,22 +2,16 @@
   import { page } from '$app/state';
   import { formatTime } from '$lib/frontend/utils';
   import { cancelBooking, getBookingByToken } from '$lib/remotes/endpoints/class.remote';
-  import {
-    Badge,
-    Button,
-    Card,
-    CardBody,
-    CardHeader,
-    CardTitle,
-    Heading,
-    HStack,
-    Icon,
-    LoadingSpinner,
-    modalManager,
-    Stack,
-    Text,
-  } from '@immich/ui';
-  import { mdiCalendarPlus, mdiCancel, mdiCheck, mdiHelp } from '@mdi/js';
+  import { Button } from '$lib/components/ui/button';
+  import { Separator } from '$lib/components/ui/separator';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import InfoRow from '$lib/frontend/components/InfoRow.svelte';
+  import Section from '$lib/frontend/components/Section.svelte';
+  import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
+  import BanIcon from '@lucide/svelte/icons/ban';
+  import CalendarPlusIcon from '@lucide/svelte/icons/calendar-plus';
+  import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
   import { DateTime } from 'luxon';
 
   const token = page.params.token ?? '';
@@ -85,12 +79,12 @@
   }
 
   async function handleCancel() {
-    const confirmed = await modalManager.showDialog({
+    const confirmed = await modalManager.confirm({
       title: 'Cancel Booking',
       prompt: 'Are you sure you want to cancel this booking? You will receive a full refund.',
       confirmText: 'Cancel Booking',
-      confirmColor: 'danger',
-      icon: mdiHelp,
+      cancelText: 'Keep Booking',
+      variant: 'destructive',
     });
 
     if (!confirmed) return;
@@ -100,10 +94,11 @@
       await cancelBooking({ bookingToken: token });
       await getBookingByToken(token).refresh();
     } catch (error: any) {
-      modalManager.showDialog({
+      modalManager.confirm({
         title: 'Error',
         prompt: error?.message ?? 'Failed to cancel booking',
         confirmText: 'OK',
+        hideCancel: true,
       });
     } finally {
       canceling = false;
@@ -116,101 +111,80 @@
 </svelte:head>
 
 {#if bookingRemote.loading}
-  <LoadingSpinner class="mx-auto mt-12" size="large" />
+  <Spinner class="mx-auto mt-12 size-8" />
 {:else if !booking || !booking.instance || !booking.catalog}
-  <Card>
-    <CardBody>
-      <Text color="danger" fontWeight="bold">Booking not found.</Text>
-      <Text class="mt-2">This booking may not exist or the link may be invalid.</Text>
-    </CardBody>
-  </Card>
+  <div class="rounded-lg border p-4 text-sm">
+    <p class="font-medium text-destructive">Booking not found.</p>
+    <p class="mt-1 text-muted-foreground">This booking may not exist or the link may be invalid.</p>
+  </div>
 {:else}
-  <Stack gap={6}>
-    <Card>
-      <CardHeader>
-        <HStack class="items-center gap-3">
-          <Icon icon={booking.status === 'confirmed' ? mdiCheck : mdiCancel} size="1.5rem" />
-          <CardTitle>
-            {booking.status === 'confirmed' ? 'Booking Confirmed' : 'Booking Canceled'}
-          </CardTitle>
-        </HStack>
-      </CardHeader>
-      <CardBody>
-        <Stack gap={4}>
-          <Badge color={booking.status === 'confirmed' ? 'success' : 'danger'} class="self-start">
-            {booking.status === 'confirmed' ? 'Confirmed' : 'Canceled'}
-          </Badge>
+  {@const isConfirmed = booking.status === 'confirmed'}
+  <div class="flex flex-col gap-4">
+    <div class="flex items-center gap-2">
+      {#if isConfirmed}
+        <CircleCheckIcon class="size-5 text-success" />
+      {:else}
+        <BanIcon class="size-5 text-destructive" />
+      {/if}
+      <h2 class="flex-1 text-lg font-semibold">
+        {isConfirmed ? 'Booking Confirmed' : 'Booking Canceled'}
+      </h2>
+      <StatusBadge tone={isConfirmed ? 'success' : 'danger'}>
+        {isConfirmed ? 'Confirmed' : 'Canceled'}
+      </StatusBadge>
+    </div>
 
-          <Heading size="small">{booking.catalog.name}</Heading>
+    <Section title={booking.catalog.name}>
+      <dl>
+        <InfoRow label="Date">{getBookingDate()}</InfoRow>
+        <InfoRow label="Time">
+          {formatTime(booking.instance.startTime)} ({booking.instance.durationMinutes} min)
+        </InfoRow>
+        <InfoRow label="Name">{booking.customerName}</InfoRow>
+        <InfoRow label="Email">{booking.customerEmail}</InfoRow>
+        <InfoRow label="Spots">{booking.quantity ?? 1}</InfoRow>
+        <InfoRow label="Amount Paid">${(booking.amountPaid / 100).toFixed(2)}</InfoRow>
+      </dl>
+    </Section>
 
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <Text color="muted" size="small">Date</Text>
-              <Text fontWeight="bold">
-                {getBookingDate()}
-              </Text>
-            </div>
-            <div>
-              <Text color="muted" size="small">Time</Text>
-              <Text fontWeight="bold">
-                {formatTime(booking.instance.startTime)} ({booking.instance.durationMinutes} min)
-              </Text>
-            </div>
-            <div>
-              <Text color="muted" size="small">Name</Text>
-              <Text fontWeight="bold">{booking.customerName}</Text>
-            </div>
-            <div>
-              <Text color="muted" size="small">Email</Text>
-              <Text fontWeight="bold">{booking.customerEmail}</Text>
-            </div>
-            <div>
-              <Text color="muted" size="small">Spots</Text>
-              <Text fontWeight="bold">{booking.quantity ?? 1}</Text>
-            </div>
-            <div>
-              <Text color="muted" size="small">Amount Paid</Text>
-              <Text fontWeight="bold">${(booking.amountPaid / 100).toFixed(2)}</Text>
-            </div>
-          </div>
+    {#if isConfirmed}
+      <Section title="Add to Calendar">
+        <div class="flex flex-col gap-2 sm:flex-row">
+          <Button
+            variant="outline"
+            href={getGoogleCalendarUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <CalendarPlusIcon />
+            Google Calendar
+          </Button>
+          <Button
+            variant="outline"
+            href={getIcsDownloadUrl()}
+            download="{booking.catalog.name}.ics"
+          >
+            <CalendarPlusIcon />
+            Apple Calendar / Other (.ics)
+          </Button>
+        </div>
+      </Section>
 
-          {#if booking.status === 'confirmed'}
-            <Stack gap={2} class="mt-4">
-              <Heading size="small">Add to Calendar</Heading>
-              <HStack gap={2} class="flex-wrap">
-                <a href={getGoogleCalendarUrl()} target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" leadingIcon={mdiCalendarPlus}>Google Calendar</Button>
-                </a>
-                <a href={getIcsDownloadUrl()} download="{booking.catalog.name}.ics">
-                  <Button variant="outline" leadingIcon={mdiCalendarPlus}>
-                    Apple Calendar / Other (.ics)
-                  </Button>
-                </a>
-              </HStack>
-            </Stack>
+      <Separator />
 
-            <hr />
-
-            <div class="mt">
-              <Button
-                color="danger"
-                variant="outline"
-                leadingIcon={mdiCancel}
-                onclick={handleCancel}
-                loading={canceling}
-              >
-                Cancel Booking
-              </Button>
-            </div>
-          {/if}
-
-          {#if booking.status === 'canceled'}
-            <Text color="muted" class="mt-2">
-              This booking has been canceled and a refund has been issued.
-            </Text>
-          {/if}
-        </Stack>
-      </CardBody>
-    </Card>
-  </Stack>
+      <Button
+        variant="destructive"
+        class="self-start max-sm:w-full"
+        onclick={handleCancel}
+        disabled={canceling}
+      >
+        {#if canceling}<Spinner />{:else}<BanIcon />{/if}
+        Cancel Booking
+      </Button>
+    {:else}
+      <p class="text-sm text-muted-foreground">
+        This booking has been canceled and a refund has been issued.
+      </p>
+    {/if}
+  </div>
 {/if}

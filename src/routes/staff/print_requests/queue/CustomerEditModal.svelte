@@ -1,8 +1,12 @@
 <script lang="ts">
+  import { Input } from '$lib/components/ui/input';
+  import FormField from '$lib/frontend/components/form/FormField.svelte';
+  import ModalForm from '$lib/frontend/components/ModalForm.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
+  import { submitWithToast } from '$lib/frontend/form-submit';
   import { updatePrintRequest } from '$lib/remotes/endpoints/print_request.remote';
-  import { Button, Field, HStack, Input, Modal, ModalBody, Stack, toastManager } from '@immich/ui';
-  import { mdiAccountEdit, mdiCheck } from '@mdi/js';
+  import CheckIcon from '@lucide/svelte/icons/check';
+  import UserPenIcon from '@lucide/svelte/icons/user-pen';
   import { untrack } from 'svelte';
 
   type Props = ModalProps & {
@@ -19,51 +23,41 @@
 
   const isValid = $derived(customerName.trim().length > 0 && email.trim().length > 0);
 
-  async function handleSubmit(e: Event) {
-    e.preventDefault();
+  async function handleSubmit() {
     if (!isValid || submitting) return;
 
     submitting = true;
-    try {
-      await updatePrintRequest({
-        id: requestId,
-        customerName: customerName.trim(),
-        email: email.trim(),
-      });
-      toastManager.success('Customer updated');
-      onClose();
-    } catch (error: any) {
-      toastManager.danger(error?.message ?? 'Failed to update customer');
-    } finally {
-      submitting = false;
-    }
+    const ok = await submitWithToast(
+      () =>
+        updatePrintRequest({
+          id: requestId,
+          customerName: customerName.trim(),
+          email: email.trim(),
+        }),
+      { success: 'Customer updated', error: 'Failed to update customer' },
+    );
+    submitting = false;
+
+    if (ok) onClose();
   }
 </script>
 
-<Modal title="Edit Customer" icon={mdiAccountEdit} {onClose}>
-  <ModalBody>
-    <form onsubmit={handleSubmit}>
-      <Stack gap={4}>
-        <Field label="Full Name" required="indicator">
-          <Input bind:value={customerName} placeholder="John Doe" />
-        </Field>
+<ModalForm
+  title="Edit Customer"
+  icon={UserPenIcon}
+  size="sm"
+  {onClose}
+  submitLabel="Save"
+  submitIcon={CheckIcon}
+  canSubmit={isValid}
+  {submitting}
+  onSubmit={handleSubmit}
+>
+  <FormField label="Full Name" for="customer-name" required>
+    <Input id="customer-name" bind:value={customerName} placeholder="John Doe" />
+  </FormField>
 
-        <Field label="Email" required="indicator">
-          <Input bind:value={email} type="email" placeholder="john@example.com" />
-        </Field>
-
-        <HStack class="justify-end">
-          <Button
-            type="submit"
-            color="success"
-            leadingIcon={mdiCheck}
-            loading={submitting}
-            disabled={submitting || !isValid}
-          >
-            Save
-          </Button>
-        </HStack>
-      </Stack>
-    </form>
-  </ModalBody>
-</Modal>
+  <FormField label="Email" for="customer-email" required>
+    <Input id="customer-email" bind:value={email} type="email" placeholder="john@example.com" />
+  </FormField>
+</ModalForm>

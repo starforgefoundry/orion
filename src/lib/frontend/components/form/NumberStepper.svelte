@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { HStack, IconButton, Text } from '@immich/ui';
-  import { mdiMinus, mdiPlus } from '@mdi/js';
+  import { Button } from '$lib/components/ui/button';
+  import * as ButtonGroup from '$lib/components/ui/button-group';
+  import MinusIcon from '@lucide/svelte/icons/minus';
+  import PlusIcon from '@lucide/svelte/icons/plus';
 
   type Props = {
     value: number;
@@ -18,46 +20,30 @@
     onChange,
   }: Props = $props();
 
-  function increment() {
-    const newValue = Math.min(value + step, max);
-    value = newValue;
-    onChange?.(newValue);
-  }
-
-  function decrement() {
-    const newValue = Math.max(value - step, min);
-    value = newValue;
-    onChange?.(newValue);
+  function update(newValue: number) {
+    value = Math.min(Math.max(newValue, min), max);
+    onChange?.(value);
   }
 </script>
 
-<HStack gap={0}>
-  <IconButton
+<ButtonGroup.Root>
+  <Button
+    variant="outline"
+    size="icon"
     aria-label="Decrement"
-    icon={mdiMinus}
-    onclick={decrement}
     disabled={value <= min}
-    shape="rectangle"
-    size="medium"
-    class="rounded-l-md aria-disabled:text-primary-300 aria-disabled:opacity-100 dark:aria-disabled:text-gray-500"
-  />
-  <div class="flex h-full items-center bg-primary">
-    <div class="h-1/3 w-px bg-gray-300 dark:bg-gray-600"></div>
-  </div>
-  <Text
-    class="flex h-10 w-10 items-center justify-center bg-primary text-white dark:text-black"
-    size="medium">{value}</Text
+    onclick={() => update(value - step)}
   >
-  <div class="flex h-full items-center bg-primary">
-    <div class="h-1/3 w-px bg-gray-300 dark:bg-gray-600"></div>
-  </div>
-  <IconButton
+    <MinusIcon />
+  </Button>
+  <ButtonGroup.Text class="min-w-10 justify-center tabular-nums">{value}</ButtonGroup.Text>
+  <Button
+    variant="outline"
+    size="icon"
     aria-label="Increment"
-    icon={mdiPlus}
-    onclick={increment}
     disabled={value >= max}
-    shape="rectangle"
-    size="medium"
-    class="rounded-r-md aria-disabled:text-primary-300 aria-disabled:opacity-100 dark:aria-disabled:text-gray-500"
-  />
-</HStack>
+    onclick={() => update(value + step)}
+  >
+    <PlusIcon />
+  </Button>
+</ButtonGroup.Root>

@@ -1,19 +1,13 @@
 <script lang="ts">
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import * as Table from '$lib/components/ui/table';
+  import PageHeader from '$lib/frontend/components/PageHeader.svelte';
+  import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { getOrganizations } from '$lib/remotes/endpoints/organization.remote';
-  import {
-    Heading,
-    IconButton,
-    Input,
-    LoadingSpinner,
-    modalManager,
-    Table,
-    TableBody,
-    TableCell,
-    TableHeader,
-    TableHeading,
-    TableRow,
-  } from '@immich/ui';
-  import { mdiEye, mdiMagnify, mdiPlus } from '@mdi/js';
+  import PlusIcon from '@lucide/svelte/icons/plus';
+  import SearchIcon from '@lucide/svelte/icons/search';
   import CreateOrganizationModal from './CreateOrganizationModal.svelte';
   import OrganizationDetailModal from './OrganizationDetailModal.svelte';
 
@@ -34,55 +28,73 @@
   function showOrganizationDetail(id: string) {
     modalManager.show(OrganizationDetailModal, { organizationId: id });
   }
+
+  function handleRowKeydown(event: KeyboardEvent, id: string) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    showOrganizationDetail(id);
+  }
 </script>
 
-<div class="mb-6 flex items-center justify-between">
-  <Heading size="large" class="inline-block w-fit">Organizations</Heading>
-  <div class="flex w-1/3 items-center gap-2">
-    <IconButton
-      icon={mdiPlus}
-      variant="filled"
-      aria-label="Add Organization"
-      class="min-w-10"
-      onclick={showCreateModal}
-    />
-    <Input placeholder="Search Organizations" leadingIcon={mdiMagnify} bind:value={searchTerm} />
-  </div>
-</div>
+<PageHeader title="Organizations">
+  {#snippet actions()}
+    <Button size="sm" onclick={showCreateModal}>
+      <PlusIcon />
+      Add Organization
+    </Button>
+  {/snippet}
+</PageHeader>
+
+<TextInput
+  icon={SearchIcon}
+  placeholder="Search Organizations"
+  class="mb-3 sm:max-w-xs"
+  bind:value={searchTerm}
+/>
 
 {#if organizations.loading}
-  <div class="flex justify-center">
-    <LoadingSpinner size="large" />
+  <div class="flex justify-center py-8">
+    <Spinner class="size-6" />
   </div>
 {:else if organizations.error}
-  <p class="text-danger">Error loading organizations: {organizations.error.message}</p>
+  <p class="text-sm text-destructive">
+    Error loading organizations: {organizations.error.message}
+  </p>
 {:else}
-  <Table striped class="mt-4">
-    <TableHeader>
-      <TableHeading class="w-4/12 text-left">Name</TableHeading>
-      <TableHeading class="w-6/12 text-left">Email</TableHeading>
-      <TableHeading class="w-2/12 text-left">Actions</TableHeading>
-    </TableHeader>
-    <TableBody>
-      {#each searchedOrganizations as organization}
-        <TableRow>
-          <TableCell class="w-4/12 px-4 text-left">{organization.name}</TableCell>
-          <TableCell class="w-6/12 px-4 text-left">{organization.email}</TableCell>
-          <TableCell class="w-2/12 px-4 text-left">
-            <IconButton
-              aria-label="View Organization Details"
-              icon={mdiEye}
-              onclick={() => showOrganizationDetail(organization.id)}
-            />
-          </TableCell>
-        </TableRow>
-      {/each}
-
-      {#if searchedOrganizations.length === 0}
-        <TableRow>
-          <TableCell class="w-full text-center">No organizations found.</TableCell>
-        </TableRow>
-      {/if}
-    </TableBody>
-  </Table>
+  <div class="overflow-hidden rounded-lg border">
+    <Table.Root>
+      <Table.Header class="bg-muted/50">
+        <Table.Row>
+          <Table.Head>Name</Table.Head>
+          <Table.Head class="hidden sm:table-cell">Email</Table.Head>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
+        {#each searchedOrganizations as organization (organization.id)}
+          <Table.Row
+            class="cursor-pointer"
+            tabindex={0}
+            onclick={() => showOrganizationDetail(organization.id)}
+            onkeydown={(e) => handleRowKeydown(e, organization.id)}
+          >
+            <Table.Cell class="max-w-48">
+              <div class="truncate font-medium">{organization.name}</div>
+              <div class="truncate text-xs text-muted-foreground sm:hidden">
+                {organization.email}
+              </div>
+            </Table.Cell>
+            <Table.Cell class="hidden max-w-64 truncate sm:table-cell">
+              {organization.email}
+            </Table.Cell>
+          </Table.Row>
+        {:else}
+          <Table.Row>
+            <Table.Cell colspan={2} class="h-20 text-center text-muted-foreground">
+              No organizations found.
+            </Table.Cell>
+          </Table.Row>
+        {/each}
+      </Table.Body>
+    </Table.Root>
+  </div>
 {/if}

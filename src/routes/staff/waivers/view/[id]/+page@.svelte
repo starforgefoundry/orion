@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { getWaiverById } from '$lib/remotes/endpoints/waiver.remote';
-  import { LoadingSpinner, Text } from '@immich/ui';
+  import { Spinner } from '$lib/components/ui/spinner';
 
   let waiver = $derived(getWaiverById(page.params.id!));
 
@@ -29,14 +29,14 @@
 
 {#if waiver.loading}
   <div class="flex min-h-screen items-center justify-center">
-    <LoadingSpinner size="large" />
+    <Spinner class="size-6" />
   </div>
 {:else if waiver.error}
   <div class="flex min-h-screen items-center justify-center">
-    <Text color="danger">Error loading waiver: {waiver.error.message}</Text>
+    <p class="text-sm text-destructive">Error loading waiver: {waiver.error.message}</p>
   </div>
 {:else if waiver.current}
-  <div class="mx-auto max-w-3xl bg-white p-12 pt-4 text-black">
+  <div class="mx-auto max-w-3xl bg-white p-4 text-black sm:p-12 sm:pt-4">
     <h1 class="text-center text-xl font-bold">WAIVER OF LIABILITY AND HOLD HARMLESS AGREEMENT</h1>
     <h2 class="mb-6 text-center text-lg font-bold">STARFORGE FOUNDRY INC.</h2>
 
@@ -84,7 +84,7 @@
       </p>
     </div>
 
-    <div class="mt-8 flex items-start justify-between">
+    <div class="mt-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <p class="text-base font-bold">Name: {waiver.current.name}</p>
         <p class="text-base">Email: {waiver.current.email}</p>

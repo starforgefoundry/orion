@@ -1,13 +1,11 @@
-import { goto } from '$app/navigation';
 import { downloadFilamentCard } from '$lib/frontend/filament-card/download';
+import { modalManager } from '$lib/frontend/modal-manager.svelte';
 import {
   getPrintMaterials,
   updatePrintMaterial,
 } from '$lib/remotes/endpoints/print_materials.remote';
 import type { PrintMaterial } from '$lib/server/db/schema';
-import { modalManager } from '@immich/ui';
-import { mdiChatQuestion } from '@mdi/js';
-import MaterialEditModal from './MaterialEditModal.svelte';
+import MaterialModal from './MaterialModal.svelte';
 
 export class MaterialsManager {
   searchTerm = $state('');
@@ -24,21 +22,27 @@ export class MaterialsManager {
   }
 
   get results(): PrintMaterial[] {
-    const term = this.searchTerm.toUpperCase();
+    const term = this.searchTerm.trim().toUpperCase();
 
     return (this.materials.current ?? []).filter((material) =>
-      material.name.toUpperCase().includes(term),
+      [material.name, material.vendor, material.materialType, material.colorName, material.tagId]
+        .filter(Boolean)
+        .some((value) => value!.toUpperCase().includes(term)),
     );
   }
 
   filamentLabel(material: PrintMaterial) {
-    if (!material.filamentId) return 'Not linked';
+    if (!material.filamentId) return null;
 
-    return `${material.vendor} ${material.materialType} — ${material.colorName}`;
+    return `${material.vendor} ${material.materialType} · ${material.colorName}`;
+  }
+
+  create() {
+    modalManager.show(MaterialModal);
   }
 
   edit(material: PrintMaterial) {
-    modalManager.show(MaterialEditModal, { material });
+    modalManager.show(MaterialModal, { material });
   }
 
   async setAvailability(id: string, available: boolean) {
@@ -59,25 +63,16 @@ export class MaterialsManager {
     }
   }
 
-  printTag(material: PrintMaterial) {
-    if (!material.tagId) return;
-
-    const tags = [{ name: material.name, tagId: material.tagId, colorHex: material.colorHex }];
-
-    goto('/staff/print_requests/materials/labels?tags=' + encodeURIComponent(JSON.stringify(tags)));
-  }
-
-  async archive(id: string) {
-    const confirmed = await modalManager.showDialog({
+  async archive(material: PrintMaterial) {
+    const confirmed = await modalManager.confirm({
       title: 'Delete Print Material',
-      prompt: 'Are you sure you want to delete this print material? This action cannot be undone.',
+      prompt: `Delete "${material.name}"? It will no longer be offered to customers. Existing requests keep their material.`,
       confirmText: 'Delete',
-      confirmColor: 'danger',
-      icon: mdiChatQuestion,
+      variant: 'destructive',
     });
 
     if (confirmed) {
-      await updatePrintMaterial({ id, archived: true });
+      await updatePrintMaterial({ id: material.id, archived: true });
     }
   }
 }

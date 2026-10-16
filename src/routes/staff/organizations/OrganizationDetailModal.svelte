@@ -1,43 +1,36 @@
 <script lang="ts">
+  import { Button } from '$lib/components/ui/button';
+  import { Input } from '$lib/components/ui/input';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import * as Table from '$lib/components/ui/table';
+  import * as Tabs from '$lib/components/ui/tabs';
+  import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import InfoRow from '$lib/frontend/components/InfoRow.svelte';
+  import Modal from '$lib/frontend/components/Modal.svelte';
   import Pagination from '$lib/frontend/components/Pagination.svelte';
+  import Section from '$lib/frontend/components/Section.svelte';
+  import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
+  import FormField from '$lib/frontend/components/form/FormField.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import {
     archiveOrganization,
     chargeOrganizationBalance,
     getOrganizationDetail,
     updateOrganization,
   } from '$lib/remotes/endpoints/organization.remote';
-  import {
-    Badge,
-    Button,
-    Heading,
-    HStack,
-    IconButton,
-    Input,
-    LoadingSpinner,
-    Modal,
-    ModalBody,
-    modalManager,
-    Stack,
-    Table,
-    TableBody,
-    TableCell,
-    TableHeader,
-    TableHeading,
-    TableRow,
-  } from '@immich/ui';
-  import {
-    mdiAccountGroup,
-    mdiCashPlus,
-    mdiChatQuestion,
-    mdiCheck,
-    mdiClose,
-    mdiPencil,
-    mdiTrashCan,
-  } from '@mdi/js';
+  import CheckIcon from '@lucide/svelte/icons/check';
+  import HandCoinsIcon from '@lucide/svelte/icons/hand-coins';
+  import PencilIcon from '@lucide/svelte/icons/pencil';
+  import TrashIcon from '@lucide/svelte/icons/trash';
+  import UsersIcon from '@lucide/svelte/icons/users';
+  import XIcon from '@lucide/svelte/icons/x';
   import { DateTime } from 'luxon';
   import { getPaymentStatusColor } from '../print_requests/queue/utils';
   import CreateChargeModal from './CreateChargeModal.svelte';
+
+  const TABS = { CHARGES: 'charges', BALANCE_PAYMENTS: 'balance_payments' } as const;
+  type Tab = (typeof TABS)[keyof typeof TABS];
 
   type Props = ModalProps & {
     organizationId: string;
@@ -46,7 +39,7 @@
   let { onClose, organizationId }: Props = $props();
 
   let organizationDetail = $derived(getOrganizationDetail({ id: organizationId }));
-  let activeTab: 'charges' | 'balance_payments' = $state('charges');
+  let activeTab: Tab = $state(TABS.CHARGES);
   let isEditing = $state(false);
   let isChargingBalance = $state(false);
   let editName = $state('');
@@ -54,11 +47,9 @@
   let originalName = $state('');
   let originalEmail = $state('');
 
-  // Pagination state
   let chargesCurrentPage = $state(1);
   let chargesItemsPerPage = 10;
 
-  // Paginated data
   let paginatedCharges = $derived(() => {
     if (!organizationDetail.current) return [];
     const startIndex = (chargesCurrentPage - 1) * chargesItemsPerPage;
@@ -72,14 +63,12 @@
   });
 
   async function handleChargeBalance() {
-    const confirm = await modalManager.showDialog({
+    const confirm = await modalManager.confirm({
       title: 'Charge Outstanding Balance',
       prompt: `Are you sure you want to send an invoice for the outstanding balance of ${formatCurrency(
         organizationDetail.current?.outstandingBalance || 0,
       )} to the organization's email?`,
       confirmText: 'Charge Balance',
-      confirmColor: 'success',
-      icon: mdiCashPlus,
     });
 
     if (!confirm) {
@@ -130,13 +119,12 @@
   }
 
   async function deleteOrganization() {
-    const confirm = await modalManager.showDialog({
+    const confirm = await modalManager.confirm({
       title: 'Archive Organization',
       prompt:
         'Are you sure you want to archive this organization? This will hide it from the list but preserve all data.',
       confirmText: 'Archive',
-      confirmColor: 'danger',
-      icon: mdiChatQuestion,
+      variant: 'destructive',
     });
 
     if (confirm) {
@@ -157,185 +145,166 @@
   }
 </script>
 
-<Modal title="Organization Details" icon={mdiAccountGroup} {onClose} size="giant">
-  <ModalBody>
-    {#if organizationDetail.loading}
-      <div class="flex justify-center py-8">
-        <LoadingSpinner size="large" />
-      </div>
-    {:else if organizationDetail.error}
-      <p class="text-danger">
-        Error loading organization details: {organizationDetail.error.message}
-      </p>
-    {:else if organizationDetail.current}
-      <Stack gap={4}>
-        <HStack class="justify-between">
-          <div>
-            <p class="text-sm text-gray-500">Name</p>
+<Modal title="Organization Details" icon={UsersIcon} {onClose} size="xl">
+  {#if organizationDetail.loading}
+    <div class="flex justify-center py-8">
+      <Spinner class="size-6" />
+    </div>
+  {:else if organizationDetail.error}
+    <p class="text-sm text-destructive">
+      Error loading organization details: {organizationDetail.error.message}
+    </p>
+  {:else if organizationDetail.current}
+    <div class="flex flex-col gap-3">
+      <div class="grid gap-3 md:grid-cols-2">
+        <Section title="Organization">
+          {#snippet actions()}
             {#if isEditing}
-              <Input bind:value={editName} />
+              <IconButton icon={CheckIcon} aria-label="Save Changes" onclick={saveEdits} />
+              <IconButton icon={XIcon} aria-label="Cancel" onclick={cancelEditing} />
             {:else}
-              <p class="font-semibold">{organizationDetail.current.name}</p>
-            {/if}
-          </div>
-          <div>
-            <p class="text-sm text-gray-500">Email</p>
-            {#if isEditing}
-              <Input bind:value={editEmail} type="email" />
-            {:else}
-              <p class="font-semibold">{organizationDetail.current.email}</p>
-            {/if}
-          </div>
-
-          <HStack class="justify-end" gap={2}>
-            {#if isEditing}
+              <IconButton icon={PencilIcon} aria-label="Edit Organization" onclick={startEditing} />
               <IconButton
-                icon={mdiCheck}
-                aria-label="Save Changes"
-                color="success"
-                size="small"
-                onclick={saveEdits}
-              />
-              <IconButton
-                icon={mdiClose}
-                aria-label="Cancel"
-                color="danger"
-                size="small"
-                onclick={cancelEditing}
-              />
-            {:else}
-              <IconButton
-                icon={mdiCashPlus}
-                aria-label="Create Organization Charge"
-                color="success"
-                size="small"
-                onclick={createOrganizationCharge}
-              />
-              <IconButton
-                icon={mdiPencil}
-                aria-label="Edit Organization"
-                color="primary"
-                size="small"
-                onclick={startEditing}
-              />
-              <IconButton
-                icon={mdiTrashCan}
-                aria-label="Delete Organization"
-                color="danger"
-                size="small"
+                icon={TrashIcon}
+                aria-label="Archive Organization"
+                class="text-destructive hover:text-destructive"
                 onclick={deleteOrganization}
               />
             {/if}
-          </HStack>
-        </HStack>
-
-        <div class="rounded-lg border border-gray-400 p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-gray-500">Outstanding Balance</p>
-              <Heading size="medium" class="mt-1">
-                {formatCurrency(organizationDetail.current.outstandingBalance)}
-              </Heading>
+          {/snippet}
+          {#if isEditing}
+            <div class="flex flex-col gap-3">
+              <FormField label="Name" for="organization-name">
+                <Input id="organization-name" bind:value={editName} />
+              </FormField>
+              <FormField label="Email" for="organization-email">
+                <Input id="organization-email" bind:value={editEmail} type="email" />
+              </FormField>
             </div>
+          {:else}
+            <dl>
+              <InfoRow label="Name">{organizationDetail.current.name}</InfoRow>
+              <InfoRow label="Email">{organizationDetail.current.email}</InfoRow>
+            </dl>
+          {/if}
+        </Section>
+
+        <Section title="Outstanding Balance">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="text-2xl font-semibold tabular-nums">
+              {formatCurrency(organizationDetail.current.outstandingBalance)}
+            </span>
             {#if organizationDetail.current.outstandingBalance > 0}
-              <Button variant="filled" onclick={handleChargeBalance} loading={isChargingBalance}>
-                <div class="flex items-center gap-2">Charge Balance</div>
+              <Button size="sm" onclick={handleChargeBalance} disabled={isChargingBalance}>
+                {#if isChargingBalance}<Spinner />{/if}
+                Charge Balance
               </Button>
             {/if}
           </div>
+        </Section>
+      </div>
+
+      <Tabs.Root bind:value={activeTab}>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <Tabs.List>
+            <Tabs.Trigger value={TABS.CHARGES}>Charges</Tabs.Trigger>
+            <Tabs.Trigger value={TABS.BALANCE_PAYMENTS}>Balance Payments</Tabs.Trigger>
+          </Tabs.List>
+          {#if activeTab === TABS.CHARGES}
+            <Button size="sm" variant="outline" onclick={createOrganizationCharge}>
+              <HandCoinsIcon />
+              Add Charge
+            </Button>
+          {/if}
         </div>
 
-        <div class="flex gap-2">
-          <button
-            class="px-4 py-2 {activeTab === 'charges'
-              ? 'border-b-2 border-primary font-semibold'
-              : ''}"
-            onclick={() => (activeTab = 'charges')}
-          >
-            Charges
-          </button>
-          <button
-            class="px-4 py-2 {activeTab === 'balance_payments'
-              ? 'border-b-2 border-primary font-semibold'
-              : ''}"
-            onclick={() => (activeTab = 'balance_payments')}
-          >
-            Balance Payments
-          </button>
-        </div>
-
-        {#if activeTab === 'charges'}
-          <Table striped class="mt-4">
-            <TableHeader class="bg-level-3">
-              <TableHeading class="w-6/12 text-left">Description</TableHeading>
-              <TableHeading class="w-3/12 text-left">Date</TableHeading>
-              <TableHeading class="w-3/12 text-right">Amount</TableHeading>
-            </TableHeader>
-            <TableBody class="border border-gray-700">
-              {#each paginatedCharges() as charge}
-                <TableRow class="border-b border-gray-700">
-                  <TableCell class="w-6/12 px-4 text-left">
-                    {charge.description}
-                  </TableCell>
-                  <TableCell class="w-3/12 px-4 text-left">
-                    {DateTime.fromISO(charge.date).toLocaleString(DateTime.DATE_SHORT)}
-                  </TableCell>
-                  <TableCell class="w-3/12 px-4 text-right">
-                    {formatCurrency(charge.amount)}
-                  </TableCell>
-                </TableRow>
-              {/each}
-              {#if organizationDetail.current.charges.length === 0}
-                <TableRow>
-                  <TableCell class="w-full text-center">No charges found.</TableCell>
-                </TableRow>
-              {/if}
-            </TableBody>
-          </Table>
+        <Tabs.Content value={TABS.CHARGES}>
+          <div class="overflow-hidden rounded-lg border">
+            <Table.Root>
+              <Table.Header class="bg-muted/50">
+                <Table.Row>
+                  <Table.Head>Description</Table.Head>
+                  <Table.Head class="hidden sm:table-cell">Date</Table.Head>
+                  <Table.Head class="text-right">Amount</Table.Head>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {#each paginatedCharges() as charge, index (index)}
+                  <Table.Row>
+                    <Table.Cell class="max-w-64">
+                      <div class="truncate">{charge.description}</div>
+                      <div class="text-xs text-muted-foreground sm:hidden">
+                        {DateTime.fromISO(charge.date).toLocaleString(DateTime.DATE_SHORT)}
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell class="hidden sm:table-cell">
+                      {DateTime.fromISO(charge.date).toLocaleString(DateTime.DATE_SHORT)}
+                    </Table.Cell>
+                    <Table.Cell class="text-right tabular-nums">
+                      {formatCurrency(charge.amount)}
+                    </Table.Cell>
+                  </Table.Row>
+                {:else}
+                  <Table.Row>
+                    <Table.Cell colspan={3} class="h-20 text-center text-muted-foreground">
+                      No charges found.
+                    </Table.Cell>
+                  </Table.Row>
+                {/each}
+              </Table.Body>
+            </Table.Root>
+          </div>
 
           <Pagination
             currentPage={chargesCurrentPage}
             totalPages={chargesTotalPages()}
             onPageChange={(page) => (chargesCurrentPage = page)}
           />
-        {:else if activeTab === 'balance_payments'}
-          <Table striped class="mt-4">
-            <TableHeader class="bg-level-3">
-              <TableHeading class="w-3/12 text-left">Issued Date</TableHeading>
-              <TableHeading class="w-3/12 text-left">Payment Date</TableHeading>
-              <TableHeading class="w-3/12">Status</TableHeading>
-              <TableHeading class="w-3/12 text-right">Amount</TableHeading>
-            </TableHeader>
-            <TableBody class="border border-gray-700">
-              {#each organizationDetail.current.balancePayments as payment}
-                <TableRow>
-                  <TableCell class="w-3/12 px-4 text-left">
-                    {payment.issuedDate.toLocaleString(DateTime.DATE_SHORT)}
-                  </TableCell>
-                  <TableCell class="w-3/12 px-4 text-left">
-                    {payment.paymentDate
-                      ? payment.paymentDate.toLocaleString(DateTime.DATE_SHORT)
-                      : '-'}
-                  </TableCell>
-                  <TableCell class="w-3/12">
-                    <Badge color={getPaymentStatusColor(payment.status)}
-                      >{formatStatus(payment.status)}</Badge
-                    >
-                  </TableCell>
-                  <TableCell class="w-3/12 px-4 text-right">
-                    {formatCurrency(payment.total)}
-                  </TableCell>
-                </TableRow>
-              {/each}
-              {#if organizationDetail.current.balancePayments.length === 0}
-                <TableRow>
-                  <TableCell class="w-full text-center">No balance payments found.</TableCell>
-                </TableRow>
-              {/if}
-            </TableBody>
-          </Table>
-        {/if}
-      </Stack>
-    {/if}
-  </ModalBody>
+        </Tabs.Content>
+
+        <Tabs.Content value={TABS.BALANCE_PAYMENTS}>
+          <div class="overflow-hidden rounded-lg border">
+            <Table.Root>
+              <Table.Header class="bg-muted/50">
+                <Table.Row>
+                  <Table.Head>Issued</Table.Head>
+                  <Table.Head class="hidden sm:table-cell">Paid</Table.Head>
+                  <Table.Head>Status</Table.Head>
+                  <Table.Head class="text-right">Amount</Table.Head>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {#each organizationDetail.current.balancePayments as payment, index (index)}
+                  <Table.Row>
+                    <Table.Cell>
+                      {payment.issuedDate.toLocaleString(DateTime.DATE_SHORT)}
+                    </Table.Cell>
+                    <Table.Cell class="hidden sm:table-cell">
+                      {payment.paymentDate
+                        ? payment.paymentDate.toLocaleString(DateTime.DATE_SHORT)
+                        : '—'}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <StatusBadge tone={getPaymentStatusColor(payment.status)}>
+                        {formatStatus(payment.status)}
+                      </StatusBadge>
+                    </Table.Cell>
+                    <Table.Cell class="text-right tabular-nums">
+                      {formatCurrency(payment.total)}
+                    </Table.Cell>
+                  </Table.Row>
+                {:else}
+                  <Table.Row>
+                    <Table.Cell colspan={4} class="h-20 text-center text-muted-foreground">
+                      No balance payments found.
+                    </Table.Cell>
+                  </Table.Row>
+                {/each}
+              </Table.Body>
+            </Table.Root>
+          </div>
+        </Tabs.Content>
+      </Tabs.Root>
+    </div>
+  {/if}
 </Modal>

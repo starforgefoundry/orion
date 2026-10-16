@@ -1,4 +1,4 @@
-import { command, form, query } from '$app/server';
+import { command, query } from '$app/server';
 import {
   createPrintMaterialDto,
   setMaterialSetupDto,
@@ -15,12 +15,11 @@ export const getPrintMaterials = query(async () => {
 
 export const createPrintMaterial = command(createPrintMaterialDto, async (data) => {
   verifyAuth();
-  return await printMaterialsService.createMaterial(data);
-});
 
-export const createPrintMaterialForm = form(createPrintMaterialDto, async (data) => {
-  verifyAuth();
-  return await printMaterialsService.createMaterial(data);
+  const material = await printMaterialsService.createMaterial(data);
+  await getPrintMaterials().refresh();
+
+  return material;
 });
 
 export const updatePrintMaterial = command(updatePrintMaterialDto, async (dto) => {

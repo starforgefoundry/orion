@@ -1,7 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { Button } from '$lib/components/ui/button';
+  import * as Card from '$lib/components/ui/card';
   import logo from '$lib/assets/logo.png';
-  import { Button, Card, CardBody, CardHeader, CardTitle } from '@immich/ui';
 
   const error = page.url.searchParams.get('error');
 
@@ -17,18 +18,15 @@
   <title>Login Error | Orion</title>
 </svelte:head>
 
-<div class="flex justify-center">
-  <div class="align-center mx-5 my-3 size-fit">
-    <img class="mx-auto mt-10 mb-6 w-20" src={logo} alt="Orion" />
-    <Card>
-      <CardHeader>
-        <CardTitle>{errorTitle}</CardTitle>
-      </CardHeader>
-      <CardBody>
-        <p>{errorMessage}</p>
-
-        <Button fullWidth href="/auth/login" color="primary" class="mt-4">Return to Login</Button>
-      </CardBody>
-    </Card>
-  </div>
+<div class="mx-auto flex w-full max-w-sm flex-col px-4 py-10">
+  <img class="mx-auto mb-6 w-16" src={logo} alt="Orion" />
+  <Card.Root size="sm">
+    <Card.Header>
+      <Card.Title>{errorTitle}</Card.Title>
+    </Card.Header>
+    <Card.Content>
+      <p class="text-muted-foreground">{errorMessage}</p>
+      <Button href="/auth/login" class="w-full">Return to Login</Button>
+    </Card.Content>
+  </Card.Root>
 </div>

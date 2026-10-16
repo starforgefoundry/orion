@@ -1,15 +1,22 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import Modal from '$lib/frontend/components/Modal.svelte';
+  import FormField from '$lib/frontend/components/form/FormField.svelte';
   import NumberStepper from '$lib/frontend/components/form/NumberStepper.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { initForm } from '$lib/frontend/components/form/utils.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { formatTime } from '$lib/frontend/utils';
+  import { squareCard, type SquareCard } from '$lib/frontend/square-card';
   import { bookClass, bookClassForm, getSquareConfig } from '$lib/remotes/endpoints/class.remote';
-  import { Button, Field, HStack, Modal, ModalBody, Stack, Text, toastManager } from '@immich/ui';
-  import { mdiCalendar, mdiCheck } from '@mdi/js';
+  import CalendarIcon from '@lucide/svelte/icons/calendar';
+  import CheckIcon from '@lucide/svelte/icons/check';
   import { DateTime } from 'luxon';
-  import { onMount } from 'svelte';
+  import { toast } from 'svelte-sonner';
+
+  const FORM_ID = 'book-class-form';
 
   interface Props extends ModalProps {
     catalogName: string;
@@ -37,7 +44,7 @@
   let quantity = $state(1);
   let submitting = $state(false);
 
-  let cardInstance: any = $state(null);
+  let cardInstance = $state<SquareCard>();
   let squareReady = $state(false);
 
   const squareConfigRemote = getSquareConfig();
@@ -54,75 +61,10 @@
     sourceId: '',
   }));
 
-  $effect(() => {
-    bookClassForm.fields.quantity.set(quantity);
-  });
-
-  onMount(async () => {
-    const config = await squareConfigRemote;
-
-    if ((window as any).Square) {
-      initializeSquare();
-    } else {
-      const script = document.createElement('script');
-      script.src = config.webSdkUrl;
-      script.onload = () => initializeSquare();
-      document.head.appendChild(script);
-    }
-  });
-
-  async function initializeSquare() {
-    if (!(window as any).Square || !squareConfig) return;
-
-    try {
-      const payments = (window as any).Square.payments(
-        squareConfig.applicationId,
-        squareConfig.locationId,
-      );
-      cardInstance = await payments.card({
-        style: {
-          '.input-container': {
-            borderColor: '#4b5563',
-            borderRadius: '8px',
-          },
-          '.input-container.is-focus': {
-            borderColor: '#9ca3af',
-          },
-          '.input-container.is-error': {
-            borderColor: '#ef4444',
-          },
-
-          '.message-text': {
-            color: '#9ca3af',
-          },
-          '.message-text.is-error': {
-            color: '#ef4444',
-          },
-          '.message-icon': {
-            color: '#9ca3af',
-          },
-          '.message-icon.is-error': {
-            color: '#ef4444',
-          },
-        },
-      });
-      await cardInstance.attach('#card-container');
-      squareReady = true;
-    } catch (err) {
-      console.error('Failed to initialize Square payments:', err);
-    }
-  }
-
-  $effect(() => {
-    if (squareConfig && (window as any).Square && !cardInstance) {
-      initializeSquare();
-    }
-  });
-
   type SubmitParameters = Parameters<Parameters<typeof bookClassForm.enhance>[0]>[0];
   async function handleSubmit(params: SubmitParameters) {
     if (!cardInstance) {
-      toastManager.danger('Payment form not ready. Please wait and try again.');
+      toast.error('Payment form not ready. Please wait and try again.');
       return;
     }
 
@@ -130,8 +72,8 @@
 
     try {
       const tokenResult = await cardInstance.tokenize();
-      if (tokenResult.status !== 'OK') {
-        toastManager.danger('Payment card error. Please check your card details.');
+      if (tokenResult.status !== 'OK' || !tokenResult.token) {
+        toast.error('Payment card error. Please check your card details.');
         submitting = false;
         return;
       }
@@ -146,82 +88,86 @@
         await goto(`/classes/booking/${booking.bookingToken}`);
       }
     } catch (error: any) {
-      toastManager.danger(error?.message ?? 'Failed to book class');
+      toast.error(error?.message ?? 'Failed to book class');
     } finally {
       submitting = false;
     }
   }
 </script>
 
-<Modal title="Book {catalogName}" icon={mdiCalendar} {onClose}>
-  <ModalBody>
-    <form {...bookClassForm.enhance(handleSubmit)}>
-      <input {...bookClassForm.fields.instanceId.as('text')} hidden />
-      <input {...bookClassForm.fields.sourceId.as('text')} hidden />
-      <input {...bookClassForm.fields.quantity.as('number')} hidden />
+<Modal title="Book {catalogName}" icon={CalendarIcon} {onClose}>
+  <form id={FORM_ID} {...bookClassForm.enhance(handleSubmit)} class="flex flex-col gap-4">
+    <input {...bookClassForm.fields.instanceId.as('text')} hidden />
+    <input {...bookClassForm.fields.sourceId.as('text')} hidden />
+    <input {...bookClassForm.fields.quantity.as('number')} value={quantity} hidden />
 
-      <Stack gap={4}>
-        <div class="rounded-lg border border-gray-600 p-3 text-center">
-          <Text fontWeight="bold">{formattedDate}</Text>
-          <Text color="muted" size="small">
-            {formatTime(startTime)} ({durationMinutes} min)
-          </Text>
+    <div class="rounded-lg border bg-muted/50 p-3 text-center">
+      <p class="text-sm font-medium">{formattedDate}</p>
+      <p class="text-xs text-muted-foreground">
+        {formatTime(startTime)} ({durationMinutes} min)
+      </p>
+    </div>
+
+    <FormField label="Full Name" required>
+      <TextInput {...bookClassForm.fields.customerName.as('text')} placeholder="John Doe" />
+    </FormField>
+
+    <FormField label="Email" required>
+      <TextInput
+        {...bookClassForm.fields.customerEmail.as('text')}
+        type="email"
+        placeholder="john@example.com"
+      />
+    </FormField>
+
+    <FormField label="Phone Number" required>
+      <TextInput
+        {...bookClassForm.fields.customerPhone.as('text')}
+        type="tel"
+        placeholder="(555) 123-4567"
+      />
+    </FormField>
+
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-sm font-medium">Attendees</span>
+      <NumberStepper bind:value={quantity} min={1} max={availableSpots} />
+    </div>
+
+    <FormField label="Payment">
+      {#if squareConfig}
+        <div
+          id="card-container"
+          {@attach squareCard(squareConfig, (card) => {
+            cardInstance = card;
+            squareReady = true;
+          })}
+        ></div>
+      {/if}
+      {#if !squareReady}
+        <div
+          class="flex h-24 items-center justify-center rounded-lg border"
+          aria-label="Loading payment form"
+        >
+          <Spinner class="size-5 text-muted-foreground" />
         </div>
+      {/if}
+    </FormField>
+  </form>
 
-        <Field label="Full Name" required="indicator">
-          <TextInput {...bookClassForm.fields.customerName.as('text')} placeholder="John Doe" />
-        </Field>
-
-        <Field label="Email" required="indicator">
-          <TextInput
-            {...bookClassForm.fields.customerEmail.as('text')}
-            type="email"
-            placeholder="john@example.com"
-          />
-        </Field>
-
-        <Field label="Phone Number" required="indicator">
-          <TextInput
-            {...bookClassForm.fields.customerPhone.as('text')}
-            type="tel"
-            placeholder="(555) 123-4567"
-          />
-        </Field>
-
-        <div class="flex items-center justify-between">
-          <Text>Attendees</Text>
-          <NumberStepper bind:value={quantity} min={1} max={availableSpots} />
-        </div>
-
-        <Field label="Payment">
-          <div id="card-container"></div>
-          {#if !squareReady}
-            <Text size="small" color="muted" class="mt-1">Loading payment form...</Text>
-          {/if}
-        </Field>
-
-        <HStack class="items-center justify-between">
-          <div>
-            <Text fontWeight="bold" class="text-lg">
-              Total: ${(totalPrice / 100).toFixed(2)}
-            </Text>
-            {#if quantity > 1}
-              <Text size="small" color="muted">
-                ${(price / 100).toFixed(2)} x {quantity}
-              </Text>
-            {/if}
-          </div>
-          <Button
-            type="submit"
-            color="success"
-            leadingIcon={mdiCheck}
-            loading={submitting}
-            disabled={submitting || !squareReady}
-          >
-            Confirm & Pay
-          </Button>
-        </HStack>
-      </Stack>
-    </form>
-  </ModalBody>
+  {#snippet footer()}
+    <div class="flex w-full items-center justify-between gap-3">
+      <div>
+        <p class="text-base font-semibold">Total: ${(totalPrice / 100).toFixed(2)}</p>
+        {#if quantity > 1}
+          <p class="text-xs text-muted-foreground">
+            ${(price / 100).toFixed(2)} x {quantity}
+          </p>
+        {/if}
+      </div>
+      <Button type="submit" form={FORM_ID} disabled={submitting || !squareReady}>
+        {#if submitting}<Spinner />{:else}<CheckIcon />{/if}
+        Confirm & Pay
+      </Button>
+    </div>
+  {/snippet}
 </Modal>

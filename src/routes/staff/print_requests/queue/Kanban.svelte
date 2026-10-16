@@ -1,523 +1,198 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import { cn } from '$lib/frontend/cn';
+  import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import StatusIndicator from '$lib/frontend/components/StatusIndicator.svelte';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import type { PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
-  import {
-    getPrintRequests,
-    sendPickupNotification,
-    updatePrintRequestStatus,
-  } from '$lib/remotes/endpoints/print_request.remote';
-  import {
-    Badge,
-    ContextMenuButton,
-    Heading,
-    LoadingSpinner,
-    modalManager,
-    toastManager,
-    type MenuItems,
-  } from '@immich/ui';
-  import { mdiEmailOutline, mdiPackageVariantClosed } from '@mdi/js';
+  import { getPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
+  import EllipsisVerticalIcon from '@lucide/svelte/icons/ellipsis-vertical';
+  import MailIcon from '@lucide/svelte/icons/mail';
+  import PackageCheckIcon from '@lucide/svelte/icons/package-check';
   import type { DateTime } from 'luxon';
+  import { MediaQuery } from 'svelte/reactivity';
+  import { KanbanDrag } from './kanban-drag.svelte';
   import RequestDetailModal from './RequestDetailModal.svelte';
+  import {
+    BOARD_STATUSES,
+    changeStatus,
+    sendPickupEmail,
+    STATUS,
+    STATUS_LABELS,
+  } from './request-actions';
+  import { PAYMENT_STATUS_DISPLAY } from './utils';
 
-  let printRequests = getPrintRequests();
-  let prints = $derived((printRequests.current || []).filter((p) => p.payment?.status !== 'quote'));
+  type ColumnStyle = { dot: string; column: string; card: string };
 
-  let draggedJobId: string | null = $state(null);
-  let draggedFromColumn: PrintRequestStatus | null = $state(null);
-  let dragOverColumn: PrintRequestStatus | null = $state(null);
-  let dragOverIndex = $state(-1);
-
-  // Touch support
-  let touchStartX = $state(0);
-  let touchStartY = $state(0);
-  let isDragging = $state(false);
-  let draggedElement: HTMLElement | null = $state(null);
-  let scrollContainer: HTMLElement | null = $state(null);
-  let autoScrollInterval: number | null = $state(null);
-  let dragOffsetX = $state(0);
-  let dragOffsetY = $state(0);
-  let dragClone: HTMLElement | null = $state(null);
-  let initialCardRect: DOMRect | null = $state(null);
-
-  const columns = [
-    {
-      id: 'in_queue' as const,
-      title: 'Print Queue',
-      titleClass: 'bg-level-3',
-      cardClass: 'bg-level-2 border-slate-600 hover:border-slate-500',
-      columnClass: 'bg-level-1',
-      hoverClass: 'ring-2 ring-slate-500',
+  const COLUMN_STYLES: Record<(typeof BOARD_STATUSES)[number], ColumnStyle> = {
+    in_queue: {
+      dot: 'bg-muted-foreground',
+      column: 'bg-muted/40',
+      card: 'bg-card hover:border-foreground/25',
     },
-    {
-      id: 'printing' as const,
-      title: 'Printing',
-      titleClass: 'bg-info-200',
-      cardClass: 'bg-info-100 border-info-200 hover:border-info-300',
-      columnClass: 'bg-info-50',
-      hoverClass: 'ring-2 ring-info-300',
+    printing: {
+      dot: 'bg-info',
+      column: 'border-info/20 bg-info/5',
+      card: 'border-info/20 bg-info/10 hover:border-info/50',
     },
-    {
-      id: 'done' as const,
-      title: 'Ready for Pickup',
-      titleClass: 'bg-success-200',
-      cardClass: 'bg-success-100 border-success-200 hover:border-success-300',
-      columnClass: 'bg-success-50',
-      hoverClass: 'ring-2 ring-success-300',
+    done: {
+      dot: 'bg-success',
+      column: 'border-success/20 bg-success/5',
+      card: 'border-success/20 bg-success/10 hover:border-success/50',
     },
-  ];
+  };
 
-  function handleCardClick(requestId: string) {
-    goto(`?id=${requestId}`, { replaceState: true, noScroll: true, keepFocus: true });
-    modalManager.open(RequestDetailModal, { requestId });
-  }
+  const columns = BOARD_STATUSES.map((id) => ({
+    id,
+    title: STATUS_LABELS[id],
+    style: COLUMN_STYLES[id],
+  }));
 
-  function formatDate(date: DateTime): string {
-    return date.toLocaleString({
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  }
+  const printRequests = getPrintRequests();
+  const prints = $derived(
+    (printRequests.current || []).filter((p) => p.payment?.status !== 'quote'),
+  );
 
-  function handleDragStart(event: DragEvent, jobId: string, column: PrintRequestStatus) {
-    draggedJobId = jobId;
-    draggedFromColumn = column;
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
-    }
-  }
+  // Touch devices use the long-press drag instead of native drag and drop.
+  const hasMouse = new MediaQuery('pointer: fine');
 
-  function handleDrag(event: DragEvent) {
-    if (event.clientX > 0) {
-      updateAutoScroll(event.clientX);
-    }
-  }
+  const drag = new KanbanDrag(async (requestId, column) => {
+    const job = prints.find((print) => print.id === requestId);
+    if (job) await changeStatus(job, column);
+  });
 
-  function handleDragOverCard(event: DragEvent, column: PrintRequestStatus, index: number) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'move';
-    }
-    dragOverColumn = column;
-    dragOverIndex = index;
+  let scrollContainer = $state<HTMLElement>();
+  $effect(() => drag.setScrollContainer(scrollContainer));
+
+  function canDrag(job: (typeof prints)[number]) {
+    return job.status !== STATUS.DONE;
   }
 
   function getColumnData(column: PrintRequestStatus) {
     return prints.filter((p) => p.status === column);
   }
 
-  function optimisticUpdate(
-    current: typeof prints,
-    jobId: string,
-    targetColumn: PrintRequestStatus,
-  ) {
-    return current.map((p) => {
-      if (p.id === jobId) {
-        return { ...p, status: targetColumn };
-      }
-      return p;
-    });
+  function openRequest(requestId: string) {
+    goto(`?id=${requestId}`, { replaceState: true, noScroll: true, keepFocus: true });
+    modalManager.show(RequestDetailModal, { requestId });
   }
 
-  function handleDragOverContainer(event: DragEvent, column: PrintRequestStatus) {
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'move';
-    }
-    dragOverColumn = column;
-    // Set to end of list
-    const columnData = getColumnData(column);
-    dragOverIndex = columnData.length;
+  function formatDate(date: DateTime): string {
+    return date.toLocaleString({ month: 'short', day: 'numeric', year: 'numeric' });
   }
-
-  function handleDragLeave() {
-    dragOverColumn = null;
-    dragOverIndex = -1;
-  }
-
-  async function handleDrop(event: DragEvent, targetColumn: PrintRequestStatus) {
-    event.preventDefault();
-
-    if (!draggedJobId) {
-      resetDragState();
-      return;
-    }
-
-    // Use dragOverColumn if available, otherwise fall back to targetColumn
-    const finalColumn = dragOverColumn || targetColumn;
-
-    if (draggedFromColumn === finalColumn) {
-      resetDragState();
-      return;
-    }
-
-    // keep a reference to the dragged item
-    const jobId = draggedJobId;
-    const destinationColumn = finalColumn;
-
-    resetDragState();
-
-    try {
-      // Confirm movement to Done column
-      if (destinationColumn === 'done') {
-        const confirmed = await modalManager.showDialog({
-          title: 'Mark as Done',
-          prompt: 'Are you sure this print request is complete and ready for pickup?',
-          confirmText: 'Mark as Done',
-          confirmColor: 'success',
-          icon: mdiPackageVariantClosed,
-        });
-
-        if (!confirmed) {
-          return;
-        }
-      }
-
-      await updatePrintRequestStatus({ id: jobId, status: destinationColumn }).updates(
-        getPrintRequests().withOverride((current) =>
-          optimisticUpdate(current, jobId, destinationColumn),
-        ),
-      );
-    } catch (error) {
-      toastManager.danger('Failed to update print request status.');
-    }
-  }
-
-  // Touch event handlers for mobile support
-  function handleTouchStart(event: TouchEvent, jobId: string, column: PrintRequestStatus) {
-    const touch = event.touches[0];
-    touchStartX = touch.clientX;
-    touchStartY = touch.clientY;
-    draggedJobId = jobId;
-    draggedFromColumn = column;
-    isDragging = false;
-    draggedElement = event.currentTarget as HTMLElement;
-    initialCardRect = draggedElement.getBoundingClientRect();
-  }
-
-  function handleTouchMove(event: TouchEvent) {
-    if (!draggedJobId || !draggedElement) return;
-
-    const touch = event.touches[0];
-    const deltaX = Math.abs(touch.clientX - touchStartX);
-    const deltaY = Math.abs(touch.clientY - touchStartY);
-
-    // Start dragging if moved more than 10px in any direction
-    if (!isDragging && (deltaX > 10 || deltaY > 10)) {
-      isDragging = true;
-      event.preventDefault();
-
-      // Prevent body scrolling and text selection during drag
-      document.body.style.overflow = 'hidden';
-      document.body.style.touchAction = 'none';
-      document.body.style.userSelect = 'none';
-
-      // Create a clone of the card for dragging
-      if (!dragClone && initialCardRect) {
-        dragClone = draggedElement.cloneNode(true) as HTMLElement;
-        dragClone.style.position = 'fixed';
-        dragClone.style.left = `${initialCardRect.left}px`;
-        dragClone.style.top = `${initialCardRect.top}px`;
-        dragClone.style.width = `${initialCardRect.width}px`;
-        dragClone.style.height = `${initialCardRect.height}px`;
-        dragClone.style.zIndex = '9999';
-        dragClone.style.pointerEvents = 'none';
-        dragClone.style.opacity = '0.9';
-        dragClone.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)';
-        dragClone.style.transform = 'rotate(2deg)';
-        document.body.appendChild(dragClone);
-
-        // Hide the original element
-        draggedElement.style.opacity = '0.3';
-      }
-
-      startAutoScroll(touch.clientX);
-    }
-
-    if (isDragging && dragClone && initialCardRect) {
-      event.preventDefault();
-
-      // Update clone position
-      dragOffsetX = touch.clientX - touchStartX;
-      dragOffsetY = touch.clientY - touchStartY;
-      dragClone.style.left = `${initialCardRect.left + dragOffsetX}px`;
-      dragClone.style.top = `${initialCardRect.top + dragOffsetY}px`;
-
-      // Update auto-scroll based on touch position
-      updateAutoScroll(touch.clientX);
-
-      // Find element under touch point (temporarily hide clone to get element below)
-      dragClone.style.display = 'none';
-      const elementAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
-      dragClone.style.display = '';
-
-      if (elementAtPoint) {
-        // Check if over a column container
-        const columnContainer = elementAtPoint.closest('[data-column-id]');
-        if (columnContainer) {
-          const columnId = columnContainer.getAttribute('data-column-id') as PrintRequestStatus;
-          dragOverColumn = columnId;
-
-          // Check if over a card
-          const card = elementAtPoint.closest('[data-card-index]');
-          if (card) {
-            dragOverIndex = parseInt(card.getAttribute('data-card-index') || '-1');
-          } else {
-            const columnData = getColumnData(columnId);
-            dragOverIndex = columnData.length;
-          }
-        }
-      }
-    }
-  }
-
-  function startAutoScroll(clientX: number) {
-    if (autoScrollInterval !== null) return;
-    updateAutoScroll(clientX);
-  }
-
-  function updateAutoScroll(clientX: number) {
-    if (!scrollContainer) return;
-
-    const scrollZone = 100; // pixels from edge to trigger scroll
-    const scrollSpeed = 10; // pixels per frame
-    const containerRect = scrollContainer.getBoundingClientRect();
-
-    // Clear existing interval
-    if (autoScrollInterval !== null) {
-      clearInterval(autoScrollInterval);
-      autoScrollInterval = null;
-    }
-
-    // Check if near left edge
-    if (clientX < containerRect.left + scrollZone) {
-      autoScrollInterval = window.setInterval(() => {
-        if (scrollContainer) {
-          scrollContainer.scrollLeft -= scrollSpeed;
-        }
-      }, 16);
-    }
-    // Check if near right edge
-    else if (clientX > containerRect.right - scrollZone) {
-      autoScrollInterval = window.setInterval(() => {
-        if (scrollContainer) {
-          scrollContainer.scrollLeft += scrollSpeed;
-        }
-      }, 16);
-    }
-  }
-
-  function stopAutoScroll() {
-    if (autoScrollInterval !== null) {
-      clearInterval(autoScrollInterval);
-      autoScrollInterval = null;
-    }
-  }
-
-  function resetDragState() {
-    // Restore body scrolling and text selection
-    document.body.style.overflow = '';
-    document.body.style.touchAction = '';
-    document.body.style.userSelect = '';
-
-    // Remove the drag clone if it exists
-    if (dragClone) {
-      dragClone.remove();
-      dragClone = null;
-    }
-    // Restore original element opacity
-    if (draggedElement) {
-      draggedElement.style.opacity = '';
-    }
-    draggedJobId = null;
-    draggedFromColumn = null;
-    dragOverColumn = null;
-    dragOverIndex = -1;
-    isDragging = false;
-    draggedElement = null;
-    dragOffsetX = 0;
-    dragOffsetY = 0;
-    initialCardRect = null;
-    stopAutoScroll();
-  }
-
-  async function handleTouchEnd(event: TouchEvent, targetColumn?: PrintRequestStatus) {
-    if (!isDragging || !draggedJobId) {
-      resetDragState();
-      return;
-    }
-
-    event.preventDefault();
-
-    // Use dragOverColumn which is tracked during touch move
-    const finalColumn = dragOverColumn || targetColumn;
-
-    if (finalColumn && draggedJobId && draggedFromColumn !== finalColumn) {
-      const jobId = draggedJobId;
-      const destinationColumn = finalColumn;
-
-      resetDragState();
-
-      try {
-        // Confirm movement to Done column
-        if (destinationColumn === 'done') {
-          const confirmed = await modalManager.showDialog({
-            title: 'Mark as Done',
-            prompt: 'Are you sure this print request is complete and ready for pickup?',
-            confirmText: 'Mark as Done',
-            confirmColor: 'success',
-            icon: mdiPackageVariantClosed,
-          });
-
-          if (!confirmed) {
-            return;
-          }
-        }
-
-        await updatePrintRequestStatus({ id: jobId, status: destinationColumn }).updates(
-          getPrintRequests().withOverride((current) =>
-            optimisticUpdate(current, jobId, destinationColumn),
-          ),
-        );
-      } catch (error) {
-        toastManager.danger('Failed to update print request status.');
-      }
-    } else {
-      resetDragState();
-    }
-  }
-
-  async function markPickedUp(jobId: string) {
-    // Find the job and check payment status
-    const job = prints.find((p) => p.id === jobId);
-    if (!job) return;
-
-    // Check if payment is paid
-    if (job.payment && job.payment.status !== 'paid') {
-      await modalManager.showDialog({
-        title: 'Payment Required',
-        prompt:
-          'This print request cannot be marked as picked up because the payment has not been completed. Please ensure the payment is marked as paid before marking as picked up.',
-        confirmText: 'OK',
-        confirmColor: 'primary',
-        icon: mdiPackageVariantClosed,
-      });
-      return;
-    }
-
-    try {
-      await updatePrintRequestStatus({ id: jobId, status: 'picked_up' }).updates(
-        getPrintRequests().withOverride((current) => optimisticUpdate(current, jobId, 'picked_up')),
-      );
-    } catch (error) {
-      toastManager.danger('Failed to mark print request as picked up.');
-    }
-  }
-
-  async function sendPickupEmail(jobId: string) {
-    try {
-      await sendPickupNotification(jobId);
-      toastManager.success('Pickup notification sent successfully.');
-    } catch (error) {
-      toastManager.danger('Failed to send pickup notification.');
-    }
-  }
-
-  const doneContextItems = (jobId: string): MenuItems => [
-    {
-      title: 'Send Pickup Reminder',
-      icon: mdiEmailOutline,
-      onAction: () => sendPickupEmail(jobId),
-    },
-    {
-      title: 'Mark as Picked Up',
-      icon: mdiPackageVariantClosed,
-      onAction: () => markPickedUp(jobId),
-    },
-  ];
 </script>
 
+{#snippet pickupMenu(job: (typeof prints)[number])}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="-my-1 -mr-1"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+  >
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger>
+        {#snippet child({ props })}
+          <IconButton
+            {...props}
+            icon={EllipsisVerticalIcon}
+            size="icon"
+            aria-label="Request options"
+            tooltip={false}
+          />
+        {/snippet}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content align="end" class="w-56">
+        <DropdownMenu.Item onSelect={() => sendPickupEmail(job.id)}>
+          <MailIcon />
+          Send Pickup Reminder
+        </DropdownMenu.Item>
+        <DropdownMenu.Item onSelect={() => changeStatus(job, STATUS.PICKED_UP)}>
+          <PackageCheckIcon />
+          Mark as Picked Up
+        </DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Root>
+  </div>
+{/snippet}
+
 {#if printRequests.loading && !printRequests.current}
-  <div class="flex w-full flex-col items-center justify-center">
-    <LoadingSpinner size="large" />
+  <div class="flex justify-center py-8">
+    <Spinner class="size-6" />
   </div>
 {:else if printRequests.error}
-  <p class="text-danger">Error loading print requests: {printRequests.error.message}</p>
+  <p class="text-sm text-destructive">
+    Error loading print requests: {printRequests.error.message}
+  </p>
 {:else}
   <div
-    class="-mx-4 flex h-full gap-6 overflow-x-auto overscroll-x-contain px-4"
+    class="-m-1 flex flex-col gap-4 p-1 pb-3 md:flex-row md:items-start md:overflow-x-auto"
     bind:this={scrollContainer}
-    style="touch-action: {isDragging ? 'none' : 'pan-x pan-y'};"
   >
-    {#each columns as column}
+    {#each columns as column (column.id)}
+      {@const columnPrints = getColumnData(column.id)}
       <div
-        class="my-1 flex min-w-75 flex-1 flex-col rounded-lg p-4 {column.columnClass} {dragOverColumn ===
-        column.id
-          ? column.hoverClass
-          : ''}"
+        class={cn(
+          'flex w-full shrink-0 flex-col rounded-xl border p-3 md:w-96 xl:w-auto xl:min-w-80 xl:flex-1 xl:shrink',
+          column.style.column,
+          drag.overColumn === column.id && drag.draggedId && 'ring-2 ring-primary',
+        )}
         data-column-id={column.id}
+        ondragover={(e) => drag.dragOver(e, column.id)}
+        ondragleave={(e) => drag.dragLeave(e)}
+        ondrop={(e) => drag.drop(e, column.id)}
+        role="region"
+        aria-label={column.title}
       >
-        <Heading
-          size="small"
-          class="mb-2 inline-block w-fit rounded-xl p-2 px-4 {column.titleClass}"
-        >
-          {column.title}
-        </Heading>
-        <div
-          class="flex min-h-25 flex-1 flex-col gap-4 overflow-y-auto pt-2"
-          ondragover={(e) => handleDragOverContainer(e, column.id)}
-          ondragleave={handleDragLeave}
-          ondrop={(e) => handleDrop(e, column.id)}
-          role="region"
-        >
-          {#each prints.filter((p) => p.status === column.id) as job, index}
+        <div class="flex items-center gap-2.5 px-1 pb-3">
+          <span class={cn('size-2.5 shrink-0 rounded-full', column.style.dot)}></span>
+          <h2 class="truncate text-base font-semibold">{column.title}</h2>
+          <span
+            class="ml-auto rounded-full bg-background/60 px-2 py-0.5 text-sm text-muted-foreground tabular-nums"
+          >
+            {columnPrints.length}
+          </span>
+        </div>
+        <div class="-m-1 flex min-h-20 flex-col gap-2.5 p-1">
+          {#each columnPrints as job (job.id)}
             <div
-              class="{column.cardClass} w-full {job.status === 'done'
-                ? 'cursor-pointer'
-                : 'cursor-grab'} rounded-md border-2 p-4 text-left transition-all duration-200 hover:border-blue-500 {job.status !==
-              'done'
-                ? 'active:cursor-grabbing'
-                : ''}"
-              style="touch-action: {job.status !== 'done' ? 'none' : 'auto'};"
-              draggable={job.status !== 'done'}
-              ondragstart={(e) => job.status !== 'done' && handleDragStart(e, job.id, column.id)}
-              ondrag={handleDrag}
-              ondragover={(e) => handleDragOverCard(e, column.id, index)}
-              ondragend={resetDragState}
-              ontouchstart={(e) => job.status !== 'done' && handleTouchStart(e, job.id, column.id)}
-              ontouchmove={handleTouchMove}
-              ontouchend={(e) => handleTouchEnd(e, column.id)}
-              onclick={() => handleCardClick(job.id)}
-              onkeydown={(e) => e.key === 'Enter' && handleCardClick(job.id)}
+              class={cn(
+                'w-full rounded-lg border p-3.5 text-left text-base shadow-xs transition-colors select-none [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                column.style.card,
+                canDrag(job) && hasMouse.current && 'cursor-grab active:cursor-grabbing',
+                !canDrag(job) && 'cursor-pointer',
+              )}
+              draggable={canDrag(job) && hasMouse.current}
+              ondragstart={(e) => drag.dragStart(e, job.id, column.id)}
+              ondrag={(e) => drag.drag(e)}
+              ondragend={() => drag.dragEnd()}
+              {@attach canDrag(job) && !hasMouse.current ? drag.touch(job.id, column.id) : null}
+              onclick={() => openRequest(job.id)}
+              onkeydown={(e) => e.key === 'Enter' && openRequest(job.id)}
               role="button"
               tabindex="0"
-              data-card-index={index}
             >
-              <div class="flex items-start justify-between">
-                <div class="flex-1">
-                  <h3 class="mb-2 text-lg font-semibold">{job.projectName}</h3>
-                  <p class="mb-1 text-sm">{job.customerName}</p>
-                  <p class="text-xs">{formatDate(job.submissionDate)}</p>
+              <div class="flex items-start gap-2">
+                <div class="flex min-w-0 flex-1 flex-col gap-1">
+                  <h3 class="truncate font-medium">{job.projectName}</h3>
+                  <p class="truncate text-sm text-muted-foreground">
+                    {job.customerName} · {formatDate(job.submissionDate)}
+                  </p>
                   {#if job.payment}
-                    <div class="mt-2">
-                      {#if job.payment.status === 'pending'}
-                        <Badge color="info" size="small">Pending Payment</Badge>
-                      {:else if job.payment.status === 'paid'}
-                        <Badge color="success" size="small">Paid</Badge>
-                      {/if}
-                    </div>
+                    <StatusIndicator
+                      display={PAYMENT_STATUS_DISPLAY[job.payment.status]}
+                      class="mt-1.5 self-start"
+                    />
                   {/if}
                 </div>
-                {#if job.status === 'done'}
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  <!-- svelte-ignore a11y_click_events_have_key_events -->
-                  <div class="flex gap-2" onclick={(e) => e.stopPropagation()}>
-                    <ContextMenuButton position="top-right" items={doneContextItems(job.id)} />
-                  </div>
+                {#if job.status === STATUS.DONE}
+                  {@render pickupMenu(job)}
                 {/if}
               </div>
             </div>
+          {:else}
+            <p class="px-1 py-6 text-center text-sm text-muted-foreground">No requests</p>
           {/each}
         </div>
       </div>

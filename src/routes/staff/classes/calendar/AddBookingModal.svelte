@@ -1,18 +1,12 @@
 <script lang="ts">
+  import FormField from '$lib/frontend/components/form/FormField.svelte';
   import NumberStepper from '$lib/frontend/components/form/NumberStepper.svelte';
+  import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import ModalForm from '$lib/frontend/components/ModalForm.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
-  import {
-    Button,
-    Field,
-    HStack,
-    Input,
-    Modal,
-    ModalBody,
-    Stack,
-    Text,
-    toastManager,
-  } from '@immich/ui';
-  import { mdiAccountPlus, mdiCheck } from '@mdi/js';
+  import { submitWithToast } from '$lib/frontend/form-submit';
+  import CheckIcon from '@lucide/svelte/icons/check';
+  import UserPlusIcon from '@lucide/svelte/icons/user-plus';
 
   interface Props extends ModalProps {
     instanceId: string;
@@ -34,68 +28,70 @@
       customerPhone.trim().length > 0,
   );
 
-  async function handleSubmit(e: Event) {
-    e.preventDefault();
+  async function handleSubmit() {
     if (!isValid || submitting) return;
 
     submitting = true;
-    try {
-      const { manualBookClass } = await import('$lib/remotes/endpoints/class.remote');
-      await manualBookClass({
-        instanceId,
-        customerName: customerName.trim(),
-        customerEmail: customerEmail.trim(),
-        customerPhone: customerPhone.trim(),
-        quantity,
-      });
-      toastManager.success('Booking added');
+    const ok = await submitWithToast(
+      async () => {
+        const { manualBookClass } = await import('$lib/remotes/endpoints/class.remote');
+        await manualBookClass({
+          instanceId,
+          customerName: customerName.trim(),
+          customerEmail: customerEmail.trim(),
+          customerPhone: customerPhone.trim(),
+          quantity,
+        });
+      },
+      { success: 'Booking added', error: 'Failed to add booking' },
+    );
+    submitting = false;
+
+    if (ok) {
       onBookingCreated();
       onClose();
-    } catch (error: any) {
-      toastManager.danger(error?.message ?? 'Failed to add booking');
-    } finally {
-      submitting = false;
     }
   }
 </script>
 
-<Modal title="Add Booking" icon={mdiAccountPlus} {onClose}>
-  <ModalBody>
-    <form onsubmit={handleSubmit}>
-      <Stack gap={4}>
-        <Field label="Full Name" required="indicator">
-          <Input bind:value={customerName} placeholder="John Doe" />
-        </Field>
+<ModalForm
+  title="Add Booking"
+  icon={UserPlusIcon}
+  {onClose}
+  submitLabel="Add Booking"
+  submitIcon={CheckIcon}
+  canSubmit={isValid}
+  {submitting}
+  onSubmit={handleSubmit}
+>
+  <FormField label="Full Name" for="booking-name" required>
+    <TextInput id="booking-name" bind:value={customerName} placeholder="John Doe" />
+  </FormField>
 
-        <Field label="Email" required="indicator">
-          <Input bind:value={customerEmail} type="email" placeholder="john@example.com" />
-        </Field>
+  <FormField label="Email" for="booking-email" required>
+    <TextInput
+      id="booking-email"
+      bind:value={customerEmail}
+      type="email"
+      placeholder="john@example.com"
+    />
+  </FormField>
 
-        <Field label="Phone Number" required="indicator">
-          <Input bind:value={customerPhone} type="tel" placeholder="(555) 123-4567" />
-        </Field>
+  <FormField label="Phone Number" for="booking-phone" required>
+    <TextInput
+      id="booking-phone"
+      bind:value={customerPhone}
+      type="tel"
+      placeholder="(555) 123-4567"
+    />
+  </FormField>
 
-        <div class="flex items-center justify-between">
-          <Text>Attendees</Text>
-          <NumberStepper bind:value={quantity} min={1} max={availableSpots} />
-        </div>
+  <div class="flex items-center justify-between gap-3">
+    <span class="text-sm font-medium">Attendees</span>
+    <NumberStepper bind:value={quantity} min={1} max={availableSpots} />
+  </div>
 
-        <Text size="small" color="muted" class="mt-2">
-          No payment will be collected. Cancelling this booking will not issue a refund.
-        </Text>
-
-        <HStack class="justify-end">
-          <Button
-            type="submit"
-            color="success"
-            leadingIcon={mdiCheck}
-            loading={submitting}
-            disabled={submitting || !isValid}
-          >
-            Add Booking
-          </Button>
-        </HStack>
-      </Stack>
-    </form>
-  </ModalBody>
-</Modal>
+  <p class="text-xs text-muted-foreground">
+    No payment will be collected. Cancelling this booking will not issue a refund.
+  </p>
+</ModalForm>

@@ -2,7 +2,7 @@ import type { SubmitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { fileUrl, saveFile } from '$lib/server/utils/storage';
-import { asc, count, eq, ilike, or } from 'drizzle-orm';
+import { asc, count, desc, eq, ilike, or } from 'drizzle-orm';
 
 export class WaiverRepository extends BaseRepository {
   async submit(dto: SubmitWaiverDto, signatureFile: File) {
@@ -46,7 +46,7 @@ export class WaiverRepository extends BaseRepository {
       .select()
       .from(schema.waiver)
       .where(whereClause)
-      .orderBy(asc(schema.waiver.name))
+      .orderBy(desc(schema.waiver.signedDate), asc(schema.waiver.name))
       .limit(dto.pageSize)
       .offset((dto.page - 1) * dto.pageSize)
       .execute();

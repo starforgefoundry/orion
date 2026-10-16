@@ -1,28 +1,27 @@
 <script lang="ts">
-  import { CardBody, CardHeader, CardTitle, Icon, Text } from '@immich/ui';
-  import { mdiCheckCircle, mdiReceipt } from '@mdi/js';
+  import * as Card from '$lib/components/ui/card';
+  import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
+  import ReceiptIcon from '@lucide/svelte/icons/receipt';
 </script>
 
-<CardHeader>
-  <div class="flex items-center justify-start gap-2">
-    <Icon icon={mdiReceipt} size="1.5rem" aria-hidden />
-    <CardTitle>3D Print Request Quote</CardTitle>
-  </div>
-</CardHeader>
-<CardBody>
-  <div class="flex flex-col items-center justify-center text-center">
-    <Icon icon={mdiCheckCircle} class="h-16 w-16 align-middle text-success" />
-    <h1 class="mb-6 text-3xl font-bold">Quote Approved</h1>
-
-    <Text class="mb-6">
+<Card.Header>
+  <Card.Title class="flex items-center gap-2">
+    <ReceiptIcon class="size-4 text-muted-foreground" aria-hidden="true" />
+    3D Print Request Quote
+  </Card.Title>
+</Card.Header>
+<Card.Content>
+  <div class="flex flex-col items-center gap-2 py-4 text-center">
+    <CircleCheckIcon class="size-12 text-success" />
+    <h1 class="text-xl font-semibold">Quote Approved</h1>
+    <p class="text-muted-foreground">
       You will receive an email confirmation shortly with a payment link to complete your order.
-    </Text>
-
-    <Text>
+    </p>
+    <p class="text-muted-foreground">
       If you have any questions or need further assistance, please contact us at
-      <a href="mailto:3dprint@starforgefoundry.com" class="text-primary">
+      <a href="mailto:3dprint@starforgefoundry.com" class="text-primary hover:underline">
         3dprint@starforgefoundry.com</a
       >
-    </Text>
+    </p>
   </div>
-</CardBody>
+</Card.Content>

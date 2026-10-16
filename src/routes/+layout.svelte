@@ -1,21 +1,29 @@
 <script lang="ts">
+  import { Toaster } from '$lib/components/ui/sonner';
+  import * as Tooltip from '$lib/components/ui/tooltip';
   import favicon from '$lib/assets/logo.png';
-  import { toastManager, TooltipProvider } from '@immich/ui';
-  import { onMount } from 'svelte';
+  import ModalHost from '$lib/frontend/components/ModalHost.svelte';
+  import { ModeWatcher } from 'mode-watcher';
   import '../app.css';
 
-  let { children } = $props();
+  const TOOLTIP_DELAY_MS = 400;
 
-  onMount(() => {
-    // open modals set pointer-events: none on body, which would make toasts unclickable
-    toastManager.setOptions({ class: 'fixed pointer-events-auto' });
-  });
+  let { children } = $props();
 </script>
 
 <svelte:head>
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-<TooltipProvider>
+<ModeWatcher defaultMode="dark" />
+<Toaster richColors position="top-center" />
+
+<Tooltip.Provider
+  delayDuration={TOOLTIP_DELAY_MS}
+  skipDelayDuration={0}
+  disableHoverableContent
+  ignoreNonKeyboardFocus
+>
   {@render children()}
-</TooltipProvider>
+  <ModalHost />
+</Tooltip.Provider>

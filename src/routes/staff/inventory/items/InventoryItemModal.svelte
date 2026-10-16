@@ -1,10 +1,12 @@
 <script lang="ts">
+  import ModalForm from '$lib/frontend/components/ModalForm.svelte';
+  import FormField from '$lib/frontend/components/form/FormField.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { initForm } from '$lib/frontend/components/form/utils.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
+  import { enhanceWithToast } from '$lib/frontend/form-submit';
   import { upsertInventoryItem } from '$lib/remotes/endpoints/inventory.remote';
-  import { Button, Field, Modal, ModalBody, Stack } from '@immich/ui';
-  import { mdiPackageVariant } from '@mdi/js';
+  import PackageIcon from '@lucide/svelte/icons/package';
 
   interface Props extends ModalProps {
     itemId?: string;
@@ -27,42 +29,36 @@
   }));
 </script>
 
-<Modal
+<ModalForm
   title={prefill ? 'Edit Inventory Item' : 'Create Inventory Item'}
-  icon={mdiPackageVariant}
+  icon={PackageIcon}
   {onClose}
+  submitLabel={prefill ? 'Update Item' : 'Create Item'}
+  submitting={upsertInventoryItem.pending > 0}
+  form={enhanceWithToast(
+    upsertInventoryItem,
+    { success: 'Inventory item saved', error: 'Failed to save inventory item' },
+    onClose,
+  )}
 >
-  <ModalBody>
-    <form {...upsertInventoryItem} onsubmit={() => onClose()}>
-      <input {...upsertInventoryItem.fields.id.as('text')} value={itemId} hidden />
+  <input {...upsertInventoryItem.fields.id.as('text')} value={itemId} hidden />
 
-      <Stack gap={4}>
-        <Field label="Name" required="indicator">
-          <TextInput
-            {...upsertInventoryItem.fields.name.as('text')}
-            placeholder="e.g., Filament Spool"
-          />
-        </Field>
+  <FormField label="Name" required>
+    <TextInput {...upsertInventoryItem.fields.name.as('text')} placeholder="e.g., Filament Spool" />
+  </FormField>
 
-        <Field label="Vendor" required="indicator">
-          <TextInput {...upsertInventoryItem.fields.vendor.as('text')} placeholder="e.g., Amazon" />
-        </Field>
+  <FormField label="Vendor" required>
+    <TextInput {...upsertInventoryItem.fields.vendor.as('text')} placeholder="e.g., Amazon" />
+  </FormField>
 
-        <Field label="URL" required="indicator">
-          <TextInput {...upsertInventoryItem.fields.url.as('url')} placeholder="https://..." />
-        </Field>
+  <FormField label="URL" required>
+    <TextInput {...upsertInventoryItem.fields.url.as('url')} placeholder="https://..." />
+  </FormField>
 
-        <Field label="Description" required="indicator">
-          <TextInput
-            {...upsertInventoryItem.fields.description.as('text')}
-            placeholder="Item description"
-          />
-        </Field>
-
-        <Button type="submit" variant="filled" fullWidth
-          >{prefill ? 'Update Item' : 'Create Item'}</Button
-        >
-      </Stack>
-    </form>
-  </ModalBody>
-</Modal>
+  <FormField label="Description" required>
+    <TextInput
+      {...upsertInventoryItem.fields.description.as('text')}
+      placeholder="Item description"
+    />
+  </FormField>
+</ModalForm>

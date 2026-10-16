@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { Button } from '$lib/components/ui/button';
+  import { Checkbox } from '$lib/components/ui/checkbox';
+  import { Label } from '$lib/components/ui/label';
+  import Modal from '$lib/frontend/components/Modal.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
-  import { Button, Modal, ModalBody, Stack, Text } from '@immich/ui';
-  import { mdiCancel } from '@mdi/js';
+  import BanIcon from '@lucide/svelte/icons/ban';
 
   interface Props extends ModalProps {
     hasRecurrenceGroup: boolean;
@@ -18,24 +21,22 @@
   }
 </script>
 
-<Modal title="Cancel Class" icon={mdiCancel} {onClose} size="small">
-  <ModalBody>
-    <Stack gap={4}>
-      <Text>Cancel this class? All bookings will be refunded.</Text>
+<Modal title="Cancel Class" icon={BanIcon} {onClose} size="sm">
+  <div class="flex flex-col gap-3 text-sm">
+    <p>Cancel this class? All bookings will be refunded.</p>
 
-      {#if hasRecurrenceGroup}
-        <label class="flex cursor-pointer items-center gap-3">
-          <input type="checkbox" bind:checked={cancelFuture} class="h-4 w-4 rounded" />
-          <Text>Also cancel all future classes in this series</Text>
-        </label>
-      {/if}
+    {#if hasRecurrenceGroup}
+      <Label class="flex cursor-pointer items-center gap-2 font-normal">
+        <Checkbox bind:checked={cancelFuture} />
+        Also cancel all future classes in this series
+      </Label>
+    {/if}
+  </div>
 
-      <div class="flex gap-2">
-        <Button variant="outline" onclick={onClose} fullWidth>Go Back</Button>
-        <Button color="danger" onclick={handleConfirm} fullWidth>
-          {cancelFuture ? 'Cancel All Future' : 'Cancel Class'}
-        </Button>
-      </div>
-    </Stack>
-  </ModalBody>
+  {#snippet footer()}
+    <Button variant="outline" onclick={() => onClose()}>Go Back</Button>
+    <Button variant="destructive" onclick={handleConfirm}>
+      {cancelFuture ? 'Cancel All Future' : 'Cancel Class'}
+    </Button>
+  {/snippet}
 </Modal>

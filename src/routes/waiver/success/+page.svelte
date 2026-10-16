@@ -1,28 +1,25 @@
 <script lang="ts">
-  import { Button, Icon, Text } from '@immich/ui';
-  import { mdiCheckCircle } from '@mdi/js';
+  import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
 </script>
 
 <svelte:head>
   <title>Waiver Signed</title>
 </svelte:head>
 
-<div class="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-4 text-center">
-  <Icon icon={mdiCheckCircle} class="h-16 w-16 text-success" />
-  <h1 class="text-3xl font-bold">Waiver Signed Successfully</h1>
+<div
+  class="mx-auto flex min-h-[60vh] w-full max-w-lg flex-col items-center justify-center gap-3 px-4 py-8 text-center text-sm"
+>
+  <CircleCheckIcon class="size-12 text-success" />
+  <h1 class="text-xl font-semibold">Waiver Signed Successfully</h1>
 
-  <Text>
+  <p class="text-muted-foreground">
     Thank you for signing the Starforge waiver. You are now cleared to use our facilities.
-  </Text>
+  </p>
 
-  <Text>
+  <p class="text-muted-foreground">
     If you have any questions, please contact us at
-    <a href="mailto:contact@starforgefoundry.com" class="text-primary"
+    <a href="mailto:contact@starforgefoundry.com" class="text-primary hover:underline"
       >contact@starforgefoundry.com</a
     >.
-  </Text>
-
-  <Button onclick={() => (window.location.href = '/waiver')} class="mt-4">
-    Sign Another Waiver
-  </Button>
+  </p>
 </div>

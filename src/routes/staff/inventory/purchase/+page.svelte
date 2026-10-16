@@ -1,23 +1,17 @@
 <script lang="ts">
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import * as Table from '$lib/components/ui/table';
+  import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import PageHeader from '$lib/frontend/components/PageHeader.svelte';
+  import Section from '$lib/frontend/components/Section.svelte';
   import { getPurchaseList, removeFromPurchaseList } from '$lib/remotes/endpoints/inventory.remote';
-  import {
-    Button,
-    Heading,
-    IconButton,
-    LoadingSpinner,
-    Table,
-    TableBody,
-    TableCell,
-    TableHeader,
-    TableHeading,
-    TableRow,
-    toastManager,
-  } from '@immich/ui';
-  import { mdiCheck, mdiOpenInNew } from '@mdi/js';
+  import CheckIcon from '@lucide/svelte/icons/check';
+  import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
+  import { toast } from 'svelte-sonner';
 
   let purchaseList = getPurchaseList();
 
-  // Group items by vendor
   let groupedByVendor = $derived.by(() => {
     const groups = new Map<string, typeof purchaseList.current>();
 
@@ -36,7 +30,7 @@
 
   async function handleRemoveFromList(inventoryItemId: string) {
     await removeFromPurchaseList({ inventoryItemId });
-    toastManager.success('Item marked as purchased.');
+    toast.success('Item marked as purchased.');
   }
 
   function openUrl(url: string) {
@@ -44,71 +38,24 @@
   }
 </script>
 
-<div class="mb-6">
-  <Heading size="large" class="inline-block w-fit">Purchase List</Heading>
-</div>
+<PageHeader title="Purchase List" />
 
 {#if purchaseList.loading}
-  <div class="flex justify-center">
-    <LoadingSpinner size="large" />
+  <div class="flex justify-center py-8">
+    <Spinner class="size-6" />
   </div>
 {:else if purchaseList.error}
-  <p class="text-danger">Error loading purchase list: {purchaseList.error.message}</p>
+  <p class="text-sm text-destructive">Error loading purchase list: {purchaseList.error.message}</p>
 {:else if groupedByVendor.size === 0}
-  <p class="text-center text-gray-500">No items need purchasing.</p>
+  <p class="py-8 text-center text-sm text-muted-foreground">No items need purchasing.</p>
 {:else}
-  <div class="flex flex-col gap-6">
-    {#each [...groupedByVendor.entries()] as [vendor, items]}
-      <div class="rounded-lg border border-gray-200 p-4">
-        <div class="mb-4 flex items-center justify-between">
-          <h3 class="text-lg font-bold">{vendor}</h3>
-        </div>
-
-        <Table striped class="mt-4">
-          <TableHeader>
-            <TableHeading class="w-4/12">Item</TableHeading>
-            <TableHeading class="w-5/12">Description</TableHeading>
-            <TableHeading class="w-2/12">Added</TableHeading>
-            <TableHeading class="w-1/12">Actions</TableHeading>
-          </TableHeader>
-          <TableBody>
-            {#each items as item}
-              {#if item.inventoryItem}
-                <TableRow>
-                  <TableCell class="w-4/12 px-4 text-left">
-                    <button
-                      class="text-primary hover:underline"
-                      onclick={() => openUrl(item.inventoryItem!.url)}
-                    >
-                      {item.inventoryItem.name}
-                    </button>
-                  </TableCell>
-                  <TableCell class="w-5/12 truncate px-4 text-left">
-                    {item.inventoryItem.description}
-                  </TableCell>
-                  <TableCell class="w-2/12 px-4 text-left">
-                    {item.addedDate ? new Date(item.addedDate).toLocaleDateString() : 'N/A'}
-                  </TableCell>
-                  <TableCell class="w-1/12">
-                    <div class="flex justify-center">
-                      <IconButton
-                        icon={mdiCheck}
-                        aria-label="Mark as Purchased"
-                        color="success"
-                        onclick={() => handleRemoveFromList(item.inventoryItemId)}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              {/if}
-            {/each}
-          </TableBody>
-        </Table>
-
-        <div class="mt-4 flex justify-end">
+  <div class="flex flex-col gap-4">
+    {#each [...groupedByVendor.entries()] as [vendor, items] (vendor)}
+      <Section title={vendor} class="overflow-hidden [&>div]:p-0">
+        {#snippet actions()}
           <Button
-            variant="filled"
-            leadingIcon={mdiOpenInNew}
+            variant="ghost"
+            size="sm"
             onclick={() => {
               items?.forEach((item) => {
                 if (item.inventoryItem?.url) {
@@ -117,10 +64,54 @@
               });
             }}
           >
-            Open All Items in Browser
+            <ExternalLinkIcon />
+            Open All
           </Button>
-        </div>
-      </div>
+        {/snippet}
+        <Table.Root>
+          <Table.Header class="bg-muted/50">
+            <Table.Row>
+              <Table.Head>Item</Table.Head>
+              <Table.Head class="hidden md:table-cell">Description</Table.Head>
+              <Table.Head class="hidden sm:table-cell">Added</Table.Head>
+              <Table.Head class="w-12"><span class="sr-only">Actions</span></Table.Head>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            {#each items ?? [] as item (item.inventoryItemId)}
+              {#if item.inventoryItem}
+                <Table.Row>
+                  <Table.Cell class="max-w-48">
+                    <button
+                      class="block max-w-full truncate text-left font-medium text-primary hover:underline"
+                      onclick={() => openUrl(item.inventoryItem!.url)}
+                    >
+                      {item.inventoryItem.name}
+                    </button>
+                    <div class="truncate text-xs text-muted-foreground md:hidden">
+                      {item.inventoryItem.description}
+                    </div>
+                  </Table.Cell>
+                  <Table.Cell class="hidden max-w-64 truncate md:table-cell">
+                    {item.inventoryItem.description}
+                  </Table.Cell>
+                  <Table.Cell class="hidden sm:table-cell">
+                    {item.addedDate ? new Date(item.addedDate).toLocaleDateString() : 'N/A'}
+                  </Table.Cell>
+                  <Table.Cell class="text-right">
+                    <IconButton
+                      icon={CheckIcon}
+                      aria-label="Mark as Purchased"
+                      class="text-success"
+                      onclick={() => handleRemoveFromList(item.inventoryItemId)}
+                    />
+                  </Table.Cell>
+                </Table.Row>
+              {/if}
+            {/each}
+          </Table.Body>
+        </Table.Root>
+      </Section>
     {/each}
   </div>
 {/if}

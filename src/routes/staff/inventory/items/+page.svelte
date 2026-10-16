@@ -1,34 +1,26 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { Button } from '$lib/components/ui/button';
+  import { Checkbox } from '$lib/components/ui/checkbox';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import * as Table from '$lib/components/ui/table';
+  import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import PageHeader from '$lib/frontend/components/PageHeader.svelte';
+  import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import type { InventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
   import {
     addToPurchaseList,
     deleteInventoryItem,
     getInventoryItems,
   } from '$lib/remotes/endpoints/inventory.remote';
-  import {
-    Checkbox,
-    Heading,
-    IconButton,
-    Input,
-    LoadingSpinner,
-    modalManager,
-    Table,
-    TableBody,
-    TableCell,
-    TableHeader,
-    TableHeading,
-    TableRow,
-    toastManager,
-  } from '@immich/ui';
-  import {
-    mdiChatQuestion,
-    mdiMagnify,
-    mdiPencil,
-    mdiPlus,
-    mdiPrinter,
-    mdiTrashCan,
-  } from '@mdi/js';
+  import PencilIcon from '@lucide/svelte/icons/pencil';
+  import PlusIcon from '@lucide/svelte/icons/plus';
+  import PrinterIcon from '@lucide/svelte/icons/printer';
+  import SearchIcon from '@lucide/svelte/icons/search';
+  import ShoppingCartPlusIcon from '@lucide/svelte/icons/shopping-cart-plus';
+  import TrashIcon from '@lucide/svelte/icons/trash';
+  import { toast } from 'svelte-sonner';
   import InventoryItemModal from './InventoryItemModal.svelte';
 
   let inventoryItems = getInventoryItems();
@@ -51,18 +43,16 @@
   }
 
   function showEditModal(item: InventoryItemDto) {
-    // @ts-ignore - modalManager type doesn't support our CreateOrUpdate pattern
     modalManager.show(InventoryItemModal, { itemId: item.id, prefill: item });
   }
 
   async function handleDeleteItem(id: string) {
-    const confirm = await modalManager.showDialog({
+    const confirm = await modalManager.confirm({
       title: 'Delete Inventory Item',
       prompt:
         'Are you sure you want to delete this item? It will also be removed from the purchase list.',
       confirmText: 'Delete',
-      confirmColor: 'danger',
-      icon: mdiChatQuestion,
+      variant: 'destructive',
     });
 
     if (confirm) {
@@ -92,7 +82,6 @@
       }
       selectedItems = newSelected;
     } else {
-      // Normal click
       const newSelected = new Set(selectedItems);
       if (isChecked) {
         newSelected.add(id);
@@ -107,7 +96,6 @@
   async function handlePrintLabels() {
     if (selectedItems.size === 0) return;
 
-    // Get the selected inventory items
     const itemsToPrint = searchedItems.filter((item) => selectedItems.has(item.id));
 
     goto('/staff/inventory/labels?items=' + encodeURIComponent(JSON.stringify(itemsToPrint)));
@@ -116,88 +104,97 @@
   async function handleAddToPurchaseList(item: InventoryItemDto) {
     await addToPurchaseList({ inventoryItemId: item.id });
 
-    toastManager.success(`Added "${item.name}" to purchase list.`);
+    toast.success(`Added "${item.name}" to purchase list.`);
   }
 </script>
 
-<div class="mb-6 flex items-center justify-between">
-  <Heading size="large" class="inline-block w-fit">Inventory Items</Heading>
-  <div class="flex w-1/2 items-center gap-2">
-    <IconButton
-      class="min-w-10"
-      icon={mdiPrinter}
-      color="success"
-      aria-label="Print Labels"
-      disabled={selectedCount === 0}
-      onclick={handlePrintLabels}
-    />
-    <IconButton
-      icon={mdiPlus}
-      variant="filled"
-      aria-label="Add Inventory Item"
-      class="min-w-10"
-      onclick={showCreateModal}
-    />
-    <Input placeholder="Search Items" leadingIcon={mdiMagnify} bind:value={searchTerm} />
-  </div>
-</div>
+<PageHeader title="Inventory Items">
+  {#snippet actions()}
+    <Button variant="outline" size="sm" disabled={selectedCount === 0} onclick={handlePrintLabels}>
+      <PrinterIcon />
+      Print Labels{selectedCount > 0 ? ` (${selectedCount})` : ''}
+    </Button>
+    <Button size="sm" onclick={showCreateModal}>
+      <PlusIcon />
+      Add Item
+    </Button>
+  {/snippet}
+</PageHeader>
+
+<TextInput
+  icon={SearchIcon}
+  placeholder="Search Items"
+  class="mb-3 sm:max-w-xs"
+  bind:value={searchTerm}
+/>
 
 {#if inventoryItems.loading}
-  <div class="flex justify-center">
-    <LoadingSpinner size="large" />
+  <div class="flex justify-center py-8">
+    <Spinner class="size-6" />
   </div>
 {:else if inventoryItems.error}
-  <p class="text-danger">Error loading inventory items: {inventoryItems.error.message}</p>
+  <p class="text-sm text-destructive">
+    Error loading inventory items: {inventoryItems.error.message}
+  </p>
 {:else}
-  <Table striped class="mt-4">
-    <TableHeader>
-      <TableHeading class="w-1/12"></TableHeading>
-      <TableHeading class="w-3/12">Name</TableHeading>
-      <TableHeading class="w-2/12">Vendor</TableHeading>
-      <TableHeading class="w-4/12">Description</TableHeading>
-      <TableHeading class="w-2/12">Actions</TableHeading>
-    </TableHeader>
-    <TableBody>
-      {#each searchedItems as item, index}
-        <TableRow>
-          <TableCell class="w-1/12">
-            <Checkbox
-              checked={selectedItems.has(item.id)}
-              onCheckedChange={(newValue) => handleCheckboxChange(item.id, index, newValue)}
-            />
-          </TableCell>
-          <TableCell class="w-3/12 px-4 text-left">{item.name}</TableCell>
-          <TableCell class="w-2/12 px-4 text-left">{item.vendor}</TableCell>
-          <TableCell class="w-4/12 truncate px-4 text-left">{item.description}</TableCell>
-          <TableCell class="w-2/12">
-            <div class="flex justify-center gap-2">
-              <IconButton
-                icon={mdiPlus}
-                color="success"
-                aria-label="Add Item to Purchase List"
-                onclick={() => handleAddToPurchaseList(item)}
+  <div class="overflow-hidden rounded-lg border">
+    <Table.Root>
+      <Table.Header class="bg-muted/50">
+        <Table.Row>
+          <Table.Head class="w-8"><span class="sr-only">Select</span></Table.Head>
+          <Table.Head>Name</Table.Head>
+          <Table.Head class="hidden md:table-cell">Vendor</Table.Head>
+          <Table.Head class="hidden lg:table-cell">Description</Table.Head>
+          <Table.Head class="w-28"><span class="sr-only">Actions</span></Table.Head>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
+        {#each searchedItems as item, index (item.id)}
+          <Table.Row data-state={selectedItems.has(item.id) ? 'selected' : undefined}>
+            <Table.Cell>
+              <Checkbox
+                aria-label="Select {item.name}"
+                checked={selectedItems.has(item.id)}
+                onCheckedChange={(newValue) => handleCheckboxChange(item.id, index, newValue)}
               />
-              <IconButton
-                icon={mdiPencil}
-                aria-label="Edit Item"
-                onclick={() => showEditModal(item)}
-              />
-              <IconButton
-                icon={mdiTrashCan}
-                aria-label="Delete Item"
-                color="danger"
-                onclick={() => handleDeleteItem(item.id)}
-              />
-            </div>
-          </TableCell>
-        </TableRow>
-      {/each}
-
-      {#if searchedItems.length === 0}
-        <TableRow>
-          <TableCell class="w-full text-center">No inventory items found.</TableCell>
-        </TableRow>
-      {/if}
-    </TableBody>
-  </Table>
+            </Table.Cell>
+            <Table.Cell class="max-w-48">
+              <div class="truncate font-medium">{item.name}</div>
+              <div class="truncate text-xs text-muted-foreground md:hidden">{item.vendor}</div>
+            </Table.Cell>
+            <Table.Cell class="hidden md:table-cell">{item.vendor}</Table.Cell>
+            <Table.Cell class="hidden max-w-80 truncate lg:table-cell"
+              >{item.description}</Table.Cell
+            >
+            <Table.Cell>
+              <div class="flex justify-end gap-0.5">
+                <IconButton
+                  icon={ShoppingCartPlusIcon}
+                  aria-label="Add Item to Purchase List"
+                  onclick={() => handleAddToPurchaseList(item)}
+                />
+                <IconButton
+                  icon={PencilIcon}
+                  aria-label="Edit Item"
+                  onclick={() => showEditModal(item)}
+                />
+                <IconButton
+                  icon={TrashIcon}
+                  aria-label="Delete Item"
+                  class="text-destructive hover:text-destructive"
+                  onclick={() => handleDeleteItem(item.id)}
+                />
+              </div>
+            </Table.Cell>
+          </Table.Row>
+        {:else}
+          <Table.Row>
+            <Table.Cell colspan={5} class="h-20 text-center text-muted-foreground">
+              No inventory items found.
+            </Table.Cell>
+          </Table.Row>
+        {/each}
+      </Table.Body>
+    </Table.Root>
+  </div>
 {/if}

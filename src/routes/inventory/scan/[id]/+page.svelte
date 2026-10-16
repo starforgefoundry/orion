@@ -1,8 +1,11 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import * as Card from '$lib/components/ui/card';
+  import { Spinner } from '$lib/components/ui/spinner';
   import { addToPurchaseList } from '$lib/remotes/endpoints/inventory.remote';
-  import { CardBody, CardHeader, CardTitle, Icon, LoadingSpinner, Text } from '@immich/ui';
-  import { mdiAlertCircle, mdiCheckCircle, mdiPackageVariant } from '@mdi/js';
+  import CircleAlertIcon from '@lucide/svelte/icons/circle-alert';
+  import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
+  import PackageIcon from '@lucide/svelte/icons/package';
   import { onMount } from 'svelte';
 
   let error = $state<string | null>(null);
@@ -20,30 +23,29 @@
   });
 </script>
 
-<CardHeader>
-  <div class="flex items-center justify-start gap-2">
-    <Icon icon={mdiPackageVariant} size="1.5rem" aria-hidden />
-    <CardTitle>Inventory Item Scanned</CardTitle>
-  </div>
-</CardHeader>
-<CardBody>
+<Card.Header>
+  <Card.Title class="flex items-center gap-2">
+    <PackageIcon class="size-4 text-muted-foreground" aria-hidden="true" />
+    Inventory Item Scanned
+  </Card.Title>
+</Card.Header>
+<Card.Content>
   {#if error}
-    <div class="flex flex-col items-center justify-center text-center">
-      <Icon icon={mdiAlertCircle} class="h-16 w-16 align-middle text-danger" />
-      <h1 class="mb-2 text-3xl font-bold">Error</h1>
-
-      <Text class="mb-6">{error}</Text>
-
-      <Text color="muted">If you believe this is an error, please ask a staff member.</Text>
+    <div class="flex flex-col items-center gap-2 py-4 text-center">
+      <CircleAlertIcon class="size-12 text-destructive" />
+      <h1 class="text-xl font-semibold">Error</h1>
+      <p>{error}</p>
+      <p class="text-muted-foreground">
+        If you believe this is an error, please ask a staff member.
+      </p>
     </div>
   {:else if loading}
-    <LoadingSpinner class="mx-auto" size="large" />
+    <Spinner class="mx-auto my-6 size-8" />
   {:else}
-    <div class="flex flex-col items-center justify-center text-center">
-      <Icon icon={mdiCheckCircle} class="h-16 w-16 align-middle text-success" />
-      <h1 class="mb-6 text-3xl font-bold">Added to Purchase List</h1>
-
-      <Text class="mb-6">This item has been added to the purchase list. Thanks!</Text>
+    <div class="flex flex-col items-center gap-2 py-4 text-center">
+      <CircleCheckIcon class="size-12 text-success" />
+      <h1 class="text-xl font-semibold">Added to Purchase List</h1>
+      <p class="text-muted-foreground">This item has been added to the purchase list. Thanks!</p>
     </div>
   {/if}
-</CardBody>
+</Card.Content>

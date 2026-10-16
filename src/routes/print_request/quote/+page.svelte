@@ -1,32 +1,25 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import { Button } from '$lib/components/ui/button';
+  import * as Card from '$lib/components/ui/card';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import InfoRow from '$lib/frontend/components/InfoRow.svelte';
+  import Section from '$lib/frontend/components/Section.svelte';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import {
     getPrintRequestQuote,
     respondToPrintRequestQuote,
   } from '$lib/remotes/endpoints/print_request.remote';
-  import {
-    Badge,
-    Button,
-    CardBody,
-    CardHeader,
-    CardTitle,
-    Heading,
-    HStack,
-    Icon,
-    LoadingSpinner,
-    modalManager,
-    Stack,
-    Text,
-  } from '@immich/ui';
-  import { mdiCheckCircle, mdiClose, mdiHelp, mdiReceipt } from '@mdi/js';
+  import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
+  import ReceiptIcon from '@lucide/svelte/icons/receipt';
+  import XIcon from '@lucide/svelte/icons/x';
   import type { Order } from 'square';
 
   const requestRemote = getPrintRequestQuote(page.url.searchParams.get('id') ?? '');
   const request = $derived(requestRemote.current);
   const payment = $derived(request?.payment);
 
-  // Calculate values from payment data
   const order = $derived(JSON.parse(payment?.orderObject ?? '{}') as Order);
   const totalCost = $derived((payment?.total ?? 0) / 100);
 
@@ -48,12 +41,12 @@
   }
 
   async function handleCancel() {
-    const cancel = await modalManager.showDialog({
+    const cancel = await modalManager.confirm({
       title: 'Cancel Print Request',
       prompt: 'Are you sure you want to cancel this print request? This action cannot be undone.',
       confirmText: 'Cancel Request',
-      confirmColor: 'danger',
-      icon: mdiHelp,
+      cancelText: 'Keep Request',
+      variant: 'destructive',
     });
 
     if (cancel) {
@@ -69,101 +62,88 @@
   }
 </script>
 
-<CardHeader>
-  <div class="flex items-center justify-start gap-2">
-    <Icon icon={mdiReceipt} size="1.5rem" aria-hidden />
-    <CardTitle>3D Print Request Quote</CardTitle>
-  </div>
-</CardHeader>
-<CardBody>
+<Card.Header>
+  <Card.Title class="flex items-center gap-2">
+    <ReceiptIcon class="size-4 text-muted-foreground" aria-hidden="true" />
+    3D Print Request Quote
+  </Card.Title>
+</Card.Header>
+<Card.Content>
   {#if requestRemote.loading}
-    <LoadingSpinner class="mx-auto" size="large" />
+    <Spinner class="mx-auto my-6 size-8" />
   {:else if requestRemote.error || !request || !request.payment}
-    <Text color="danger" class="mb-4" fontWeight="bold"
-      >Unable to fetch quote for this print request.</Text
-    >
-    <Text>
+    <p class="font-medium text-destructive">Unable to fetch quote for this print request.</p>
+    <p class="text-muted-foreground">
       This could be because you have already replied to the quote or the quote is no longer
       available.
-    </Text>
-
-    <Text class="mt-4">
+    </p>
+    <p class="text-muted-foreground">
       If you have any questions, please contact us at
-      <a href="mailto:3dprint@starforgefoundry.com" class="text-primary">
+      <a href="mailto:3dprint@starforgefoundry.com" class="text-primary hover:underline">
         3dprint@starforgefoundry.com
       </a>
-    </Text>
+    </p>
   {:else}
-    <div class="space-y-6">
-      <Text class="mb-2" color="muted">TOTAL</Text>
-      <Heading class="text-5xl">${totalCost.toFixed(2)}</Heading>
+    <div class="flex flex-col gap-4">
+      <div>
+        <p class="text-xs font-medium tracking-wide text-muted-foreground uppercase">Total</p>
+        <p class="text-3xl font-semibold tabular-nums">${totalCost.toFixed(2)}</p>
+      </div>
 
-      <!-- Action Buttons -->
       {#if submitting}
-        <LoadingSpinner class="mx-auto" size="large" />
+        <Spinner class="mx-auto my-2 size-8" />
       {:else}
-        <Stack gap={2}>
-          <Button fullWidth color="success" leadingIcon={mdiCheckCircle} onclick={handleApprove}>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <Button onclick={handleApprove}>
+            <CircleCheckIcon />
             Approve Quote
           </Button>
-          <Button fullWidth color="danger" onclick={handleCancel} leadingIcon={mdiClose}
-            >Cancel Request</Button
-          >
-        </Stack>
+          <Button variant="destructive" onclick={handleCancel}>
+            <XIcon />
+            Cancel Request
+          </Button>
+        </div>
       {/if}
 
-      <!-- Request Information -->
-      <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-        <Heading size="small">Request Details</Heading>
-        <HStack class="justify-between">
-          <Text>Project Name</Text>
-          <Text fontWeight="bold">{request?.projectName}</Text>
-        </HStack>
-        <HStack class="justify-between">
-          <Text>Material</Text>
-          <Text fontWeight="bold">{request?.material?.name}</Text>
-        </HStack>
-        <HStack class="justify-between">
-          <Text>Email</Text>
-          <Badge color="secondary" size="small">
-            {request?.email}
-          </Badge>
-        </HStack>
-      </Stack>
+      <Section title="Request Details">
+        <dl>
+          <InfoRow label="Project Name">{request?.projectName}</InfoRow>
+          <InfoRow label="Material">{request?.material?.name}</InfoRow>
+          <InfoRow label="Email">{request?.email}</InfoRow>
+        </dl>
+      </Section>
 
-      <!-- Price Breakdown -->
-      <Stack class="rounded-2xl border-2 border-slate-700 p-4">
-        <Heading size="small" class="mb-2">Price Breakdown</Heading>
-        <Stack>
+      <Section title="Price Breakdown">
+        <ul class="flex flex-col gap-2 text-sm">
           {#each order.lineItems as item}
-            <HStack class="justify-between">
-              <Stack gap={0}>
-                <Text>{item.name?.replace('3D Print Request - ', '')}</Text>
+            <li class="flex items-start justify-between gap-4">
+              <div class="min-w-0">
+                <p>{item.name?.replace('3D Print Request - ', '')}</p>
                 {#if Number(item.quantity) > 1}
-                  <Text size="small" color="muted">
+                  <p class="text-xs text-muted-foreground">
                     {item.quantity}x - ${(Number(item.basePriceMoney?.amount ?? 0) / 100).toFixed(
                       2,
                     )} each
-                  </Text>
+                  </p>
                 {/if}
-              </Stack>
-              <Text>
+              </div>
+              <span class="shrink-0 tabular-nums">
                 ${(Number(item.grossSalesMoney?.amount ?? 0) / 100).toFixed(2)}
-              </Text>
-            </HStack>
+              </span>
+            </li>
           {/each}
 
           {#each order.discounts as discount}
-            <HStack class="justify-between">
-              <Stack gap={0}>
-                <Text>{discount.name?.replace('3D Print Request - ', '')}</Text>
+            <li class="flex items-start justify-between gap-4">
+              <div class="min-w-0">
+                <p>{discount.name?.replace('3D Print Request - ', '')}</p>
                 {#if Number(discount.percentage) > 0}
-                  <Text size="small" color="muted">
+                  <p class="text-xs text-muted-foreground">
                     {Number(discount.percentage).toFixed(0)}% Off
-                  </Text>
+                  </p>
                 {/if}
-              </Stack>
-              <Text>
+              </div>
+              <span class="shrink-0 tabular-nums">
                 - ${discount.appliedMoney
                   ? (
                       Number(
@@ -171,20 +151,16 @@
                       ) / 100
                     ).toFixed(2)
                   : '0.00'}
-              </Text>
-            </HStack>
+              </span>
+            </li>
           {/each}
 
-          <hr class="mt-1 mb-2 w-1/3 self-end border-slate-700" />
-
-          <HStack class="justify-between">
-            <Text fontWeight="bold">TOTAL</Text>
-            <Text>
-              ${totalCost.toFixed(2)}
-            </Text>
-          </HStack>
-        </Stack>
-      </Stack>
+          <li class="flex justify-between gap-4 border-t pt-2 font-semibold">
+            <span>Total</span>
+            <span class="tabular-nums">${totalCost.toFixed(2)}</span>
+          </li>
+        </ul>
+      </Section>
     </div>
   {/if}
-</CardBody>
+</Card.Content>

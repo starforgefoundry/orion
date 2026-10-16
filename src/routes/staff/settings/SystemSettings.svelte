@@ -1,10 +1,14 @@
 <script lang="ts">
   import { expiryFromInputValue, expiryToInputValue } from '$lib/frontend/announcement';
+  import HiddenField from '$lib/frontend/components/form/HiddenField.svelte';
   import TextArea from '$lib/frontend/components/form/TextArea.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { initForm } from '$lib/frontend/components/form/utils.svelte';
+  import { enhanceWithToast } from '$lib/frontend/form-submit';
   import { printRequestSettingsForm } from '$lib/remotes/endpoints/settings.remote';
-  import { Field, Input, NumberInput, Stack, Switch, toastManager } from '@immich/ui';
+  import { Input } from '$lib/components/ui/input';
+  import { Switch } from '$lib/components/ui/switch';
+  import FormField from '$lib/frontend/components/form/FormField.svelte';
 
   interface Props {
     printRequestSettings: {
@@ -18,6 +22,8 @@
     formId?: string;
   }
 
+  const DEFAULT_MAX_UPLOAD_MB = 100;
+
   const { printRequestSettings, formId = 'print-request-settings' }: Props = $props();
 
   initForm(printRequestSettingsForm, () => ({
@@ -30,52 +36,28 @@
   }));
 
   let isOpen = $derived(printRequestSettings.isOpen);
-  $effect(() => {
-    printRequestSettingsForm.fields.isOpen.set(isOpen);
-  });
-
   let maxUpload = $derived(printRequestSettings.maxUploadMB);
-  $effect(() => {
-    printRequestSettingsForm.fields.maxUploadMB.set(maxUpload ?? 100);
-  });
-
   let announcementUntil = $derived(expiryToInputValue(printRequestSettings.announcementUntil));
-  $effect(() => {
-    printRequestSettingsForm.fields.announcementUntil.set(expiryFromInputValue(announcementUntil));
-  });
-
-  async function handleSubmit(submit: () => Promise<void>) {
-    try {
-      await submit();
-      toastManager.show({
-        title: 'Settings Saved',
-        description: 'Settings have been updated successfully.',
-        color: 'success',
-      });
-    } catch (error) {
-      toastManager.show({
-        title: 'Error Saving Settings',
-        description: 'An error occurred while saving settings. Please try again.',
-        color: 'danger',
-      });
-    }
-  }
 </script>
 
 <form
   id={formId}
-  {...printRequestSettingsForm.enhance(async ({ submit }) => await handleSubmit(submit))}
+  {...enhanceWithToast(printRequestSettingsForm, {
+    success: 'Settings saved',
+    error: 'Error saving settings',
+  })}
 >
-  <Stack gap={4}>
-    <Field
+  <div class="flex flex-col gap-5">
+    <FormField
       label="Accept Print Requests"
+      for="accept-print-requests"
       description="When disabled, the public print request form is replaced with a closed message."
     >
-      <Switch bind:checked={isOpen} />
-      <input hidden {...printRequestSettingsForm.fields.isOpen.as('checkbox')} />
-    </Field>
+      <Switch id="accept-print-requests" bind:checked={isOpen} />
+      <HiddenField field={printRequestSettingsForm.fields.isOpen} value={isOpen} />
+    </FormField>
 
-    <Field
+    <FormField
       label="Announcement Banner"
       description="Shown as a yellow banner at the top of the print request form. Leave blank to hide it."
     >
@@ -84,33 +66,39 @@
         class="h-24"
         placeholder="Prints submitted after Friday will not be ready until the following week."
       />
-    </Field>
+    </FormField>
 
-    <Field
+    <FormField
       label="Show Announcement Until"
       description="The banner stops showing at this time. Leave blank to show it until you clear the text."
     >
-      <Input type="datetime-local" bind:value={announcementUntil} />
-      <input hidden {...printRequestSettingsForm.fields.announcementUntil.as('text')} />
-    </Field>
+      <Input type="datetime-local" class="sm:max-w-64" bind:value={announcementUntil} />
+      <HiddenField
+        field={printRequestSettingsForm.fields.announcementUntil}
+        value={expiryFromInputValue(announcementUntil)}
+      />
+    </FormField>
 
-    <Field label="Max Upload Size (MB)" required="indicator">
-      <NumberInput bind:value={maxUpload} />
-      <input hidden {...printRequestSettingsForm.fields.maxUploadMB.as('number')} />
-    </Field>
+    <FormField label="Max Upload Size (MB)" required>
+      <Input type="number" class="sm:max-w-40" bind:value={maxUpload} />
+      <HiddenField
+        field={printRequestSettingsForm.fields.maxUploadMB}
+        value={maxUpload ?? DEFAULT_MAX_UPLOAD_MB}
+      />
+    </FormField>
 
-    <Field
+    <FormField
       label="Allowed File Types"
-      required="indicator"
+      required
       description="Comma-separated list of file extensions (e.g., .stl, .3mf, .obj)"
     >
       <TextInput
         {...printRequestSettingsForm.fields.allowedFileTypes.as('text')}
         placeholder=".stl, .3mf, .obj"
       />
-    </Field>
+    </FormField>
 
-    <Field
+    <FormField
       label="Discord Webhook URL"
       description="Webhook URL for Discord notifications when print requests are submitted"
     >
@@ -118,6 +106,6 @@
         {...printRequestSettingsForm.fields.discordWebhookUrl.as('text')}
         placeholder="https://discord.com/api/webhooks/..."
       />
-    </Field>
-  </Stack>
+    </FormField>
+  </div>
 </form>

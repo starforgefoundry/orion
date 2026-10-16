@@ -8,6 +8,7 @@ Starforge Foundry internal application for managing the makerspace.
 cp .env.example .env
 docker compose up -d postgres
 pnpm db:migrate
+pnpm db:seed # optional: wipes the database and loads sample data
 pnpm dev
 ```
 

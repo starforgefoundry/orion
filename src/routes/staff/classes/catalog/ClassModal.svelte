@@ -1,13 +1,18 @@
 <script lang="ts">
   import FileUpload from '$lib/frontend/components/FileUpload.svelte';
+  import FormField from '$lib/frontend/components/form/FormField.svelte';
+  import HiddenField from '$lib/frontend/components/form/HiddenField.svelte';
   import PriceInput from '$lib/frontend/components/form/PriceInput.svelte';
   import TextArea from '$lib/frontend/components/form/TextArea.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { initForm } from '$lib/frontend/components/form/utils.svelte';
+  import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import ModalForm from '$lib/frontend/components/ModalForm.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
+  import { enhanceWithToast } from '$lib/frontend/form-submit';
   import { upsertCatalogForm } from '$lib/remotes/endpoints/class.remote';
-  import { Button, Field, IconButton, Modal, ModalBody, Stack, Text } from '@immich/ui';
-  import { mdiDelete, mdiGoogleClassroom } from '@mdi/js';
+  import GraduationCapIcon from '@lucide/svelte/icons/graduation-cap';
+  import TrashIcon from '@lucide/svelte/icons/trash';
 
   interface Props extends ModalProps {
     catalogId?: string;
@@ -38,10 +43,6 @@
     price: prefill?.price ?? 0,
   }));
 
-  $effect(() => {
-    upsertCatalogForm.fields.price.set(price);
-  });
-
   function handlePhotoUpload(file: File) {
     photoPreviewUrl = URL.createObjectURL(file);
 
@@ -60,54 +61,61 @@
   }
 </script>
 
-<Modal title={isEditing ? 'Edit Class' : 'New Class'} icon={mdiGoogleClassroom} {onClose}>
-  <ModalBody>
-    <form {...upsertCatalogForm} onsubmit={() => onClose()} enctype="multipart/form-data">
-      <input {...upsertCatalogForm.fields.id.as('text')} value={catalogId} hidden />
+<ModalForm
+  title={isEditing ? 'Edit Class' : 'New Class'}
+  icon={GraduationCapIcon}
+  {onClose}
+  submitLabel={isEditing ? 'Save Changes' : 'Create Class'}
+  submitting={upsertCatalogForm.pending > 0}
+  form={{
+    ...enhanceWithToast(
+      upsertCatalogForm,
+      { success: 'Class saved', error: 'Failed to save class' },
+      onClose,
+    ),
+    enctype: 'multipart/form-data',
+  }}
+>
+  <input {...upsertCatalogForm.fields.id.as('text')} value={catalogId} hidden />
 
-      <Stack gap={4}>
-        <Field label="Class Name" required="indicator">
-          <TextInput {...upsertCatalogForm.fields.name.as('text')} placeholder="Welding Class" />
-        </Field>
+  <FormField label="Class Name" required>
+    <TextInput {...upsertCatalogForm.fields.name.as('text')} placeholder="Welding Class" />
+  </FormField>
 
-        <Field label="Description" required="indicator">
-          <TextArea
-            {...upsertCatalogForm.fields.description.as('text')}
-            placeholder="Describe what students will learn..."
-          />
-        </Field>
+  <FormField label="Description" required>
+    <TextArea
+      {...upsertCatalogForm.fields.description.as('text')}
+      placeholder="Describe what students will learn..."
+    />
+  </FormField>
 
-        <Field label="Price" required="indicator">
-          <PriceInput bind:value={price} multiplier={100} />
-          <input {...upsertCatalogForm.fields.price.as('number')} hidden />
-        </Field>
+  <FormField label="Price" required>
+    <PriceInput bind:value={price} multiplier={100} />
+    <HiddenField field={upsertCatalogForm.fields.price} value={price} />
+  </FormField>
 
-        <Text>Cover Photo</Text>
+  <div class="flex flex-col gap-1.5">
+    <span class="text-sm font-medium">Cover Photo</span>
 
-        <input accept="image/*" {...upsertCatalogForm.fields.photo.as('file')} hidden />
+    <input accept="image/*" {...upsertCatalogForm.fields.photo.as('file')} hidden />
 
-        {#if photoPreviewUrl}
-          <div class="relative mb-2 self-center">
-            <img src={photoPreviewUrl} alt="Preview" class="max-h-36 rounded-lg object-cover" />
-            <IconButton
-              color="danger"
-              class="absolute top-2 right-2 h-8 w-8 "
-              aria-label="Remove photo"
-              onclick={clearPhoto}
-              icon={mdiDelete}
-            />
-          </div>
-        {:else}
-          <FileUpload
-            supportedExtensions={['jpg', 'jpeg', 'png', 'gif', 'webp']}
-            onUpload={handlePhotoUpload}
-            onUnsupported={() => {}}
-          />
-        {/if}
-        <Button type="submit" variant="filled" fullWidth>
-          {isEditing ? 'Save Changes' : 'Create Class'}
-        </Button>
-      </Stack>
-    </form>
-  </ModalBody>
-</Modal>
+    {#if photoPreviewUrl}
+      <div class="relative self-center">
+        <img src={photoPreviewUrl} alt="Preview" class="max-h-36 rounded-lg object-cover" />
+        <IconButton
+          icon={TrashIcon}
+          variant="destructive"
+          class="absolute top-2 right-2"
+          aria-label="Remove photo"
+          onclick={clearPhoto}
+        />
+      </div>
+    {:else}
+      <FileUpload
+        supportedExtensions={['jpg', 'jpeg', 'png', 'gif', 'webp']}
+        onUpload={handlePhotoUpload}
+        onUnsupported={() => {}}
+      />
+    {/if}
+  </div>
+</ModalForm>

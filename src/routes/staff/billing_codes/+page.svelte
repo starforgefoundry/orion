@@ -1,19 +1,15 @@
 <script lang="ts">
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import * as Table from '$lib/components/ui/table';
+  import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import PageHeader from '$lib/frontend/components/PageHeader.svelte';
+  import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { getBillingCodes, updateBillingCode } from '$lib/remotes/endpoints/billing_code.remote';
-  import {
-    Heading,
-    IconButton,
-    Input,
-    LoadingSpinner,
-    modalManager,
-    Table,
-    TableBody,
-    TableCell,
-    TableHeader,
-    TableHeading,
-    TableRow,
-  } from '@immich/ui';
-  import { mdiChatQuestion, mdiMagnify, mdiPlus, mdiTrashCan } from '@mdi/js';
+  import PlusIcon from '@lucide/svelte/icons/plus';
+  import SearchIcon from '@lucide/svelte/icons/search';
+  import TrashIcon from '@lucide/svelte/icons/trash';
   import BillingCodeModal from './BillingCodeModal.svelte';
 
   let billingCodes = getBillingCodes();
@@ -33,12 +29,11 @@
   }
 
   async function handleDeleteCode(id: string) {
-    const confirm = await modalManager.showDialog({
+    const confirm = await modalManager.confirm({
       title: 'Archive Billing Code',
       prompt: 'Are you sure you want to archive this billing code?',
       confirmText: 'Archive',
-      confirmColor: 'danger',
-      icon: mdiChatQuestion,
+      variant: 'destructive',
     });
 
     if (confirm) {
@@ -47,60 +42,71 @@
   }
 </script>
 
-<div class="mb-6 flex items-center justify-between">
-  <Heading size="large" class="inline-block w-fit">Billing Codes</Heading>
-  <div class="flex w-1/3 items-center gap-2">
-    <IconButton
-      icon={mdiPlus}
-      variant="filled"
-      aria-label="Add Billing Code"
-      class="min-w-10"
-      onclick={showCreateModal}
-    />
-    <Input placeholder="Search Billing Codes" leadingIcon={mdiMagnify} bind:value={searchTerm} />
-  </div>
-</div>
+<PageHeader title="Billing Codes">
+  {#snippet actions()}
+    <Button size="sm" onclick={showCreateModal}>
+      <PlusIcon />
+      Add Billing Code
+    </Button>
+  {/snippet}
+</PageHeader>
+
+<TextInput
+  icon={SearchIcon}
+  placeholder="Search Billing Codes"
+  class="mb-3 sm:max-w-xs"
+  bind:value={searchTerm}
+/>
 
 {#if billingCodes.loading}
-  <div class="flex justify-center">
-    <LoadingSpinner size="large" />
+  <div class="flex justify-center py-8">
+    <Spinner class="size-6" />
   </div>
 {:else if billingCodes.error}
-  <p class="text-danger">Error loading billing codes: {billingCodes.error.message}</p>
+  <p class="text-sm text-destructive">Error loading billing codes: {billingCodes.error.message}</p>
 {:else}
-  <Table striped class="mt-4">
-    <TableHeader>
-      <TableHeading class="w-2/12">Code</TableHeading>
-      <TableHeading class="w-3/12">Description</TableHeading>
-      <TableHeading class="w-2/12">Organization</TableHeading>
-      <TableHeading class="w-3/12">Discount</TableHeading>
-      <TableHeading class="w-2/12">Actions</TableHeading>
-    </TableHeader>
-    <TableBody>
-      {#each searchedCodes as code}
-        <TableRow>
-          <TableCell class="w-2/12 px-4 text-left font-mono">{code.code}</TableCell>
-          <TableCell class="w-3/12 px-4 text-left">{code.description}</TableCell>
-          <TableCell class="w-2/12 px-4 text-left">{code.organizationName || '-'}</TableCell>
-          <TableCell class="w-3/12 px-4 text-left">{code.discountName || '-'}</TableCell>
-          <TableCell class="w-2/12">
-            <div class="flex justify-center gap-2">
+  <div class="overflow-hidden rounded-lg border">
+    <Table.Root>
+      <Table.Header class="bg-muted/50">
+        <Table.Row>
+          <Table.Head>Code</Table.Head>
+          <Table.Head class="hidden md:table-cell">Description</Table.Head>
+          <Table.Head class="hidden sm:table-cell">Organization</Table.Head>
+          <Table.Head class="hidden lg:table-cell">Discount</Table.Head>
+          <Table.Head class="w-12"><span class="sr-only">Actions</span></Table.Head>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
+        {#each searchedCodes as code (code.id)}
+          <Table.Row>
+            <Table.Cell class="max-w-48">
+              <div class="truncate font-mono font-medium">{code.code}</div>
+              <div class="truncate text-xs text-muted-foreground md:hidden">
+                {code.description}
+              </div>
+            </Table.Cell>
+            <Table.Cell class="hidden max-w-64 truncate md:table-cell">
+              {code.description}
+            </Table.Cell>
+            <Table.Cell class="hidden sm:table-cell">{code.organizationName || '—'}</Table.Cell>
+            <Table.Cell class="hidden lg:table-cell">{code.discountName || '—'}</Table.Cell>
+            <Table.Cell class="text-right">
               <IconButton
-                icon={mdiTrashCan}
-                aria-label="Delete Billing Code"
-                color="danger"
+                icon={TrashIcon}
+                aria-label="Archive Billing Code"
+                class="text-destructive hover:text-destructive"
                 onclick={() => handleDeleteCode(code.id)}
               />
-            </div>
-          </TableCell>
-        </TableRow>
-      {/each}
-
-      {#if searchedCodes.length === 0}
-        <TableRow>
-          <TableCell class="w-full text-center">No billing codes found.</TableCell>
-        </TableRow>
-      {/if}
-    </TableBody>
-  </Table>
+            </Table.Cell>
+          </Table.Row>
+        {:else}
+          <Table.Row>
+            <Table.Cell colspan={5} class="h-20 text-center text-muted-foreground">
+              No billing codes found.
+            </Table.Cell>
+          </Table.Row>
+        {/each}
+      </Table.Body>
+    </Table.Root>
+  </div>
 {/if}

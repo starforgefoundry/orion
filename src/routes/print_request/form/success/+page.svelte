@@ -1,29 +1,31 @@
 <script lang="ts">
-  import { Button, Icon, Text } from '@immich/ui';
-  import { mdiCheckCircle } from '@mdi/js';
+  import { Button } from '$lib/components/ui/button';
+  import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
 </script>
 
 <svelte:head>
   <title>3D Print Request Submitted</title>
 </svelte:head>
 
-<div class="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-4 text-center">
-  <Icon icon={mdiCheckCircle} class="h-16 w-16 text-success" />
-  <h1 class="text-3xl font-bold">3D Print Request Submitted</h1>
+<div
+  class="mx-auto flex min-h-[60vh] w-full max-w-lg flex-col items-center justify-center gap-3 px-4 py-8 text-center text-sm"
+>
+  <CircleCheckIcon class="size-12 text-success" />
+  <h1 class="text-xl font-semibold">3D Print Request Submitted</h1>
 
-  <Text>
+  <p class="text-muted-foreground">
     We will review your request and get back to you shortly. Keep an eye on your email for further
     updates!
-  </Text>
+  </p>
 
-  <Text>
+  <p class="text-muted-foreground">
     If you have any questions or need further assistance, please contact us at
-    <a href="mailto:3dprint@starforgefoundry.com" class="text-primary">
+    <a href="mailto:3dprint@starforgefoundry.com" class="text-primary hover:underline">
       3dprint@starforgefoundry.com
     </a>.
-  </Text>
+  </p>
 
-  <Button onclick={() => (window.location.href = '/print_request/form')} class="mt-4">
+  <Button onclick={() => (window.location.href = '/print_request/form')} class="mt-2">
     Submit Another Request
   </Button>
 </div>

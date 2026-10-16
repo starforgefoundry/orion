@@ -1,79 +1,168 @@
 <script lang="ts">
+  import { page } from '$app/state';
+  import { Button } from '$lib/components/ui/button';
+  import { Spinner } from '$lib/components/ui/spinner';
+  import { cn } from '$lib/frontend/cn';
+  import PageHeader from '$lib/frontend/components/PageHeader.svelte';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import {
     getBambuddySettings,
     getClassSettings,
     getPrintRequestSettings,
     getPrintRequestSquareSettings,
   } from '$lib/remotes/endpoints/settings.remote';
-  import { Button, Heading, LoadingSpinner } from '@immich/ui';
+  import CalendarIcon from '@lucide/svelte/icons/calendar';
+  import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
+  import CreditCardIcon from '@lucide/svelte/icons/credit-card';
+  import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
+  import ServerIcon from '@lucide/svelte/icons/server';
+  import type { Component } from 'svelte';
   import BambuddySettings from './BambuddySettings.svelte';
   import BambuddyStatus from './BambuddyStatus.svelte';
   import ClassSettings from './ClassSettings.svelte';
   import SettingsSection from './SettingsSection.svelte';
+  import SquareInfoModal from './SquareInfoModal.svelte';
   import SquareSettings from './SquareSettings.svelte';
   import SystemSettings from './SystemSettings.svelte';
 
-  let printRequestSettings = getPrintRequestSettings();
-  let squareSettings = getPrintRequestSquareSettings();
-  let classSettings = getClassSettings();
-  let bambuddySettings = getBambuddySettings();
+  const SECTION_PARAM = 'section';
+
+  const SECTIONS = {
+    PRINT_REQUESTS: 'print-requests',
+    BAMBUDDY: 'bambuddy',
+    SQUARE: 'square',
+    CLASSES: 'classes',
+  } as const;
+  type SectionId = (typeof SECTIONS)[keyof typeof SECTIONS];
+
+  type SectionInfo = { id: SectionId; title: string; description: string; icon: Component };
+
+  const SECTION_LIST: SectionInfo[] = [
+    {
+      id: SECTIONS.PRINT_REQUESTS,
+      title: '3D Print Requests',
+      description: 'Intake form, announcements, upload limits and notifications.',
+      icon: Printer3dIcon,
+    },
+    {
+      id: SECTIONS.BAMBUDDY,
+      title: 'Bambuddy',
+      description: 'Connection to the server that talks to the printers.',
+      icon: ServerIcon,
+    },
+    {
+      id: SECTIONS.SQUARE,
+      title: 'Square',
+      description: 'Location and catalog items used when billing print requests.',
+      icon: CreditCardIcon,
+    },
+    {
+      id: SECTIONS.CLASSES,
+      title: 'Classes',
+      description: 'Notifications for class bookings.',
+      icon: CalendarIcon,
+    },
+  ];
+
+  const active = $derived(
+    SECTION_LIST.find((section) => section.id === page.url.searchParams.get(SECTION_PARAM)) ??
+      SECTION_LIST[0],
+  );
+
+  const printRequestSettings = getPrintRequestSettings();
+  const squareSettings = getPrintRequestSquareSettings();
+  const classSettings = getClassSettings();
+  const bambuddySettings = getBambuddySettings();
 </script>
 
-<div class="mb-6">
-  <Heading size="large">Settings</Heading>
-</div>
+{#snippet loadState(query: { loading: boolean; error?: unknown }, name: string)}
+  {#if query.loading}
+    <Spinner />
+  {:else if query.error}
+    <p class="text-sm text-destructive">Error loading {name} settings.</p>
+  {/if}
+{/snippet}
 
-<div class="flex flex-col items-center gap-4">
-  <SettingsSection title="3D Print Requests">
-    {#snippet headerActions()}
-      <Button type="submit" form="print-request-settings" size="small">Save</Button>
-    {/snippet}
-    {#if printRequestSettings.loading}
-      <LoadingSpinner />
-    {:else if printRequestSettings.error}
-      <p class="text-danger">Error loading print request settings.</p>
-    {:else}
-      <SystemSettings printRequestSettings={printRequestSettings.current!} />
-    {/if}
-  </SettingsSection>
+<PageHeader title="Settings" />
 
-  <SettingsSection title="Bambuddy">
-    {#snippet headerActions()}
-      <Button type="submit" form="bambuddy-settings" size="small">Save</Button>
-    {/snippet}
-    {#if bambuddySettings.loading}
-      <LoadingSpinner />
-    {:else if bambuddySettings.error}
-      <p class="text-danger">Error loading Bambuddy settings.</p>
-    {:else}
-      <BambuddySettings bambuddySettings={bambuddySettings.current!} />
-    {/if}
-    <BambuddyStatus />
-  </SettingsSection>
+<div class="flex flex-col gap-4 md:flex-row md:items-start md:gap-6">
+  <nav
+    aria-label="Settings sections"
+    class="-mx-3 flex shrink-0 gap-1 overflow-x-auto px-3 pb-1 sm:-mx-4 sm:px-4 md:sticky md:top-4 md:mx-0 md:w-52 md:flex-col md:overflow-visible md:px-0 md:pb-0"
+  >
+    {#each SECTION_LIST as section (section.id)}
+      <a
+        href={`?${SECTION_PARAM}=${section.id}`}
+        data-sveltekit-replacestate
+        data-sveltekit-noscroll
+        aria-current={active.id === section.id ? 'page' : undefined}
+        class={cn(
+          'flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors',
+          active.id === section.id
+            ? 'bg-muted text-foreground'
+            : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+        )}
+      >
+        <section.icon class="size-4 shrink-0" />
+        {section.title}
+      </a>
+    {/each}
+  </nav>
 
-  <SettingsSection title="Square">
-    {#snippet headerActions()}
-      <Button type="submit" form="square-settings" size="small">Save</Button>
-    {/snippet}
-    {#if squareSettings.loading}
-      <LoadingSpinner />
-    {:else if squareSettings.error}
-      <p class="text-danger">Error loading Square settings.</p>
-    {:else}
-      <SquareSettings squareSettings={squareSettings.current!} />
+  <div class="min-w-0 flex-1 md:max-w-3xl">
+    {#if active.id === SECTIONS.PRINT_REQUESTS}
+      <SettingsSection
+        title={active.title}
+        description={active.description}
+        formId="print-request-settings"
+      >
+        {@render loadState(printRequestSettings, 'print request')}
+        {#if printRequestSettings.current}
+          <SystemSettings printRequestSettings={printRequestSettings.current} />
+        {/if}
+      </SettingsSection>
+    {:else if active.id === SECTIONS.BAMBUDDY}
+      <SettingsSection
+        title={active.title}
+        description={active.description}
+        formId="bambuddy-settings"
+      >
+        <div class="flex flex-col gap-4">
+          <BambuddyStatus />
+          {@render loadState(bambuddySettings, 'Bambuddy')}
+          {#if bambuddySettings.current}
+            <BambuddySettings bambuddySettings={bambuddySettings.current} />
+          {/if}
+        </div>
+      </SettingsSection>
+    {:else if active.id === SECTIONS.SQUARE}
+      <SettingsSection
+        title={active.title}
+        description={active.description}
+        formId="square-settings"
+      >
+        {#snippet actions()}
+          <Button variant="ghost" size="sm" onclick={() => modalManager.show(SquareInfoModal)}>
+            <CircleHelpIcon />
+            Setup help
+          </Button>
+        {/snippet}
+        {@render loadState(squareSettings, 'Square')}
+        {#if squareSettings.current}
+          <SquareSettings squareSettings={squareSettings.current} />
+        {/if}
+      </SettingsSection>
+    {:else if active.id === SECTIONS.CLASSES}
+      <SettingsSection
+        title={active.title}
+        description={active.description}
+        formId="class-settings"
+      >
+        {@render loadState(classSettings, 'class')}
+        {#if classSettings.current}
+          <ClassSettings classSettings={classSettings.current} />
+        {/if}
+      </SettingsSection>
     {/if}
-  </SettingsSection>
-
-  <SettingsSection title="Classes">
-    {#snippet headerActions()}
-      <Button type="submit" form="class-settings" size="small">Save</Button>
-    {/snippet}
-    {#if classSettings.loading}
-      <LoadingSpinner />
-    {:else if classSettings.error}
-      <p class="text-danger">Error loading class settings.</p>
-    {:else}
-      <ClassSettings classSettings={classSettings.current!} />
-    {/if}
-  </SettingsSection>
+  </div>
 </div>
