@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 
 export const CAR_BAY_ZONE = 'America/Chicago';
+export const CAR_BAY_EMAIL = 'carbay@starforgefoundry.com';
 
 const WEEKEND_DAYS = [6, 7];
 

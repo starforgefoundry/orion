@@ -18,6 +18,7 @@ import {
   stringifySquareObject,
 } from '$lib/server/utils/square';
 import {
+  CAR_BAY_EMAIL,
   CAR_BAY_STATUS,
   CAR_BAY_TIER,
   CAR_BAY_TIER_NAMES,
@@ -37,7 +38,6 @@ import {
 import { DateTime } from 'luxon';
 import type { OrderLineItem } from 'square';
 
-const CAR_BAY_EMAIL = 'carbay@starforgefoundry.com';
 const CAR_BAY_SENDER = `Starforge Car Bay <${CAR_BAY_EMAIL}>`;
 const APPROVED_PAYMENT_STATUS = 'APPROVED';
 const OVERRUN_PAYMENT_TYPE = 'car_bay_overrun';
