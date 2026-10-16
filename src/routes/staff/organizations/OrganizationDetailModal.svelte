@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
+  import { Label } from '$lib/components/ui/label';
+  import { Switch } from '$lib/components/ui/switch';
   import { Spinner } from '$lib/components/ui/spinner';
   import * as Table from '$lib/components/ui/table';
   import * as Tabs from '$lib/components/ui/tabs';
@@ -25,11 +27,20 @@
   import TrashIcon from '@lucide/svelte/icons/trash';
   import UsersIcon from '@lucide/svelte/icons/users';
   import XIcon from '@lucide/svelte/icons/x';
+  import { SPACE_ZONE } from '$lib/space';
   import { DateTime } from 'luxon';
   import { getPaymentStatusColor } from '../print_requests/queue/utils';
+  import UserMinusIcon from '@lucide/svelte/icons/user-minus';
+  import UserPlusIcon from '@lucide/svelte/icons/user-plus';
   import CreateChargeModal from './CreateChargeModal.svelte';
+  import OrganizationMembers from './OrganizationMembers.svelte';
+  import { OrganizationMembersManager } from './organization-members.svelte';
 
-  const TABS = { CHARGES: 'charges', BALANCE_PAYMENTS: 'balance_payments' } as const;
+  const TABS = {
+    CHARGES: 'charges',
+    BALANCE_PAYMENTS: 'balance_payments',
+    MEMBERS: 'members',
+  } as const;
   type Tab = (typeof TABS)[keyof typeof TABS];
 
   type Props = ModalProps & {
@@ -46,6 +57,10 @@
   let editEmail = $state('');
   let originalName = $state('');
   let originalEmail = $state('');
+  let editAccessEndDate = $state('');
+  let editGrantsAccess = $state(true);
+
+  const membersManager = new OrganizationMembersManager(() => organizationId);
 
   let chargesCurrentPage = $state(1);
   let chargesItemsPerPage = 10;
@@ -90,6 +105,9 @@
       editEmail = organizationDetail.current.email;
       originalName = organizationDetail.current.name;
       originalEmail = organizationDetail.current.email;
+      editAccessEndDate =
+        organizationDetail.current.accessEndDate?.setZone(SPACE_ZONE).toISODate() ?? '';
+      editGrantsAccess = organizationDetail.current.grantsAccess;
       isEditing = true;
     }
   }
@@ -113,6 +131,8 @@
       id: organizationId,
       name: editName,
       email: editEmail,
+      grantsAccess: editGrantsAccess,
+      accessEndDate: editAccessEndDate || null,
     });
     await organizationDetail.refresh();
     isEditing = false;
@@ -180,11 +200,35 @@
               <FormField label="Email" for="organization-email">
                 <Input id="organization-email" bind:value={editEmail} type="email" />
               </FormField>
+              <div class="flex items-center justify-between gap-3">
+                <Label for="organization-grants-access">Grants member access</Label>
+                <Switch id="organization-grants-access" bind:checked={editGrantsAccess} />
+              </div>
+              {#if editGrantsAccess}
+                <FormField
+                  label="Access Through"
+                  for="organization-access-end"
+                  description="Leave empty for no end date."
+                >
+                  <Input id="organization-access-end" bind:value={editAccessEndDate} type="date" />
+                </FormField>
+              {/if}
             </div>
           {:else}
             <dl>
               <InfoRow label="Name">{organizationDetail.current.name}</InfoRow>
               <InfoRow label="Email">{organizationDetail.current.email}</InfoRow>
+              <InfoRow label="Member Access">
+                {#if !organizationDetail.current.grantsAccess}
+                  Off
+                {:else if organizationDetail.current.accessEndDate}
+                  Through {organizationDetail.current.accessEndDate
+                    .setZone(SPACE_ZONE)
+                    .toLocaleString(DateTime.DATE_MED)}
+                {:else}
+                  No end date
+                {/if}
+              </InfoRow>
             </dl>
           {/if}
         </Section>
@@ -209,14 +253,36 @@
           <Tabs.List>
             <Tabs.Trigger value={TABS.CHARGES}>Charges</Tabs.Trigger>
             <Tabs.Trigger value={TABS.BALANCE_PAYMENTS}>Balance Payments</Tabs.Trigger>
+            <Tabs.Trigger value={TABS.MEMBERS}>Members</Tabs.Trigger>
           </Tabs.List>
           {#if activeTab === TABS.CHARGES}
             <Button size="sm" variant="outline" onclick={createOrganizationCharge}>
               <HandCoinsIcon />
               Add Charge
             </Button>
+          {:else if activeTab === TABS.MEMBERS}
+            <div class="flex flex-wrap gap-2">
+              {#if membersManager.selected.size > 0}
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onclick={() => membersManager.removeSelected()}
+                >
+                  <UserMinusIcon />
+                  Remove {membersManager.selected.size}
+                </Button>
+              {/if}
+              <Button size="sm" variant="outline" onclick={() => membersManager.add()}>
+                <UserPlusIcon />
+                Add Members
+              </Button>
+            </div>
           {/if}
         </div>
+
+        <Tabs.Content value={TABS.MEMBERS}>
+          <OrganizationMembers manager={membersManager} />
+        </Tabs.Content>
 
         <Tabs.Content value={TABS.CHARGES}>
           <div class="overflow-hidden rounded-lg border">

@@ -83,3 +83,6 @@ export const carBayPolicyDto = v.pipe(
     'Closing time must be after opening time',
   ),
 );
+export const memberSquareSettingsDto = v.object({
+  dayPassItemVariationIds: v.optional(v.array(v.string()), []),
+});

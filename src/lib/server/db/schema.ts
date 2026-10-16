@@ -1,5 +1,15 @@
 import { type InferSelectModel } from 'drizzle-orm';
 import { boolean, foreignKey, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
+import {
+  ACCESS_BASIS,
+  enumValues,
+  MEMBER_EMAIL_TRIGGER,
+  MEMBER_EMAIL_TYPE,
+  SUBSCRIPTION_STATUS,
+  VISIT_OUTCOME,
+  VISIT_SOURCE,
+  WAIVER_SOURCE,
+} from '../../member_enums';
 import { DateTime } from 'luxon';
 import { luxonTimestamp } from './custom/luxon';
 
@@ -193,6 +203,8 @@ export const organization = pgTable('organization', {
   name: text('name').notNull(),
   email: text('email').notNull(),
   archived: boolean('archived').notNull().default(false),
+  grantsAccess: boolean('grants_access').notNull().default(true),
+  accessEndDate: luxonTimestamp('access_end_date'),
 });
 
 export type Organization = InferSelectModel<typeof organization>;
@@ -250,20 +262,181 @@ export const purchaseList = pgTable(
 
 export type PurchaseList = InferSelectModel<typeof purchaseList>;
 
-export const waiver = pgTable('waiver', {
+export const member = pgTable('member', {
   id: text('id')
     .notNull()
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
+  email: text('email').notNull().unique(),
   name: text('name').notNull(),
-  email: text('email').notNull(),
-  signatureUrl: text('signature_url').notNull(),
-  signedDate: luxonTimestamp('signed_date')
+  phone: text('phone'),
+  squareCustomerId: text('square_customer_id'),
+  passToken: text('pass_token')
+    .notNull()
+    .unique()
+    .$defaultFn(() => crypto.randomUUID()),
+  onboardingToken: text('onboarding_token')
+    .notNull()
+    .unique()
+    .$defaultFn(() => crypto.randomUUID()),
+  createdDate: luxonTimestamp('created_date')
     .notNull()
     .$defaultFn(() => DateTime.now()),
 });
 
+export type Member = InferSelectModel<typeof member>;
+
+export const waiver = pgTable(
+  'waiver',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => member.id),
+    name: text('name').notNull(),
+    email: text('email').notNull(),
+    signatureUrl: text('signature_url').notNull(),
+    signedDate: luxonTimestamp('signed_date')
+      .notNull()
+      .$defaultFn(() => DateTime.now()),
+    source: text('source', { enum: enumValues(WAIVER_SOURCE) })
+      .notNull()
+      .default(WAIVER_SOURCE.WEB),
+    isAdult: boolean('is_adult').notNull().default(false),
+  },
+  (table) => [index('waiver_member_idx').on(table.memberId)],
+);
+
 export type Waiver = InferSelectModel<typeof waiver>;
+
+export const memberSubscription = pgTable(
+  'member_subscription',
+  {
+    id: text('id').notNull().primaryKey(), // Square subscription id
+    memberId: text('member_id')
+      .notNull()
+      .references(() => member.id),
+    planVariationId: text('plan_variation_id').notNull(),
+    planName: text('plan_name').notNull(),
+    status: text('status', {
+      enum: enumValues(SUBSCRIPTION_STATUS),
+    }).notNull(),
+    startDate: text('start_date').notNull(), // YYYY-MM-DD
+    chargedThroughDate: text('charged_through_date'), // YYYY-MM-DD
+    canceledDate: text('canceled_date'), // YYYY-MM-DD
+    accessEndedDate: luxonTimestamp('access_ended_date'),
+    refundedPaymentId: text('refunded_payment_id'),
+    updatedDate: luxonTimestamp('updated_date')
+      .notNull()
+      .$defaultFn(() => DateTime.now()),
+  },
+  (table) => [index('member_subscription_member_idx').on(table.memberId)],
+);
+
+export type MemberSubscription = InferSelectModel<typeof memberSubscription>;
+
+export const dayPass = pgTable(
+  'day_pass',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => member.id),
+    squareOrderId: text('square_order_id').notNull(),
+    purchasedDate: luxonTimestamp('purchased_date').notNull(),
+    usedDate: text('used_date'), // YYYY-MM-DD in Central time
+  },
+  (table) => [
+    index('day_pass_member_idx').on(table.memberId),
+    index('day_pass_order_idx').on(table.squareOrderId),
+  ],
+);
+
+export type DayPass = InferSelectModel<typeof dayPass>;
+
+export const organizationMember = pgTable(
+  'organization_member',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => member.id),
+    addedDate: luxonTimestamp('added_date')
+      .notNull()
+      .$defaultFn(() => DateTime.now()),
+    removedDate: luxonTimestamp('removed_date'),
+  },
+  (table) => [
+    index('organization_member_org_idx').on(table.organizationId),
+    index('organization_member_member_idx').on(table.memberId),
+  ],
+);
+
+export type OrganizationMember = InferSelectModel<typeof organizationMember>;
+
+export const visit = pgTable(
+  'visit',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => member.id),
+    scannedDate: luxonTimestamp('scanned_date')
+      .notNull()
+      .$defaultFn(() => DateTime.now()),
+    source: text('source', { enum: enumValues(VISIT_SOURCE) }).notNull(),
+    accessBasis: text('access_basis', {
+      enum: enumValues(ACCESS_BASIS),
+    }).notNull(),
+    outcome: text('outcome', {
+      enum: enumValues(VISIT_OUTCOME),
+    }).notNull(),
+  },
+  (table) => [
+    index('visit_member_idx').on(table.memberId),
+    index('visit_scanned_date_idx').on(table.scannedDate),
+  ],
+);
+
+export type Visit = InferSelectModel<typeof visit>;
+
+export const memberEmail = pgTable(
+  'member_email',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => member.id),
+    type: text('type', { enum: enumValues(MEMBER_EMAIL_TYPE) }).notNull(),
+    trigger: text('trigger', {
+      enum: enumValues(MEMBER_EMAIL_TRIGGER),
+    }).notNull(),
+    sentDate: luxonTimestamp('sent_date')
+      .notNull()
+      .$defaultFn(() => DateTime.now()),
+  },
+  (table) => [index('member_email_member_idx').on(table.memberId)],
+);
+
+export type MemberEmail = InferSelectModel<typeof memberEmail>;
 
 export const classCatalog = pgTable('class_catalog', {
   id: text('id')
@@ -400,7 +573,13 @@ export const schema = {
   organizationCharge,
   inventoryItem,
   purchaseList,
+  member,
   waiver,
+  memberSubscription,
+  dayPass,
+  organizationMember,
+  visit,
+  memberEmail,
   classCatalog,
   classInstance,
   classBooking,

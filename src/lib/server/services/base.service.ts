@@ -4,6 +4,13 @@ import { CarBayRepository } from '$lib/server/repositories/car_bay.repository';
 import { DiscordRepository } from '$lib/server/repositories/discord.repository';
 import { InventoryRepository } from '$lib/server/repositories/inventory.repository';
 import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
+import { DayPassRepository } from '$lib/server/repositories/day_pass.repository';
+import { MemberRepository } from '$lib/server/repositories/member.repository';
+import { MemberEmailRepository } from '$lib/server/repositories/member_email.repository';
+import { MemberNotificationRepository } from '$lib/server/repositories/member_notification.repository';
+import { MemberSubscriptionRepository } from '$lib/server/repositories/member_subscription.repository';
+import { OrganizationMemberRepository } from '$lib/server/repositories/organization_member.repository';
+import { VisitRepository } from '$lib/server/repositories/visit.repository';
 import { OrganizationRepository } from '$lib/server/repositories/organization.repository';
 import { PrintFilesRepository } from '$lib/server/repositories/print_files.repository';
 import { PrintMaterialsRepository } from '$lib/server/repositories/print_materials.repository';
@@ -13,6 +20,16 @@ import { PrintRequestCommentRepository } from '$lib/server/repositories/print_re
 import { SettingsRepository } from '$lib/server/repositories/settings.repository';
 import { SquareRepository } from '$lib/server/repositories/square.repository';
 import { WaiverRepository } from '$lib/server/repositories/waiver.repository';
+
+export type MemberRepositories = {
+  memberRepository: MemberRepository;
+  memberSubscriptionRepository: MemberSubscriptionRepository;
+  dayPassRepository: DayPassRepository;
+  organizationMemberRepository: OrganizationMemberRepository;
+  visitRepository: VisitRepository;
+  memberEmailRepository: MemberEmailRepository;
+  memberNotificationRepository: MemberNotificationRepository;
+};
 
 export class BaseService {
   protected printFilesRepository: PrintFilesRepository;
@@ -30,6 +47,13 @@ export class BaseService {
   protected bambuddyRepository: BambuddyRepository;
   protected waiverRepository: WaiverRepository;
   protected carBayRepository: CarBayRepository;
+  protected memberRepository: MemberRepository;
+  protected memberSubscriptionRepository: MemberSubscriptionRepository;
+  protected dayPassRepository: DayPassRepository;
+  protected organizationMemberRepository: OrganizationMemberRepository;
+  protected visitRepository: VisitRepository;
+  protected memberEmailRepository: MemberEmailRepository;
+  protected memberNotificationRepository: MemberNotificationRepository;
 
   constructor(
     printFilesRepository?: PrintFilesRepository,
@@ -47,6 +71,7 @@ export class BaseService {
     waiverRepository?: WaiverRepository,
     printRequestCommentRepository?: PrintRequestCommentRepository,
     carBayRepository?: CarBayRepository,
+    memberRepositories: Partial<MemberRepositories> = {},
   ) {
     this.printFilesRepository = printFilesRepository ?? new PrintFilesRepository();
     this.printMaterialsRepository = printMaterialsRepository ?? new PrintMaterialsRepository();
@@ -64,5 +89,16 @@ export class BaseService {
     this.printRequestCommentRepository =
       printRequestCommentRepository ?? new PrintRequestCommentRepository();
     this.carBayRepository = carBayRepository ?? new CarBayRepository();
+    this.memberRepository = memberRepositories.memberRepository ?? new MemberRepository();
+    this.memberSubscriptionRepository =
+      memberRepositories.memberSubscriptionRepository ?? new MemberSubscriptionRepository();
+    this.dayPassRepository = memberRepositories.dayPassRepository ?? new DayPassRepository();
+    this.organizationMemberRepository =
+      memberRepositories.organizationMemberRepository ?? new OrganizationMemberRepository();
+    this.visitRepository = memberRepositories.visitRepository ?? new VisitRepository();
+    this.memberEmailRepository =
+      memberRepositories.memberEmailRepository ?? new MemberEmailRepository();
+    this.memberNotificationRepository =
+      memberRepositories.memberNotificationRepository ?? new MemberNotificationRepository();
   }
 }

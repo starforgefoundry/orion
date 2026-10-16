@@ -13,8 +13,8 @@
   import BookOpenIcon from '@lucide/svelte/icons/book-open';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
   import CarIcon from '@lucide/svelte/icons/car';
+  import IdCardIcon from '@lucide/svelte/icons/id-card';
   import SpoolIcon from '@lucide/svelte/icons/spool';
-  import FileSignatureIcon from '@lucide/svelte/icons/file-pen-line';
   import PrinterIcon from '@lucide/svelte/icons/printer-3d';
   import ScanLineIcon from '@lucide/svelte/icons/scan-line';
   import SettingsIcon from '@lucide/svelte/icons/settings';
@@ -23,7 +23,8 @@
   import UsersIcon from '@lucide/svelte/icons/users';
   import type { Component } from 'svelte';
 
-  type NavItem = { href: string; title: string; icon: Component };
+  type NavLink = { href: string; title: string };
+  type NavItem = NavLink & { icon: Component; children?: NavLink[] };
   type NavGroup = { title?: string; items: NavItem[] };
 
   const SETTINGS_HREF = '/staff/settings';
@@ -58,7 +59,15 @@
     {
       title: 'Members',
       items: [
-        { href: '/staff/waivers', title: 'Waivers', icon: FileSignatureIcon },
+        {
+          href: '/staff/members',
+          title: 'Members',
+          icon: IdCardIcon,
+          children: [
+            { href: '/staff/visits', title: 'Visits' },
+            { href: '/staff/waivers', title: 'Waivers' },
+          ],
+        },
         { href: '/staff/organizations', title: 'Organizations', icon: UsersIcon },
         { href: '/staff/billing_codes', title: 'Billing Codes', icon: TicketIcon },
       ],
@@ -69,6 +78,14 @@
   const user = currentUser();
 
   afterNavigate(() => sidebar.setOpenMobile(false));
+
+  function isActive(item: NavLink) {
+    return page.url.pathname.startsWith(item.href);
+  }
+
+  function isExpanded(item: NavItem) {
+    return isActive(item) || (item.children ?? []).some(isActive);
+  }
 
   function initials(name: string) {
     return name
@@ -97,10 +114,7 @@
           <Sidebar.Menu>
             {#each group.items as item (item.href)}
               <Sidebar.MenuItem>
-                <Sidebar.MenuButton
-                  isActive={page.url.pathname.startsWith(item.href)}
-                  tooltipContent={item.title}
-                >
+                <Sidebar.MenuButton isActive={isActive(item)} tooltipContent={item.title}>
                   {#snippet child({ props })}
                     <a href={item.href} {...props}>
                       <item.icon />
@@ -108,6 +122,21 @@
                     </a>
                   {/snippet}
                 </Sidebar.MenuButton>
+                {#if item.children && isExpanded(item)}
+                  <Sidebar.MenuSub>
+                    {#each item.children as subItem (subItem.href)}
+                      <Sidebar.MenuSubItem>
+                        <Sidebar.MenuSubButton isActive={isActive(subItem)}>
+                          {#snippet child({ props })}
+                            <a href={subItem.href} {...props}>
+                              <span>{subItem.title}</span>
+                            </a>
+                          {/snippet}
+                        </Sidebar.MenuSubButton>
+                      </Sidebar.MenuSubItem>
+                    {/each}
+                  </Sidebar.MenuSub>
+                {/if}
               </Sidebar.MenuItem>
             {/each}
           </Sidebar.Menu>

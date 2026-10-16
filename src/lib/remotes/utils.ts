@@ -3,6 +3,9 @@ import { env } from '$env/dynamic/private';
 import { squareWebhookUrl } from '$lib/server/utils/square';
 import { WebhooksHelper } from 'square';
 
+export const HTTP_FOUND = 302;
+export const HTTP_NOT_FOUND = 404;
+
 export function verifyAuth() {
   const event = getRequestEvent();
   if (!event.locals.user) {

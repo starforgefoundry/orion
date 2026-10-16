@@ -9,8 +9,8 @@ import type {
 import type { SettingsMap } from '$lib/server/repositories/settings.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { printRequestService } from '$lib/server/services/print_request.service';
-import { squareService } from '$lib/server/services/square.service';
 import { runInBackground } from '$lib/server/utils/background';
+import { hasMembership } from '$lib/server/utils/member_access';
 import { stringifySquareObject } from '$lib/server/utils/square';
 import { DateTime } from 'luxon';
 import type {
@@ -35,6 +35,11 @@ export class PrintPaymentService extends BaseService {
     return await this.paymentRepository.getById(id);
   }
 
+  private async isMember(email: string) {
+    const context = await this.memberRepository.getAccessContextByEmail(email);
+    return context !== undefined && hasMembership(context, DateTime.now());
+  }
+
   /**
    * Get all applicable discount IDs for a customer and billing code
    */
@@ -45,9 +50,7 @@ export class PrintPaymentService extends BaseService {
     const squareSettings = await this.settingsRepository.getSetting('printRequestSquare');
     const discounts: string[] = [];
 
-    // Check for member discount
-    const activeMember = await squareService.checkActiveMember(customerEmail);
-    if (activeMember) {
+    if (await this.isMember(customerEmail)) {
       discounts.push(squareSettings.memberPrintDiscountId);
     }
 

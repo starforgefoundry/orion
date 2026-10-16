@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
-import type { Subscription } from 'square';
+import type { MemberSubscription } from '$lib/server/db/schema';
+import type { Customer, Order, SubscriptionStatus } from 'square';
 
 const SQUARE_PRODUCTION_API_URL = 'https://connect.squareup.com';
 const SQUARE_SANDBOX_API_URL = 'https://connect.squareupsandbox.com';
@@ -37,12 +38,34 @@ export type SquareWebhook<T> = {
   };
 };
 
+const SUBSCRIPTION_STATUS_MAP: Record<SubscriptionStatus, MemberSubscription['status']> = {
+  PENDING: 'pending',
+  ACTIVE: 'active',
+  PAUSED: 'paused',
+  CANCELED: 'canceled',
+  DEACTIVATED: 'deactivated',
+  COMPLETED: 'deactivated',
+};
+
+export function memberSubscriptionStatus(status: SubscriptionStatus): MemberSubscription['status'] {
+  return SUBSCRIPTION_STATUS_MAP[status];
+}
+
+export function customerDisplayName(customer: Customer): string | undefined {
+  const name = [customer.givenName, customer.familyName].filter(Boolean).join(' ').trim();
+  return name || undefined;
+}
+
+export function dayPassQuantity(order: Order, dayPassItemVariationIds: string[]): number {
+  const dayPassIds = new Set(dayPassItemVariationIds);
+
+  return (order.lineItems ?? [])
+    .filter((item) => item.catalogObjectId && dayPassIds.has(item.catalogObjectId))
+    .reduce((total, item) => total + Math.floor(Number(item.quantity)), 0);
+}
+
 export function stringifySquareObject(obj: any): string {
   return JSON.stringify(obj, (_key, value) =>
     typeof value === 'bigint' ? value.toString() : value,
   );
-}
-
-export function hasActiveMembership(memberships: Subscription[] | undefined) {
-  return (memberships ?? []).some((membership) => membership.status === 'ACTIVE');
 }

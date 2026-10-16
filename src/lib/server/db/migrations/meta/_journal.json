@@ -15,6 +15,13 @@
       "when": 1792129098865,
       "tag": "0001_car_bay_booking",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792135358202,
+      "tag": "0002_member_management",
+      "breakpoints": true
     }
   ]
 }

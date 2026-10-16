@@ -4,6 +4,7 @@ import {
   carBayPolicyDto,
   carBayRatesDto,
   classSettingsDto,
+  memberSquareSettingsDto,
   printRequestSettings,
   printRequestSquareSettings,
 } from '$lib/remotes/dtos/settings.dto';
@@ -86,6 +87,19 @@ export const setCarBayPolicy = command(carBayPolicyDto, async (dto) => {
   verifyAuth();
   const response = await settingsService.setCarBayPolicy(dto);
   getCarBayPolicy().refresh();
+
+  return response;
+});
+
+export const getMemberSquareSettings = query(() => {
+  verifyAuth();
+  return settingsService.getMemberSquareSettings();
+});
+
+export const memberSquareSettingsForm = form(memberSquareSettingsDto, async (dto) => {
+  verifyAuth();
+  const response = await settingsService.setMemberSquareSettings(dto);
+  getMemberSquareSettings().refresh();
 
   return response;
 });

@@ -3,7 +3,8 @@ import { BaseService } from '$lib/server/services/base.service';
 
 export class WaiverService extends BaseService {
   async submitWaiver(dto: SubmitWaiverDto) {
-    const waiver = await this.waiverRepository.submit(dto, dto.signature);
+    const member = await this.memberRepository.upsertByEmail(dto.name, dto.email);
+    const waiver = await this.waiverRepository.submit(dto, member.id);
 
     return {
       status: 'success',

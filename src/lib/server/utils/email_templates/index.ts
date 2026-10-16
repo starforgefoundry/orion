@@ -1,6 +1,7 @@
 import CAR_BAY_BOOKING_TEMPLATE from './car_bay_booking.html?raw';
 import CAR_BAY_REMINDER_TEMPLATE from './car_bay_reminder.html?raw';
 import CLASS_BOOKING_TEMPLATE from './class_booking.html?raw';
+import MEMBER_ONBOARDING_TEMPLATE from './member_onboarding.html?raw';
 import PRINT_PICKUP_TEMPLATE from './print_pickup.html?raw';
 import PRINT_QUOTE_TEMPLATE from './print_quote.html?raw';
 
@@ -33,6 +34,7 @@ export type Templates = {
     bookingWhen: string;
     bookingUrl: string;
   };
+  member_onboarding: { memberName: string; introMessage: string; onboardingUrl: string };
 };
 
 export const templates: { [key in keyof Templates]: string } = {
@@ -41,4 +43,5 @@ export const templates: { [key in keyof Templates]: string } = {
   class_booking: CLASS_BOOKING_TEMPLATE,
   car_bay_booking: CAR_BAY_BOOKING_TEMPLATE,
   car_bay_reminder: CAR_BAY_REMINDER_TEMPLATE,
+  member_onboarding: MEMBER_ONBOARDING_TEMPLATE,
 };

@@ -82,6 +82,91 @@ const customers = [
   ['Jamie Lee', 'jamie.lee@example.com'],
 ];
 
+type MemberScenario = {
+  name: string;
+  email: string;
+  waiver: boolean;
+  subscription?: { planName: string; status: string; canceled?: boolean; refunded?: boolean };
+  organization?: number;
+  /** Days ago each pass was used, null when unused. */
+  dayPasses?: (number | null)[];
+  visits?: number;
+  visitBasis?: string;
+};
+
+const memberScenarios: MemberScenario[] = [
+  {
+    name: 'Jordan Smith',
+    email: 'jordan.smith@example.com',
+    waiver: true,
+    subscription: { planName: 'Monthly Membership', status: 'active' },
+    visits: 9,
+    visitBasis: 'subscription',
+  },
+  {
+    name: 'Taylor Nguyen',
+    email: 'taylor.n@example.com',
+    waiver: true,
+    subscription: { planName: 'Monthly Membership', status: 'active', canceled: true },
+    visits: 4,
+    visitBasis: 'subscription',
+  },
+  {
+    name: 'Morgan Patel',
+    email: 'mpatel@example.com',
+    waiver: true,
+    subscription: { planName: 'Student Membership', status: 'active', refunded: true },
+    visits: 3,
+    visitBasis: 'subscription',
+  },
+  {
+    name: 'Casey Johnson',
+    email: 'casey.j@example.com',
+    waiver: true,
+    organization: 0,
+    visits: 6,
+    visitBasis: 'organization',
+  },
+  {
+    name: 'Riley Garcia',
+    email: 'riley.garcia@example.com',
+    waiver: true,
+    organization: 1,
+    visits: 2,
+  },
+  {
+    name: 'Avery Thompson',
+    email: 'avery.t@example.com',
+    waiver: true,
+    dayPasses: [3, null],
+    visits: 1,
+    visitBasis: 'day_pass',
+  },
+  {
+    name: 'Quinn Martinez',
+    email: 'quinn.m@example.com',
+    waiver: true,
+    dayPasses: [8],
+    visits: 1,
+    visitBasis: 'day_pass',
+  },
+  { name: 'Jamie Lee', email: 'jamie.lee@example.com', waiver: true },
+  {
+    name: 'Drew Kim',
+    email: 'drew.kim@example.com',
+    waiver: false,
+    subscription: { planName: 'Monthly Membership', status: 'active' },
+  },
+  { name: 'Pat Morales', email: 'pat.morales@example.com', waiver: false, dayPasses: [null] },
+  { name: 'Robin Park', email: 'robin.park@example.com', waiver: false, organization: 0 },
+  {
+    name: 'Sky Alvarez',
+    email: 'sky.alvarez@example.com',
+    waiver: true,
+    subscription: { planName: 'Monthly Membership', status: 'paused' },
+  },
+];
+
 const projects = [
   'Drone Frame v3',
   'Replacement Knob',
@@ -121,7 +206,8 @@ async function seed() {
     await tx`
       TRUNCATE "user", print_request, print_request_file, print_request_comment,
         print_request_comment_file, payment, print_material, settings, billing_code,
-        organization, organization_charge, inventory_item, purchase_list, waiver,
+        organization, organization_charge, inventory_item, purchase_list, member, waiver,
+        member_subscription, day_pass, organization_member, visit, member_email,
         class_catalog, class_instance, class_booking, car_bay_booking
       CASCADE`;
 
@@ -271,15 +357,64 @@ async function seed() {
         VALUES (${randomUUID()}, ${item.id}, ${daysAgo(index)})`;
     }
 
-    for (const [index, [name, email]] of customers.entries()) {
-      const id = randomUUID();
-      const key = await writeStorageFile(
-        `waivers/${name.replace(/\W+/g, '_')}_${isoDate(-index * 9)}_${id}`,
-        SIGNATURE_SVG,
-      );
+    await tx`UPDATE organization SET access_end_date = ${daysAgo(-60)} WHERE id = ${organizations[0].id}`;
+    await tx`UPDATE organization SET access_end_date = ${daysAgo(5)} WHERE id = ${organizations[1].id}`;
+
+    for (const [index, scenario] of memberScenarios.entries()) {
+      const memberId = randomUUID();
+      const joined = daysAgo(30 + index * 9);
       await tx`
-        INSERT INTO waiver (id, name, email, signature_url, signed_date)
-        VALUES (${id}, ${name}, ${email}, ${key}, ${daysAgo(index * 9)})`;
+        INSERT INTO member (id, email, name, pass_token, onboarding_token, created_date)
+        VALUES (${memberId}, ${scenario.email}, ${scenario.name}, ${randomUUID()}, ${randomUUID()}, ${joined})`;
+
+      if (scenario.waiver) {
+        const waiverId = randomUUID();
+        const key = await writeStorageFile(
+          `waivers/${scenario.name.replace(/\W+/g, '_')}_${isoDate(-index * 9)}_${waiverId}`,
+          SIGNATURE_SVG,
+        );
+        await tx`
+          INSERT INTO waiver (id, member_id, name, email, signature_url, signed_date, is_adult, source)
+          VALUES (${waiverId}, ${memberId}, ${scenario.name}, ${scenario.email}, ${key}, ${joined}, true,
+            ${index % 3 === 0 ? 'kiosk' : 'web'})`;
+      }
+
+      if (scenario.subscription) {
+        const sub = scenario.subscription;
+        await tx`
+          INSERT INTO member_subscription (id, member_id, plan_variation_id, plan_name, status, start_date,
+            charged_through_date, canceled_date, access_ended_date, refunded_payment_id, updated_date)
+          VALUES (${`sandbox-sub-${index}`}, ${memberId}, 'sandbox-plan', ${sub.planName}, ${sub.status},
+            ${isoDate(-90)}, ${isoDate(14)}, ${sub.canceled ? isoDate(14) : null},
+            ${sub.refunded ? daysAgo(2) : null}, ${sub.refunded ? `sandbox-payment-${index}` : null}, now())`;
+        await tx`
+          INSERT INTO member_email (id, member_id, type, trigger, sent_date)
+          VALUES (${randomUUID()}, ${memberId}, 'onboarding', 'subscription', ${daysAgo(90)})`;
+      }
+
+      if (scenario.organization !== undefined) {
+        await tx`
+          INSERT INTO organization_member (id, organization_id, member_id, added_date)
+          VALUES (${randomUUID()}, ${organizations[scenario.organization].id}, ${memberId}, ${daysAgo(40)})`;
+        await tx`
+          INSERT INTO member_email (id, member_id, type, trigger, sent_date)
+          VALUES (${randomUUID()}, ${memberId}, 'onboarding', 'organization', ${daysAgo(40)})`;
+      }
+
+      for (const [passIndex, usedDaysAgo] of (scenario.dayPasses ?? []).entries()) {
+        await tx`
+          INSERT INTO day_pass (id, member_id, square_order_id, purchased_date, used_date)
+          VALUES (${`sandbox-order-${index}:${passIndex}`}, ${memberId}, ${`sandbox-order-${index}`},
+            ${daysAgo(20)}, ${usedDaysAgo === null ? null : isoDate(-usedDaysAgo)})`;
+      }
+
+      for (let visit = 0; visit < (scenario.visits ?? 0); visit++) {
+        await tx`
+          INSERT INTO visit (id, member_id, scanned_date, source, access_basis, outcome)
+          VALUES (${randomUUID()}, ${memberId}, ${daysAgo(visit * 2 + index / 10)},
+            ${visit % 5 === 4 ? 'staff' : 'kiosk'}, ${scenario.visitBasis ?? 'none'},
+            ${scenario.visitBasis ? 'admitted' : 'denied_no_access'})`;
+      }
     }
 
     const catalog = [

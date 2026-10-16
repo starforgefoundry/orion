@@ -1,12 +1,13 @@
-import type {
-  CreateOrganizationDto,
-  UpdateOrganizationDto,
-} from '$lib/remotes/dtos/organization.dto';
+import type { CreateOrganizationDto } from '$lib/remotes/dtos/organization.dto';
 import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
-import { schema } from '$lib/server/db/schema';
+import { schema, type Organization } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { and, eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
+
+export type OrganizationUpdates = Partial<
+  Pick<Organization, 'name' | 'email' | 'grantsAccess' | 'accessEndDate'>
+>;
 
 export class OrganizationRepository extends BaseRepository {
   async create(dto: CreateOrganizationDto) {
@@ -29,7 +30,7 @@ export class OrganizationRepository extends BaseRepository {
     return organization;
   }
 
-  async update(id: string, updates: Omit<UpdateOrganizationDto, 'id'>) {
+  async update(id: string, updates: OrganizationUpdates) {
     const [organization] = await this.db
       .update(schema.organization)
       .set(updates)
