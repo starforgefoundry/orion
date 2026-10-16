@@ -212,78 +212,83 @@
           </Item.Actions>
         </Item.Root>
 
-        <Item.Root size="sm" class="rounded-none border-0 border-b border-border last:border-b-0">
-          <Item.Media class="size-9 translate-y-0! self-center! rounded-md bg-muted">
-            {#if request.material.colorHex}
-              <span
-                class="size-5 rounded-full border"
-                style={`background-color: ${request.material.colorHex}`}
-              ></span>
-            {:else}
-              <SpoolIcon class="size-4" />
-            {/if}
-          </Item.Media>
-          <Item.Content class="min-w-0 gap-0.5">
-            <Item.Title class="max-w-full truncate">{request.material.name}</Item.Title>
-            {#if request.materialCost && request.materialCost >= 0}
-              <Item.Description>
-                {formatPrice(request.materialCost)} material · {request.buildplateCount}
-                {request.buildplateCount === 1 ? 'plate' : 'plates'}
-              </Item.Description>
-            {/if}
-          </Item.Content>
-        </Item.Root>
-
-        <Item.Root size="sm" class="rounded-none border-0 border-b border-border last:border-b-0">
-          <Item.Media class="size-9 translate-y-0! self-center! rounded-md bg-muted">
-            <ReceiptIcon class="size-4" />
-          </Item.Media>
-          <Item.Content class="min-w-0 gap-0.5">
-            {#if request.payment}
-              <Item.Title>
-                <span class="tabular-nums">{formatPrice(request.payment.total)}</span>
-                <StatusIndicator display={PAYMENT_STATUS_DISPLAY[request.payment.status]} />
-              </Item.Title>
-              <Item.Description class="truncate [&>a]:no-underline">
-                {billingType} issued {request.payment.issuedDate.toLocaleString(DateTime.DATE_MED)}
-                {#if request.billingCode}· <span class="font-mono">{request.billingCode}</span>{/if}
-              </Item.Description>
-            {:else}
-              <Item.Title class="text-muted-foreground"
-                >No {billingType.toLowerCase()} yet</Item.Title
-              >
-              {#if request.billingCode}
-                <Item.Description class="font-mono">{request.billingCode}</Item.Description>
+        <div class="grid sm:grid-cols-2">
+          <Item.Root
+            size="sm"
+            class="rounded-none border-0 border-b border-border sm:border-r sm:border-b-0"
+          >
+            <Item.Media class="size-9 translate-y-0! self-center! rounded-md bg-muted">
+              {#if request.material.colorHex}
+                <span
+                  class="size-5 rounded-full border"
+                  style={`background-color: ${request.material.colorHex}`}
+                ></span>
+              {:else}
+                <SpoolIcon class="size-4" />
               {/if}
-            {/if}
-          </Item.Content>
-          <Item.Actions>
-            {#if canEditPayment}
-              <IconButton
-                icon={TagIcon}
-                aria-label="Edit discount code"
-                onclick={editDiscountCode}
-              />
-            {/if}
-            {#if request.payment?.squareInvoiceId}
-              <IconButton
-                icon={ExternalLinkIcon}
-                aria-label="View invoice in Square"
-                href={`https://app.squareup.com/dashboard/invoices/${request.payment.squareInvoiceId}`}
-                target="_blank"
-              />
-            {/if}
-          </Item.Actions>
-        </Item.Root>
+            </Item.Media>
+            <Item.Content class="min-w-0 gap-0.5">
+              <Item.Title class="max-w-full truncate">{request.material.name}</Item.Title>
+              {#if request.materialCost && request.materialCost >= 0}
+                <Item.Description>
+                  {formatPrice(request.materialCost)} material · {request.buildplateCount}
+                  {request.buildplateCount === 1 ? 'plate' : 'plates'}
+                </Item.Description>
+              {/if}
+            </Item.Content>
+          </Item.Root>
+
+          <Item.Root size="sm" class="rounded-none border-0">
+            <Item.Media class="size-9 translate-y-0! self-center! rounded-md bg-muted">
+              <ReceiptIcon class="size-4" />
+            </Item.Media>
+            <Item.Content class="min-w-0 gap-0.5">
+              {#if request.payment}
+                <Item.Title>
+                  <span class="tabular-nums">{formatPrice(request.payment.total)}</span>
+                  <StatusIndicator display={PAYMENT_STATUS_DISPLAY[request.payment.status]} />
+                </Item.Title>
+                <Item.Description class="truncate [&>a]:no-underline">
+                  {billingType} issued {request.payment.issuedDate.toLocaleString(
+                    DateTime.DATE_MED,
+                  )}
+                  {#if request.billingCode}· <span class="font-mono">{request.billingCode}</span
+                    >{/if}
+                </Item.Description>
+              {:else}
+                <Item.Title class="text-muted-foreground"
+                  >No {billingType.toLowerCase()} yet</Item.Title
+                >
+                {#if request.billingCode}
+                  <Item.Description class="font-mono">{request.billingCode}</Item.Description>
+                {/if}
+              {/if}
+            </Item.Content>
+            <Item.Actions>
+              {#if canEditPayment}
+                <IconButton
+                  icon={TagIcon}
+                  aria-label="Edit discount code"
+                  onclick={editDiscountCode}
+                />
+              {/if}
+              {#if request.payment?.squareInvoiceId}
+                <IconButton
+                  icon={ExternalLinkIcon}
+                  aria-label="View invoice in Square"
+                  href={`https://app.squareup.com/dashboard/invoices/${request.payment.squareInvoiceId}`}
+                  target="_blank"
+                />
+              {/if}
+            </Item.Actions>
+          </Item.Root>
+        </div>
       </Item.Group>
 
       {#if request.specialRequests}
-        <div class="rounded-lg border-l-4 border-primary bg-muted/40 px-4 py-3">
-          <h3 class="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Special Requests
-          </h3>
+        <Section title="Special Requests">
           <p class="text-base whitespace-pre-line">{request.specialRequests}</p>
-        </div>
+        </Section>
       {/if}
     </div>
   {/if}
