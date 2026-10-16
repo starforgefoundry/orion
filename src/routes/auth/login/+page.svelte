@@ -1,7 +1,11 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card';
+  import { Button } from '$lib/components/ui/button';
   import logo from '$lib/assets/logo.png';
   import SignInWithGoogle from '$lib/frontend/components/SignInWithGoogle.svelte';
+  import { modalManager } from '$lib/frontend/modal-manager.svelte';
+  import QrCodeIcon from '@lucide/svelte/icons/qr-code';
+  import PairKioskDialog from './PairKioskDialog.svelte';
 </script>
 
 <svelte:head>
@@ -18,4 +22,12 @@
       <SignInWithGoogle />
     </Card.Content>
   </Card.Root>
+  <Button
+    variant="ghost"
+    class="mt-4 self-center"
+    onclick={() => modalManager.show(PairKioskDialog)}
+  >
+    <QrCodeIcon />
+    Pair kiosk
+  </Button>
 </div>
