@@ -74,7 +74,9 @@ export class OnboardingService extends BaseService {
   private availableWallets(): WalletProvider[] {
     const configured: Record<WalletProvider, boolean> = {
       [WALLET_PROVIDER.APPLE]: Boolean(appleWalletConfig()),
-      [WALLET_PROVIDER.GOOGLE]: Boolean(googleWalletConfig()),
+      // Hidden until Google approves publishing access for the Wallet issuer.
+      // [WALLET_PROVIDER.GOOGLE]: Boolean(googleWalletConfig()),
+      [WALLET_PROVIDER.GOOGLE]: false,
     };
     return Object.values(WALLET_PROVIDER).filter((provider) => configured[provider]);
   }
