@@ -1,6 +1,6 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, exists, inArray, isNull } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 
 export class OrganizationMemberRepository extends BaseRepository {
@@ -41,7 +41,16 @@ export class OrganizationMemberRepository extends BaseRepository {
 
   async listByOrganization(organizationId: string) {
     return await this.db
-      .select({ membership: schema.organizationMember, member: schema.member })
+      .select({
+        membership: schema.organizationMember,
+        member: schema.member,
+        hasWaiver: exists(
+          this.db
+            .select({ id: schema.waiver.id })
+            .from(schema.waiver)
+            .where(eq(schema.waiver.memberId, schema.member.id)),
+        ).mapWith(Boolean),
+      })
       .from(schema.organizationMember)
       .innerJoin(schema.member, eq(schema.member.id, schema.organizationMember.memberId))
       .where(

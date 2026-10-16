@@ -3,11 +3,13 @@
   import { Spinner } from '$lib/components/ui/spinner';
   import * as Table from '$lib/components/ui/table';
   import IconButton from '$lib/frontend/components/IconButton.svelte';
+  import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
+  import { waiverDisplay } from '../members/display';
   import UserMinusIcon from '@lucide/svelte/icons/user-minus';
   import { DateTime } from 'luxon';
   import type { OrganizationMembersManager } from './organization-members.svelte';
 
-  const COLUMN_COUNT = 5;
+  const COLUMN_COUNT = 6;
 
   type Props = { manager: OrganizationMembersManager };
 
@@ -36,12 +38,14 @@
           </Table.Head>
           <Table.Head>Name</Table.Head>
           <Table.Head class="hidden sm:table-cell">Email</Table.Head>
+          <Table.Head>Waiver</Table.Head>
           <Table.Head class="hidden sm:table-cell">Added</Table.Head>
           <Table.Head class="w-12"><span class="sr-only">Actions</span></Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each manager.members.current as { membership, member } (membership.id)}
+        {#each manager.members.current as { membership, member, hasWaiver } (membership.id)}
+          {@const waiver = waiverDisplay(hasWaiver)}
           <Table.Row data-state={manager.isSelected(membership) ? 'selected' : undefined}>
             <Table.Cell>
               <Checkbox
@@ -60,6 +64,9 @@
               <div class="truncate text-xs text-muted-foreground sm:hidden">{member.email}</div>
             </Table.Cell>
             <Table.Cell class="hidden max-w-64 truncate sm:table-cell">{member.email}</Table.Cell>
+            <Table.Cell>
+              <StatusBadge tone={waiver.tone}>{waiver.label}</StatusBadge>
+            </Table.Cell>
             <Table.Cell class="hidden sm:table-cell">
               {membership.addedDate.toLocaleString(DateTime.DATE_SHORT)}
             </Table.Cell>
