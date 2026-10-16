@@ -12,6 +12,11 @@ export const getSquareCatalog = query(() => {
   return squareService.getCatalog();
 });
 
+export const syncSquareMembers = command(() => {
+  verifyAuth();
+  return squareService.syncSubscriptions({ onboardNewMembers: false });
+});
+
 export const handleSquareWebhook = command('unchecked', async (body: string) => {
   await verifySquareSigning(body);
   const webhookData = JSON.parse(body);

@@ -5,14 +5,13 @@ import type { CatalogObject, Customer, Invoice, Order } from 'square';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrintPaymentService } from './print_payment.service';
 
-// Mock squareService singleton
-vi.mock('./square.service', () => ({
-  squareService: {
-    checkActiveMember: vi.fn(),
-    getLocations: vi.fn(),
-    getCatalog: vi.fn(),
-  },
-}));
+const MEMBER_CONTEXT = {
+  member: { id: 'member-1' },
+  hasWaiver: true,
+  subscriptions: [{ status: 'active', accessEndedDate: null }],
+  organizations: [],
+  dayPasses: [],
+};
 
 // Mock remote endpoints to avoid SvelteKit request store errors
 vi.mock('$lib/remotes/endpoints/print_payment.remote', () => ({
@@ -37,10 +36,18 @@ describe('PrintPaymentService', () => {
   let mockSettingsRepo: any;
   let mockSquareRepo: any;
   let mockBillingCodeRepo: any;
-  let squareServiceMock: any;
+  let mockMemberRepo: any;
+
+  function mockMembership(isMember: boolean) {
+    mockMemberRepo.getAccessContextByEmail.mockResolvedValue(isMember ? MEMBER_CONTEXT : undefined);
+  }
 
   beforeEach(async () => {
     vi.clearAllMocks();
+
+    mockMemberRepo = {
+      getAccessContextByEmail: vi.fn().mockResolvedValue(undefined),
+    };
 
     mockPaymentRepo = {
       getById: vi.fn(),
@@ -86,10 +93,13 @@ describe('PrintPaymentService', () => {
       undefined,
       undefined,
       mockBillingCodeRepo,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { memberRepository: mockMemberRepo },
     );
-
-    const { squareService } = await import('./square.service');
-    squareServiceMock = squareService;
   });
 
   afterEach(() => {
@@ -168,7 +178,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
         objects: [mockBuildPlateItem, mockMemberDiscount],
       });
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
 
       // Act
       const result = await printPaymentService.getPricingInfo(customerEmail);
@@ -176,7 +186,7 @@ describe('PrintPaymentService', () => {
       // Assert
       expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequestSquare');
       expect(mockSquareRepo.getCatalogByIds).toHaveBeenCalledWith(['plate-456']);
-      expect(squareServiceMock.checkActiveMember).toHaveBeenCalledWith(customerEmail);
+      expect(mockMemberRepo.getAccessContextByEmail).toHaveBeenCalledWith(customerEmail);
       expect(result).toEqual({
         additionalBuildPlateModifier: 1000,
         discounts: [
@@ -222,7 +232,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
         objects: [mockBuildPlateItem, mockMemberDiscount],
       });
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+      mockMembership(true);
 
       // Act
       const result = await printPaymentService.getPricingInfo(customerEmail);
@@ -298,7 +308,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockPaymentRepo.getById).mockResolvedValue(null);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
@@ -380,7 +390,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
@@ -505,7 +515,7 @@ describe('PrintPaymentService', () => {
 
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
@@ -557,7 +567,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockPaymentRepo.getById).mockResolvedValue(null);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(null);
 
@@ -605,7 +615,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockPaymentRepo.getById).mockResolvedValue(null);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(null);
@@ -665,7 +675,7 @@ describe('PrintPaymentService', () => {
 
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
@@ -736,7 +746,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockPaymentRepo.getById).mockResolvedValue(null);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+      mockMembership(true);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
@@ -748,7 +758,7 @@ describe('PrintPaymentService', () => {
       await printPaymentService.upsertPayment(dto);
 
       // Assert
-      expect(squareServiceMock.checkActiveMember).toHaveBeenCalledWith('member@example.com');
+      expect(mockMemberRepo.getAccessContextByEmail).toHaveBeenCalledWith('member@example.com');
       const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
       expect(orderCall.order.discounts).toHaveLength(1);
       expect(orderCall.order.discounts[0].catalogObjectId).toBe('discount-789');
@@ -803,7 +813,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockPaymentRepo.getById).mockResolvedValue(null);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
@@ -871,7 +881,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockPaymentRepo.getById).mockResolvedValue(null);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
@@ -936,7 +946,7 @@ describe('PrintPaymentService', () => {
 
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
@@ -1123,7 +1133,7 @@ describe('PrintPaymentService', () => {
 
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
@@ -1250,7 +1260,7 @@ describe('PrintPaymentService', () => {
 
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(mockCalculatedOrder);
       vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
@@ -1306,7 +1316,7 @@ describe('PrintPaymentService', () => {
 
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(null);
 
@@ -1367,7 +1377,7 @@ describe('PrintPaymentService', () => {
         };
 
         vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        mockMembership(false);
         vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
         vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
           objects: [mockBuildPlateItem, mockBillingDiscount],
@@ -1446,7 +1456,7 @@ describe('PrintPaymentService', () => {
         };
 
         vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+        mockMembership(true);
         vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
         vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
           objects: [mockBuildPlateItem, mockMemberDiscount, mockBillingDiscount],
@@ -1513,7 +1523,7 @@ describe('PrintPaymentService', () => {
         };
 
         vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        mockMembership(false);
         vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
         vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
           objects: [mockBuildPlateItem],
@@ -1551,7 +1561,7 @@ describe('PrintPaymentService', () => {
         };
 
         vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        mockMembership(false);
         vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(null);
         vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
           objects: [mockBuildPlateItem],
@@ -1741,7 +1751,7 @@ describe('PrintPaymentService', () => {
         vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
         vi.mocked(mockRequestRepo.update).mockResolvedValue(mockRequest);
         // Member check should not be called for organization billing
-        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+        mockMembership(true);
 
         // Act
         await printPaymentService.upsertPayment(dto);
@@ -1754,7 +1764,7 @@ describe('PrintPaymentService', () => {
         // Member discount should NOT be in the order
         expect(orderCall.order.discounts[0].catalogObjectId).not.toBe('member-discount-999');
         // Member check should not be called in organization billing flow
-        expect(squareServiceMock.checkActiveMember).not.toHaveBeenCalled();
+        expect(mockMemberRepo.getAccessContextByEmail).not.toHaveBeenCalled();
       });
 
       it('should handle organization billing without discount when billing code has no discount', async () => {
@@ -1969,7 +1979,7 @@ describe('PrintPaymentService', () => {
         vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
         vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
         vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        mockMembership(false);
         vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
         vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
         vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
@@ -2085,7 +2095,7 @@ describe('PrintPaymentService', () => {
         vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
         vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
         vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        mockMembership(false);
         vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
           objects: [mockBuildPlateItem, mockArchivedDiscount],
         });
@@ -2188,7 +2198,7 @@ describe('PrintPaymentService', () => {
         vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
         vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
         vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        mockMembership(false);
         vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
         vi.mocked(mockSquareRepo.calculateOrder).mockResolvedValue(mockCalculatedOrder);
         vi.mocked(mockPaymentRepo.savePayment).mockResolvedValue(mockPayment);
@@ -2257,7 +2267,7 @@ describe('PrintPaymentService', () => {
         };
 
         vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-        vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+        mockMembership(false);
         vi.mocked(mockBillingCodeRepo.getByCode).mockResolvedValue(mockBillingCodeData);
         vi.mocked(mockSquareRepo.getCatalogByIds).mockResolvedValue({
           objects: [mockBuildPlateItem, mockArchivedDiscount],
@@ -2315,7 +2325,7 @@ describe('PrintPaymentService', () => {
 
     function setupUpsertOrderMocks() {
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(false);
+      mockMembership(false);
       vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
       vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
       vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
@@ -2894,11 +2904,11 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
       setupUpsertOrderMocks();
       // Override to make this customer an active member
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+      mockMembership(true);
 
       await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: '' });
 
-      expect(squareServiceMock.checkActiveMember).toHaveBeenCalledWith('member@example.com');
+      expect(mockMemberRepo.getAccessContextByEmail).toHaveBeenCalledWith('member@example.com');
       expect(mockSquareRepo.createOrder).toHaveBeenCalled();
       const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
       expect(orderCall.order.discounts).toEqual(
@@ -2928,7 +2938,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
       vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
       setupUpsertOrderMocks();
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+      mockMembership(true);
 
       await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: '' });
 
@@ -2997,7 +3007,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
       vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
       setupUpsertOrderMocks();
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+      mockMembership(true);
 
       await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'SAVE20' });
 
@@ -3041,7 +3051,7 @@ describe('PrintPaymentService', () => {
       vi.mocked(mockBillingCodeRepo.getById).mockResolvedValue(orgBCode);
       vi.mocked(mockRequestRepo.update).mockResolvedValue([]);
       setupUpsertOrderMocks();
-      vi.mocked(squareServiceMock.checkActiveMember).mockResolvedValue(true);
+      mockMembership(true);
 
       await printPaymentService.updatePrintRequestDiscount('req-1', { billingCode: 'ORG_B' });
 

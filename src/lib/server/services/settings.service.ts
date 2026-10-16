@@ -103,6 +103,14 @@ export class SettingsService extends BaseService {
   async setCarBayPolicy(value: SettingsMap['carBayPolicy']) {
     return await this.settingsRepository.setSetting('carBayPolicy', value);
   }
+
+  async getMemberSquareSettings() {
+    return await this.settingsRepository.getSetting('memberSquare');
+  }
+
+  async setMemberSquareSettings(value: SettingsMap['memberSquare']) {
+    return await this.settingsRepository.setSetting('memberSquare', value);
+  }
 }
 
 export const settingsService = new SettingsService();

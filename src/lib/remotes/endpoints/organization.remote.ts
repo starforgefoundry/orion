@@ -1,7 +1,9 @@
 import { command, form, query } from '$app/server';
 import {
+  addOrganizationMembersDto,
   chargeOrganizationBalanceDto,
   createOrganizationDto,
+  removeOrganizationMembersDto,
   updateOrganizationDto,
 } from '$lib/remotes/dtos/organization.dto';
 import { createOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
@@ -64,4 +66,22 @@ export const createOrganizationChargeForm = form(createOrgChargeDto, async (dto)
   const charge = await organizationService.createCharge(dto);
   await getOrganizationDetail({ id: dto.organizationId }).refresh();
   return charge;
+});
+
+export const getOrganizationMembers = query(v.string(), async (organizationId) => {
+  verifyAuth();
+  return await organizationService.listOrganizationMembers(organizationId);
+});
+
+export const addOrganizationMembers = command(addOrganizationMembersDto, async (dto) => {
+  verifyAuth();
+  const result = await organizationService.addOrganizationMembers(dto);
+  await getOrganizationMembers(dto.organizationId).refresh();
+  return result;
+});
+
+export const removeOrganizationMembers = command(removeOrganizationMembersDto, async (dto) => {
+  verifyAuth();
+  await organizationService.removeOrganizationMembers(dto.organizationId, dto.membershipIds);
+  await getOrganizationMembers(dto.organizationId).refresh();
 });

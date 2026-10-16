@@ -6,8 +6,13 @@ vi.mock('$lib/server/repositories/square.repository', () => {
   const MockSquareRepository = vi.fn();
   MockSquareRepository.prototype.getLocations = vi.fn();
   MockSquareRepository.prototype.getCatalog = vi.fn();
-  MockSquareRepository.prototype.getMembershipsByEmail = vi.fn();
   MockSquareRepository.prototype.logWebhook = vi.fn();
+  MockSquareRepository.prototype.getSubscription = vi.fn();
+  MockSquareRepository.prototype.listSubscriptions = vi.fn();
+  MockSquareRepository.prototype.getCustomer = vi.fn();
+  MockSquareRepository.prototype.getPayment = vi.fn();
+  MockSquareRepository.prototype.getOrderById = vi.fn();
+  MockSquareRepository.prototype.getPlanVariationName = vi.fn();
   return { SquareRepository: MockSquareRepository };
 });
 
@@ -34,6 +39,7 @@ vi.mock('$lib/server/repositories/print_payment.repository', () => {
 
 vi.mock('$lib/server/repositories/settings.repository', () => {
   const MockSettingsRepository = vi.fn();
+  MockSettingsRepository.prototype.getSetting = vi.fn();
   return { SettingsRepository: MockSettingsRepository };
 });
 
@@ -178,176 +184,6 @@ describe('SquareService', () => {
     });
   });
 
-  describe('checkActiveMember', () => {
-    it('should return true when customer has active membership', async () => {
-      // Arrange
-      const customerEmail = 'member@example.com';
-      const mockMemberships: Subscription[] = [
-        {
-          id: 'sub-123',
-          status: 'ACTIVE',
-          customerId: 'customer-123',
-        },
-      ];
-
-      vi.mocked(mockSquareRepo.getMembershipsByEmail).mockResolvedValue(mockMemberships);
-
-      // Act
-      const result = await squareService.checkActiveMember(customerEmail);
-
-      // Assert
-      expect(mockSquareRepo.getMembershipsByEmail).toHaveBeenCalledWith(customerEmail);
-      expect(result).toBe(true);
-    });
-
-    it('should return true when customer has multiple active memberships', async () => {
-      // Arrange
-      const customerEmail = 'multi-member@example.com';
-      const mockMemberships: Subscription[] = [
-        {
-          id: 'sub-123',
-          status: 'ACTIVE',
-          customerId: 'customer-123',
-        },
-        {
-          id: 'sub-456',
-          status: 'ACTIVE',
-          customerId: 'customer-123',
-        },
-      ];
-
-      vi.mocked(mockSquareRepo.getMembershipsByEmail).mockResolvedValue(mockMemberships);
-
-      // Act
-      const result = await squareService.checkActiveMember(customerEmail);
-
-      // Assert
-      expect(result).toBe(true);
-    });
-
-    it('should return false when customer has no memberships', async () => {
-      // Arrange
-      const customerEmail = 'nonmember@example.com';
-      vi.mocked(mockSquareRepo.getMembershipsByEmail).mockResolvedValue([]);
-
-      // Act
-      const result = await squareService.checkActiveMember(customerEmail);
-
-      // Assert
-      expect(mockSquareRepo.getMembershipsByEmail).toHaveBeenCalledWith(customerEmail);
-      expect(result).toBe(false);
-    });
-
-    it('should return false when memberships is null', async () => {
-      // Arrange
-      const customerEmail = 'nullmember@example.com';
-      vi.mocked(mockSquareRepo.getMembershipsByEmail).mockResolvedValue(null);
-
-      // Act
-      const result = await squareService.checkActiveMember(customerEmail);
-
-      // Assert
-      expect(result).toBe(false);
-    });
-
-    it('should return false when customer has inactive memberships', async () => {
-      // Arrange
-      const customerEmail = 'expired@example.com';
-      const mockMemberships: Subscription[] = [
-        {
-          id: 'sub-expired',
-          status: 'CANCELED',
-          customerId: 'customer-456',
-        },
-      ];
-
-      vi.mocked(mockSquareRepo.getMembershipsByEmail).mockResolvedValue(mockMemberships);
-
-      // Act
-      const result = await squareService.checkActiveMember(customerEmail);
-
-      // Assert
-      expect(result).toBe(false);
-    });
-
-    it('should return false when all memberships are paused', async () => {
-      // Arrange
-      const customerEmail = 'paused@example.com';
-      const mockMemberships: Subscription[] = [
-        {
-          id: 'sub-paused',
-          status: 'PAUSED',
-          customerId: 'customer-789',
-        },
-      ];
-
-      vi.mocked(mockSquareRepo.getMembershipsByEmail).mockResolvedValue(mockMemberships);
-
-      // Act
-      const result = await squareService.checkActiveMember(customerEmail);
-
-      // Assert
-      expect(result).toBe(false);
-    });
-
-    it('should return true when customer has mix of active and inactive memberships', async () => {
-      // Arrange
-      const customerEmail = 'mixed@example.com';
-      const mockMemberships: Subscription[] = [
-        {
-          id: 'sub-canceled',
-          status: 'CANCELED',
-          customerId: 'customer-999',
-        },
-        {
-          id: 'sub-active',
-          status: 'ACTIVE',
-          customerId: 'customer-999',
-        },
-        {
-          id: 'sub-paused',
-          status: 'PAUSED',
-          customerId: 'customer-999',
-        },
-      ];
-
-      vi.mocked(mockSquareRepo.getMembershipsByEmail).mockResolvedValue(mockMemberships);
-
-      // Act
-      const result = await squareService.checkActiveMember(customerEmail);
-
-      // Assert
-      expect(result).toBe(true);
-    });
-
-    it('should handle different email formats correctly', async () => {
-      // Arrange
-      const emails = [
-        'test@example.com',
-        'TEST@EXAMPLE.COM',
-        'user+tag@example.com',
-        'first.last@example.co.uk',
-      ];
-
-      const mockMemberships: Subscription[] = [
-        {
-          id: 'sub-test',
-          status: 'ACTIVE',
-          customerId: 'customer-test',
-        },
-      ];
-
-      vi.mocked(mockSquareRepo.getMembershipsByEmail).mockResolvedValue(mockMemberships);
-
-      // Act & Assert
-      for (const email of emails) {
-        const result = await squareService.checkActiveMember(email);
-        expect(mockSquareRepo.getMembershipsByEmail).toHaveBeenCalledWith(email);
-        expect(result).toBe(true);
-      }
-    });
-  });
-
   describe('edge cases', () => {
     it('should handle repository errors gracefully in getLocations', async () => {
       // Arrange
@@ -363,19 +199,6 @@ describe('SquareService', () => {
 
       // Act & Assert
       await expect(squareService.getCatalog()).rejects.toThrow('Catalog not available');
-    });
-
-    it('should handle repository errors gracefully in checkActiveMember', async () => {
-      // Arrange
-      const customerEmail = 'error@example.com';
-      vi.mocked(mockSquareRepo.getMembershipsByEmail).mockRejectedValue(
-        new Error('Membership lookup failed'),
-      );
-
-      // Act & Assert
-      await expect(squareService.checkActiveMember(customerEmail)).rejects.toThrow(
-        'Membership lookup failed',
-      );
     });
   });
 
@@ -531,6 +354,334 @@ describe('SquareService', () => {
 
       // Act & Assert
       await expect(squareService.processWebhook(webhookData)).rejects.toThrow('Update failed');
+    });
+  });
+});
+
+describe('SquareService member sync', () => {
+  const MEMBER = { id: 'member-1', email: 'ada@example.com', squareCustomerId: null };
+  const CUSTOMER = {
+    id: 'cust-1',
+    givenName: 'Ada',
+    familyName: 'Lovelace',
+    emailAddress: 'ada@example.com',
+  };
+  const SUBSCRIPTION: Subscription = {
+    id: 'sub-1',
+    customerId: 'cust-1',
+    planVariationId: 'plan-var-1',
+    status: 'ACTIVE',
+    startDate: '2026-10-01',
+    chargedThroughDate: '2026-11-01',
+  };
+  const DAY_PASS_VARIATION = 'day-pass-var';
+
+  let service: any;
+  let squareRepo: any;
+  let settingsRepo: any;
+  let memberRepo: any;
+  let memberSubscriptionRepo: any;
+  let dayPassRepo: any;
+  let notificationRepo: any;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+
+    const { SquareRepository } = await import('$lib/server/repositories/square.repository');
+    squareRepo = SquareRepository.prototype;
+    const { SettingsRepository } = await import('$lib/server/repositories/settings.repository');
+    settingsRepo = SettingsRepository.prototype;
+
+    memberRepo = {
+      upsertByEmail: vi.fn().mockResolvedValue(MEMBER),
+      getByEmail: vi.fn().mockResolvedValue(undefined),
+      setSquareCustomerId: vi.fn(),
+    };
+    memberSubscriptionRepo = {
+      upsert: vi.fn().mockResolvedValue({ created: true }),
+      listIds: vi.fn().mockResolvedValue([]),
+    };
+    dayPassRepo = {
+      existsForOrder: vi.fn().mockResolvedValue(false),
+      createForOrder: vi.fn().mockResolvedValue([]),
+    };
+    notificationRepo = { sendOnboarding: vi.fn().mockResolvedValue(undefined) };
+
+    squareRepo.logWebhook.mockResolvedValue({ id: 'log' });
+    squareRepo.getSubscription.mockResolvedValue(SUBSCRIPTION);
+    squareRepo.getCustomer.mockResolvedValue(CUSTOMER);
+    squareRepo.getPlanVariationName.mockResolvedValue('Monthly Membership');
+    settingsRepo.getSetting.mockResolvedValue({ dayPassItemVariationIds: [DAY_PASS_VARIATION] });
+
+    const { SquareService } = await import('./square.service');
+    service = new SquareService(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        memberRepository: memberRepo,
+        memberSubscriptionRepository: memberSubscriptionRepo,
+        dayPassRepository: dayPassRepo,
+        memberNotificationRepository: notificationRepo,
+      },
+    );
+  });
+
+  const subscriptionWebhook = (type = 'subscription.created') => ({
+    type,
+    event_id: 'evt-sub',
+    data: { id: 'sub-1' },
+  });
+
+  describe('subscription webhooks', () => {
+    it('upserts the member and subscription, then sends onboarding', async () => {
+      await service.processWebhook(subscriptionWebhook());
+
+      expect(memberRepo.upsertByEmail).toHaveBeenCalledWith('Ada Lovelace', 'ada@example.com');
+      expect(memberRepo.setSquareCustomerId).toHaveBeenCalledWith('member-1', 'cust-1');
+      expect(memberSubscriptionRepo.upsert).toHaveBeenCalledWith({
+        id: 'sub-1',
+        memberId: 'member-1',
+        planVariationId: 'plan-var-1',
+        planName: 'Monthly Membership',
+        status: 'active',
+        startDate: '2026-10-01',
+        chargedThroughDate: '2026-11-01',
+        canceledDate: null,
+      });
+      expect(notificationRepo.sendOnboarding).toHaveBeenCalledWith(MEMBER, 'subscription');
+    });
+
+    it('handles subscription.updated the same way', async () => {
+      memberSubscriptionRepo.upsert.mockResolvedValue({ created: false });
+      squareRepo.getSubscription.mockResolvedValue({
+        ...SUBSCRIPTION,
+        status: 'CANCELED',
+        canceledDate: '2026-10-20',
+      });
+
+      await service.processWebhook(subscriptionWebhook('subscription.updated'));
+
+      expect(memberSubscriptionRepo.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'canceled', canceledDate: '2026-10-20' }),
+      );
+      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
+    });
+
+    it('does not onboard a newly seen canceled subscription', async () => {
+      squareRepo.getSubscription.mockResolvedValue({ ...SUBSCRIPTION, status: 'CANCELED' });
+
+      await service.processWebhook(subscriptionWebhook());
+
+      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
+    });
+
+    it('skips customers without an email', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      squareRepo.getCustomer.mockResolvedValue({ ...CUSTOMER, emailAddress: undefined });
+
+      await service.processWebhook(subscriptionWebhook());
+
+      expect(warn).toHaveBeenCalled();
+      expect(memberRepo.upsertByEmail).not.toHaveBeenCalled();
+      expect(memberSubscriptionRepo.upsert).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('falls back to the email when the customer has no name', async () => {
+      squareRepo.getCustomer.mockResolvedValue({ id: 'cust-1', emailAddress: 'ada@example.com' });
+
+      await service.processWebhook(subscriptionWebhook());
+
+      expect(memberRepo.upsertByEmail).toHaveBeenCalledWith('ada@example.com', 'ada@example.com');
+    });
+
+    it('does not fail the webhook when onboarding fails', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      notificationRepo.sendOnboarding.mockRejectedValue(new Error('Mailgun down'));
+
+      await expect(service.processWebhook(subscriptionWebhook())).resolves.toEqual({
+        success: true,
+      });
+      error.mockRestore();
+    });
+  });
+
+  describe('syncSubscriptions', () => {
+    it('upserts every active subscription without onboarding and returns counts', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      squareRepo.listSubscriptions.mockResolvedValue([
+        SUBSCRIPTION,
+        { ...SUBSCRIPTION, id: 'sub-2' },
+        { ...SUBSCRIPTION, id: 'sub-3', customerId: undefined },
+      ]);
+      memberSubscriptionRepo.upsert
+        .mockResolvedValueOnce({ created: true })
+        .mockResolvedValueOnce({ created: false });
+
+      const result = await service.syncSubscriptions({ onboardNewMembers: false });
+
+      expect(result).toEqual({ total: 3, created: 1, updated: 1, skipped: 1 });
+      expect(memberSubscriptionRepo.upsert).toHaveBeenCalledTimes(2);
+      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('refreshes known subscriptions that are no longer active and ignores unknown ones', async () => {
+      squareRepo.listSubscriptions.mockResolvedValue([
+        { ...SUBSCRIPTION, id: 'known-canceled', status: 'CANCELED' },
+        { ...SUBSCRIPTION, id: 'unknown-canceled', status: 'CANCELED' },
+      ]);
+      memberSubscriptionRepo.listIds.mockResolvedValue(['known-canceled']);
+      memberSubscriptionRepo.upsert.mockResolvedValue({ created: false });
+
+      const result = await service.syncSubscriptions({ onboardNewMembers: false });
+
+      expect(result).toEqual({ total: 1, created: 0, updated: 1, skipped: 0 });
+      expect(memberSubscriptionRepo.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'known-canceled', status: 'canceled' }),
+      );
+    });
+
+    it('onboards subscribers whose webhook was missed when asked to', async () => {
+      squareRepo.listSubscriptions.mockResolvedValue([SUBSCRIPTION]);
+      memberSubscriptionRepo.upsert.mockResolvedValue({ created: true });
+
+      await service.syncSubscriptions({ onboardNewMembers: true });
+
+      expect(notificationRepo.sendOnboarding).toHaveBeenCalledWith(MEMBER, 'subscription');
+    });
+  });
+
+  describe('day pass webhooks', () => {
+    const paymentWebhook = { type: 'payment.updated', event_id: 'evt-pay', data: { id: 'pay-1' } };
+    const PAYMENT = {
+      id: 'pay-1',
+      status: 'COMPLETED',
+      orderId: 'order-1',
+      createdAt: '2026-10-16T15:00:00Z',
+    };
+    const ORDER = {
+      id: 'order-1',
+      customerId: 'cust-1',
+      closedAt: '2026-10-16T15:01:00Z',
+      lineItems: [
+        { catalogObjectId: DAY_PASS_VARIATION, quantity: '2' },
+        { catalogObjectId: 'other-item', quantity: '5' },
+      ],
+    };
+
+    beforeEach(() => {
+      squareRepo.getPayment.mockResolvedValue(PAYMENT);
+      squareRepo.getOrderById.mockResolvedValue(ORDER);
+      dayPassRepo.createForOrder.mockResolvedValue([{ id: 'order-1:0' }, { id: 'order-1:1' }]);
+    });
+
+    it('creates one pass per day pass item and sends onboarding', async () => {
+      await service.processWebhook(paymentWebhook);
+
+      expect(dayPassRepo.createForOrder).toHaveBeenCalledWith(
+        'member-1',
+        'order-1',
+        expect.anything(),
+        2,
+      );
+      expect(dayPassRepo.createForOrder.mock.calls[0][2].toUTC().toISO()).toContain(
+        '2026-10-16T15:01',
+      );
+      expect(memberRepo.setSquareCustomerId).toHaveBeenCalledWith('member-1', 'cust-1');
+      expect(notificationRepo.sendOnboarding).toHaveBeenCalledWith(MEMBER, 'day_pass');
+    });
+
+    it('keeps an existing member name', async () => {
+      memberRepo.getByEmail.mockResolvedValue({ ...MEMBER, squareCustomerId: 'cust-1' });
+
+      await service.processWebhook(paymentWebhook);
+
+      expect(memberRepo.upsertByEmail).not.toHaveBeenCalled();
+      expect(memberRepo.setSquareCustomerId).not.toHaveBeenCalled();
+    });
+
+    it('is idempotent per order', async () => {
+      dayPassRepo.existsForOrder.mockResolvedValue(true);
+
+      await service.processWebhook(paymentWebhook);
+
+      expect(dayPassRepo.createForOrder).not.toHaveBeenCalled();
+    });
+
+    it('does not resend onboarding when a concurrent webhook already created the passes', async () => {
+      dayPassRepo.createForOrder.mockResolvedValue([]);
+
+      await service.processWebhook(paymentWebhook);
+
+      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
+    });
+
+    it('ignores payments that are not completed', async () => {
+      squareRepo.getPayment.mockResolvedValue({ ...PAYMENT, status: 'APPROVED' });
+
+      await service.processWebhook(paymentWebhook);
+
+      expect(squareRepo.getOrderById).not.toHaveBeenCalled();
+    });
+
+    it('ignores orders without day pass items', async () => {
+      squareRepo.getOrderById.mockResolvedValue({ ...ORDER, lineItems: ORDER.lineItems.slice(1) });
+
+      await service.processWebhook(paymentWebhook);
+
+      expect(dayPassRepo.createForOrder).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when no day pass items are configured', async () => {
+      settingsRepo.getSetting.mockResolvedValue({ dayPassItemVariationIds: [] });
+
+      await service.processWebhook(paymentWebhook);
+
+      expect(squareRepo.getPayment).not.toHaveBeenCalled();
+    });
+
+    it('uses the payment buyer email when the order has no customer', async () => {
+      squareRepo.getOrderById.mockResolvedValue({ ...ORDER, customerId: undefined });
+      squareRepo.getPayment.mockResolvedValue({ ...PAYMENT, buyerEmailAddress: 'bob@example.com' });
+
+      await service.processWebhook(paymentWebhook);
+
+      expect(memberRepo.upsertByEmail).toHaveBeenCalledWith('bob@example.com', 'bob@example.com');
+    });
+
+    it('falls back to the payment customer record', async () => {
+      squareRepo.getOrderById.mockResolvedValue({ ...ORDER, customerId: undefined });
+      squareRepo.getPayment.mockResolvedValue({ ...PAYMENT, customerId: 'cust-1' });
+
+      await service.processWebhook(paymentWebhook);
+
+      expect(squareRepo.getCustomer).toHaveBeenCalledWith('cust-1');
+      expect(memberRepo.upsertByEmail).toHaveBeenCalledWith('Ada Lovelace', 'ada@example.com');
+    });
+
+    it('skips walk-in orders without any email', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      squareRepo.getOrderById.mockResolvedValue({ ...ORDER, customerId: undefined });
+
+      await service.processWebhook(paymentWebhook);
+
+      expect(dayPassRepo.createForOrder).not.toHaveBeenCalled();
+      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
+      warn.mockRestore();
     });
   });
 });

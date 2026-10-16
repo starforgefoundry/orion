@@ -32,6 +32,12 @@ export type SettingsMap = {
   };
   carBayRates: CarBayRates;
   carBayPolicy: CarBayPolicy;
+  memberSquare: {
+    dayPassItemVariationIds: string[];
+  };
+  kiosk: {
+    deviceToken: string;
+  };
 };
 
 const defaults: SettingsMap = {
@@ -58,6 +64,12 @@ const defaults: SettingsMap = {
   },
   carBayRates: DEFAULT_CAR_BAY_RATES,
   carBayPolicy: DEFAULT_CAR_BAY_POLICY,
+  memberSquare: {
+    dayPassItemVariationIds: [],
+  },
+  kiosk: {
+    deviceToken: '',
+  },
 };
 
 export class SettingsRepository extends BaseRepository {

@@ -5,8 +5,16 @@ import type {
   CalculateOrderRequest,
   CreateOrderRequest,
   CreatePaymentRequest,
+  Customer,
+  Invoice,
+  Payment,
+  Subscription,
   UpdateOrderRequest,
 } from 'square';
+
+const SUBSCRIPTION_REFUND_KEY_PREFIX = 'refund-';
+const INVOICE_PAID_STATUS = 'PAID';
+const SUBSCRIPTION_REFUND_REASON = 'Membership access ended';
 
 export class SquareRepository extends BaseRepository {
   async getLocations() {
@@ -23,33 +31,6 @@ export class SquareRepository extends BaseRepository {
     return await this.square.catalog.batchGet({
       objectIds: ids,
     });
-  }
-
-  async getMembershipsByEmail(customerEmail: string) {
-    const customerSearch = await this.square.customers.search({
-      query: {
-        filter: {
-          emailAddress: {
-            exact: customerEmail,
-          },
-        },
-      },
-    });
-
-    const customers = customerSearch.customers ?? [];
-    if (customers.length === 0) {
-      return undefined;
-    }
-
-    const membershipsSearch = await this.square.subscriptions.search({
-      query: {
-        filter: {
-          customerIds: [customers[0].id ?? ''],
-        },
-      },
-    });
-
-    return membershipsSearch.subscriptions;
   }
 
   async getOrderById(orderId: string) {
@@ -173,6 +154,89 @@ export class SquareRepository extends BaseRepository {
     });
 
     return response.refund;
+  }
+
+  async getSubscription(subscriptionId: string): Promise<Subscription | undefined> {
+    const response = await this.square.subscriptions.get({ subscriptionId });
+    return response.subscription;
+  }
+
+  async listSubscriptions(): Promise<Subscription[]> {
+    const subscriptions: Subscription[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const response = await this.square.subscriptions.search({ cursor });
+      subscriptions.push(...(response.subscriptions ?? []));
+      cursor = response.cursor;
+    } while (cursor);
+
+    return subscriptions;
+  }
+
+  async getCustomer(customerId: string): Promise<Customer | undefined> {
+    const response = await this.square.customers.get({ customerId });
+    return response.customer;
+  }
+
+  async getPayment(paymentId: string): Promise<Payment | undefined> {
+    const response = await this.square.payments.get({ paymentId });
+    return response.payment;
+  }
+
+  async getPlanVariationName(planVariationId: string): Promise<string | undefined> {
+    const response = await this.square.catalog.object.get({ objectId: planVariationId });
+    const object = response.object;
+    if (object?.type !== 'SUBSCRIPTION_PLAN_VARIATION') return undefined;
+
+    return object.subscriptionPlanVariationData?.name;
+  }
+
+  /** Cancels at the end of the current billing period. */
+  async cancelSubscription(subscriptionId: string): Promise<void> {
+    await this.square.subscriptions.cancel({ subscriptionId });
+  }
+
+  async refundLatestSubscriptionPayment(subscriptionId: string): Promise<string> {
+    const subscription = await this.getSubscription(subscriptionId);
+    if (!subscription) {
+      throw new Error('Subscription not found');
+    }
+
+    const invoice = await this.findLatestPaidInvoice(subscription.invoiceIds ?? []);
+    if (!invoice?.orderId) {
+      throw new Error('No paid invoice found for this subscription');
+    }
+
+    const order = await this.getOrderById(invoice.orderId);
+    const paymentId = order?.tenders?.[0]?.id;
+    if (!paymentId) {
+      throw new Error('No payment found for the latest invoice');
+    }
+
+    const payment = await this.getPayment(paymentId);
+    const amountMoney = payment?.totalMoney ?? payment?.amountMoney;
+    if (!amountMoney) {
+      throw new Error('Payment has no amount to refund');
+    }
+
+    await this.square.refunds.refundPayment({
+      idempotencyKey: `${SUBSCRIPTION_REFUND_KEY_PREFIX}${paymentId}`,
+      paymentId,
+      amountMoney,
+      reason: SUBSCRIPTION_REFUND_REASON,
+    });
+
+    return paymentId;
+  }
+
+  /** Square lists a subscription's invoices newest first. */
+  private async findLatestPaidInvoice(invoiceIds: string[]): Promise<Invoice | undefined> {
+    for (const invoiceId of invoiceIds) {
+      const invoice = await this.getInvoiceById(invoiceId);
+      if (invoice?.status === INVOICE_PAID_STATUS) return invoice;
+    }
+    return undefined;
   }
 
   async logWebhook(webhookData: SquareWebhook<any>) {

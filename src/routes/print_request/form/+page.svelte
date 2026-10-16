@@ -10,6 +10,7 @@
   import FileDropArea from '$lib/frontend/components/FileDropArea.svelte';
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
+  import StepProgress from '$lib/frontend/components/StepProgress.svelte';
   import FormField from '$lib/frontend/components/form/FormField.svelte';
   import HiddenField from '$lib/frontend/components/form/HiddenField.svelte';
   import OptionSelect from '$lib/frontend/components/form/OptionSelect.svelte';
@@ -126,26 +127,7 @@
       </p>
     </Section>
   {:else}
-    <ol class="flex items-center gap-3 text-sm" aria-label="Form steps">
-      {#each STEP_LIST as step, index (step.id)}
-        {@const isActive = manager.step === step.id}
-        {#if index > 0}<li aria-hidden="true" class="h-px w-8 bg-border"></li>{/if}
-        <li
-          class={cn('flex items-center gap-2', isActive ? 'font-medium' : 'text-muted-foreground')}
-          aria-current={isActive ? 'step' : undefined}
-        >
-          <span
-            class={cn(
-              'grid size-6 place-items-center rounded-full border text-xs',
-              isActive && 'border-primary bg-primary text-primary-foreground',
-            )}
-          >
-            {index + 1}
-          </span>
-          {step.label}
-        </li>
-      {/each}
-    </ol>
+    <StepProgress steps={STEP_LIST} current={manager.step} />
 
     <!-- Both steps live in one form (step 1 is only hidden) so every field is submitted. -->
     <form

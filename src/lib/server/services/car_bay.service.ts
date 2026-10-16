@@ -12,11 +12,8 @@ import type {
 import type { CarBayBooking } from '$lib/server/db/schema';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
-import {
-  SQUARE_CURRENCY,
-  hasActiveMembership,
-  stringifySquareObject,
-} from '$lib/server/utils/square';
+import { hasMembership } from '$lib/server/utils/member_access';
+import { SQUARE_CURRENCY, stringifySquareObject } from '$lib/server/utils/square';
 import {
   CAR_BAY_EMAIL,
   CAR_BAY_STATUS,
@@ -174,7 +171,8 @@ export class CarBayService extends BaseService {
   }
 
   async isMember(customerEmail: string) {
-    return hasActiveMembership(await this.squareRepository.getMembershipsByEmail(customerEmail));
+    const context = await this.memberRepository.getAccessContextByEmail(customerEmail);
+    return context !== undefined && hasMembership(context, DateTime.now());
   }
 
   async book(dto: BookCarBayDto, now: DateTime = DateTime.now()) {

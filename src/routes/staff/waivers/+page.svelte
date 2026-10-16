@@ -9,6 +9,8 @@
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
   import EyeIcon from '@lucide/svelte/icons/eye';
   import SearchIcon from '@lucide/svelte/icons/search';
+  import UserIcon from '@lucide/svelte/icons/user';
+  import { goto } from '$app/navigation';
 
   let searchTerm = $state('');
   let page = $state(1);
@@ -86,7 +88,7 @@
           <Table.Head>Name</Table.Head>
           <Table.Head class="hidden md:table-cell">Email</Table.Head>
           <Table.Head class="hidden sm:table-cell">Signed Date</Table.Head>
-          <Table.Head class="w-12"><span class="sr-only">Actions</span></Table.Head>
+          <Table.Head class="w-20"><span class="sr-only">Actions</span></Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
@@ -101,7 +103,12 @@
             </Table.Cell>
             <Table.Cell class="hidden max-w-64 truncate md:table-cell">{waiver.email}</Table.Cell>
             <Table.Cell class="hidden sm:table-cell">{formatDate(waiver.signedDate)}</Table.Cell>
-            <Table.Cell class="text-right">
+            <Table.Cell class="text-right whitespace-nowrap">
+              <IconButton
+                icon={UserIcon}
+                aria-label="View Member"
+                onclick={() => goto(`/staff/members/${waiver.memberId}`)}
+              />
               <IconButton
                 icon={EyeIcon}
                 aria-label="View Waiver"

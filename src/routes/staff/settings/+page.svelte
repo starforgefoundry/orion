@@ -19,11 +19,15 @@
   import CreditCardIcon from '@lucide/svelte/icons/credit-card';
   import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
   import ServerIcon from '@lucide/svelte/icons/server';
+  import TabletIcon from '@lucide/svelte/icons/tablet';
+  import UsersIcon from '@lucide/svelte/icons/users';
   import type { Component } from 'svelte';
   import BambuddySettings from './BambuddySettings.svelte';
   import BambuddyStatus from './BambuddyStatus.svelte';
   import CarBaySettings from './CarBaySettings.svelte';
   import ClassSettings from './ClassSettings.svelte';
+  import KioskSettings from './KioskSettings.svelte';
+  import MemberSquareSettings from './MemberSquareSettings.svelte';
   import SettingsSection from './SettingsSection.svelte';
   import SquareInfoModal from './SquareInfoModal.svelte';
   import SquareSettings from './SquareSettings.svelte';
@@ -37,6 +41,8 @@
     SQUARE: 'square',
     CLASSES: 'classes',
     CAR_BAY: 'car-bay',
+    MEMBERS: 'members',
+    KIOSK: 'kiosk',
   } as const;
   type SectionId = (typeof SECTIONS)[keyof typeof SECTIONS];
 
@@ -72,6 +78,18 @@
       title: 'Car Bay',
       description: 'Open hours, booking lengths, booking window and rates.',
       icon: CarIcon,
+    },
+    {
+      id: SECTIONS.MEMBERS,
+      title: 'Members',
+      description: 'Square day pass items and syncing memberships from Square.',
+      icon: UsersIcon,
+    },
+    {
+      id: SECTIONS.KIOSK,
+      title: 'Check-in Kiosk',
+      description: 'Pairing the iPad that scans member passes.',
+      icon: TabletIcon,
     },
   ];
 
@@ -187,6 +205,18 @@
         {#if carBayRates.current && carBayPolicy.current}
           <CarBaySettings rates={carBayRates.current} policy={carBayPolicy.current} />
         {/if}
+      </SettingsSection>
+    {:else if active.id === SECTIONS.MEMBERS}
+      <SettingsSection
+        title={active.title}
+        description={active.description}
+        formId="member-square-settings"
+      >
+        <MemberSquareSettings />
+      </SettingsSection>
+    {:else if active.id === SECTIONS.KIOSK}
+      <SettingsSection title={active.title} description={active.description}>
+        <KioskSettings />
       </SettingsSection>
     {/if}
   </div>

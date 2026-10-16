@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { getTableConfig, type PgTable } from 'drizzle-orm/pg-core';
+import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
@@ -71,8 +72,12 @@ describe.skipIf(!TEST_DATABASE_URL)('migrations', () => {
   it('round-trips timestamps without shifting them', async () => {
     const db = drizzle(sql);
     const signedDate = DateTime.fromISO('2026-03-08T01:30:00.123', { zone: 'America/Chicago' });
+    await db
+      .insert(schema.member)
+      .values({ id: 'member-tz', name: 'Jane', email: 'jane@example.com' });
     await db.insert(schema.waiver).values({
       id: 'waiver-tz',
+      memberId: 'member-tz',
       name: 'Jane',
       email: 'jane@example.com',
       signatureUrl: 'waivers/jane',
@@ -151,5 +156,59 @@ describe.skipIf(!TEST_DATABASE_URL)('migrations', () => {
 
       expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     });
+  });
+});
+
+describe.skipIf(!TEST_DATABASE_URL)('member management migration', () => {
+  const sql = postgres(TEST_DATABASE_URL ?? '', { max: 1, onnotice: () => {} });
+
+  async function runMigrationFile(tag: string) {
+    const contents = await readFile(join(MIGRATIONS_DIR, `${tag}.sql`), 'utf8');
+    for (const statement of contents.split('--> statement-breakpoint')) {
+      await sql.unsafe(statement);
+    }
+  }
+
+  beforeAll(async () => {
+    await sql`DROP SCHEMA IF EXISTS public CASCADE`;
+    await sql`DROP SCHEMA IF EXISTS drizzle CASCADE`;
+    await sql`CREATE SCHEMA public`;
+    await runMigrationFile('0000_baseline');
+    await runMigrationFile('0001_car_bay_booking');
+    await sql`
+      INSERT INTO waiver (id, name, email, signature_url, signed_date) VALUES
+        ('w1', 'Old Name', 'Sam@Example.com ', 'waivers/w1', '2025-01-01T00:00:00Z'),
+        ('w2', 'New Name', 'sam@example.com', 'waivers/w2', '2026-01-01T00:00:00Z'),
+        ('w3', 'Alex', 'alex@example.com', 'waivers/w3', '2025-06-01T00:00:00Z')
+    `;
+    await runMigrationFile('0002_member_management');
+  });
+
+  afterAll(async () => {
+    await sql.end();
+  });
+
+  it('creates one member per waiver email using the latest name', async () => {
+    const members = await sql<{ email: string; name: string }[]>`
+      SELECT email, name FROM member ORDER BY email
+    `;
+
+    expect(members).toEqual([
+      { email: 'alex@example.com', name: 'Alex' },
+      { email: 'sam@example.com', name: 'New Name' },
+    ]);
+  });
+
+  it('links every waiver to its member', async () => {
+    const rows = await sql<{ id: string; email: string }[]>`
+      SELECT waiver.id, member.email FROM waiver JOIN member ON member.id = waiver.member_id
+      ORDER BY waiver.id
+    `;
+
+    expect(rows).toEqual([
+      { id: 'w1', email: 'sam@example.com' },
+      { id: 'w2', email: 'sam@example.com' },
+      { id: 'w3', email: 'alex@example.com' },
+    ]);
   });
 });

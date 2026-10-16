@@ -1,25 +1,28 @@
 import type { SubmitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
-import { schema } from '$lib/server/db/schema';
+import { schema, type Waiver } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { fileUrl, saveFile } from '$lib/server/utils/storage';
 import { asc, count, desc, eq, ilike, or } from 'drizzle-orm';
 
 export class WaiverRepository extends BaseRepository {
-  async submit(dto: SubmitWaiverDto, signatureFile: File) {
+  async submit(dto: SubmitWaiverDto, memberId: string, source: Waiver['source'] = 'web') {
     const waiverId = crypto.randomUUID();
     const sanitizedName = dto.name.replace(/[^a-zA-Z0-9_-]/g, '_');
     const dateStr = new Date().toISOString().split('T')[0];
     const filename = `waivers/${sanitizedName}_${dateStr}_${waiverId}`;
 
-    const signatureUrl = await saveFile(signatureFile, filename);
+    const signatureUrl = await saveFile(dto.signature, filename);
 
     const [waiver] = await this.db
       .insert(schema.waiver)
       .values({
         id: waiverId,
+        memberId,
         name: dto.name,
         email: dto.email,
         signatureUrl,
+        isAdult: dto.isAdult,
+        source,
       })
       .returning();
     return waiver;

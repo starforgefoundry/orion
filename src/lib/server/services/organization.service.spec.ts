@@ -6,7 +6,8 @@ import type {
 import { DateTime } from 'luxon';
 import type { Customer, Invoice, Order } from 'square';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { OrganizationService } from './organization.service';
+import { SPACE_ZONE } from '$lib/server/utils/member_access';
+import { ORGANIZATION_NOT_FOUND, OrganizationService } from './organization.service';
 
 // Mock remote endpoints to avoid SvelteKit request store errors
 vi.mock('$lib/remotes/endpoints/organization.remote', () => ({
@@ -836,6 +837,169 @@ describe('OrganizationService', () => {
       expect(result.total).toBe(largeBalance);
       const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
       expect(orderCall.order.lineItems![0].basePriceMoney!.amount).toBe(BigInt(largeBalance));
+    });
+  });
+});
+
+describe('OrganizationService student members', () => {
+  const organization = { id: 'org-1', name: 'Robotics Club', email: 'club@example.com' };
+  let service: OrganizationService;
+  let organizationRepository: {
+    getById: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  };
+  let memberRepository: { upsertByEmail: ReturnType<typeof vi.fn> };
+  let organizationMemberRepository: {
+    add: ReturnType<typeof vi.fn>;
+    removeMany: ReturnType<typeof vi.fn>;
+  };
+  let memberNotificationRepository: { sendOnboarding: ReturnType<typeof vi.fn> };
+
+  beforeEach(() => {
+    organizationRepository = {
+      getById: vi.fn().mockResolvedValue(organization),
+      update: vi.fn(),
+    };
+    memberRepository = {
+      upsertByEmail: vi.fn(async (name: string, email: string) => ({
+        id: `id-${email}`,
+        name,
+        email,
+      })),
+    };
+    organizationMemberRepository = {
+      add: vi.fn(async (_: string, memberId: string) => ({ id: `membership-${memberId}` })),
+      removeMany: vi.fn(),
+    };
+    memberNotificationRepository = { sendOnboarding: vi.fn() };
+
+    service = new OrganizationService(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      organizationRepository as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        memberRepository,
+        organizationMemberRepository,
+        memberNotificationRepository,
+      } as never,
+    );
+  });
+
+  describe('addOrganizationMembers', () => {
+    it('adds each parsed member and sends onboarding', async () => {
+      const result = await service.addOrganizationMembers({
+        organizationId: organization.id,
+        lines: 'Ada <ada@example.com>\nGrace, grace@example.com',
+      });
+
+      expect(memberRepository.upsertByEmail).toHaveBeenCalledWith('Ada', 'ada@example.com');
+      expect(organizationMemberRepository.add).toHaveBeenCalledWith(
+        organization.id,
+        'id-ada@example.com',
+      );
+      expect(memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'id-grace@example.com' }),
+        'organization',
+      );
+      expect(result.added.map((line) => line.email)).toEqual([
+        'ada@example.com',
+        'grace@example.com',
+      ]);
+      expect(result.errors).toEqual([]);
+    });
+
+    it('skips onboarding for existing members', async () => {
+      organizationMemberRepository.add.mockResolvedValue(undefined);
+
+      const result = await service.addOrganizationMembers({
+        organizationId: organization.id,
+        lines: 'Ada <ada@example.com>',
+      });
+
+      expect(memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      expect(result.alreadyMembers).toHaveLength(1);
+      expect(result.added).toEqual([]);
+    });
+
+    it('reports unparseable lines and still adds the rest', async () => {
+      const result = await service.addOrganizationMembers({
+        organizationId: organization.id,
+        lines: 'nonsense\nAda <ada@example.com>',
+      });
+
+      expect(result.errors).toEqual([expect.objectContaining({ line: 1, text: 'nonsense' })]);
+      expect(result.added).toHaveLength(1);
+    });
+
+    it('keeps the membership when the onboarding email fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      memberNotificationRepository.sendOnboarding.mockRejectedValueOnce(new Error('mailgun'));
+
+      const result = await service.addOrganizationMembers({
+        organizationId: organization.id,
+        lines: 'Ada <ada@example.com>\nGrace <grace@example.com>',
+      });
+
+      expect(result.added).toHaveLength(2);
+      expect(result.onboardingFailed.map((line) => line.email)).toEqual(['ada@example.com']);
+    });
+
+    it('throws when the organization does not exist', async () => {
+      organizationRepository.getById.mockResolvedValue(undefined);
+
+      await expect(
+        service.addOrganizationMembers({ organizationId: 'missing', lines: 'Ada <a@b.co>' }),
+      ).rejects.toThrow(ORGANIZATION_NOT_FOUND);
+      expect(memberRepository.upsertByEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateOrganization access end date', () => {
+    it('stores the end of the chosen day in the space time zone', async () => {
+      await service.updateOrganization(organization.id, { accessEndDate: '2026-12-15' });
+
+      const { accessEndDate } = organizationRepository.update.mock.calls[0][1];
+      expect(accessEndDate.zoneName).toBe(SPACE_ZONE);
+      expect(accessEndDate.toISO()).toBe('2026-12-15T23:59:59.999-06:00');
+    });
+
+    it('clears the end date when null', async () => {
+      await service.updateOrganization(organization.id, { accessEndDate: null });
+
+      expect(organizationRepository.update).toHaveBeenCalledWith(organization.id, {
+        accessEndDate: null,
+      });
+    });
+
+    it('switches member access off without touching the end date', async () => {
+      await service.updateOrganization(organization.id, { grantsAccess: false });
+
+      expect(organizationRepository.update).toHaveBeenCalledWith(organization.id, {
+        grantsAccess: false,
+      });
+    });
+  });
+
+  describe('removeOrganizationMembers', () => {
+    it('removes the memberships within the organization', async () => {
+      await service.removeOrganizationMembers(organization.id, ['m1', 'm2']);
+
+      expect(organizationMemberRepository.removeMany).toHaveBeenCalledWith(organization.id, [
+        'm1',
+        'm2',
+      ]);
     });
   });
 });

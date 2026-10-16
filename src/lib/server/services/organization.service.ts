@@ -1,11 +1,22 @@
 import type {
+  AddOrganizationMembersDto,
   ChargeOrganizationBalanceDto,
   CreateOrganizationDto,
   UpdateOrganizationDto,
 } from '$lib/remotes/dtos/organization.dto';
 import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
+import { MEMBER_EMAIL_TRIGGER } from '$lib/member_enums';
 import { BaseService } from '$lib/server/services/base.service';
+import { SPACE_ZONE } from '$lib/server/utils/member_access';
+import { parseMemberLines, type ParsedMemberLine } from '$lib/server/utils/member_lines';
 import { DateTime } from 'luxon';
+
+export const ORGANIZATION_NOT_FOUND = 'Organization not found';
+
+/** Access lasts through the whole chosen day in the space's time zone. */
+export function accessEndOfDay(date: string | null) {
+  return date === null ? null : DateTime.fromISO(date, { zone: SPACE_ZONE }).endOf('day');
+}
 
 export class OrganizationService extends BaseService {
   async getOrganizations() {
@@ -61,6 +72,8 @@ export class OrganizationService extends BaseService {
       id: organization.id,
       name: organization.name,
       email: organization.email,
+      grantsAccess: organization.grantsAccess,
+      accessEndDate: organization.accessEndDate,
       outstandingBalance,
       charges: allCharges,
       balancePayments,
@@ -72,7 +85,52 @@ export class OrganizationService extends BaseService {
   }
 
   async updateOrganization(id: string, updates: Omit<UpdateOrganizationDto, 'id'>) {
-    return await this.organizationRepository.update(id, updates);
+    const { accessEndDate, ...rest } = updates;
+    return await this.organizationRepository.update(id, {
+      ...rest,
+      ...(accessEndDate !== undefined && { accessEndDate: accessEndOfDay(accessEndDate) }),
+    });
+  }
+
+  async listOrganizationMembers(organizationId: string) {
+    return await this.organizationMemberRepository.listByOrganization(organizationId);
+  }
+
+  async removeOrganizationMembers(organizationId: string, membershipIds: string[]) {
+    await this.organizationMemberRepository.removeMany(organizationId, membershipIds);
+  }
+
+  /** Members already in the organization are skipped and not emailed again. */
+  async addOrganizationMembers(dto: AddOrganizationMembersDto) {
+    const organization = await this.organizationRepository.getById(dto.organizationId);
+    if (!organization) throw new Error(ORGANIZATION_NOT_FOUND);
+
+    const { members, errors } = parseMemberLines(dto.lines);
+    const added: ParsedMemberLine[] = [];
+    const alreadyMembers: ParsedMemberLine[] = [];
+    const onboardingFailed: ParsedMemberLine[] = [];
+
+    for (const line of members) {
+      const member = await this.memberRepository.upsertByEmail(line.name, line.email);
+      const membership = await this.organizationMemberRepository.add(organization.id, member.id);
+      if (!membership) {
+        alreadyMembers.push(line);
+        continue;
+      }
+
+      added.push(line);
+      try {
+        await this.memberNotificationRepository.sendOnboarding(
+          member,
+          MEMBER_EMAIL_TRIGGER.ORGANIZATION,
+        );
+      } catch (error) {
+        console.error(`Onboarding email failed for ${line.email}`, error);
+        onboardingFailed.push(line);
+      }
+    }
+
+    return { added, alreadyMembers, onboardingFailed, errors };
   }
 
   async archiveOrganization(id: string) {
