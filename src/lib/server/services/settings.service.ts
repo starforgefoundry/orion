@@ -87,6 +87,14 @@ export class SettingsService extends BaseService {
 
     return setting;
   }
+
+  async getCarBayRates() {
+    return await this.settingsRepository.getSetting('carBayRates');
+  }
+
+  async setCarBayRates(value: SettingsMap['carBayRates']) {
+    return await this.settingsRepository.setSetting('carBayRates', value);
+  }
 }
 
 export const settingsService = new SettingsService();

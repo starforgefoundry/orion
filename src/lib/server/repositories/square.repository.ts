@@ -1,7 +1,12 @@
 import { schema, type SquareWebhookLog } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import type { SquareWebhook } from '$lib/server/utils/square';
-import type { CalculateOrderRequest, CreateOrderRequest, UpdateOrderRequest } from 'square';
+import type {
+  CalculateOrderRequest,
+  CreateOrderRequest,
+  CreatePaymentRequest,
+  UpdateOrderRequest,
+} from 'square';
 
 export class SquareRepository extends BaseRepository {
   async getLocations() {
@@ -139,6 +144,35 @@ export class SquareRepository extends BaseRepository {
     }
 
     return createdCustomer.customer;
+  }
+
+  /** With `autocomplete: false` the card is only authorized until `completePayment` captures it. */
+  async createPayment(payment: CreatePaymentRequest) {
+    const response = await this.square.payments.create(payment);
+    return response.payment;
+  }
+
+  async completePayment(paymentId: string) {
+    const response = await this.square.payments.complete({ paymentId });
+    return response.payment;
+  }
+
+  async cancelPayment(paymentId: string) {
+    const response = await this.square.payments.cancel({ paymentId });
+    return response.payment;
+  }
+
+  async refundPayment(paymentId: string, amountCents: number) {
+    const response = await this.square.refunds.refundPayment({
+      paymentId,
+      idempotencyKey: crypto.randomUUID(),
+      amountMoney: {
+        amount: BigInt(amountCents),
+        currency: 'USD',
+      },
+    });
+
+    return response.refund;
   }
 
   async logWebhook(webhookData: SquareWebhook<any>) {

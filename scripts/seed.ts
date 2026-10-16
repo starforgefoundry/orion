@@ -122,7 +122,7 @@ async function seed() {
       TRUNCATE "user", print_request, print_request_file, print_request_comment,
         print_request_comment_file, payment, print_material, settings, billing_code,
         organization, organization_charge, inventory_item, purchase_list, waiver,
-        class_catalog, class_instance, class_booking
+        class_catalog, class_instance, class_booking, car_bay_booking
       CASCADE`;
 
     for (const user of users) {

@@ -7,11 +7,13 @@
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import {
     getBambuddySettings,
+    getCarBayRates,
     getClassSettings,
     getPrintRequestSettings,
     getPrintRequestSquareSettings,
   } from '$lib/remotes/endpoints/settings.remote';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
+  import CarIcon from '@lucide/svelte/icons/car';
   import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
   import CreditCardIcon from '@lucide/svelte/icons/credit-card';
   import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
@@ -19,6 +21,7 @@
   import type { Component } from 'svelte';
   import BambuddySettings from './BambuddySettings.svelte';
   import BambuddyStatus from './BambuddyStatus.svelte';
+  import CarBaySettings from './CarBaySettings.svelte';
   import ClassSettings from './ClassSettings.svelte';
   import SettingsSection from './SettingsSection.svelte';
   import SquareInfoModal from './SquareInfoModal.svelte';
@@ -32,6 +35,7 @@
     BAMBUDDY: 'bambuddy',
     SQUARE: 'square',
     CLASSES: 'classes',
+    CAR_BAY: 'car-bay',
   } as const;
   type SectionId = (typeof SECTIONS)[keyof typeof SECTIONS];
 
@@ -62,6 +66,12 @@
       description: 'Notifications for class bookings.',
       icon: CalendarIcon,
     },
+    {
+      id: SECTIONS.CAR_BAY,
+      title: 'Car Bay',
+      description: 'Booking rates, overrun fees and the overnight fee.',
+      icon: CarIcon,
+    },
   ];
 
   const active = $derived(
@@ -72,6 +82,7 @@
   const printRequestSettings = getPrintRequestSettings();
   const squareSettings = getPrintRequestSquareSettings();
   const classSettings = getClassSettings();
+  const carBayRates = getCarBayRates();
   const bambuddySettings = getBambuddySettings();
 </script>
 
@@ -161,6 +172,17 @@
         {@render loadState(classSettings, 'class')}
         {#if classSettings.current}
           <ClassSettings classSettings={classSettings.current} />
+        {/if}
+      </SettingsSection>
+    {:else if active.id === SECTIONS.CAR_BAY}
+      <SettingsSection
+        title={active.title}
+        description={active.description}
+        formId="car-bay-settings"
+      >
+        {@render loadState(carBayRates, 'car bay')}
+        {#if carBayRates.current}
+          <CarBaySettings rates={carBayRates.current} />
         {/if}
       </SettingsSection>
     {/if}

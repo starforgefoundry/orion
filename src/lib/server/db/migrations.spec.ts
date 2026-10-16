@@ -1,4 +1,9 @@
 import { schema } from '$lib/server/db/schema';
+import {
+  CarBayRepository,
+  CarBaySlotTakenError,
+} from '$lib/server/repositories/car_bay.repository';
+import { blockedUntil } from '$lib/utils/car_bay';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -7,7 +12,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import { DateTime } from 'luxon';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -87,5 +92,67 @@ describe.skipIf(!TEST_DATABASE_URL)('migrations', () => {
     expect(stored.signedDate.toMillis()).toBe(signedDate.toMillis());
     expect(resaved.signedDate.toMillis()).toBe(signedDate.toMillis());
     expect(resaved.signedDate.zoneName).toBe('America/Chicago');
+  });
+
+  describe('car bay overlap constraint', () => {
+    const repository = new CarBayRepository(drizzle(sql));
+
+    function booking(start: string, end: string) {
+      const endAt = DateTime.fromISO(end, { zone: 'America/Chicago' });
+      return {
+        tier: 'hourly' as const,
+        status: 'confirmed' as const,
+        startAt: DateTime.fromISO(start, { zone: 'America/Chicago' }),
+        endAt,
+        blockedUntil: blockedUntil(endAt),
+        isMember: true,
+        customerName: 'Jane Doe',
+        customerEmail: 'jane@example.com',
+        customerPhone: '555-0100',
+      };
+    }
+
+    beforeEach(async () => {
+      await sql`TRUNCATE car_bay_booking CASCADE`;
+    });
+
+    it('rejects a booking that overlaps a confirmed one', async () => {
+      await repository.create(booking('2026-10-17T12:00', '2026-10-17T14:00'));
+
+      await expect(
+        repository.create(booking('2026-10-17T13:00', '2026-10-17T15:00')),
+      ).rejects.toThrow(CarBaySlotTakenError);
+    });
+
+    it('rejects a booking that starts inside the 30 minute buffer', async () => {
+      await repository.create(booking('2026-10-17T12:00', '2026-10-17T14:00'));
+
+      await expect(
+        repository.create(booking('2026-10-17T14:15', '2026-10-17T16:15')),
+      ).rejects.toThrow(CarBaySlotTakenError);
+      await expect(
+        repository.create(booking('2026-10-17T14:30', '2026-10-17T16:30')),
+      ).resolves.toBeDefined();
+    });
+
+    it('frees the time once a booking is canceled or a no-show', async () => {
+      const canceled = await repository.create(booking('2026-10-17T12:00', '2026-10-17T14:00'));
+      await repository.update(canceled.id, { status: 'canceled' });
+      const noShow = await repository.create(booking('2026-10-17T12:00', '2026-10-17T14:00'));
+      await repository.update(noShow.id, { status: 'no_show' });
+
+      await expect(
+        repository.create(booking('2026-10-17T12:00', '2026-10-17T14:00')),
+      ).resolves.toBeDefined();
+    });
+
+    it('lets only one of two simultaneous checkouts win', async () => {
+      const results = await Promise.allSettled([
+        repository.create(booking('2026-10-17T12:00', '2026-10-17T14:00')),
+        repository.create(booking('2026-10-17T13:00', '2026-10-17T15:00')),
+      ]);
+
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    });
   });
 });

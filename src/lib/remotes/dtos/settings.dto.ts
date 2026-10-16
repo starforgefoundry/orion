@@ -41,3 +41,15 @@ export const bambuddySettings = v.object({
 export const classSettingsDto = v.object({
   discordWebhookUrl: v.string(),
 });
+
+const cents = v.pipe(v.number(), v.integer(), v.minValue(0));
+const pricePair = v.object({ member: cents, nonMember: cents });
+
+export const carBayRatesDto = v.object({
+  quickJob: pricePair,
+  hourly: pricePair,
+  fullDayWeekday: pricePair,
+  fullDayWeekend: pricePair,
+  overrunHourly: pricePair,
+  overnightFee: cents,
+});
