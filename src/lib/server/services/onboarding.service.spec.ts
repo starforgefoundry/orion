@@ -104,8 +104,7 @@ describe('OnboardingService', () => {
       expect(memberRepo.getAccessContext).toHaveBeenCalledWith('member-1');
     });
 
-    // Google Wallet is hidden until publishing access is approved.
-    it.skip('offers Google Wallet when it is configured', async () => {
+    it('offers Google Wallet when it is configured', async () => {
       vi.mocked(googleWalletConfig).mockReturnValue(WALLET_CONFIG);
       memberRepo.getAccessContext.mockResolvedValue({ hasWaiver: true });
 
@@ -115,7 +114,7 @@ describe('OnboardingService', () => {
       expect(onboarding?.wallets).toEqual(['google']);
     });
 
-    it.skip('offers both wallets when both are configured', async () => {
+    it('offers both wallets when both are configured', async () => {
       vi.mocked(googleWalletConfig).mockReturnValue(WALLET_CONFIG);
       vi.mocked(appleWalletConfig).mockReturnValue(APPLE_CONFIG);
 
