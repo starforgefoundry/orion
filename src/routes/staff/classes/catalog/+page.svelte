@@ -37,7 +37,7 @@
   }
 </script>
 
-<PageHeader title="Class Catalog">
+<PageHeader title="Class Catalog" formHref="/classes">
   {#snippet actions()}
     <Button onclick={openCreate}>
       <PlusIcon />

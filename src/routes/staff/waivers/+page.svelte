@@ -64,7 +64,7 @@
   }
 </script>
 
-<PageHeader title="Signed Waivers" />
+<PageHeader title="Signed Waivers" formHref="/waiver" />
 
 <TextInput
   icon={SearchIcon}

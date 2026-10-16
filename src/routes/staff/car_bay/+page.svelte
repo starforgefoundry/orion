@@ -74,7 +74,7 @@
 
 <svelte:window onfocus={refresh} />
 
-<PageHeader title="Car Bay">
+<PageHeader title="Car Bay" formHref="/car_bay">
   {#snippet actions()}
     <Button onclick={openFirstAvailable}>
       <PlusIcon />

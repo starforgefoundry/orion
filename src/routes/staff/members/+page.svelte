@@ -60,7 +60,7 @@
   }
 </script>
 
-<PageHeader title="Members" />
+<PageHeader title="Members" formHref="/pass" />
 
 <div class="mb-3 flex flex-wrap items-center gap-2">
   <TextInput

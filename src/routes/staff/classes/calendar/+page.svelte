@@ -27,7 +27,7 @@
 
 <svelte:window onfocus={() => getAllInstances().refresh()} />
 
-<PageHeader title="Classes">
+<PageHeader title="Classes" formHref="/classes">
   {#snippet actions()}
     <IconButton
       icon={CalendarSyncIcon}
