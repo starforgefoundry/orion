@@ -18,7 +18,6 @@
   import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
   import CreditCardIcon from '@lucide/svelte/icons/credit-card';
   import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
-  import ServerIcon from '@lucide/svelte/icons/server';
   import TabletIcon from '@lucide/svelte/icons/tablet';
   import UsersIcon from '@lucide/svelte/icons/users';
   import type { Component } from 'svelte';
@@ -36,8 +35,7 @@
   const SECTION_PARAM = 'section';
 
   const SECTIONS = {
-    PRINT_REQUESTS: 'print-requests',
-    BAMBUDDY: 'bambuddy',
+    PRINTING: '3d-printing',
     SQUARE: 'square',
     CLASSES: 'classes',
     CAR_BAY: 'car-bay',
@@ -50,16 +48,10 @@
 
   const SECTION_LIST: SectionInfo[] = [
     {
-      id: SECTIONS.PRINT_REQUESTS,
-      title: '3D Print Requests',
-      description: 'Intake form, announcements, upload limits and notifications.',
+      id: SECTIONS.PRINTING,
+      title: '3D Printing',
+      description: 'Print request intake and the connection to the printers.',
       icon: Printer3dIcon,
-    },
-    {
-      id: SECTIONS.BAMBUDDY,
-      title: 'Bambuddy',
-      description: 'Connection to the server that talks to the printers.',
-      icon: ServerIcon,
     },
     {
       id: SECTIONS.SQUARE,
@@ -141,31 +133,32 @@
   </nav>
 
   <div class="min-w-0 flex-1 md:max-w-3xl">
-    {#if active.id === SECTIONS.PRINT_REQUESTS}
-      <SettingsSection
-        title={active.title}
-        description={active.description}
-        formId="print-request-settings"
-      >
-        {@render loadState(printRequestSettings, 'print request')}
-        {#if printRequestSettings.current}
-          <SystemSettings printRequestSettings={printRequestSettings.current} />
-        {/if}
-      </SettingsSection>
-    {:else if active.id === SECTIONS.BAMBUDDY}
-      <SettingsSection
-        title={active.title}
-        description={active.description}
-        formId="bambuddy-settings"
-      >
-        <div class="flex flex-col gap-4">
-          <BambuddyStatus />
-          {@render loadState(bambuddySettings, 'Bambuddy')}
-          {#if bambuddySettings.current}
-            <BambuddySettings bambuddySettings={bambuddySettings.current} />
+    {#if active.id === SECTIONS.PRINTING}
+      <div class="flex flex-col gap-6">
+        <SettingsSection
+          title="Print Requests"
+          description="Intake form, announcements, upload limits and notifications."
+          formId="print-request-settings"
+        >
+          {@render loadState(printRequestSettings, 'print request')}
+          {#if printRequestSettings.current}
+            <SystemSettings printRequestSettings={printRequestSettings.current} />
           {/if}
-        </div>
-      </SettingsSection>
+        </SettingsSection>
+        <SettingsSection
+          title="Bambuddy"
+          description="Connection to the server that talks to the printers."
+          formId="bambuddy-settings"
+        >
+          <div class="flex flex-col gap-4">
+            <BambuddyStatus />
+            {@render loadState(bambuddySettings, 'Bambuddy')}
+            {#if bambuddySettings.current}
+              <BambuddySettings bambuddySettings={bambuddySettings.current} />
+            {/if}
+          </div>
+        </SettingsSection>
+      </div>
     {:else if active.id === SECTIONS.SQUARE}
       <SettingsSection
         title={active.title}
