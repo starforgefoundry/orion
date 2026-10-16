@@ -9,7 +9,7 @@ export type Step = (typeof STEPS)[keyof typeof STEPS];
 const BYTES_PER_MB = 1024 * 1024;
 const PERCENT = 100;
 const HTTP_OK = 200;
-const SUCCESS_PATH = '/print_request/form/success';
+const SUCCESS_PATH = '/print_request/success';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type SubmitParameters = Parameters<Parameters<typeof submitPrintRequestForm.enhance>[0]>[0];

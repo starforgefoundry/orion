@@ -25,7 +25,7 @@
     </a>.
   </p>
 
-  <Button onclick={() => (window.location.href = '/print_request/form')} class="mt-2">
+  <Button onclick={() => (window.location.href = '/print_request')} class="mt-2">
     Submit Another Request
   </Button>
 </div>

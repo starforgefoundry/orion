@@ -26,7 +26,7 @@
 
 <svelte:window onfocus={() => getPrintRequests().refresh()} />
 
-<PageHeader title="Request Queue" formHref="/print_request/form">
+<PageHeader title="Request Queue" formHref="/print_request">
   {#snippet actions()}
     <ToggleGroup.Root
       type="single"
