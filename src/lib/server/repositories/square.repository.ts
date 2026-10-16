@@ -1,6 +1,6 @@
 import { schema, type SquareWebhookLog } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import type { SquareWebhook } from '$lib/server/utils/square';
+import { SQUARE_CURRENCY, type SquareWebhook } from '$lib/server/utils/square';
 import type {
   CalculateOrderRequest,
   CreateOrderRequest,
@@ -168,7 +168,7 @@ export class SquareRepository extends BaseRepository {
       idempotencyKey: crypto.randomUUID(),
       amountMoney: {
         amount: BigInt(amountCents),
-        currency: 'USD',
+        currency: SQUARE_CURRENCY,
       },
     });
 

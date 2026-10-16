@@ -1,5 +1,4 @@
-import { CarBaySlotTakenError } from '$lib/server/repositories/car_bay.repository';
-import { CAR_BAY_ZONE, DEFAULT_CAR_BAY_RATES } from '$lib/utils/car_bay';
+import { CAR_BAY_ZONE, CarBaySlotTakenError, DEFAULT_CAR_BAY_RATES } from '$lib/utils/car_bay';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CarBayService } from './car_bay.service';

@@ -108,6 +108,14 @@ describe('resolvePeriod', () => {
     ).toThrow('past closing');
   });
 
+  it('rejects an Hourly booking that runs past midnight into the next day', () => {
+    for (const hours of [4, 24]) {
+      expect(() =>
+        resolvePeriod({ tier: 'hourly', date: MONDAY, startHour: 20, hours }, SUNDAY_BEFORE, STAFF),
+      ).toThrow('past closing');
+    }
+  });
+
   it('books the entire window for a Full Day', () => {
     const period = resolvePeriod(
       { tier: 'full_day', date: SATURDAY, days: 1 },

@@ -32,6 +32,14 @@ export const CAR_BAY_TIER_NAMES: Record<CarBayTier, string> = {
   full_day: 'Full Day',
 };
 
+export const CAR_BAY_STATUS = {
+  CONFIRMED: 'confirmed',
+  CANCELED: 'canceled',
+  NO_SHOW: 'no_show',
+} as const;
+
+export const CENTS_PER_DOLLAR = 100;
+
 export const CAR_BAY_OVERRUN = {
   HOURLY: 'hourly',
   OVERNIGHT: 'overnight',
@@ -72,6 +80,12 @@ export type CarBayPeriod = { startAt: DateTime; endAt: DateTime };
 export type CarBayLineItem = { name: string; quantity: number; unitAmount: number };
 
 export class CarBayRuleError extends Error {}
+
+export class CarBaySlotTakenError extends CarBayRuleError {
+  constructor() {
+    super('That time was just booked by someone else. Please pick another time.');
+  }
+}
 
 function day(date: string) {
   const parsed = DateTime.fromISO(date, { zone: CAR_BAY_ZONE });
@@ -140,7 +154,11 @@ export function resolvePeriod(
   options: { enforceHorizon: boolean },
 ): CarBayPeriod {
   const period = periodFor(request);
-  const { close } = openWindow(period.endAt.toISODate()!);
+  const lastDate =
+    request.tier === CAR_BAY_TIER.FULL_DAY
+      ? consecutiveDates(request.date, request.days).at(-1)!
+      : request.date;
+  const { close } = openWindow(lastDate);
 
   if (period.endAt > close) {
     throw new CarBayRuleError('The booking runs past closing time');
@@ -315,7 +333,7 @@ export function formatPeriod({ startAt, endAt }: CarBayPeriod) {
 }
 
 export function formatDollars(cents: number) {
-  return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+  return `$${(cents / CENTS_PER_DOLLAR).toFixed(cents % CENTS_PER_DOLLAR === 0 ? 0 : 2)}`;
 }
 
 export function lineItemsTotal(items: CarBayLineItem[]) {

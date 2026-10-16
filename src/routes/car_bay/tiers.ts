@@ -1,5 +1,8 @@
 import {
   CAR_BAY_TIER,
+  FULL_DAY_MAX_DAYS,
+  HOURLY_MIN_HOURS,
+  QUICK_JOB_MINUTES,
   formatDollars,
   type CarBayRates,
   type CarBayTier,
@@ -15,17 +18,17 @@ type TierDetails = { icon: Component; duration: string; copy: string };
 export const TIER_DETAILS: Record<CarBayTier, TierDetails> = {
   [CAR_BAY_TIER.QUICK_JOB]: {
     icon: WrenchIcon,
-    duration: '90 minutes',
+    duration: `${QUICK_JOB_MINUTES} minutes`,
     copy: 'Good for an oil change, a brake job or other quick maintenance.',
   },
   [CAR_BAY_TIER.HOURLY]: {
     icon: ClockIcon,
-    duration: '2 hour minimum, whole hours',
+    duration: `${HOURLY_MIN_HOURS} hour minimum, whole hours`,
     copy: 'Jobs almost always run longer than planned. Book 2.5 to 3 times what you expect.',
   },
   [CAR_BAY_TIER.FULL_DAY]: {
     icon: CalendarDaysIcon,
-    duration: 'The whole day, 1 to 3 days',
+    duration: `The whole day, 1 to ${FULL_DAY_MAX_DAYS} days`,
     copy: 'Pick this if the job might take more than 3.5 hours.',
   },
 };

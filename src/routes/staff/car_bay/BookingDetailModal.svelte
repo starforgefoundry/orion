@@ -31,6 +31,7 @@
   import { getCarBayBookingDetail, markCarBayNoShow } from '$lib/remotes/endpoints/car_bay.remote';
   import {
     CAR_BAY_REFUND_CUTOFF_HOURS,
+    CAR_BAY_STATUS,
     CAR_BAY_TIER_NAMES,
     formatDollars,
     formatPeriod,
@@ -104,11 +105,11 @@
 
 {#snippet actionsFooter()}
   <div class="flex w-full flex-wrap justify-end gap-2">
-    <Button variant="outline" onclick={sendInvoice} disabled={busy}>
-      <ReceiptIcon />
-      Send Overrun Invoice
-    </Button>
-    {#if detail?.status === 'confirmed'}
+    {#if detail?.status === CAR_BAY_STATUS.CONFIRMED}
+      <Button variant="outline" onclick={sendInvoice} disabled={busy}>
+        <ReceiptIcon />
+        Send Overrun Invoice
+      </Button>
       <Button variant="outline" onclick={markNoShow} disabled={busy}>
         <UserXIcon />
         No-show
@@ -147,7 +148,7 @@
           <InfoRow label="Paid">
             {isPaid ? formatDollars(detail.amountPaid) : 'Staff booking (free)'}
           </InfoRow>
-          {#if isPaid && detail.status === 'confirmed'}
+          {#if isPaid && detail.status === CAR_BAY_STATUS.CONFIRMED}
             <InfoRow label="Refund policy">
               {detail.refundable
                 ? 'Refundable'

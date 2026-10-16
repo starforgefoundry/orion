@@ -1,16 +1,10 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { CarBayRuleError, type CarBayTier } from '$lib/utils/car_bay';
+import { CAR_BAY_STATUS, CarBaySlotTakenError, type CarBayTier } from '$lib/utils/car_bay';
 import { and, asc, eq, gt, gte, isNull, lt, lte, type InferInsertModel } from 'drizzle-orm';
 import type { DateTime } from 'luxon';
 
 const EXCLUSION_VIOLATION = '23P01';
-
-export class CarBaySlotTakenError extends CarBayRuleError {
-  constructor() {
-    super('That time was just booked by someone else. Please pick another time.');
-  }
-}
 
 function isExclusionViolation(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -60,7 +54,7 @@ export class CarBayRepository extends BaseRepository {
       .from(schema.carBayBooking)
       .where(
         and(
-          eq(schema.carBayBooking.status, 'confirmed'),
+          eq(schema.carBayBooking.status, CAR_BAY_STATUS.CONFIRMED),
           lt(schema.carBayBooking.startAt, to),
           gt(schema.carBayBooking.blockedUntil, from),
         ),
@@ -87,7 +81,7 @@ export class CarBayRepository extends BaseRepository {
       .from(schema.carBayBooking)
       .where(
         and(
-          eq(schema.carBayBooking.status, 'confirmed'),
+          eq(schema.carBayBooking.status, CAR_BAY_STATUS.CONFIRMED),
           eq(schema.carBayBooking.tier, tier),
           eq(schema.carBayBooking.customerEmail, customerEmail),
           gte(schema.carBayBooking.startAt, from),
@@ -104,7 +98,7 @@ export class CarBayRepository extends BaseRepository {
       .from(schema.carBayBooking)
       .where(
         and(
-          eq(schema.carBayBooking.status, 'confirmed'),
+          eq(schema.carBayBooking.status, CAR_BAY_STATUS.CONFIRMED),
           isNull(schema.carBayBooking.reminderSentDate),
           gt(schema.carBayBooking.startAt, now),
           lte(schema.carBayBooking.startAt, until),

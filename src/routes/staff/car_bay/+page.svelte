@@ -7,6 +7,7 @@
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { getCarBayStaffSchedule } from '$lib/remotes/endpoints/car_bay.remote';
   import {
+    CAR_BAY_STATUS,
     CAR_BAY_TIER,
     CAR_BAY_TIER_NAMES,
     CAR_BAY_ZONE,
@@ -33,7 +34,7 @@
   const range = $derived({ from: days[0], to: days.at(-1)! });
   const scheduleRemote = $derived(getCarBayStaffSchedule(range));
   const bookings = $derived(
-    (scheduleRemote.current ?? []).filter((booking) => booking.status === 'confirmed'),
+    (scheduleRemote.current ?? []).filter((booking) => booking.status === CAR_BAY_STATUS.CONFIRMED),
   );
   const periods = $derived(bookings.map(toPeriod));
 

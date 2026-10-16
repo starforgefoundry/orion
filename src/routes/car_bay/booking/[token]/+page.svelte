@@ -14,6 +14,7 @@
   } from '$lib/remotes/endpoints/car_bay.remote';
   import {
     CAR_BAY_REFUND_CUTOFF_HOURS,
+    CAR_BAY_STATUS,
     CAR_BAY_TIER_NAMES,
     formatDollars,
     formatPeriod,
@@ -77,7 +78,7 @@
     <p class="mt-1 text-muted-foreground">This booking may not exist or the link may be invalid.</p>
   </div>
 {:else}
-  {@const isConfirmed = booking.status === 'confirmed'}
+  {@const isConfirmed = booking.status === CAR_BAY_STATUS.CONFIRMED}
   <div class="flex flex-col gap-4">
     <div class="flex items-center gap-2">
       {#if isConfirmed}

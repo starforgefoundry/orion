@@ -1,14 +1,21 @@
 <script lang="ts" module>
-  import type { CarBayRates, PricePair } from '$lib/utils/car_bay';
+  import {
+    CENTS_PER_DOLLAR,
+    QUICK_JOB_MINUTES,
+    type CarBayRates,
+    type PricePair,
+  } from '$lib/utils/car_bay';
 
   type PairKey = {
     [K in keyof CarBayRates]: CarBayRates[K] extends PricePair ? K : never;
   }[keyof CarBayRates];
 
-  const CENTS_PER_DOLLAR = 100;
-
   const PAIR_FIELDS: { key: PairKey; label: string; description?: string }[] = [
-    { key: 'quickJob', label: 'Quick Job', description: 'Flat rate for the 90 minute slot' },
+    {
+      key: 'quickJob',
+      label: 'Quick Job',
+      description: `Flat rate for the ${QUICK_JOB_MINUTES} minute slot`,
+    },
     { key: 'hourly', label: 'Hourly', description: 'Per hour' },
     { key: 'fullDayWeekday', label: 'Full Day (Weekday)' },
     { key: 'fullDayWeekend', label: 'Full Day (Weekend)' },

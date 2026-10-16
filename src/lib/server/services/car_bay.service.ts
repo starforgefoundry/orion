@@ -10,17 +10,23 @@ import type {
   StaffCancelCarBayBookingDto,
 } from '$lib/remotes/dtos/car_bay.dto';
 import type { CarBayBooking } from '$lib/server/db/schema';
-import { CarBaySlotTakenError } from '$lib/server/repositories/car_bay.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
-import { hasActiveMembership, stringifySquareObject } from '$lib/server/utils/square';
+import {
+  SQUARE_CURRENCY,
+  hasActiveMembership,
+  stringifySquareObject,
+} from '$lib/server/utils/square';
 import {
   CAR_BAY_PUBLIC_HORIZON_DAYS,
   CAR_BAY_REMINDER_LEAD_HOURS,
+  CAR_BAY_STATUS,
   CAR_BAY_TIER,
   CAR_BAY_TIER_NAMES,
   CAR_BAY_ZONE,
   CarBayRuleError,
+  CarBaySlotTakenError,
+  CENTS_PER_DOLLAR,
   blockedUntil,
   bookingLineItems,
   formatPeriod,
@@ -38,6 +44,7 @@ import type { OrderLineItem } from 'square';
 const CAR_BAY_EMAIL = 'carbay@starforgefoundry.com';
 const CAR_BAY_SENDER = `Starforge Car Bay <${CAR_BAY_EMAIL}>`;
 const APPROVED_PAYMENT_STATUS = 'APPROVED';
+const OVERRUN_PAYMENT_TYPE = 'car_bay_overrun';
 const PAYMENT_FAILED_MESSAGE = 'Payment failed. Please check your card details and try again.';
 
 type CustomerDetails = Pick<
@@ -49,7 +56,7 @@ function toSquareLineItem(item: CarBayLineItem): OrderLineItem {
   return {
     name: item.name,
     quantity: item.quantity.toString(),
-    basePriceMoney: { amount: BigInt(item.unitAmount), currency: 'USD' },
+    basePriceMoney: { amount: BigInt(item.unitAmount), currency: SQUARE_CURRENCY },
   };
 }
 
@@ -64,7 +71,7 @@ function toView(booking: CarBayBooking): CarBayBookingView {
 }
 
 function formatCents(cents: number) {
-  return (cents / 100).toFixed(2);
+  return (cents / CENTS_PER_DOLLAR).toFixed(2);
 }
 
 export class CarBayService extends BaseService {
@@ -199,7 +206,7 @@ export class CarBayService extends BaseService {
       .createPayment({
         sourceId: dto.sourceId,
         idempotencyKey: crypto.randomUUID(),
-        amountMoney: { amount: BigInt(total), currency: 'USD' },
+        amountMoney: { amount: BigInt(total), currency: SQUARE_CURRENCY },
         orderId: order.id,
         locationId: squareSettings.locationId,
         customerId: customer.id,
@@ -217,7 +224,7 @@ export class CarBayService extends BaseService {
     try {
       booking = await this.carBayRepository.create({
         tier: dto.request.tier,
-        status: 'confirmed',
+        status: CAR_BAY_STATUS.CONFIRMED,
         startAt: period.startAt,
         endAt: period.endAt,
         blockedUntil: blockedUntil(period.endAt),
@@ -234,7 +241,7 @@ export class CarBayService extends BaseService {
     try {
       await this.squareRepository.completePayment(payment.id);
     } catch (error) {
-      await this.carBayRepository.update(booking.id, { status: 'canceled' });
+      await this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.CANCELED });
       await this.squareRepository.cancelPayment(payment.id);
       throw new CarBayRuleError(PAYMENT_FAILED_MESSAGE, { cause: error });
     }
@@ -250,7 +257,7 @@ export class CarBayService extends BaseService {
 
     const booking = await this.carBayRepository.create({
       tier: dto.request.tier,
-      status: 'confirmed',
+      status: CAR_BAY_STATUS.CONFIRMED,
       startAt: period.startAt,
       endAt: period.endAt,
       blockedUntil: blockedUntil(period.endAt),
@@ -280,7 +287,7 @@ export class CarBayService extends BaseService {
 
   private requireConfirmed(booking: CarBayBooking | null): CarBayBooking {
     if (!booking) throw new CarBayRuleError('Booking not found');
-    if (booking.status !== 'confirmed')
+    if (booking.status !== CAR_BAY_STATUS.CONFIRMED)
       throw new CarBayRuleError('This booking is no longer active');
     return booking;
   }
@@ -289,7 +296,7 @@ export class CarBayService extends BaseService {
     const booking = this.requireConfirmed(await this.carBayRepository.getByToken(token));
     const refunded = isRefundable(booking.startAt, now) && (await this.refund(booking));
 
-    await this.carBayRepository.update(booking.id, { status: 'canceled' });
+    await this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.CANCELED });
     return { refunded };
   }
 
@@ -297,18 +304,19 @@ export class CarBayService extends BaseService {
     const booking = this.requireConfirmed(await this.carBayRepository.getById(dto.bookingId));
     const refunded = dto.refund && (await this.refund(booking));
 
-    await this.carBayRepository.update(booking.id, { status: 'canceled' });
+    await this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.CANCELED });
     return { refunded };
   }
 
   async markNoShow(bookingId: string) {
     const booking = this.requireConfirmed(await this.carBayRepository.getById(bookingId));
-    return toView(await this.carBayRepository.update(booking.id, { status: 'no_show' }));
+    return toView(
+      await this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.NO_SHOW }),
+    );
   }
 
   async sendOverrunInvoice(dto: SendCarBayOverrunInvoiceDto) {
-    const booking = await this.carBayRepository.getById(dto.bookingId);
-    if (!booking) throw new CarBayRuleError('Booking not found');
+    const booking = this.requireConfirmed(await this.carBayRepository.getById(dto.bookingId));
 
     const [rates, squareSettings] = await Promise.all([
       this.settingsRepository.getSetting('carBayRates'),
@@ -341,7 +349,7 @@ export class CarBayService extends BaseService {
     const published = await this.squareRepository.sendInvoice(invoice.id!, invoice.version!);
 
     return await this.paymentRepository.createStandalonePayment({
-      type: 'car_bay_overrun',
+      type: OVERRUN_PAYMENT_TYPE,
       status: 'pending',
       issuedDate: DateTime.now(),
       total: lineItemsTotal(lineItems),
