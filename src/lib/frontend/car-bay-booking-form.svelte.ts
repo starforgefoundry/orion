@@ -21,6 +21,9 @@ type BookingFormContext = {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export const CHECKOUT_STEPS = { DETAILS: 'details', PAYMENT: 'payment' } as const;
+export type CheckoutStep = (typeof CHECKOUT_STEPS)[keyof typeof CHECKOUT_STEPS];
+
 type BookingFormStart = { tier: CarBayTier; date: string; startHour: number };
 
 function range(from: number, to: number) {
@@ -148,11 +151,24 @@ export class CarBayBookingForm {
 
   hasCustomer = $derived(
     this.customerName.trim() !== '' &&
-      this.customerEmail.trim() !== '' &&
+      EMAIL_PATTERN.test(this.customerEmail.trim()) &&
       this.customerPhone.trim() !== '',
   );
 
-  canSubmit = $derived(this.fits && this.hasCustomer && !this.membershipPending);
+  canContinue = $derived(this.fits && this.hasCustomer);
+
+  canSubmit = $derived(this.canContinue && !this.membershipPending);
+
+  step = $state<CheckoutStep>(CHECKOUT_STEPS.DETAILS);
+
+  next() {
+    this.confirmEmail();
+    if (this.canContinue) this.step = CHECKOUT_STEPS.PAYMENT;
+  }
+
+  back() {
+    this.step = CHECKOUT_STEPS.DETAILS;
+  }
 
   confirmEmail() {
     const email = this.customerEmail.trim().toLowerCase();

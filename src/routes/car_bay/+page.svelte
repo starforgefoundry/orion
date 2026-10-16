@@ -3,7 +3,7 @@
   import { getCarBayPolicy, getCarBayRates } from '$lib/remotes/endpoints/settings.remote';
   import { CAR_BAY_TIER, CAR_BAY_TIER_NAMES } from '$lib/utils/car_bay';
   import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
-  import PolicyNotes from './PolicyNotes.svelte';
+  import ContactLine from './ContactLine.svelte';
   import TierPrices from './TierPrices.svelte';
   import { openHoursSummary, priceRows, tierDetails } from './tiers';
 
@@ -65,6 +65,6 @@
       {/each}
     </div>
 
-    <PolicyNotes {policy} />
+    <ContactLine />
   {/if}
 </div>

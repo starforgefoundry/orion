@@ -11,7 +11,6 @@
   import {
     CAR_BAY_TIER,
     CAR_BAY_TIER_NAMES,
-    formatDollars,
     formatPeriod,
     type CarBayTier,
   } from '$lib/utils/car_bay';
@@ -124,7 +123,6 @@
             type="email"
             bind:value={form.customerEmail}
             placeholder="john@example.com"
-            onblur={() => form.confirmEmail()}
           />
         </FormField>
 
@@ -140,15 +138,8 @@
 
       {#if form.checksMembership}
         <p class="text-sm text-muted-foreground">
-          {#if !form.emailChecked}
-            Members get member pricing. We check your email against Starforge memberships.
-          {:else if form.membershipPending}
-            Checking membership…
-          {:else if form.memberRate}
-            Membership found. You get member pricing.
-          {:else}
-            No membership on this email, so non-member pricing applies.
-          {/if}
+          Members get member pricing. We check your email against Starforge memberships on the next
+          step.
         </p>
       {:else}
         <div class="flex items-center gap-2">
@@ -158,23 +149,4 @@
       {/if}
     </div>
   </Section>
-
-  {#if form.lineItems.length > 0}
-    <Section title="Price">
-      <ul class="flex flex-col gap-1.5 text-sm">
-        {#each form.lineItems as item (item.name)}
-          <li class="flex justify-between gap-3">
-            <span class="text-muted-foreground">
-              {item.name}{item.quantity > 1 ? ` × ${item.quantity}` : ''}
-            </span>
-            <span class="tabular-nums">{formatDollars(item.quantity * item.unitAmount)}</span>
-          </li>
-        {/each}
-        <li class="mt-1 flex justify-between gap-3 border-t pt-2 font-semibold">
-          <span>Total</span>
-          <span class="tabular-nums">{formatDollars(form.total)}</span>
-        </li>
-      </ul>
-    </Section>
-  {/if}
 </div>

@@ -5,6 +5,7 @@
   import { Spinner } from '$lib/components/ui/spinner';
   import InfoRow from '$lib/frontend/components/InfoRow.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
+  import ContactLine from '../../ContactLine.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import { submitWithToast } from '$lib/frontend/form-submit';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
@@ -42,9 +43,6 @@
   const policyRemote = getCarBayPolicy();
   const refundCutoffHours = $derived(
     policyRemote.current?.refundCutoffHours ?? DEFAULT_CAR_BAY_POLICY.refundCutoffHours,
-  );
-  const storageDays = $derived(
-    policyRemote.current?.storageDays ?? DEFAULT_CAR_BAY_POLICY.storageDays,
   );
   const booking = $derived(bookingRemote.current);
 
@@ -111,10 +109,7 @@
       </dl>
     </Section>
 
-    <p class="rounded-lg border bg-muted/50 p-4 text-sm">
-      You can move your own car outside when your booking ends, free of charge. It can stay on the
-      property for up to {storageDays} days from your booking's start date.
-    </p>
+    <ContactLine />
 
     {#if isConfirmed}
       <Separator />

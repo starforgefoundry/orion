@@ -17,7 +17,8 @@
   import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
   import { DateTime } from 'luxon';
   import CheckoutModal from '../CheckoutModal.svelte';
-  import PolicyNotes from '../PolicyNotes.svelte';
+  import DayPicker from '../DayPicker.svelte';
+  import ContactLine from '../ContactLine.svelte';
   import TierPrices from '../TierPrices.svelte';
   import { priceRows, tierDetails } from '../tiers';
 
@@ -115,14 +116,25 @@
       {/if}
     </p>
 
-    <BayWeekCalendar
-      {rules}
-      {days}
-      bookings={schedule.bookings}
-      {isSlotOpen}
-      onSlotClick={openCheckout}
-    />
+    {#if tier === CAR_BAY_TIER.FULL_DAY}
+      <DayPicker
+        {rules}
+        {rates}
+        {days}
+        bookings={periods}
+        isDayOpen={(date) => isSlotOpen(date, rules.slotHours(date)[0])}
+        onDayClick={(date) => openCheckout(date, rules.slotHours(date)[0])}
+      />
+    {:else}
+      <BayWeekCalendar
+        {rules}
+        {days}
+        bookings={schedule.bookings}
+        {isSlotOpen}
+        onSlotClick={openCheckout}
+      />
+    {/if}
 
-    <PolicyNotes {policy} />
+    <ContactLine />
   {/if}
 </div>
