@@ -30,7 +30,6 @@
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { getCarBayBookingDetail, markCarBayNoShow } from '$lib/remotes/endpoints/car_bay.remote';
   import {
-    CAR_BAY_REFUND_CUTOFF_HOURS,
     CAR_BAY_STATUS,
     CAR_BAY_TIER_NAMES,
     formatDollars,
@@ -47,10 +46,11 @@
 
   interface Props extends ModalProps {
     bookingId: string;
+    refundCutoffHours: number;
     onChanged: () => Promise<void>;
   }
 
-  let { onClose, bookingId, onChanged }: Props = $props();
+  let { onClose, bookingId, refundCutoffHours, onChanged }: Props = $props();
 
   const detailRemote = $derived(getCarBayBookingDetail(bookingId));
   const detail = $derived(detailRemote.current);
@@ -74,6 +74,7 @@
       bookingId,
       amountPaid: detail.amountPaid,
       refundable: detail.refundable,
+      refundCutoffHours,
     });
     if (canceled) await onChanged();
   }
@@ -152,7 +153,7 @@
             <InfoRow label="Refund policy">
               {detail.refundable
                 ? 'Refundable'
-                : `Not refundable (inside ${CAR_BAY_REFUND_CUTOFF_HOURS} hours)`}
+                : `Not refundable (inside ${refundCutoffHours} hours)`}
             </InfoRow>
           {/if}
         </dl>

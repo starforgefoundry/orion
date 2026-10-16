@@ -1,6 +1,6 @@
 import { schema } from '$lib/server/db/schema';
 import { CarBayRepository } from '$lib/server/repositories/car_bay.repository';
-import { CarBaySlotTakenError, blockedUntil } from '$lib/utils/car_bay';
+import { CarBayRules, CarBaySlotTakenError, DEFAULT_CAR_BAY_POLICY } from '$lib/utils/car_bay';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -101,7 +101,7 @@ describe.skipIf(!TEST_DATABASE_URL)('migrations', () => {
         status: 'confirmed' as const,
         startAt: DateTime.fromISO(start, { zone: 'America/Chicago' }),
         endAt,
-        blockedUntil: blockedUntil(endAt),
+        blockedUntil: new CarBayRules(DEFAULT_CAR_BAY_POLICY).blockedUntil(endAt),
         isMember: true,
         customerName: 'Jane Doe',
         customerEmail: 'jane@example.com',

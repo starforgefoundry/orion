@@ -1,21 +1,7 @@
 import { DateTime } from 'luxon';
 
 export const CAR_BAY_ZONE = 'America/Chicago';
-export const CAR_BAY_BUFFER_MINUTES = 30;
-export const CAR_BAY_PUBLIC_HORIZON_DAYS = 7;
-export const CAR_BAY_REFUND_CUTOFF_HOURS = 12;
-export const CAR_BAY_REMINDER_LEAD_HOURS = 24;
 
-export const QUICK_JOB_MINUTES = 90;
-export const HOURLY_MIN_HOURS = 2;
-export const FULL_DAY_MAX_DAYS = 3;
-
-/** The earliest any day opens, which is where the week view starts. */
-export const CAR_BAY_EARLIEST_OPEN_HOUR = 12;
-export const CAR_BAY_CLOSE_HOUR = 21;
-
-const WEEKDAY_OPEN_HOUR = 16;
-const WEEKEND_OPEN_HOUR = CAR_BAY_EARLIEST_OPEN_HOUR;
 const WEEKEND_DAYS = [6, 7];
 
 export const CAR_BAY_TIER = {
@@ -27,9 +13,9 @@ export const CAR_BAY_TIER = {
 export type CarBayTier = (typeof CAR_BAY_TIER)[keyof typeof CAR_BAY_TIER];
 
 export const CAR_BAY_TIER_NAMES: Record<CarBayTier, string> = {
-  quick_job: 'Quick Job',
-  hourly: 'Hourly',
-  full_day: 'Full Day',
+  [CAR_BAY_TIER.QUICK_JOB]: 'Quick Job',
+  [CAR_BAY_TIER.HOURLY]: 'Hourly',
+  [CAR_BAY_TIER.FULL_DAY]: 'Full Day',
 };
 
 export const CAR_BAY_STATUS = {
@@ -45,6 +31,37 @@ export const CAR_BAY_OVERRUN = {
   OVERNIGHT: 'overnight',
 } as const;
 
+/** Hours are on a 24 hour clock in Central time. */
+export type CarBayPolicy = {
+  weekdayOpenHour: number;
+  weekendOpenHour: number;
+  weekdayCloseHour: number;
+  weekendCloseHour: number;
+  quickJobMinutes: number;
+  hourlyMinHours: number;
+  fullDayMaxDays: number;
+  bufferMinutes: number;
+  publicHorizonDays: number;
+  refundCutoffHours: number;
+  reminderLeadHours: number;
+  storageDays: number;
+};
+
+export const DEFAULT_CAR_BAY_POLICY: CarBayPolicy = {
+  weekdayOpenHour: 16,
+  weekendOpenHour: 12,
+  weekdayCloseHour: 21,
+  weekendCloseHour: 21,
+  quickJobMinutes: 90,
+  hourlyMinHours: 2,
+  fullDayMaxDays: 3,
+  bufferMinutes: 30,
+  publicHorizonDays: 7,
+  refundCutoffHours: 12,
+  reminderLeadHours: 24,
+  storageDays: 3,
+};
+
 export type PricePair = { member: number; nonMember: number };
 
 /** All amounts are in cents. */
@@ -54,7 +71,7 @@ export type CarBayRates = {
   fullDayWeekday: PricePair;
   fullDayWeekend: PricePair;
   overrunHourly: PricePair;
-  overnightFee: number;
+  overnightFee: PricePair;
 };
 
 export const DEFAULT_CAR_BAY_RATES: CarBayRates = {
@@ -63,7 +80,7 @@ export const DEFAULT_CAR_BAY_RATES: CarBayRates = {
   fullDayWeekday: { member: 2500, nonMember: 3800 },
   fullDayWeekend: { member: 4500, nonMember: 7000 },
   overrunHourly: { member: 1500, nonMember: 2000 },
-  overnightFee: 3000,
+  overnightFee: { member: 3000, nonMember: 3000 },
 };
 
 export type CarBayRequest =
@@ -97,112 +114,12 @@ export function isWeekend(date: string) {
   return WEEKEND_DAYS.includes(day(date).weekday);
 }
 
-export function openWindow(date: string) {
-  const start = day(date);
-  const openHour = isWeekend(date) ? WEEKEND_OPEN_HOUR : WEEKDAY_OPEN_HOUR;
-  return { open: start.set({ hour: openHour }), close: start.set({ hour: CAR_BAY_CLOSE_HOUR }) };
-}
-
-export function slotHours(date: string) {
-  const { open, close } = openWindow(date);
-  return Array.from({ length: close.hour - open.hour }, (_, i) => open.hour + i);
-}
-
 export function consecutiveDates(date: string, days: number) {
   return Array.from({ length: days }, (_, i) => day(date).plus({ days: i }).toISODate()!);
 }
 
 export function todayInZone(now: DateTime) {
   return now.setZone(CAR_BAY_ZONE).toISODate()!;
-}
-
-function startOfSlot(date: string, startHour: number) {
-  const { open, close } = openWindow(date);
-  if (!Number.isInteger(startHour) || startHour < open.hour || startHour >= close.hour) {
-    throw new CarBayRuleError('The bay is closed at that time');
-  }
-  return open.set({ hour: startHour });
-}
-
-function periodFor(request: CarBayRequest): CarBayPeriod {
-  if (request.tier === CAR_BAY_TIER.QUICK_JOB) {
-    const startAt = startOfSlot(request.date, request.startHour);
-    return { startAt, endAt: startAt.plus({ minutes: QUICK_JOB_MINUTES }) };
-  }
-
-  if (request.tier === CAR_BAY_TIER.HOURLY) {
-    if (!Number.isInteger(request.hours)) {
-      throw new CarBayRuleError('Hourly bookings are whole hours only');
-    }
-    if (request.hours < HOURLY_MIN_HOURS) {
-      throw new CarBayRuleError(`Hourly bookings are at least ${HOURLY_MIN_HOURS} hours`);
-    }
-    const startAt = startOfSlot(request.date, request.startHour);
-    return { startAt, endAt: startAt.plus({ hours: request.hours }) };
-  }
-
-  if (!Number.isInteger(request.days) || request.days < 1 || request.days > FULL_DAY_MAX_DAYS) {
-    throw new CarBayRuleError(`Full Day bookings span 1 to ${FULL_DAY_MAX_DAYS} days`);
-  }
-  const dates = consecutiveDates(request.date, request.days);
-  return { startAt: openWindow(dates[0]).open, endAt: openWindow(dates.at(-1)!).close };
-}
-
-export function resolvePeriod(
-  request: CarBayRequest,
-  now: DateTime,
-  options: { enforceHorizon: boolean },
-): CarBayPeriod {
-  const period = periodFor(request);
-  const lastDate =
-    request.tier === CAR_BAY_TIER.FULL_DAY
-      ? consecutiveDates(request.date, request.days).at(-1)!
-      : request.date;
-  const { close } = openWindow(lastDate);
-
-  if (period.endAt > close) {
-    throw new CarBayRuleError('The booking runs past closing time');
-  }
-
-  const latestStart =
-    request.tier === CAR_BAY_TIER.FULL_DAY
-      ? openWindow(request.date).close
-      : period.startAt.plus({ hours: 1 });
-  if (latestStart <= now) {
-    throw new CarBayRuleError('That time has already passed');
-  }
-
-  const lastBookableDay = day(todayInZone(now)).plus({ days: CAR_BAY_PUBLIC_HORIZON_DAYS });
-  if (options.enforceHorizon && period.endAt.startOf('day') > lastBookableDay) {
-    throw new CarBayRuleError(
-      `Bookings can be made up to ${CAR_BAY_PUBLIC_HORIZON_DAYS} days in advance`,
-    );
-  }
-
-  return period;
-}
-
-export function blockedUntil(endAt: DateTime) {
-  return endAt.plus({ minutes: CAR_BAY_BUFFER_MINUTES });
-}
-
-export function periodsConflict(a: CarBayPeriod, b: CarBayPeriod) {
-  return a.startAt < blockedUntil(b.endAt) && b.startAt < blockedUntil(a.endAt);
-}
-
-export function requestFits(
-  request: CarBayRequest,
-  existing: CarBayPeriod[],
-  now: DateTime,
-  options: { enforceHorizon: boolean },
-) {
-  try {
-    const period = resolvePeriod(request, now, options);
-    return !existing.some((booking) => periodsConflict(period, booking));
-  } catch (error) {
-    if (error instanceof CarBayRuleError) return false;
-    throw error;
-  }
 }
 
 export function toPeriod(booking: { startAt: string; endAt: string }): CarBayPeriod {
@@ -212,19 +129,142 @@ export function toPeriod(booking: { startAt: string; endAt: string }): CarBayPer
   };
 }
 
-export function isRefundable(startAt: DateTime, now: DateTime) {
-  return now <= startAt.minus({ hours: CAR_BAY_REFUND_CUTOFF_HOURS });
-}
+export class CarBayRules {
+  constructor(readonly policy: CarBayPolicy) {}
 
-export function needsReminder(createdAt: DateTime, startAt: DateTime) {
-  return startAt.diff(createdAt, 'hours').hours > CAR_BAY_REMINDER_LEAD_HOURS;
-}
+  get earliestOpenHour() {
+    return Math.min(this.policy.weekdayOpenHour, this.policy.weekendOpenHour);
+  }
 
-export function clipToDay(period: CarBayPeriod, date: string) {
-  const { open, close } = openWindow(date);
-  const start = DateTime.max(period.startAt, open);
-  const end = DateTime.min(blockedUntil(period.endAt), close);
-  return start < end ? { start, end } : null;
+  get latestCloseHour() {
+    return Math.max(this.policy.weekdayCloseHour, this.policy.weekendCloseHour);
+  }
+
+  openWindow(date: string) {
+    const start = day(date);
+    const weekend = isWeekend(date);
+    return {
+      open: start.set({
+        hour: weekend ? this.policy.weekendOpenHour : this.policy.weekdayOpenHour,
+      }),
+      close: start.set({
+        hour: weekend ? this.policy.weekendCloseHour : this.policy.weekdayCloseHour,
+      }),
+    };
+  }
+
+  slotHours(date: string) {
+    const { open, close } = this.openWindow(date);
+    return Array.from({ length: close.hour - open.hour }, (_, i) => open.hour + i);
+  }
+
+  #startOfSlot(date: string, startHour: number) {
+    const { open, close } = this.openWindow(date);
+    if (!Number.isInteger(startHour) || startHour < open.hour || startHour >= close.hour) {
+      throw new CarBayRuleError('The bay is closed at that time');
+    }
+    return open.set({ hour: startHour });
+  }
+
+  #periodFor(request: CarBayRequest): CarBayPeriod {
+    if (request.tier === CAR_BAY_TIER.QUICK_JOB) {
+      const startAt = this.#startOfSlot(request.date, request.startHour);
+      return { startAt, endAt: startAt.plus({ minutes: this.policy.quickJobMinutes }) };
+    }
+
+    if (request.tier === CAR_BAY_TIER.HOURLY) {
+      if (!Number.isInteger(request.hours)) {
+        throw new CarBayRuleError('Hourly bookings are whole hours only');
+      }
+      if (request.hours < this.policy.hourlyMinHours) {
+        throw new CarBayRuleError(
+          `Hourly bookings are at least ${this.policy.hourlyMinHours} hours`,
+        );
+      }
+      const startAt = this.#startOfSlot(request.date, request.startHour);
+      return { startAt, endAt: startAt.plus({ hours: request.hours }) };
+    }
+
+    const maxDays = this.policy.fullDayMaxDays;
+    if (!Number.isInteger(request.days) || request.days < 1 || request.days > maxDays) {
+      throw new CarBayRuleError(`Full Day bookings span 1 to ${maxDays} days`);
+    }
+    const dates = consecutiveDates(request.date, request.days);
+    return {
+      startAt: this.openWindow(dates[0]).open,
+      endAt: this.openWindow(dates.at(-1)!).close,
+    };
+  }
+
+  resolvePeriod(
+    request: CarBayRequest,
+    now: DateTime,
+    options: { enforceHorizon: boolean },
+  ): CarBayPeriod {
+    const period = this.#periodFor(request);
+    const lastDate =
+      request.tier === CAR_BAY_TIER.FULL_DAY
+        ? consecutiveDates(request.date, request.days).at(-1)!
+        : request.date;
+
+    if (period.endAt > this.openWindow(lastDate).close) {
+      throw new CarBayRuleError('The booking runs past closing time');
+    }
+
+    const latestStart =
+      request.tier === CAR_BAY_TIER.FULL_DAY
+        ? this.openWindow(request.date).close
+        : period.startAt.plus({ hours: 1 });
+    if (latestStart <= now) {
+      throw new CarBayRuleError('That time has already passed');
+    }
+
+    const horizon = this.policy.publicHorizonDays;
+    const lastBookableDay = day(todayInZone(now)).plus({ days: horizon });
+    if (options.enforceHorizon && period.endAt.startOf('day') > lastBookableDay) {
+      throw new CarBayRuleError(`Bookings can be made up to ${horizon} days in advance`);
+    }
+
+    return period;
+  }
+
+  blockedUntil(endAt: DateTime) {
+    return endAt.plus({ minutes: this.policy.bufferMinutes });
+  }
+
+  periodsConflict(a: CarBayPeriod, b: CarBayPeriod) {
+    return a.startAt < this.blockedUntil(b.endAt) && b.startAt < this.blockedUntil(a.endAt);
+  }
+
+  requestFits(
+    request: CarBayRequest,
+    existing: CarBayPeriod[],
+    now: DateTime,
+    options: { enforceHorizon: boolean },
+  ) {
+    try {
+      const period = this.resolvePeriod(request, now, options);
+      return !existing.some((booking) => this.periodsConflict(period, booking));
+    } catch (error) {
+      if (error instanceof CarBayRuleError) return false;
+      throw error;
+    }
+  }
+
+  isRefundable(startAt: DateTime, now: DateTime) {
+    return now <= startAt.minus({ hours: this.policy.refundCutoffHours });
+  }
+
+  needsReminder(createdAt: DateTime, startAt: DateTime) {
+    return startAt.diff(createdAt, 'hours').hours > this.policy.reminderLeadHours;
+  }
+
+  clipToDay(period: CarBayPeriod, date: string) {
+    const { open, close } = this.openWindow(date);
+    const start = DateTime.max(period.startAt, open);
+    const end = DateTime.min(this.blockedUntil(period.endAt), close);
+    return start < end ? { start, end } : null;
+  }
 }
 
 function rate(pair: PricePair, isMember: boolean) {
@@ -248,8 +288,12 @@ function fullDayLineItem(date: string, rates: CarBayRates, isMember: boolean): C
   };
 }
 
-function overnightLineItem(nights: number, rates: CarBayRates): CarBayLineItem {
-  return { name: 'Car Bay - Overnight Fee', quantity: nights, unitAmount: rates.overnightFee };
+function overnightLineItem(nights: number, rates: CarBayRates, isMember: boolean): CarBayLineItem {
+  return {
+    name: `Car Bay - Overnight Fee (${memberLabel(isMember)})`,
+    quantity: nights,
+    unitAmount: rate(rates.overnightFee, isMember),
+  };
 }
 
 export function bookingLineItems(
@@ -283,7 +327,7 @@ export function bookingLineItems(
     fullDayLineItem(date, rates, isMember),
   );
   const nights = request.days - 1;
-  return nights > 0 ? [...items, overnightLineItem(nights, rates)] : items;
+  return nights > 0 ? [...items, overnightLineItem(nights, rates, isMember)] : items;
 }
 
 export function overrunLineItems(
@@ -317,7 +361,7 @@ export function overrunLineItems(
 
   const extraDates = consecutiveDates(bookingEndDate, overrun.extraDays + 1).slice(1);
   return [
-    overnightLineItem(overrun.nights, rates),
+    overnightLineItem(overrun.nights, rates, isMember),
     ...extraDates.map((date) => fullDayLineItem(date, rates, isMember)),
   ];
 }
@@ -334,6 +378,10 @@ export function formatPeriod({ startAt, endAt }: CarBayPeriod) {
 
 export function formatDollars(cents: number) {
   return `$${(cents / CENTS_PER_DOLLAR).toFixed(cents % CENTS_PER_DOLLAR === 0 ? 0 : 2)}`;
+}
+
+export function formatHour(hour: number) {
+  return DateTime.fromObject({ hour }).toFormat('h a');
 }
 
 export function lineItemsTotal(items: CarBayLineItem[]) {

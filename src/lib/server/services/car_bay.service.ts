@@ -18,24 +18,20 @@ import {
   stringifySquareObject,
 } from '$lib/server/utils/square';
 import {
-  CAR_BAY_PUBLIC_HORIZON_DAYS,
-  CAR_BAY_REMINDER_LEAD_HOURS,
   CAR_BAY_STATUS,
   CAR_BAY_TIER,
   CAR_BAY_TIER_NAMES,
   CAR_BAY_ZONE,
   CarBayRuleError,
+  CarBayRules,
   CarBaySlotTakenError,
   CENTS_PER_DOLLAR,
-  blockedUntil,
   bookingLineItems,
   formatPeriod,
-  isRefundable,
   lineItemsTotal,
-  needsReminder,
   overrunLineItems,
-  resolvePeriod,
   type CarBayLineItem,
+  type CarBayPolicy,
   type CarBayRequest,
 } from '$lib/utils/car_bay';
 import { DateTime } from 'luxon';
@@ -75,9 +71,13 @@ function formatCents(cents: number) {
 }
 
 export class CarBayService extends BaseService {
+  private async rules() {
+    return new CarBayRules(await this.settingsRepository.getSetting('carBayPolicy'));
+  }
   async getPublicSchedule(now: DateTime = DateTime.now()): Promise<PublicCarBaySchedule> {
+    const rules = await this.rules();
     const from = now.setZone(CAR_BAY_ZONE).startOf('day');
-    const to = from.plus({ days: CAR_BAY_PUBLIC_HORIZON_DAYS + 1 });
+    const to = from.plus({ days: rules.policy.publicHorizonDays + 1 });
     const bookings = await this.carBayRepository.getConfirmedInRange(from, to);
 
     return {
@@ -101,13 +101,14 @@ export class CarBayService extends BaseService {
     id: string,
     now: DateTime = DateTime.now(),
   ): Promise<CarBayBookingDetail | null> {
+    const rules = await this.rules();
     const booking = await this.carBayRepository.getById(id);
     if (!booking) return null;
 
     const payments = await this.carBayRepository.getOverrunPayments(id);
     return {
       ...toView(booking),
-      refundable: isRefundable(booking.startAt, now),
+      refundable: rules.isRefundable(booking.startAt, now),
       overrunInvoices: payments.map((payment) => ({
         id: payment.id,
         status: payment.status,
@@ -122,6 +123,7 @@ export class CarBayService extends BaseService {
     token: string,
     now: DateTime = DateTime.now(),
   ): Promise<CustomerCarBayBooking | null> {
+    const rules = await this.rules();
     const booking = await this.carBayRepository.getByToken(token);
     if (!booking) return null;
 
@@ -134,17 +136,18 @@ export class CarBayService extends BaseService {
       customerName: booking.customerName,
       customerEmail: booking.customerEmail,
       amountPaid: booking.amountPaid,
-      refundable: isRefundable(booking.startAt, now),
+      refundable: rules.isRefundable(booking.startAt, now),
     };
   }
 
   private async validateRequest(
+    rules: CarBayRules,
     request: CarBayRequest,
     customerEmail: string,
     now: DateTime,
     options: { enforceHorizon: boolean },
   ) {
-    const period = resolvePeriod(request, now, options);
+    const period = rules.resolvePeriod(request, now, options);
 
     if (request.tier === CAR_BAY_TIER.QUICK_JOB) {
       const day = period.startAt.startOf('day');
@@ -163,7 +166,7 @@ export class CarBayService extends BaseService {
 
     const overlapping = await this.carBayRepository.getConfirmedInRange(
       period.startAt,
-      blockedUntil(period.endAt),
+      rules.blockedUntil(period.endAt),
     );
     if (overlapping.length > 0) throw new CarBaySlotTakenError();
 
@@ -175,7 +178,8 @@ export class CarBayService extends BaseService {
   }
 
   async book(dto: BookCarBayDto, now: DateTime = DateTime.now()) {
-    const period = await this.validateRequest(dto.request, dto.customerEmail, now, {
+    const rules = await this.rules();
+    const period = await this.validateRequest(rules, dto.request, dto.customerEmail, now, {
       enforceHorizon: true,
     });
 
@@ -227,7 +231,7 @@ export class CarBayService extends BaseService {
         status: CAR_BAY_STATUS.CONFIRMED,
         startAt: period.startAt,
         endAt: period.endAt,
-        blockedUntil: blockedUntil(period.endAt),
+        blockedUntil: rules.blockedUntil(period.endAt),
         ...this.customerColumns({ ...dto, isMember }),
         amountPaid: total,
         squarePaymentId: payment.id,
@@ -246,12 +250,16 @@ export class CarBayService extends BaseService {
       throw new CarBayRuleError(PAYMENT_FAILED_MESSAGE, { cause: error });
     }
 
-    runInBackground(this.sendConfirmationEmail(booking), 'send car bay booking email');
+    runInBackground(
+      this.sendConfirmationEmail(booking, rules.policy),
+      'send car bay booking email',
+    );
     return toView(booking);
   }
 
   async staffBook(dto: StaffBookCarBayDto, staffEmail: string, now: DateTime = DateTime.now()) {
-    const period = await this.validateRequest(dto.request, dto.customerEmail, now, {
+    const rules = await this.rules();
+    const period = await this.validateRequest(rules, dto.request, dto.customerEmail, now, {
       enforceHorizon: false,
     });
 
@@ -260,13 +268,16 @@ export class CarBayService extends BaseService {
       status: CAR_BAY_STATUS.CONFIRMED,
       startAt: period.startAt,
       endAt: period.endAt,
-      blockedUntil: blockedUntil(period.endAt),
+      blockedUntil: rules.blockedUntil(period.endAt),
       ...this.customerColumns(dto),
       amountPaid: 0,
       createdByEmail: staffEmail,
     });
 
-    runInBackground(this.sendConfirmationEmail(booking), 'send car bay booking email');
+    runInBackground(
+      this.sendConfirmationEmail(booking, rules.policy),
+      'send car bay booking email',
+    );
     return toView(booking);
   }
 
@@ -293,8 +304,9 @@ export class CarBayService extends BaseService {
   }
 
   async cancelByToken(token: string, now: DateTime = DateTime.now()) {
+    const rules = await this.rules();
     const booking = this.requireConfirmed(await this.carBayRepository.getByToken(token));
-    const refunded = isRefundable(booking.startAt, now) && (await this.refund(booking));
+    const refunded = rules.isRefundable(booking.startAt, now) && (await this.refund(booking));
 
     await this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.CANCELED });
     return { refunded };
@@ -362,12 +374,13 @@ export class CarBayService extends BaseService {
   }
 
   async sendDueReminders(now: DateTime = DateTime.now()) {
+    const rules = await this.rules();
     const candidates = await this.carBayRepository.getReminderCandidates(
       now,
-      now.plus({ hours: CAR_BAY_REMINDER_LEAD_HOURS }),
+      now.plus({ hours: rules.policy.reminderLeadHours }),
     );
 
-    for (const booking of candidates.filter((b) => needsReminder(b.createdDate, b.startAt))) {
+    for (const booking of candidates.filter((b) => rules.needsReminder(b.createdDate, b.startAt))) {
       try {
         await this.mailgunRepository.sendTemplate(
           booking.customerEmail,
@@ -393,7 +406,7 @@ export class CarBayService extends BaseService {
     return `${env.FRONTEND_URL}/car_bay/booking/${booking.bookingToken}`;
   }
 
-  async sendConfirmationEmail(booking: CarBayBooking) {
+  async sendConfirmationEmail(booking: CarBayBooking, policy: CarBayPolicy) {
     await this.mailgunRepository.sendTemplate(
       booking.customerEmail,
       CAR_BAY_SENDER,
@@ -405,6 +418,8 @@ export class CarBayService extends BaseService {
         tierName: CAR_BAY_TIER_NAMES[booking.tier],
         bookingWhen: formatPeriod(booking),
         amountPaid: formatCents(booking.amountPaid),
+        refundCutoffHours: policy.refundCutoffHours.toString(),
+        storageDays: policy.storageDays.toString(),
         bookingUrl: this.bookingUrl(booking),
       },
     );

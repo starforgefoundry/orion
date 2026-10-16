@@ -15,6 +15,7 @@
     formatDollars,
     type CarBayPeriod,
     type CarBayRates,
+    type CarBayRules,
     type CarBayTier,
   } from '$lib/utils/car_bay';
   import CarIcon from '@lucide/svelte/icons/car';
@@ -28,10 +29,11 @@
     startHour: number;
     bookings: () => CarBayPeriod[];
     rates: CarBayRates;
+    rules: CarBayRules;
     onUnavailable: () => Promise<void>;
   }
 
-  let { onClose, tier, date, startHour, bookings, rates, onUnavailable }: Props = $props();
+  let { onClose, tier, date, startHour, bookings, rates, rules, onUnavailable }: Props = $props();
 
   const form: CarBayBookingForm = untrack(
     () =>
@@ -39,6 +41,7 @@
         {
           bookings: () => bookings(),
           rates: () => rates,
+          rules,
           enforceHorizon: true,
           membership: () => membershipQuery?.current,
         },
@@ -100,8 +103,8 @@
         </div>
       {/if}
       <p class="text-xs text-muted-foreground">
-        Cancel at least 12 hours before your start time and we refund you in full. Later
-        cancellations and no-shows don't get a refund.
+        Cancel at least {rules.policy.refundCutoffHours} hours before your start time and we refund you
+        in full. Later cancellations and no-shows don't get a refund.
       </p>
     </Section>
   </form>

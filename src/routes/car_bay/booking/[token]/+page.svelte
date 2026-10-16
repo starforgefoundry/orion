@@ -12,9 +12,10 @@
     cancelCarBayBooking,
     getCarBayBookingByToken,
   } from '$lib/remotes/endpoints/car_bay.remote';
+  import { getCarBayPolicy } from '$lib/remotes/endpoints/settings.remote';
   import {
-    CAR_BAY_REFUND_CUTOFF_HOURS,
     CAR_BAY_STATUS,
+    DEFAULT_CAR_BAY_POLICY,
     CAR_BAY_TIER_NAMES,
     formatDollars,
     formatPeriod,
@@ -38,6 +39,13 @@
 
   const token = page.params.token ?? '';
   const bookingRemote = getCarBayBookingByToken(token);
+  const policyRemote = getCarBayPolicy();
+  const refundCutoffHours = $derived(
+    policyRemote.current?.refundCutoffHours ?? DEFAULT_CAR_BAY_POLICY.refundCutoffHours,
+  );
+  const storageDays = $derived(
+    policyRemote.current?.storageDays ?? DEFAULT_CAR_BAY_POLICY.storageDays,
+  );
   const booking = $derived(bookingRemote.current);
 
   let canceling = $state(false);
@@ -50,7 +58,7 @@
       title: 'Cancel Booking',
       prompt: willRefund
         ? "Cancel this booking? You'll get a full refund."
-        : `Cancel this booking? It starts in less than ${CAR_BAY_REFUND_CUTOFF_HOURS} hours, so there's no refund.`,
+        : `Cancel this booking? It starts in less than ${refundCutoffHours} hours, so there's no refund.`,
       confirmText: 'Cancel Booking',
       cancelText: 'Keep Booking',
       variant: 'destructive',
@@ -70,7 +78,7 @@
   <title>Car Bay Booking - Starforge</title>
 </svelte:head>
 
-{#if bookingRemote.loading}
+{#if bookingRemote.loading || policyRemote.loading}
   <Spinner class="mx-auto mt-12 size-8" />
 {:else if !booking}
   <div class="rounded-lg border p-4 text-sm">
@@ -105,15 +113,15 @@
 
     <p class="rounded-lg border bg-muted/50 p-4 text-sm">
       You can move your own car outside when your booking ends, free of charge. It can stay on the
-      property for up to 3 days from your booking's start date.
+      property for up to {storageDays} days from your booking's start date.
     </p>
 
     {#if isConfirmed}
       <Separator />
       <p class="text-sm text-muted-foreground">
         {booking.refundable
-          ? `Cancel now and we refund you in full. Refunds stop ${CAR_BAY_REFUND_CUTOFF_HOURS} hours before your start time.`
-          : `Your booking starts in less than ${CAR_BAY_REFUND_CUTOFF_HOURS} hours, so canceling now won't get a refund.`}
+          ? `Cancel now and we refund you in full. Refunds stop ${refundCutoffHours} hours before your start time.`
+          : `Your booking starts in less than ${refundCutoffHours} hours, so canceling now won't get a refund.`}
       </p>
       <Button
         variant="destructive"

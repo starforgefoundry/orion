@@ -6,14 +6,14 @@
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { getCarBayStaffSchedule } from '$lib/remotes/endpoints/car_bay.remote';
+  import { getCarBayPolicy } from '$lib/remotes/endpoints/settings.remote';
   import {
     CAR_BAY_STATUS,
     CAR_BAY_TIER,
     CAR_BAY_TIER_NAMES,
     CAR_BAY_ZONE,
+    CarBayRules,
     consecutiveDates,
-    requestFits,
-    slotHours,
     toPeriod,
   } from '$lib/utils/car_bay';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
@@ -37,9 +37,12 @@
     (scheduleRemote.current ?? []).filter((booking) => booking.status === CAR_BAY_STATUS.CONFIRMED),
   );
   const periods = $derived(bookings.map(toPeriod));
+  const policyRemote = getCarBayPolicy();
+  const rules = $derived(policyRemote.current && new CarBayRules(policyRemote.current));
 
   function isSlotOpen(date: string, startHour: number) {
-    return requestFits(
+    if (!rules) return false;
+    return rules.requestFits(
       { tier: CAR_BAY_TIER.QUICK_JOB, date, startHour },
       periods,
       DateTime.now(),
@@ -52,17 +55,20 @@
   }
 
   function openNewBooking(date: string, startHour: number) {
+    if (!rules) return;
     modalManager.show(StaffBookingModal, {
       date,
       startHour,
       bookings: () => periods,
+      rules,
       onBooked: refresh,
     });
   }
 
   function openFirstAvailable() {
     const date = today.toISODate()!;
-    openNewBooking(date, slotHours(date)[0]);
+    if (!rules) return;
+    openNewBooking(date, rules.slotHours(date)[0]);
   }
 </script>
 
@@ -96,18 +102,23 @@
     />
   </div>
 
-  {#if scheduleRemote.loading && !scheduleRemote.current}
+  {#if (scheduleRemote.loading && !scheduleRemote.current) || !rules}
     <div class="flex justify-center py-10">
       <Spinner class="size-6" />
     </div>
   {:else}
     <BayWeekCalendar
+      {rules}
       {days}
       {bookings}
       {isSlotOpen}
       onSlotClick={openNewBooking}
       onBookingClick={(booking) =>
-        modalManager.show(BookingDetailModal, { bookingId: booking.id, onChanged: refresh })}
+        modalManager.show(BookingDetailModal, {
+          bookingId: booking.id,
+          refundCutoffHours: rules.policy.refundCutoffHours,
+          onChanged: refresh,
+        })}
     >
       {#snippet bookingLabel(booking)}
         <span class="block truncate font-medium">{booking.customerName}</span>

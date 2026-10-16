@@ -1,13 +1,9 @@
 import {
   CAR_BAY_TIER,
-  FULL_DAY_MAX_DAYS,
-  HOURLY_MIN_HOURS,
   bookingLineItems,
   lineItemsTotal,
-  requestFits,
-  resolvePeriod,
-  slotHours,
   type CarBayPeriod,
+  type CarBayRules,
   type CarBayRates,
   type CarBayRequest,
   type CarBayTier,
@@ -17,6 +13,7 @@ import { DateTime } from 'luxon';
 type BookingFormContext = {
   bookings: () => CarBayPeriod[];
   rates: () => CarBayRates | undefined;
+  rules: CarBayRules;
   enforceHorizon: boolean;
   /** Looked up from Square for customers; `undefined` while the lookup is pending. */
   membership?: () => boolean | undefined;
@@ -34,7 +31,7 @@ export class CarBayBookingForm {
   tier = $state<CarBayTier>(CAR_BAY_TIER.QUICK_JOB);
   date = $state('');
   startHour = $state(0);
-  hours = $state(HOURLY_MIN_HOURS);
+  hours = $state(0);
   days = $state(1);
 
   customerName = $state('');
@@ -50,6 +47,7 @@ export class CarBayBookingForm {
     this.tier = start.tier;
     this.date = start.date;
     this.startHour = start.startHour;
+    this.hours = context.rules.policy.hourlyMinHours;
   }
 
   #requestFor(overrides: { startHour?: number; hours?: number; days?: number }): CarBayRequest {
@@ -63,39 +61,57 @@ export class CarBayBookingForm {
     return { tier: this.tier, date: this.date, days: overrides.days ?? this.days };
   }
 
+  #rules() {
+    return this.#context.rules;
+  }
+
   #options() {
     return { enforceHorizon: this.#context.enforceHorizon };
   }
 
   #fits(request: CarBayRequest) {
-    return requestFits(request, this.#context.bookings(), this.#now, this.#options());
+    return this.#context.rules.requestFits(
+      request,
+      this.#context.bookings(),
+      this.#now,
+      this.#options(),
+    );
   }
 
   request = $derived(this.#requestFor({}));
 
   fits = $derived(this.#fits(this.request));
 
-  period = $derived(this.fits ? resolvePeriod(this.request, this.#now, this.#options()) : null);
+  period = $derived(
+    this.fits ? this.#rules().resolvePeriod(this.request, this.#now, this.#options()) : null,
+  );
 
   startHourOptions = $derived(
     this.date
-      ? slotHours(this.date).filter((startHour) =>
-          this.#fits(this.#requestFor({ startHour, hours: HOURLY_MIN_HOURS, days: 1 })),
-        )
+      ? this.#rules()
+          .slotHours(this.date)
+          .filter((startHour) =>
+            this.#fits(
+              this.#requestFor({ startHour, hours: this.#rules().policy.hourlyMinHours, days: 1 }),
+            ),
+          )
       : [],
   );
 
   hourOptions = $derived(
     this.date
-      ? range(HOURLY_MIN_HOURS, slotHours(this.date).length).filter((hours) =>
-          this.#fits(this.#requestFor({ hours })),
-        )
+      ? range(
+          this.#rules().policy.hourlyMinHours,
+          this.#rules().slotHours(this.date).length,
+        ).filter((hours) => this.#fits(this.#requestFor({ hours })))
       : [],
   );
 
   dayOptions = $derived(
     this.date
-      ? range(1, FULL_DAY_MAX_DAYS).filter((days) => this.#fits(this.#requestFor({ days })))
+      ? range(1, this.#rules().policy.fullDayMaxDays).filter((days) =>
+          this.#fits(this.#requestFor({ days })),
+        )
       : [],
   );
 

@@ -24,6 +24,8 @@ export type Templates = {
     bookingWhen: string;
     amountPaid: string;
     bookingUrl: string;
+    refundCutoffHours: string;
+    storageDays: string;
   };
   car_bay_reminder: {
     customerName: string;

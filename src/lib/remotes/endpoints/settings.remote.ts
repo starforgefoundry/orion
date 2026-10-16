@@ -1,6 +1,7 @@
 import { command, form, query } from '$app/server';
 import {
   bambuddySettings,
+  carBayPolicyDto,
   carBayRatesDto,
   classSettingsDto,
   printRequestSettings,
@@ -75,6 +76,16 @@ export const setCarBayRates = command(carBayRatesDto, async (dto) => {
   verifyAuth();
   const response = await settingsService.setCarBayRates(dto);
   getCarBayRates().refresh();
+
+  return response;
+});
+
+export const getCarBayPolicy = query(() => settingsService.getCarBayPolicy());
+
+export const setCarBayPolicy = command(carBayPolicyDto, async (dto) => {
+  verifyAuth();
+  const response = await settingsService.setCarBayPolicy(dto);
+  getCarBayPolicy().refresh();
 
   return response;
 });

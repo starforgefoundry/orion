@@ -5,7 +5,7 @@
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { submitWithToast } from '$lib/frontend/form-submit';
   import { staffBookCarBay } from '$lib/remotes/endpoints/car_bay.remote';
-  import { CAR_BAY_TIER, type CarBayPeriod } from '$lib/utils/car_bay';
+  import { CAR_BAY_TIER, type CarBayPeriod, type CarBayRules } from '$lib/utils/car_bay';
   import CarIcon from '@lucide/svelte/icons/car';
   import CheckIcon from '@lucide/svelte/icons/check';
   import { untrack } from 'svelte';
@@ -14,15 +14,16 @@
     date: string;
     startHour: number;
     bookings: () => CarBayPeriod[];
+    rules: CarBayRules;
     onBooked: () => Promise<void>;
   }
 
-  let { onClose, date, startHour, bookings, onBooked }: Props = $props();
+  let { onClose, date, startHour, bookings, rules, onBooked }: Props = $props();
 
   const form = untrack(
     () =>
       new CarBayBookingForm(
-        { bookings: () => bookings(), rates: () => undefined, enforceHorizon: false },
+        { bookings: () => bookings(), rates: () => undefined, rules, enforceHorizon: false },
         { tier: CAR_BAY_TIER.QUICK_JOB, date, startHour },
       ),
   );

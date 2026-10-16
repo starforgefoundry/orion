@@ -1,4 +1,9 @@
-import { CAR_BAY_ZONE, CarBaySlotTakenError, DEFAULT_CAR_BAY_RATES } from '$lib/utils/car_bay';
+import {
+  CAR_BAY_ZONE,
+  CarBaySlotTakenError,
+  DEFAULT_CAR_BAY_POLICY,
+  DEFAULT_CAR_BAY_RATES,
+} from '$lib/utils/car_bay';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CarBayService } from './car_bay.service';
@@ -83,8 +88,11 @@ describe('CarBayService', () => {
       createStandalonePayment: vi.fn(async (payment) => payment),
     };
     settingsRepo = {
-      getSetting: vi.fn(async (key: string) =>
-        key === 'carBayRates' ? DEFAULT_CAR_BAY_RATES : { locationId: 'loc-1' },
+      getSetting: vi.fn(
+        async (key: string) =>
+          ({ carBayRates: DEFAULT_CAR_BAY_RATES, carBayPolicy: DEFAULT_CAR_BAY_POLICY })[key] ?? {
+            locationId: 'loc-1',
+          },
       ),
     };
     mailgunRepo = { sendTemplate: vi.fn() };
@@ -197,6 +205,25 @@ describe('CarBayService', () => {
       const request = { ...QUICK_JOB, date: '2026-10-20' };
 
       await expect(service.book({ ...dto, request }, NOW)).rejects.toThrow('7 days');
+    });
+
+    it('uses the booking rules saved in settings', async () => {
+      settingsRepo.getSetting.mockImplementation(async (key: string) =>
+        key === 'carBayPolicy'
+          ? { ...DEFAULT_CAR_BAY_POLICY, quickJobMinutes: 60, bufferMinutes: 15 }
+          : key === 'carBayRates'
+            ? DEFAULT_CAR_BAY_RATES
+            : { locationId: 'loc-1' },
+      );
+
+      await service.book(dto, NOW);
+
+      expect(carBayRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          endAt: at(`${MONDAY}T17:00`),
+          blockedUntil: at(`${MONDAY}T17:15`),
+        }),
+      );
     });
 
     it('sends a confirmation email', async () => {

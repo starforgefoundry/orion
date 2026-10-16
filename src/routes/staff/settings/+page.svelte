@@ -7,6 +7,7 @@
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import {
     getBambuddySettings,
+    getCarBayPolicy,
     getCarBayRates,
     getClassSettings,
     getPrintRequestSettings,
@@ -69,7 +70,7 @@
     {
       id: SECTIONS.CAR_BAY,
       title: 'Car Bay',
-      description: 'Booking rates, overrun fees and the overnight fee.',
+      description: 'Open hours, booking lengths, booking window and rates.',
       icon: CarIcon,
     },
   ];
@@ -83,6 +84,7 @@
   const squareSettings = getPrintRequestSquareSettings();
   const classSettings = getClassSettings();
   const carBayRates = getCarBayRates();
+  const carBayPolicy = getCarBayPolicy();
   const bambuddySettings = getBambuddySettings();
 </script>
 
@@ -180,9 +182,10 @@
         description={active.description}
         formId="car-bay-settings"
       >
-        {@render loadState(carBayRates, 'car bay')}
-        {#if carBayRates.current}
-          <CarBaySettings rates={carBayRates.current} />
+        {@render loadState(carBayRates, 'car bay rates')}
+        {@render loadState(carBayPolicy, 'car bay rules')}
+        {#if carBayRates.current && carBayPolicy.current}
+          <CarBaySettings rates={carBayRates.current} policy={carBayPolicy.current} />
         {/if}
       </SettingsSection>
     {/if}

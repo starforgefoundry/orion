@@ -1,22 +1,18 @@
 <script lang="ts" module>
   const HOUR_HEIGHT_PX = 44;
+  const MINUTES_IN_HOUR = 60;
+  const CLOSED_PATTERN =
+    'bg-[repeating-linear-gradient(135deg,var(--muted)_0_6px,transparent_6px_12px)]';
 </script>
 
 <script lang="ts" generics="B extends { id: string; startAt: string; endAt: string }">
   import { cn } from '$lib/frontend/cn';
-  import {
-    CAR_BAY_CLOSE_HOUR,
-    CAR_BAY_EARLIEST_OPEN_HOUR,
-    CAR_BAY_ZONE,
-    clipToDay,
-    openWindow,
-    slotHours,
-    toPeriod,
-  } from '$lib/utils/car_bay';
+  import { CAR_BAY_ZONE, formatHour, toPeriod, type CarBayRules } from '$lib/utils/car_bay';
   import { DateTime } from 'luxon';
   import type { Snippet } from 'svelte';
 
   interface Props {
+    rules: CarBayRules;
     days: string[];
     bookings: B[];
     isSlotOpen: (date: string, hour: number) => boolean;
@@ -25,27 +21,24 @@
     bookingLabel?: Snippet<[B]>;
   }
 
-  let { days, bookings, isSlotOpen, onSlotClick, onBookingClick, bookingLabel }: Props = $props();
+  let { rules, days, bookings, isSlotOpen, onSlotClick, onBookingClick, bookingLabel }: Props =
+    $props();
 
-  const rowHours = Array.from(
-    { length: CAR_BAY_CLOSE_HOUR - CAR_BAY_EARLIEST_OPEN_HOUR },
-    (_, i) => CAR_BAY_EARLIEST_OPEN_HOUR + i,
+  const firstHour = $derived(rules.earliestOpenHour);
+  const rowHours = $derived(
+    Array.from({ length: rules.latestCloseHour - firstHour }, (_, i) => firstHour + i),
   );
-  const columnHeight = rowHours.length * HOUR_HEIGHT_PX;
+  const columnHeight = $derived(rowHours.length * HOUR_HEIGHT_PX);
   const todayStr = DateTime.now().setZone(CAR_BAY_ZONE).toISODate();
 
   function offset(time: DateTime) {
-    return (time.hour + time.minute / 60 - CAR_BAY_EARLIEST_OPEN_HOUR) * HOUR_HEIGHT_PX;
-  }
-
-  function hourLabel(hour: number) {
-    return DateTime.fromObject({ hour }).toFormat('h a');
+    return (time.hour + time.minute / MINUTES_IN_HOUR - firstHour) * HOUR_HEIGHT_PX;
   }
 
   function segmentsFor(date: string) {
     return bookings.flatMap((booking) => {
       const period = toPeriod(booking);
-      const clipped = clipToDay(period, date);
+      const clipped = rules.clipToDay(period, date);
       if (!clipped) return [];
 
       const bookedEnd = DateTime.min(period.endAt, clipped.end);
@@ -87,21 +80,26 @@
             class="absolute right-1.5 -translate-y-1/2 text-[0.625rem] text-muted-foreground first:translate-y-0"
             style:top="{i * HOUR_HEIGHT_PX}px"
           >
-            {hourLabel(hour)}
+            {formatHour(hour)}
           </div>
         {/each}
       </div>
 
       {#each days as date (date)}
-        {@const { open } = openWindow(date)}
+        {@const { open, close } = rules.openWindow(date)}
         <div class="relative border-l" style:height="{columnHeight}px">
           <div
-            class="absolute inset-x-0 top-0 bg-[repeating-linear-gradient(135deg,var(--muted)_0_6px,transparent_6px_12px)]"
+            class="{CLOSED_PATTERN} absolute inset-x-0 top-0"
             style:height="{offset(open)}px"
             aria-hidden="true"
           ></div>
+          <div
+            class="{CLOSED_PATTERN} absolute inset-x-0 bottom-0"
+            style:top="{offset(close)}px"
+            aria-hidden="true"
+          ></div>
 
-          {#each slotHours(date) as hour (hour)}
+          {#each rules.slotHours(date) as hour (hour)}
             {@const slotOpen = isSlotOpen(date, hour)}
             <button
               type="button"
@@ -114,7 +112,7 @@
               style:top="{offset(open.set({ hour }))}px"
               style:height="{HOUR_HEIGHT_PX}px"
               disabled={!slotOpen || !onSlotClick}
-              aria-label="Book {DateTime.fromISO(date).toFormat('EEEE, MMMM d')} at {hourLabel(
+              aria-label="Book {DateTime.fromISO(date).toFormat('EEEE, MMMM d')} at {formatHour(
                 hour,
               )}"
               onclick={() => onSlotClick?.(date, hour)}

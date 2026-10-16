@@ -51,5 +51,35 @@ export const carBayRatesDto = v.object({
   fullDayWeekday: pricePair,
   fullDayWeekend: pricePair,
   overrunHourly: pricePair,
-  overnightFee: cents,
+  overnightFee: pricePair,
 });
+
+function wholeNumberBetween(min: number, max: number) {
+  return v.pipe(v.number(), v.integer(), v.minValue(min), v.maxValue(max));
+}
+
+const HOURS_IN_DAY = 24;
+const MINUTES_IN_HOUR = 60;
+
+export const carBayPolicyDto = v.pipe(
+  v.object({
+    weekdayOpenHour: wholeNumberBetween(0, HOURS_IN_DAY - 1),
+    weekendOpenHour: wholeNumberBetween(0, HOURS_IN_DAY - 1),
+    weekdayCloseHour: wholeNumberBetween(1, HOURS_IN_DAY - 1),
+    weekendCloseHour: wholeNumberBetween(1, HOURS_IN_DAY - 1),
+    quickJobMinutes: wholeNumberBetween(15, 12 * MINUTES_IN_HOUR),
+    hourlyMinHours: wholeNumberBetween(1, HOURS_IN_DAY),
+    fullDayMaxDays: wholeNumberBetween(1, 14),
+    bufferMinutes: wholeNumberBetween(0, 4 * MINUTES_IN_HOUR),
+    publicHorizonDays: wholeNumberBetween(0, 365),
+    refundCutoffHours: wholeNumberBetween(0, 14 * HOURS_IN_DAY),
+    reminderLeadHours: wholeNumberBetween(1, 14 * HOURS_IN_DAY),
+    storageDays: wholeNumberBetween(0, 60),
+  }),
+  v.check(
+    (policy) =>
+      policy.weekdayCloseHour > policy.weekdayOpenHour &&
+      policy.weekendCloseHour > policy.weekendOpenHour,
+    'Closing time must be after opening time',
+  ),
+);

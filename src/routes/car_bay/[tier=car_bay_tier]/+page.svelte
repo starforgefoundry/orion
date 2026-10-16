@@ -4,15 +4,12 @@
   import BayWeekCalendar from '$lib/frontend/components/BayWeekCalendar.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { getCarBaySchedule } from '$lib/remotes/endpoints/car_bay.remote';
-  import { getCarBayRates } from '$lib/remotes/endpoints/settings.remote';
+  import { getCarBayPolicy, getCarBayRates } from '$lib/remotes/endpoints/settings.remote';
   import {
-    CAR_BAY_PUBLIC_HORIZON_DAYS,
     CAR_BAY_TIER,
     CAR_BAY_TIER_NAMES,
-    FULL_DAY_MAX_DAYS,
-    HOURLY_MIN_HOURS,
+    CarBayRules,
     consecutiveDates,
-    requestFits,
     toPeriod,
     type CarBayRequest,
     type CarBayTier,
@@ -22,41 +19,48 @@
   import CheckoutModal from '../CheckoutModal.svelte';
   import PolicyNotes from '../PolicyNotes.svelte';
   import TierPrices from '../TierPrices.svelte';
-  import { TIER_DETAILS, priceRows } from '../tiers';
+  import { priceRows, tierDetails } from '../tiers';
 
   const tier = $derived(page.params.tier as CarBayTier);
-  const details = $derived(TIER_DETAILS[tier]);
 
   const scheduleRemote = getCarBaySchedule();
   const ratesRemote = getCarBayRates();
+  const policyRemote = getCarBayPolicy();
 
   const schedule = $derived(scheduleRemote.current);
   const rates = $derived(ratesRemote.current);
+  const policy = $derived(policyRemote.current);
+  const rules = $derived(policy && new CarBayRules(policy));
+  const details = $derived(policy && tierDetails(policy)[tier]);
   const periods = $derived((schedule?.bookings ?? []).map(toPeriod));
   const days = $derived(
-    schedule ? consecutiveDates(schedule.today, CAR_BAY_PUBLIC_HORIZON_DAYS + 1) : [],
+    schedule && policy ? consecutiveDates(schedule.today, policy.publicHorizonDays + 1) : [],
   );
 
-  function shortestRequest(date: string, startHour: number): CarBayRequest {
+  function shortestRequest(rules: CarBayRules, date: string, startHour: number): CarBayRequest {
     if (tier === CAR_BAY_TIER.QUICK_JOB) return { tier, date, startHour };
-    if (tier === CAR_BAY_TIER.HOURLY) return { tier, date, startHour, hours: HOURLY_MIN_HOURS };
+    if (tier === CAR_BAY_TIER.HOURLY) {
+      return { tier, date, startHour, hours: rules.policy.hourlyMinHours };
+    }
     return { tier, date, days: 1 };
   }
 
   function isSlotOpen(date: string, startHour: number) {
-    return requestFits(shortestRequest(date, startHour), periods, DateTime.now(), {
+    if (!rules) return false;
+    return rules.requestFits(shortestRequest(rules, date, startHour), periods, DateTime.now(), {
       enforceHorizon: true,
     });
   }
 
   function openCheckout(date: string, startHour: number) {
-    if (!rates) return;
+    if (!rates || !rules) return;
     modalManager.show(CheckoutModal, {
       tier,
       date,
       startHour,
       bookings: () => periods,
       rates,
+      rules,
       onUnavailable: () => getCarBaySchedule().refresh(),
     });
   }
@@ -77,9 +81,9 @@
     All booking types
   </a>
 
-  {#if scheduleRemote.loading || ratesRemote.loading}
+  {#if scheduleRemote.loading || ratesRemote.loading || policyRemote.loading}
     <Spinner class="mx-auto mt-12 size-8" />
-  {:else if !schedule || !rates}
+  {:else if !schedule || !rates || !policy || !rules || !details}
     <p class="rounded-lg border p-6 text-center text-sm text-destructive">
       Booking isn't available right now. Try again later.
     </p>
@@ -102,13 +106,23 @@
     </div>
 
     <p class="text-sm text-muted-foreground">
-      {tier === CAR_BAY_TIER.FULL_DAY
-        ? `Click any open day to book it. You can add up to ${FULL_DAY_MAX_DAYS - 1} more days at checkout.`
-        : 'Click an open hour to start your booking there.'}
+      {#if tier !== CAR_BAY_TIER.FULL_DAY}
+        Click an open hour to start your booking there.
+      {:else if policy.fullDayMaxDays > 1}
+        Click any open day to book it. You can add up to {policy.fullDayMaxDays - 1} more days at checkout.
+      {:else}
+        Click any open day to book it.
+      {/if}
     </p>
 
-    <BayWeekCalendar {days} bookings={schedule.bookings} {isSlotOpen} onSlotClick={openCheckout} />
+    <BayWeekCalendar
+      {rules}
+      {days}
+      bookings={schedule.bookings}
+      {isSlotOpen}
+      onSlotClick={openCheckout}
+    />
 
-    <PolicyNotes />
+    <PolicyNotes {policy} />
   {/if}
 </div>

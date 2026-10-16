@@ -5,7 +5,7 @@
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { submitWithToast } from '$lib/frontend/form-submit';
   import { staffCancelCarBayBooking } from '$lib/remotes/endpoints/car_bay.remote';
-  import { CAR_BAY_REFUND_CUTOFF_HOURS, formatDollars } from '$lib/utils/car_bay';
+  import { formatDollars } from '$lib/utils/car_bay';
   import BanIcon from '@lucide/svelte/icons/ban';
   import { untrack } from 'svelte';
 
@@ -13,9 +13,10 @@
     bookingId: string;
     amountPaid: number;
     refundable: boolean;
+    refundCutoffHours: number;
   }
 
-  let { onClose, bookingId, amountPaid, refundable }: Props = $props();
+  let { onClose, bookingId, amountPaid, refundable, refundCutoffHours }: Props = $props();
 
   const isPaid = $derived(amountPaid > 0);
   const fieldId = $props.id();
@@ -50,9 +51,9 @@
         {#if !isPaid}
           Staff booking. Nothing was charged.
         {:else if refundable}
-          Within policy. The booking starts more than {CAR_BAY_REFUND_CUTOFF_HOURS} hours from now.
+          Within policy. The booking starts more than {refundCutoffHours} hours from now.
         {:else}
-          Outside policy. The booking starts in less than {CAR_BAY_REFUND_CUTOFF_HOURS} hours.
+          Outside policy. The booking starts in less than {refundCutoffHours} hours.
         {/if}
       </p>
     </div>
