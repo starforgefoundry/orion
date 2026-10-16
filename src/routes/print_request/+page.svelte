@@ -66,8 +66,7 @@
   });
 
   const CONTACT_EMAIL = '3dprint@starforgefoundry.com';
-  const PRINTING_GUIDE_URL =
-    'https://starforge.notion.site/Starforge-Wiki-d75b4653249d4599b3c44e953cda5c6e';
+  const PRINTING_GUIDE_URL = 'https://wiki.starforgefoundry.com/en/3d-printers';
 
   const HOW_IT_WORKS = [
     {
