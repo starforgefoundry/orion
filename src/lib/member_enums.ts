@@ -45,5 +45,6 @@ export const MEMBER_EMAIL_TRIGGER = {
   ORGANIZATION: 'organization',
   DAY_PASS: 'day_pass',
   MANUAL: 'manual',
+  SELF_SERVICE: 'self_service',
 } as const;
 export type MemberEmailTrigger = EnumValue<typeof MEMBER_EMAIL_TRIGGER>;

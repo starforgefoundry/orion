@@ -1,5 +1,5 @@
 import { form, query } from '$app/server';
-import { submitOnboardingWaiverDto } from '$lib/remotes/dtos/onboarding.dto';
+import { requestPassEmailDto, submitOnboardingWaiverDto } from '$lib/remotes/dtos/onboarding.dto';
 import { HTTP_NOT_FOUND } from '$lib/remotes/utils';
 import { onboardingService } from '$lib/server/services/onboarding.service';
 import { error } from '@sveltejs/kit';
@@ -17,6 +17,11 @@ export const getOnboarding = query(v.string(), async (token) => {
   const onboarding = await onboardingService.getOnboarding(token);
   if (!onboarding) error(HTTP_NOT_FOUND, MEMBER_NOT_FOUND);
   return onboarding;
+});
+
+export const requestPassEmailForm = form(requestPassEmailDto, async ({ email }) => {
+  await onboardingService.requestOnboardingEmail(email);
+  return { requested: true };
 });
 
 export const submitOnboardingWaiverForm = form(submitOnboardingWaiverDto, async (dto) => {

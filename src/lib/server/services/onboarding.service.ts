@@ -1,4 +1,9 @@
-import { WAIVER_SOURCE } from '$lib/member_enums';
+import {
+  ACCESS_BASIS,
+  MEMBER_EMAIL_TRIGGER,
+  MEMBER_EMAIL_TYPE,
+  WAIVER_SOURCE,
+} from '$lib/member_enums';
 import {
   WALLET_PROVIDER,
   type MemberPassDto,
@@ -9,7 +14,12 @@ import {
 import { BaseService } from '$lib/server/services/base.service';
 import { appleWalletConfig, buildApplePass } from '$lib/server/utils/apple_wallet';
 import { googleWalletConfig, googleWalletSaveUrl } from '$lib/server/utils/google_wallet';
+import { resolveAccess } from '$lib/server/utils/member_access';
 import { passUrl } from '$lib/server/utils/member_links';
+import { DateTime, Duration } from 'luxon';
+
+/** Keeps the public form from being used to flood a member's inbox. */
+export const PASS_EMAIL_COOLDOWN = Duration.fromObject({ minutes: 10 });
 
 export class OnboardingService extends BaseService {
   async getMemberPass(token: string): Promise<MemberPassDto | undefined> {
@@ -49,6 +59,24 @@ export class OnboardingService extends BaseService {
       WAIVER_SOURCE.WEB,
     );
     return true;
+  }
+
+  /** Stays silent for unknown or inactive emails so the form never reveals who is a member. */
+  async requestOnboardingEmail(email: string) {
+    const context = await this.memberRepository.getAccessContextByEmail(email);
+    if (!context) return;
+
+    const now = DateTime.now();
+    if (resolveAccess(context, now).basis === ACCESS_BASIS.NONE) return;
+
+    const emails = await this.memberEmailRepository.listByMember(context.member.id);
+    const lastOnboarding = emails.find((sent) => sent.type === MEMBER_EMAIL_TYPE.ONBOARDING);
+    if (lastOnboarding && now.diff(lastOnboarding.sentDate) < PASS_EMAIL_COOLDOWN) return;
+
+    await this.memberNotificationRepository.sendOnboarding(
+      context.member,
+      MEMBER_EMAIL_TRIGGER.SELF_SERVICE,
+    );
   }
 
   async getGoogleWalletUrl(token: string): Promise<string | undefined> {

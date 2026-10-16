@@ -1,4 +1,5 @@
 import type { Member } from '$lib/server/db/schema';
+import type { MemberAccessContext } from '$lib/server/utils/member_access';
 import {
   appleWalletConfig,
   buildApplePass,
@@ -7,7 +8,7 @@ import {
 import { googleWalletConfig, type GoogleWalletConfig } from '$lib/server/utils/google_wallet';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OnboardingService } from './onboarding.service';
+import { OnboardingService, PASS_EMAIL_COOLDOWN } from './onboarding.service';
 
 vi.mock('$env/dynamic/private', () => ({
   env: { FRONTEND_URL: 'https://orion.example.com' },
@@ -34,6 +35,22 @@ const MEMBER: Member = {
   createdDate: DateTime.now(),
 };
 
+const ACTIVE_CONTEXT: MemberAccessContext = {
+  member: MEMBER,
+  hasWaiver: true,
+  subscriptions: [],
+  organizations: [],
+  dayPasses: [
+    {
+      id: 'pass-1',
+      memberId: MEMBER.id,
+      squareOrderId: 'order',
+      purchasedDate: DateTime.now(),
+      usedDate: null,
+    },
+  ],
+};
+
 const WALLET_CONFIG = { issuerId: 'issuer' } as GoogleWalletConfig;
 const APPLE_CONFIG = { passTypeId: 'pass.test' } as AppleWalletConfig;
 const SIGNATURE = new File(['sig'], 'signature.jpg');
@@ -44,8 +61,11 @@ describe('OnboardingService', () => {
     getByPassToken: ReturnType<typeof vi.fn>;
     getByOnboardingToken: ReturnType<typeof vi.fn>;
     getAccessContext: ReturnType<typeof vi.fn>;
+    getAccessContextByEmail: ReturnType<typeof vi.fn>;
   };
   let waiverRepo: { submit: ReturnType<typeof vi.fn> };
+  let memberEmailRepo: { listByMember: ReturnType<typeof vi.fn> };
+  let notificationRepo: { sendOnboarding: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -56,8 +76,11 @@ describe('OnboardingService', () => {
       getByPassToken: vi.fn().mockResolvedValue(MEMBER),
       getByOnboardingToken: vi.fn().mockResolvedValue(MEMBER),
       getAccessContext: vi.fn().mockResolvedValue({ hasWaiver: false }),
+      getAccessContextByEmail: vi.fn().mockResolvedValue(ACTIVE_CONTEXT),
     };
     waiverRepo = { submit: vi.fn().mockResolvedValue({ id: 'waiver-1' }) };
+    memberEmailRepo = { listByMember: vi.fn().mockResolvedValue([]) };
+    notificationRepo = { sendOnboarding: vi.fn() };
 
     service = new OnboardingService(
       undefined,
@@ -75,7 +98,11 @@ describe('OnboardingService', () => {
       waiverRepo as never,
       undefined,
       undefined,
-      { memberRepository: memberRepo as never },
+      {
+        memberRepository: memberRepo as never,
+        memberEmailRepository: memberEmailRepo as never,
+        memberNotificationRepository: notificationRepo as never,
+      },
     );
   });
 
@@ -188,6 +215,53 @@ describe('OnboardingService', () => {
         passUrl: 'https://orion.example.com/pass/token-abc',
         wallets: [],
       });
+    });
+  });
+
+  describe('requestOnboardingEmail', () => {
+    it('sends onboarding to a member with access', async () => {
+      await service.requestOnboardingEmail('sam@example.com');
+
+      expect(notificationRepo.sendOnboarding).toHaveBeenCalledWith(MEMBER, 'self_service');
+    });
+
+    it('sends nothing for an unknown email', async () => {
+      memberRepo.getAccessContextByEmail.mockResolvedValue(undefined);
+
+      await service.requestOnboardingEmail('nobody@example.com');
+
+      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
+    });
+
+    it('sends nothing to a member without access', async () => {
+      memberRepo.getAccessContextByEmail.mockResolvedValue({ ...ACTIVE_CONTEXT, dayPasses: [] });
+
+      await service.requestOnboardingEmail('sam@example.com');
+
+      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
+    });
+
+    it('sends nothing when an onboarding email went out within the cooldown', async () => {
+      memberEmailRepo.listByMember.mockResolvedValue([
+        { type: 'onboarding', sentDate: DateTime.now().minus({ minutes: 1 }) },
+      ]);
+
+      await service.requestOnboardingEmail('sam@example.com');
+
+      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
+    });
+
+    it('sends again once the cooldown has passed', async () => {
+      memberEmailRepo.listByMember.mockResolvedValue([
+        {
+          type: 'onboarding',
+          sentDate: DateTime.now().minus(PASS_EMAIL_COOLDOWN).minus({ minutes: 1 }),
+        },
+      ]);
+
+      await service.requestOnboardingEmail('sam@example.com');
+
+      expect(notificationRepo.sendOnboarding).toHaveBeenCalled();
     });
   });
 });

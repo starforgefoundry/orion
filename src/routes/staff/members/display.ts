@@ -41,6 +41,7 @@ export const EMAIL_TRIGGER_LABEL: Record<MemberEmail['trigger'], string> = {
   organization: 'Organization',
   day_pass: 'Day Pass',
   manual: 'Staff',
+  self_service: 'Member Request',
 };
 
 export const WAIVER_DISPLAY = {

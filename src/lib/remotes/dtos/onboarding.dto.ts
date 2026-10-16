@@ -19,6 +19,10 @@ export const submitOnboardingWaiverDto = v.object({
 
 export type SubmitOnboardingWaiverDto = v.InferOutput<typeof submitOnboardingWaiverDto>;
 
+export const requestPassEmailDto = v.object({
+  email: v.pipe(v.string(), v.trim(), v.email()),
+});
+
 export type MemberPassDto = {
   name: string;
   passUrl: string;

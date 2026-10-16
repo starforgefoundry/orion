@@ -20,6 +20,7 @@ const ONBOARDING_INTRO: Record<MemberEmailTrigger, string> = {
     'Your organization has given you access to Starforge Foundry.',
   [MEMBER_EMAIL_TRIGGER.DAY_PASS]: 'Thanks for picking up a day pass at Starforge Foundry!',
   [MEMBER_EMAIL_TRIGGER.MANUAL]: 'You now have access to Starforge Foundry.',
+  [MEMBER_EMAIL_TRIGGER.SELF_SERVICE]: 'Here is the member pass link you asked for.',
 };
 
 const HTML_ESCAPES: Record<string, string> = {
