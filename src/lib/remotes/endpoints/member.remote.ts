@@ -4,6 +4,7 @@ import {
   memberVisitsDto,
   recentVisitsDto,
   searchMembersDto,
+  sendMemberOnboardingsDto,
 } from '$lib/remotes/dtos/member.dto';
 import { verifyAuth } from '$lib/remotes/utils';
 import { memberService } from '$lib/server/services/member.service';
@@ -39,6 +40,11 @@ export const resendMemberOnboarding = command(v.string(), async (id) => {
   verifyAuth();
   await memberService.resendOnboarding(id);
   await getMemberDetail(id).refresh();
+});
+
+export const sendMemberOnboardings = command(sendMemberOnboardingsDto, async (ids) => {
+  verifyAuth();
+  return await memberService.sendOnboardings(ids);
 });
 
 export const checkInMember = command(v.string(), async (id) => {

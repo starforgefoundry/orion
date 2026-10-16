@@ -1,8 +1,21 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { MEMBER_STATUS, type MemberSearchFilter } from '$lib/remotes/dtos/member.dto';
-import { SUBSCRIPTION_STATUS } from '$lib/member_enums';
-import { type MemberAccessContext } from '$lib/server/utils/member_access';
+import {
+  MEMBER_SORT,
+  ONBOARDING_FILTER,
+  SORT_DIRECTION,
+  WAIVER_FILTER,
+  type MemberSearchFilter,
+  type OnboardingFilter,
+  type WaiverFilter,
+} from '$lib/remotes/dtos/member.dto';
+import {
+  ACCESS_BASIS,
+  MEMBER_EMAIL_TYPE,
+  SUBSCRIPTION_STATUS,
+  type AccessBasis,
+} from '$lib/member_enums';
+import { spaceDate, type MemberAccessContext } from '$lib/server/utils/member_access';
 import {
   and,
   asc,
@@ -13,7 +26,9 @@ import {
   gt,
   ilike,
   inArray,
+  isNotNull,
   isNull,
+  max,
   not,
   or,
   sql,
@@ -33,6 +48,10 @@ export class MemberRepository extends BaseRepository {
       .where(eq(schema.member.id, id))
       .limit(1);
     return member;
+  }
+
+  async getByIds(ids: string[]) {
+    return await this.db.select().from(schema.member).where(inArray(schema.member.id, ids));
   }
 
   async getByEmail(email: string) {
@@ -159,8 +178,8 @@ export class MemberRepository extends BaseRepository {
     return contexts;
   }
 
-  /** SQL form of hasMembership; member.repository.spec.ts checks the two agree. */
-  private hasMembershipCondition(now: DateTime) {
+  /** SQL form of resolveAccess; member.repository.spec.ts checks the two agree. */
+  private accessBasisConditions(now: DateTime): Record<AccessBasis, SQL> {
     const activeSubscription = this.db
       .select({ id: schema.memberSubscription.id })
       .from(schema.memberSubscription)
@@ -187,30 +206,87 @@ export class MemberRepository extends BaseRepository {
           or(isNull(schema.organization.accessEndDate), gt(schema.organization.accessEndDate, now)),
         ),
       );
-    return or(exists(activeSubscription), exists(activeOrganization))!;
+    const dayPass = this.db
+      .select({ id: schema.dayPass.id })
+      .from(schema.dayPass)
+      .where(
+        and(
+          eq(schema.dayPass.memberId, schema.member.id),
+          or(isNull(schema.dayPass.usedDate), eq(schema.dayPass.usedDate, spaceDate(now))),
+        ),
+      );
+
+    const subscription = exists(activeSubscription);
+    const organization = exists(activeOrganization);
+    const pass = exists(dayPass);
+    return {
+      [ACCESS_BASIS.SUBSCRIPTION]: subscription,
+      [ACCESS_BASIS.ORGANIZATION]: and(not(subscription), organization)!,
+      [ACCESS_BASIS.DAY_PASS]: and(not(subscription), not(organization), pass)!,
+      [ACCESS_BASIS.NONE]: not(or(subscription, organization, pass)!),
+    };
+  }
+
+  private waiverConditions(): Record<WaiverFilter, SQL> {
+    const signed = exists(
+      this.db
+        .select({ id: schema.waiver.id })
+        .from(schema.waiver)
+        .where(eq(schema.waiver.memberId, schema.member.id)),
+    );
+    return { [WAIVER_FILTER.SIGNED]: signed, [WAIVER_FILTER.MISSING]: not(signed) };
   }
 
   async search(filter: MemberSearchFilter, now: DateTime) {
+    const onboarding = this.db
+      .select({
+        memberId: schema.memberEmail.memberId,
+        lastSentDate: max(schema.memberEmail.sentDate).as('last_sent_date'),
+      })
+      .from(schema.memberEmail)
+      .where(eq(schema.memberEmail.type, MEMBER_EMAIL_TYPE.ONBOARDING))
+      .groupBy(schema.memberEmail.memberId)
+      .as('onboarding');
+
+    const accessConditions = this.accessBasisConditions(now);
+    const waiverConditions = this.waiverConditions();
+    const onboardingConditions: Record<OnboardingFilter, SQL> = {
+      [ONBOARDING_FILTER.SENT]: isNotNull(onboarding.lastSentDate),
+      [ONBOARDING_FILTER.NOT_SENT]: isNull(onboarding.lastSentDate),
+    };
+    const sortColumns = {
+      [MEMBER_SORT.NAME]: schema.member.name,
+      [MEMBER_SORT.EMAIL]: schema.member.email,
+      [MEMBER_SORT.ONBOARDING_SENT]: onboarding.lastSentDate,
+    };
+
     const term = filter.query.trim();
-    const conditions: (SQL | undefined)[] = [];
-    if (term !== '') {
-      conditions.push(
-        or(ilike(schema.member.name, `%${term}%`), ilike(schema.member.email, `%${term}%`)),
-      );
-    }
-    if (filter.status === MEMBER_STATUS.ACTIVE) conditions.push(this.hasMembershipCondition(now));
-    if (filter.status === MEMBER_STATUS.INACTIVE) {
-      conditions.push(not(this.hasMembershipCondition(now)));
-    }
-    const where = and(...conditions);
+    const where = and(
+      term === ''
+        ? undefined
+        : or(ilike(schema.member.name, `%${term}%`), ilike(schema.member.email, `%${term}%`)),
+      or(...filter.access.map((basis) => accessConditions[basis])),
+      or(...filter.waiver.map((waiver) => waiverConditions[waiver])),
+      or(...filter.onboarding.map((status) => onboardingConditions[status])),
+    );
+    const direction = filter.direction === SORT_DIRECTION.DESC ? desc : asc;
 
     const [[{ total }], data] = await Promise.all([
-      this.db.select({ total: count() }).from(schema.member).where(where),
       this.db
-        .select()
+        .select({ total: count() })
         .from(schema.member)
+        .leftJoin(onboarding, eq(onboarding.memberId, schema.member.id))
+        .where(where),
+      this.db
+        .select({ member: schema.member, lastOnboardingSentDate: onboarding.lastSentDate })
+        .from(schema.member)
+        .leftJoin(onboarding, eq(onboarding.memberId, schema.member.id))
         .where(where)
-        .orderBy(asc(schema.member.name), asc(schema.member.email))
+        .orderBy(
+          sql`${direction(sortColumns[filter.sort])} nulls last`,
+          asc(schema.member.name),
+          asc(schema.member.email),
+        )
         .limit(filter.pageSize)
         .offset((filter.page - 1) * filter.pageSize),
     ]);

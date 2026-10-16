@@ -1,7 +1,18 @@
-import { MEMBER_STATUS, type MemberStatus } from '$lib/remotes/dtos/member.dto';
+import {
+  ACCESS_BASIS,
+  MEMBER_EMAIL_TRIGGER,
+  MEMBER_EMAIL_TYPE,
+  enumValues,
+} from '$lib/member_enums';
+import {
+  MEMBER_SORT,
+  ONBOARDING_FILTER,
+  SORT_DIRECTION,
+  type MemberSearchFilter,
+} from '$lib/remotes/dtos/member.dto';
 import type { Database } from '$lib/server/db';
 import { schema } from '$lib/server/db/schema';
-import { hasMembership, resolveAccess, spaceDate } from '$lib/server/utils/member_access';
+import { resolveAccess, spaceDate } from '$lib/server/utils/member_access';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { DateTime } from 'luxon';
@@ -117,39 +128,61 @@ describe.skipIf(!TEST_DATABASE_URL)('MemberRepository access filter', () => {
     await admin.end();
   });
 
-  async function namesWithStatus(status: MemberStatus) {
+  async function search(filter: Partial<MemberSearchFilter> = {}) {
     const { data } = await repository.search(
-      { query: '', status, page: 1, pageSize: PAGE_SIZE },
+      {
+        query: '',
+        access: [],
+        waiver: [],
+        onboarding: [],
+        sort: MEMBER_SORT.NAME,
+        direction: SORT_DIRECTION.ASC,
+        page: 1,
+        pageSize: PAGE_SIZE,
+        ...filter,
+      },
       now,
     );
-    return data.map((member) => member.name).toSorted();
+    return data;
   }
 
-  it('matches hasMembership for every scenario', async () => {
-    const { data: members } = await repository.search(
-      { query: '', status: MEMBER_STATUS.ALL, page: 1, pageSize: PAGE_SIZE },
-      now,
-    );
+  async function names(filter: Partial<MemberSearchFilter>) {
+    return (await search(filter)).map(({ member }) => member.name).toSorted();
+  }
+
+  it('matches resolveAccess for every scenario', async () => {
+    const members = (await search()).map(({ member }) => member);
     const contexts = await repository.getAccessContexts(members.map((member) => member.id));
-    const expectedActive = members
-      .filter((member) => hasMembership(contexts.get(member.id)!, now))
-      .map((member) => member.name)
-      .toSorted();
-    const expectedInactive = members
-      .map((member) => member.name)
-      .filter((name) => !expectedActive.includes(name))
-      .toSorted();
 
     expect(members).toHaveLength(Object.keys(scenarios).length);
-    expect(await namesWithStatus(MEMBER_STATUS.ACTIVE)).toEqual(expectedActive);
-    expect(await namesWithStatus(MEMBER_STATUS.INACTIVE)).toEqual(expectedInactive);
+    for (const basis of enumValues(ACCESS_BASIS)) {
+      const expected = members
+        .filter((member) => resolveAccess(contexts.get(member.id)!, now).basis === basis)
+        .map((member) => member.name)
+        .toSorted();
+      expect(await names({ access: [basis] }), basis).toEqual(expected);
+    }
+  });
+
+  it('filters and sorts by onboarding email', async () => {
+    const [{ member }] = await search({ query: 'nothing' });
+    await db.insert(schema.memberEmail).values({
+      memberId: member.id,
+      type: MEMBER_EMAIL_TYPE.ONBOARDING,
+      trigger: MEMBER_EMAIL_TRIGGER.MANUAL,
+    });
+
+    expect(await names({ onboarding: [ONBOARDING_FILTER.SENT] })).toEqual(['nothing']);
+    expect(await names({ onboarding: [ONBOARDING_FILTER.NOT_SENT] })).not.toContain('nothing');
+    const [first] = await search({
+      sort: MEMBER_SORT.ONBOARDING_SENT,
+      direction: SORT_DIRECTION.DESC,
+    });
+    expect(first.member.name).toBe('nothing');
   });
 
   it('loads the same context in batch as one at a time', async () => {
-    const { data: members } = await repository.search(
-      { query: '', status: MEMBER_STATUS.ALL, page: 1, pageSize: PAGE_SIZE },
-      now,
-    );
+    const members = (await search()).map(({ member }) => member);
     const contexts = await repository.getAccessContexts(members.map((member) => member.id));
 
     for (const member of members) {

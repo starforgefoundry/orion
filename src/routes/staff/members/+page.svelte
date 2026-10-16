@@ -1,25 +1,57 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { Button } from '$lib/components/ui/button';
+  import { Checkbox } from '$lib/components/ui/checkbox';
   import { Spinner } from '$lib/components/ui/spinner';
   import * as Table from '$lib/components/ui/table';
-  import * as ToggleGroup from '$lib/components/ui/toggle-group';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import Pagination from '$lib/frontend/components/Pagination.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
-  import { MEMBER_STATUS, type MemberStatus } from '$lib/remotes/dtos/member.dto';
+  import { enumValues, ACCESS_BASIS } from '$lib/member_enums';
+  import { MEMBER_SORT, ONBOARDING_FILTER } from '$lib/remotes/dtos/member.dto';
+  import type { MemberSort } from '$lib/remotes/dtos/member.dto';
+  import MailIcon from '@lucide/svelte/icons/mail';
   import SearchIcon from '@lucide/svelte/icons/search';
-  import { ACCESS_BASIS_DISPLAY, memberHref, waiverDisplay } from './display';
-  import { MembersManager } from './members.svelte';
+  import XIcon from '@lucide/svelte/icons/x';
+  import ColumnHeader from './ColumnHeader.svelte';
+  import {
+    ACCESS_BASIS_DISPLAY,
+    ONBOARDING_FILTER_LABEL,
+    WAIVER_FILTER_LABEL,
+    formatDate,
+    memberHref,
+    waiverDisplay,
+  } from './display';
+  import { MembersManager, type FilterKey, type MemberFilters } from './members.svelte';
 
-  const COLUMN_COUNT = 4;
-  const STATUS_OPTIONS: { value: MemberStatus; label: string }[] = [
-    { value: MEMBER_STATUS.ACTIVE, label: 'Active' },
-    { value: MEMBER_STATUS.INACTIVE, label: 'Inactive' },
-    { value: MEMBER_STATUS.ALL, label: 'All' },
-  ];
+  const COLUMN_COUNT = 6;
 
   const manager = new MembersManager();
+
+  function sortFor(sort: MemberSort) {
+    return {
+      direction: manager.sortDirection(sort),
+      onSort: (direction: typeof manager.direction) => manager.sortBy(sort, direction),
+    };
+  }
+
+  function filterFor<K extends FilterKey>(
+    key: K,
+    labels: Record<MemberFilters[K][number], string>,
+  ) {
+    type Value = MemberFilters[K][number];
+    return {
+      options: (Object.keys(labels) as Value[]).map((value) => ({ value, label: labels[value] })),
+      isSelected: (value: Value) => manager.isFiltered(key, value),
+      onToggle: (value: Value, checked: boolean) => manager.toggleFilter(key, value, checked),
+      onClear: () => manager.clearFilter(key),
+    };
+  }
+
+  const accessLabels = Object.fromEntries(
+    enumValues(ACCESS_BASIS).map((basis) => [basis, ACCESS_BASIS_DISPLAY[basis].label]),
+  ) as Record<MemberFilters['access'][number], string>;
 
   function handleRowKeydown(event: KeyboardEvent, id: string) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -38,79 +70,131 @@
     value={manager.searchTerm}
     oninput={(e) => manager.setSearchTerm(e.currentTarget.value)}
   />
-  <ToggleGroup.Root
-    type="single"
-    variant="outline"
-    size="sm"
-    value={manager.status}
-    onValueChange={(value) => value && manager.setStatus(value as MemberStatus)}
-  >
-    {#each STATUS_OPTIONS as option (option.value)}
-      <ToggleGroup.Item value={option.value}>{option.label}</ToggleGroup.Item>
-    {/each}
-  </ToggleGroup.Root>
+  {#if manager.hasFilters}
+    <Button variant="ghost" size="sm" onclick={() => manager.clearFilters()}>
+      <XIcon />
+      Clear filters
+    </Button>
+  {/if}
+  {#if manager.selected.size > 0}
+    <Button
+      size="sm"
+      class="ml-auto"
+      disabled={manager.sending}
+      onclick={() => manager.sendOnboardingToSelected()}
+    >
+      {#if manager.sending}<Spinner />{:else}<MailIcon />{/if}
+      Send Onboarding ({manager.selected.size})
+    </Button>
+  {/if}
 </div>
 
 {#if manager.results.error}
   <p class="text-sm text-destructive">Error loading members: {manager.results.error.message}</p>
-{:else if !manager.results.current}
-  <div class="flex justify-center py-8">
-    <Spinner class="size-6" />
-  </div>
 {:else}
   <div class="overflow-hidden rounded-lg border">
     <Table.Root>
       <Table.Header class="bg-muted/50">
         <Table.Row>
-          <Table.Head>Name</Table.Head>
-          <Table.Head class="hidden md:table-cell">Email</Table.Head>
-          <Table.Head>Access</Table.Head>
-          <Table.Head class="hidden sm:table-cell">Waiver</Table.Head>
+          <Table.Head class="w-10">
+            <Checkbox
+              aria-label="Select all members"
+              checked={manager.allSelected}
+              indeterminate={manager.someSelected}
+              disabled={manager.rows.length === 0}
+              onCheckedChange={(checked) => manager.toggleAll(checked)}
+            />
+          </Table.Head>
+          <Table.Head>
+            <ColumnHeader label="Name" sort={sortFor(MEMBER_SORT.NAME)} />
+          </Table.Head>
+          <Table.Head class="hidden md:table-cell">
+            <ColumnHeader label="Email" sort={sortFor(MEMBER_SORT.EMAIL)} />
+          </Table.Head>
+          <Table.Head>
+            <ColumnHeader label="Access" filter={filterFor('access', accessLabels)} />
+          </Table.Head>
+          <Table.Head class="hidden sm:table-cell">
+            <ColumnHeader label="Waiver" filter={filterFor('waiver', WAIVER_FILTER_LABEL)} />
+          </Table.Head>
+          <Table.Head class="hidden lg:table-cell">
+            <ColumnHeader
+              label="Onboarding"
+              sort={sortFor(MEMBER_SORT.ONBOARDING_SENT)}
+              filter={filterFor('onboarding', ONBOARDING_FILTER_LABEL)}
+            />
+          </Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each manager.results.current.data as row (row.member.id)}
-          {@const basis = ACCESS_BASIS_DISPLAY[row.basis]}
-          {@const waiver = waiverDisplay(row.hasWaiver)}
-          <Table.Row
-            class="cursor-pointer"
-            tabindex={0}
-            onclick={() => goto(memberHref(row.member.id))}
-            onkeydown={(e) => handleRowKeydown(e, row.member.id)}
-          >
-            <Table.Cell class="max-w-48">
-              <div class="truncate font-medium">{row.member.name}</div>
-              <div class="truncate text-xs text-muted-foreground md:hidden">
-                {row.member.email}
-              </div>
-            </Table.Cell>
-            <Table.Cell class="hidden max-w-64 truncate md:table-cell">
-              {row.member.email}
-            </Table.Cell>
-            <Table.Cell>
-              <StatusBadge tone={basis.tone}>{basis.label}</StatusBadge>
-              {#if !row.hasWaiver}
-                <StatusBadge tone={waiver.tone} class="sm:hidden">No Waiver</StatusBadge>
-              {/if}
-            </Table.Cell>
-            <Table.Cell class="hidden sm:table-cell">
-              <StatusBadge tone={waiver.tone}>{waiver.label}</StatusBadge>
+        {#if !manager.results.current}
+          <Table.Row>
+            <Table.Cell colspan={COLUMN_COUNT} class="h-20">
+              <div class="flex justify-center"><Spinner class="size-6" /></div>
             </Table.Cell>
           </Table.Row>
         {:else}
-          <Table.Row>
-            <Table.Cell colspan={COLUMN_COUNT} class="h-20 text-center text-muted-foreground">
-              No members found.
-            </Table.Cell>
-          </Table.Row>
-        {/each}
+          {#each manager.rows as row (row.member.id)}
+            {@const basis = ACCESS_BASIS_DISPLAY[row.basis]}
+            {@const waiver = waiverDisplay(row.hasWaiver)}
+            <Table.Row
+              class="cursor-pointer"
+              tabindex={0}
+              data-state={manager.isSelected(row.member.id) ? 'selected' : undefined}
+              onclick={() => goto(memberHref(row.member.id))}
+              onkeydown={(e) => handleRowKeydown(e, row.member.id)}
+            >
+              <Table.Cell
+                onclick={(e) => e.stopPropagation()}
+                onkeydown={(e) => e.stopPropagation()}
+              >
+                <Checkbox
+                  aria-label="Select {row.member.name}"
+                  checked={manager.isSelected(row.member.id)}
+                  onCheckedChange={(checked) => manager.toggle(row.member.id, checked)}
+                />
+              </Table.Cell>
+              <Table.Cell class="max-w-48">
+                <div class="truncate font-medium">{row.member.name}</div>
+                <div class="truncate text-xs text-muted-foreground md:hidden">
+                  {row.member.email}
+                </div>
+              </Table.Cell>
+              <Table.Cell class="hidden max-w-64 truncate md:table-cell">
+                {row.member.email}
+              </Table.Cell>
+              <Table.Cell>
+                <StatusBadge tone={basis.tone}>{basis.label}</StatusBadge>
+                {#if !row.hasWaiver}
+                  <StatusBadge tone={waiver.tone} class="sm:hidden">No Waiver</StatusBadge>
+                {/if}
+              </Table.Cell>
+              <Table.Cell class="hidden sm:table-cell">
+                <StatusBadge tone={waiver.tone}>{waiver.label}</StatusBadge>
+              </Table.Cell>
+              <Table.Cell class="hidden text-muted-foreground lg:table-cell">
+                {row.lastOnboardingSentDate
+                  ? formatDate(row.lastOnboardingSentDate)
+                  : ONBOARDING_FILTER_LABEL[ONBOARDING_FILTER.NOT_SENT]}
+              </Table.Cell>
+            </Table.Row>
+          {:else}
+            <Table.Row>
+              <Table.Cell colspan={COLUMN_COUNT} class="h-20 text-center text-muted-foreground">
+                No members found.
+              </Table.Cell>
+            </Table.Row>
+          {/each}
+        {/if}
       </Table.Body>
     </Table.Root>
   </div>
 
-  <Pagination
-    currentPage={manager.page}
-    totalPages={manager.results.current.pagination.totalPages}
-    onPageChange={(page) => manager.setPage(page)}
-  />
+  {#if manager.results.current}
+    <Pagination
+      currentPage={manager.page}
+      totalPages={manager.results.current.pagination.totalPages}
+      onPageChange={(page) => manager.setPage(page)}
+    />
+  {/if}
 {/if}

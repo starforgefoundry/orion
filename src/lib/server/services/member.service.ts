@@ -16,14 +16,17 @@ export class MemberService extends BaseService {
   async listMembers(filter: MemberSearchFilter) {
     const now = DateTime.now();
     const { data, pagination } = await this.memberRepository.search(filter, now);
-    const contexts = await this.memberRepository.getAccessContexts(data.map((member) => member.id));
+    const contexts = await this.memberRepository.getAccessContexts(
+      data.map(({ member }) => member.id),
+    );
 
-    const rows = data.map((member) => {
+    const rows = data.map(({ member, lastOnboardingSentDate }) => {
       const context = contexts.get(member.id);
       return {
         member,
         basis: context ? resolveAccess(context, now).basis : ACCESS_BASIS.NONE,
         hasWaiver: context?.hasWaiver ?? false,
+        lastOnboardingSentDate,
       };
     });
     return { data: rows, pagination };
@@ -81,6 +84,21 @@ export class MemberService extends BaseService {
     const member = await this.memberRepository.getById(memberId);
     if (!member) throw new Error(MEMBER_NOT_FOUND);
     await this.memberNotificationRepository.sendOnboarding(member, MEMBER_EMAIL_TRIGGER.MANUAL);
+  }
+
+  /** One failed email does not stop the rest; failures come back by member name. */
+  async sendOnboardings(memberIds: string[]) {
+    const members = await this.memberRepository.getByIds(memberIds);
+    const results = await Promise.allSettled(
+      members.map((member) =>
+        this.memberNotificationRepository.sendOnboarding(member, MEMBER_EMAIL_TRIGGER.MANUAL),
+      ),
+    );
+    const failed = members.filter((_, index) => results[index].status === 'rejected');
+    return {
+      sent: members.filter((member) => !failed.includes(member)).map((member) => member.name),
+      failed: failed.map((member) => member.name),
+    };
   }
 
   /** Staff override: always admits, recording whatever access the member has. */

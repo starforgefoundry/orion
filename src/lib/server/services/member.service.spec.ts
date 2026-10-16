@@ -1,4 +1,4 @@
-import { MEMBER_STATUS } from '$lib/remotes/dtos/member.dto';
+import { MEMBER_SORT, SORT_DIRECTION } from '$lib/remotes/dtos/member.dto';
 import type { DayPass, Member, MemberSubscription } from '$lib/server/db/schema';
 import type { MemberRepositories } from '$lib/server/services/base.service';
 import type { MemberAccessContext } from '$lib/server/utils/member_access';
@@ -66,6 +66,7 @@ describe('MemberService', () => {
     repos = {
       memberRepository: {
         getById: vi.fn(),
+        getByIds: vi.fn(),
         getAccessContext: vi.fn(),
         getAccessContexts: vi.fn(),
         search: vi.fn(),
@@ -106,7 +107,14 @@ describe('MemberService', () => {
     it('resolves access and waiver status for each member on the page', async () => {
       const other = { ...member, id: 'member-2' };
       const pagination = { total: 2, page: 1, pageSize: 25, totalPages: 1 };
-      repos.memberRepository.search.mockResolvedValue({ data: [member, other], pagination });
+      const sentDate = DateTime.fromISO('2026-02-01');
+      repos.memberRepository.search.mockResolvedValue({
+        data: [
+          { member, lastOnboardingSentDate: sentDate },
+          { member: other, lastOnboardingSentDate: null },
+        ],
+        pagination,
+      });
       repos.memberRepository.getAccessContexts.mockResolvedValue(
         new Map([
           [member.id, context({ subscriptions: [subscription] })],
@@ -116,7 +124,11 @@ describe('MemberService', () => {
 
       const result = await service.listMembers({
         query: '',
-        status: MEMBER_STATUS.ALL,
+        access: [],
+        waiver: [],
+        onboarding: [],
+        sort: MEMBER_SORT.NAME,
+        direction: SORT_DIRECTION.ASC,
         page: 1,
         pageSize: 25,
       });
@@ -124,8 +136,8 @@ describe('MemberService', () => {
       expect(repos.memberRepository.getAccessContexts).toHaveBeenCalledWith([member.id, other.id]);
       expect(result).toEqual({
         data: [
-          { member, basis: 'subscription', hasWaiver: true },
-          { member: other, basis: 'none', hasWaiver: false },
+          { member, basis: 'subscription', hasWaiver: true, lastOnboardingSentDate: sentDate },
+          { member: other, basis: 'none', hasWaiver: false, lastOnboardingSentDate: null },
         ],
         pagination,
       });
@@ -257,6 +269,24 @@ describe('MemberService', () => {
       repos.memberRepository.getById.mockResolvedValue(undefined);
 
       await expect(service.resendOnboarding('missing')).rejects.toThrow(MEMBER_NOT_FOUND);
+    });
+  });
+
+  describe('sendOnboardings', () => {
+    it('keeps sending after one email fails and reports who failed', async () => {
+      const other = { ...member, id: 'member-2', name: 'Grace' };
+      repos.memberRepository.getByIds.mockResolvedValue([member, other]);
+      repos.memberNotificationRepository.sendOnboarding
+        .mockRejectedValueOnce(new Error('mailgun down'))
+        .mockResolvedValueOnce(undefined);
+
+      const result = await service.sendOnboardings([member.id, other.id]);
+
+      expect(repos.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+        other,
+        'manual',
+      );
+      expect(result).toEqual({ sent: ['Grace'], failed: ['Ada'] });
     });
   });
 

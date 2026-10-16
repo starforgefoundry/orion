@@ -1,4 +1,5 @@
 import type { Tone } from '$lib/frontend/components/StatusBadge.svelte';
+import type { OnboardingFilter, WaiverFilter } from '$lib/remotes/dtos/member.dto';
 import type { MemberEmail, MemberSubscription, Visit } from '$lib/server/db/schema';
 import { DateTime } from 'luxon';
 
@@ -46,6 +47,16 @@ export const WAIVER_DISPLAY = {
   signed: { label: 'Signed', tone: 'success' },
   missing: { label: 'Missing', tone: 'warning' },
 } as const satisfies Record<string, Display>;
+
+export const WAIVER_FILTER_LABEL: Record<WaiverFilter, string> = {
+  signed: WAIVER_DISPLAY.signed.label,
+  missing: WAIVER_DISPLAY.missing.label,
+};
+
+export const ONBOARDING_FILTER_LABEL: Record<OnboardingFilter, string> = {
+  sent: 'Sent',
+  not_sent: 'Not Sent',
+};
 
 export function waiverDisplay(hasWaiver: boolean) {
   return hasWaiver ? WAIVER_DISPLAY.signed : WAIVER_DISPLAY.missing;
