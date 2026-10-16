@@ -123,15 +123,19 @@ export const payment = pgTable(
     squareInvoiceId: text('square_invoice_id'),
     squareOrderId: text('square_order_id'),
     organizationId: text('organization_id').references(() => organization.id),
-    type: text('type', { enum: ['print_request', 'balance', 'org_charge'] }).notNull(),
+    type: text('type', {
+      enum: ['print_request', 'balance', 'org_charge', 'car_bay_overrun'],
+    }).notNull(),
 
     total: integer('total').notNull(), // in cents
     orderObject: text('order_object'),
     paymentUrl: text('payment_url'),
+    carBayBookingId: text('car_bay_booking_id').references(() => carBayBooking.id),
   },
   (table) => [
     index('square_invoice_idx').on(table.squareInvoiceId),
     index('square_order_idx').on(table.squareOrderId),
+    index('payment_car_bay_booking_idx').on(table.carBayBookingId),
   ],
 );
 
@@ -344,6 +348,43 @@ export const classBooking = pgTable(
 
 export type ClassBooking = InferSelectModel<typeof classBooking>;
 
+// Overlapping confirmed bookings are rejected by the car_bay_booking_no_overlap exclusion constraint.
+export const carBayBooking = pgTable(
+  'car_bay_booking',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    tier: text('tier', { enum: ['quick_job', 'hourly', 'full_day'] }).notNull(),
+    status: text('status', { enum: ['confirmed', 'canceled', 'no_show'] }).notNull(),
+    startAt: luxonTimestamp('start_at').notNull(),
+    endAt: luxonTimestamp('end_at').notNull(),
+    blockedUntil: luxonTimestamp('blocked_until').notNull(),
+    isMember: boolean('is_member').notNull(),
+    customerName: text('customer_name').notNull(),
+    customerEmail: text('customer_email').notNull(),
+    customerPhone: text('customer_phone').notNull(),
+    amountPaid: integer('amount_paid').notNull().default(0), // in cents
+    squarePaymentId: text('square_payment_id'),
+    squareOrderId: text('square_order_id'),
+    createdByEmail: text('created_by_email').references(() => user.email),
+    bookingToken: text('booking_token')
+      .notNull()
+      .$defaultFn(() => crypto.randomUUID()),
+    reminderSentDate: luxonTimestamp('reminder_sent_date'),
+    createdDate: luxonTimestamp('created_date')
+      .notNull()
+      .$defaultFn(() => DateTime.now()),
+  },
+  (table) => [
+    index('car_bay_booking_start_idx').on(table.startAt),
+    index('car_bay_booking_token_idx').on(table.bookingToken),
+  ],
+);
+
+export type CarBayBooking = InferSelectModel<typeof carBayBooking>;
+
 export const schema = {
   user,
   printRequest,
@@ -363,4 +404,5 @@ export const schema = {
   classCatalog,
   classInstance,
   classBooking,
+  carBayBooking,
 };

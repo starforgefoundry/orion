@@ -12,6 +12,7 @@
   import LogOutIcon from '@lucide/svelte/icons/log-out';
   import BookOpenIcon from '@lucide/svelte/icons/book-open';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
+  import CarIcon from '@lucide/svelte/icons/car';
   import SpoolIcon from '@lucide/svelte/icons/spool';
   import FileSignatureIcon from '@lucide/svelte/icons/file-pen-line';
   import PrinterIcon from '@lucide/svelte/icons/printer-3d';
@@ -42,6 +43,10 @@
         { href: '/staff/classes/calendar', title: 'Calendar', icon: CalendarIcon },
         { href: '/staff/classes/catalog', title: 'Catalog', icon: BookOpenIcon },
       ],
+    },
+    {
+      title: 'Car Bay',
+      items: [{ href: '/staff/car_bay', title: 'Bookings', icon: CarIcon }],
     },
     {
       title: 'Inventory',

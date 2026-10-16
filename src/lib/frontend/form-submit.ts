@@ -6,8 +6,11 @@ export type SubmitMessages = {
   error: string;
 };
 
-function errorDescription(error: unknown) {
-  return error instanceof Error ? error.message : undefined;
+/** Remote functions reject with an `HttpError`, which carries its message on `body`. */
+export function errorDescription(error: unknown) {
+  if (error instanceof Error) return error.message;
+  const body = (error as { body?: { message?: unknown } } | undefined)?.body;
+  return typeof body?.message === 'string' ? body.message : undefined;
 }
 
 /** Runs an action and reports the outcome as a toast. Resolves to whether it succeeded. */

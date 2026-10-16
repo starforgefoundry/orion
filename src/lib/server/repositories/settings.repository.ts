@@ -1,5 +1,11 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
+import {
+  DEFAULT_CAR_BAY_POLICY,
+  DEFAULT_CAR_BAY_RATES,
+  type CarBayPolicy,
+  type CarBayRates,
+} from '$lib/utils/car_bay';
 import { eq } from 'drizzle-orm';
 
 export type SettingsMap = {
@@ -24,6 +30,8 @@ export type SettingsMap = {
     serverUrl: string;
     apiKey: string;
   };
+  carBayRates: CarBayRates;
+  carBayPolicy: CarBayPolicy;
 };
 
 const defaults: SettingsMap = {
@@ -48,6 +56,8 @@ const defaults: SettingsMap = {
     serverUrl: '',
     apiKey: '',
   },
+  carBayRates: DEFAULT_CAR_BAY_RATES,
+  carBayPolicy: DEFAULT_CAR_BAY_POLICY,
 };
 
 export class SettingsRepository extends BaseRepository {

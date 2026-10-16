@@ -1,5 +1,6 @@
 import { BambuddyRepository } from '$lib/server/repositories/bambuddy.repository';
 import { BillingCodeRepository } from '$lib/server/repositories/billing_code.repository';
+import { CarBayRepository } from '$lib/server/repositories/car_bay.repository';
 import { DiscordRepository } from '$lib/server/repositories/discord.repository';
 import { InventoryRepository } from '$lib/server/repositories/inventory.repository';
 import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
@@ -28,6 +29,7 @@ export class BaseService {
   protected inventoryRepository: InventoryRepository;
   protected bambuddyRepository: BambuddyRepository;
   protected waiverRepository: WaiverRepository;
+  protected carBayRepository: CarBayRepository;
 
   constructor(
     printFilesRepository?: PrintFilesRepository,
@@ -44,6 +46,7 @@ export class BaseService {
     bambuddyRepository?: BambuddyRepository,
     waiverRepository?: WaiverRepository,
     printRequestCommentRepository?: PrintRequestCommentRepository,
+    carBayRepository?: CarBayRepository,
   ) {
     this.printFilesRepository = printFilesRepository ?? new PrintFilesRepository();
     this.printMaterialsRepository = printMaterialsRepository ?? new PrintMaterialsRepository();
@@ -60,5 +63,6 @@ export class BaseService {
     this.waiverRepository = waiverRepository ?? new WaiverRepository();
     this.printRequestCommentRepository =
       printRequestCommentRepository ?? new PrintRequestCommentRepository();
+    this.carBayRepository = carBayRepository ?? new CarBayRepository();
   }
 }
