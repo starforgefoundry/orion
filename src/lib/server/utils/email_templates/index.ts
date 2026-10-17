@@ -34,7 +34,12 @@ export type Templates = {
     bookingWhen: string;
     bookingUrl: string;
   };
-  member_onboarding: { memberName: string; introMessage: string; onboardingUrl: string };
+  member_onboarding: {
+    memberName: string;
+    introMessage: string;
+    setupMessage: string;
+    onboardingUrl: string;
+  };
 };
 
 export const templates: { [key in keyof Templates]: string } = {

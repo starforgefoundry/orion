@@ -45,11 +45,32 @@ describe('MemberNotificationRepository.sendOnboarding', () => {
       {
         memberName: 'Sam &lt;Smith&gt;',
         introMessage: 'Thanks for picking up a day pass at Starforge Foundry!',
+        setupMessage: expect.stringContaining('Before your first visit'),
         onboardingUrl: 'https://orion.example.com/member/onboard/onboarding-abc',
       },
     );
     expect(memberEmail.log).toHaveBeenCalledWith('member-1', 'onboarding', 'day_pass');
   });
+
+  it.each(['manual', 'self_service'] as const)(
+    'sends existing-member copy for %s sends',
+    async (trigger) => {
+      const { mailgun, repository } = setup();
+
+      await repository.sendOnboarding(MEMBER, trigger);
+
+      expect(mailgun.sendTemplate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        'Set up your Starforge Foundry member pass',
+        'member_onboarding',
+        expect.objectContaining({
+          setupMessage: expect.stringContaining('before your next visit'),
+        }),
+      );
+    },
+  );
 
   it('does not log when the email fails to send', async () => {
     const { mailgun, memberEmail, repository } = setup();
