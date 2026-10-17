@@ -18,13 +18,13 @@ type OnboardingCopy = { subject: string; setupMessage: string };
 const NEW_MEMBER_COPY: OnboardingCopy = {
   subject: 'Welcome to Starforge Foundry',
   setupMessage:
-    "Before your first visit, finish setting up your access. It only takes a minute: sign the liability waiver if you haven't already, then add your member pass to your phone. Scan the pass at the front desk kiosk each time you visit.",
+    "Before your first visit, finish setting up your access. It only takes a minute: sign the liability waiver if you haven't already, then add your member pass to your phone. Scan the pass at the front door kiosk each time you visit.",
 };
 
 const EXISTING_MEMBER_COPY: OnboardingCopy = {
   subject: 'Set up your Starforge Foundry member pass',
   setupMessage:
-    "Set up your pass before your next visit. It only takes a minute: sign the liability waiver if you haven't already, then add the pass to your phone. From then on, scan it at the front desk kiosk to check in.",
+    "Set up your pass before your next visit. It only takes a minute: sign the liability waiver if you haven't already, then add the pass to your phone. From then on, scan it at the front door kiosk to check in.",
 };
 
 const ONBOARDING_COPY: Record<MemberEmailTrigger, OnboardingCopy> = {
