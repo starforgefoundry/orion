@@ -4,6 +4,8 @@
   import TabletIcon from '@lucide/svelte/icons/tablet';
   import { onDestroy } from 'svelte';
   import { KIOSK_SCREEN, KioskManager } from './kiosk-manager.svelte';
+  import KioskPassEmail from './KioskPassEmail.svelte';
+  import KioskPassEmailSent from './KioskPassEmailSent.svelte';
   import KioskResult from './KioskResult.svelte';
   import KioskScanner from './KioskScanner.svelte';
   import KioskWaiver from './KioskWaiver.svelte';
@@ -37,10 +39,15 @@
     name={kiosk.waiver.name}
     email={kiosk.waiver.email}
   />
+{:else if kiosk.screen === KIOSK_SCREEN.PASS_EMAIL && kiosk.passEmailRequestId}
+  <KioskPassEmail {kiosk} requestId={kiosk.passEmailRequestId} />
+{:else if kiosk.screen === KIOSK_SCREEN.PASS_EMAIL_SENT}
+  <KioskPassEmailSent onDismiss={() => kiosk.reset()} />
 {:else}
   <KioskScanner
     checking={kiosk.screen === KIOSK_SCREEN.CHECKING}
     onScan={(value) => kiosk.scan(value)}
+    onRequestPassEmail={() => kiosk.requestPassEmail()}
   />
   {#if kiosk.screen === KIOSK_SCREEN.RESULT && kiosk.result}
     <div class="absolute inset-0">

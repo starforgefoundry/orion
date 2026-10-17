@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { Button } from '$lib/components/ui/button';
   import { Spinner } from '$lib/components/ui/spinner';
   import logo from '$lib/assets/logo.png';
   import CameraOffIcon from '@lucide/svelte/icons/camera-off';
+  import MailIcon from '@lucide/svelte/icons/mail';
   import QrCodeIcon from '@lucide/svelte/icons/qr-code';
   import { BarqodeStream, type DetectedBarcode } from 'barqode';
   import { onDestroy } from 'svelte';
@@ -10,9 +12,10 @@
   interface Props {
     checking: boolean;
     onScan: (value: string) => void;
+    onRequestPassEmail: () => void;
   }
 
-  let { checking, onScan }: Props = $props();
+  let { checking, onScan, onRequestPassEmail }: Props = $props();
 
   // Kept as a constant so barqode doesn't restart the stream on every render.
   const CAMERA_CONSTRAINTS: MediaTrackConstraints = {
@@ -68,5 +71,9 @@
       <p class="text-2xl text-muted-foreground">Hold your member pass QR code up to the camera.</p>
     </div>
     <QrCodeIcon class="size-24 text-muted-foreground" />
+    <Button variant="outline" class="h-16 px-8 text-xl" onclick={onRequestPassEmail}>
+      <MailIcon class="size-6" />
+      Don't have your pass? Email it to me
+    </Button>
   </div>
 </div>

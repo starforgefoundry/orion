@@ -48,11 +48,7 @@
   );
 </script>
 
-<div
-  class="h-full overflow-y-auto"
-  onpointerdown={() => kiosk.keepWaiverOpen()}
-  role="presentation"
->
+<div class="h-full overflow-y-auto" onpointerdown={() => kiosk.keepFormOpen()} role="presentation">
   <div class="mx-auto flex max-w-5xl flex-col gap-6 p-8">
     <header class="flex items-start justify-between gap-6">
       <div>

@@ -3,7 +3,8 @@ import { checkInKiosk } from '$lib/remotes/endpoints/kiosk.remote';
 import { isHttpError } from '@sveltejs/kit';
 
 const RESULT_DISPLAY_MS = 6_000;
-const WAIVER_IDLE_TIMEOUT_MS = 3 * 60_000;
+const PASS_EMAIL_SENT_DISPLAY_MS = 5_000;
+const FORM_IDLE_TIMEOUT_MS = 3 * 60_000;
 // The camera reports a held pass on every frame; it must leave view this long to scan again.
 const REPEAT_SCAN_COOLDOWN_MS = 8_000;
 const UNAUTHORIZED = 401;
@@ -13,8 +14,12 @@ export const KIOSK_SCREEN = {
   CHECKING: 'checking',
   RESULT: 'result',
   WAIVER: 'waiver',
+  PASS_EMAIL: 'pass_email',
+  PASS_EMAIL_SENT: 'pass_email_sent',
   UNPAIRED: 'unpaired',
 } as const;
+
+const FORM_SCREENS = new Set<KioskScreen>([KIOSK_SCREEN.WAIVER, KIOSK_SCREEN.PASS_EMAIL]);
 
 export type KioskScreen = (typeof KIOSK_SCREEN)[keyof typeof KIOSK_SCREEN];
 
@@ -31,6 +36,8 @@ export class KioskManager {
   screen = $state<KioskScreen>(KIOSK_SCREEN.SCANNING);
   result = $state<KioskDisplayResult | null>(null);
   waiver = $state<NeedsWaiver | null>(null);
+  /** Keys a fresh email form per request so the last person's address never carries over. */
+  passEmailRequestId = $state<string | null>(null);
 
   #lastScan: { value: string; at: number } | null = null;
   #returnTimer: ReturnType<typeof setTimeout> | undefined;
@@ -56,7 +63,7 @@ export class KioskManager {
     if (result.status === KIOSK_CHECK_IN_STATUS.NEEDS_WAIVER) {
       this.waiver = result;
       this.screen = KIOSK_SCREEN.WAIVER;
-      this.#returnAfter(WAIVER_IDLE_TIMEOUT_MS);
+      this.#returnAfter(FORM_IDLE_TIMEOUT_MS);
       return;
     }
 
@@ -66,9 +73,22 @@ export class KioskManager {
     this.#returnAfter(RESULT_DISPLAY_MS);
   }
 
-  /** Keeps the waiver open while someone is still filling it in. */
-  keepWaiverOpen() {
-    if (this.screen === KIOSK_SCREEN.WAIVER) this.#returnAfter(WAIVER_IDLE_TIMEOUT_MS);
+  requestPassEmail() {
+    if (this.screen !== KIOSK_SCREEN.SCANNING) return;
+
+    this.passEmailRequestId = crypto.randomUUID();
+    this.screen = KIOSK_SCREEN.PASS_EMAIL;
+    this.#returnAfter(FORM_IDLE_TIMEOUT_MS);
+  }
+
+  passEmailSent() {
+    this.screen = KIOSK_SCREEN.PASS_EMAIL_SENT;
+    this.#returnAfter(PASS_EMAIL_SENT_DISPLAY_MS);
+  }
+
+  /** Keeps a form open while someone is still filling it in. */
+  keepFormOpen() {
+    if (FORM_SCREENS.has(this.screen)) this.#returnAfter(FORM_IDLE_TIMEOUT_MS);
   }
 
   reset() {
@@ -78,6 +98,7 @@ export class KioskManager {
     if (this.#lastScan) this.#lastScan.at = Date.now();
     this.result = null;
     this.waiver = null;
+    this.passEmailRequestId = null;
     this.screen = KIOSK_SCREEN.SCANNING;
   }
 
