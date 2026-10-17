@@ -102,17 +102,15 @@
           <dt>Material Cost</dt>
           <dd class="tabular-nums">${(materialCost / 100).toFixed(2)}</dd>
         </div>
-        {#if buildPlates > 1}
-          <div class="flex justify-between gap-3">
-            <dt>
-              Additional Build Plates ({buildPlates - 1}x)
-              <span class="block text-xs text-muted-foreground">
-                ${buildPlateCost.toFixed(2)}/ea over 1 plate
-              </span>
-            </dt>
-            <dd class="tabular-nums">${buildPlateSurcharge.toFixed(2)}</dd>
-          </div>
-        {/if}
+        <div class="flex justify-between gap-3">
+          <dt>
+            Additional Build Plates ({buildPlates - 1}x)
+            <span class="block text-xs text-muted-foreground">
+              ${buildPlateCost.toFixed(2)}/ea over 1 plate
+            </span>
+          </dt>
+          <dd class="tabular-nums">${buildPlateSurcharge.toFixed(2)}</dd>
+        </div>
 
         {#each pricingInfo.current?.discounts ?? [] as discount, i}
           {@const priceBeforeDiscount = (pricingInfo.current?.discounts ?? [])
