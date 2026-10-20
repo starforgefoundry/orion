@@ -72,6 +72,7 @@
     "vitest": "^4.0.16"
   },
   "dependencies": {
+    "@capacitor/core": "8.5.3",
     "drizzle-orm": "^0.45.3",
     "passkit-generator": "3.6.1",
     "postgres": "^3.4.9",

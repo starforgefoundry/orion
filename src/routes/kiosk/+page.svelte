@@ -46,6 +46,7 @@
 {:else}
   <KioskScanner
     checking={kiosk.screen === KIOSK_SCREEN.CHECKING}
+    covered={kiosk.screen === KIOSK_SCREEN.RESULT}
     onScan={(value) => kiosk.scan(value)}
     onRequestPassEmail={() => kiosk.requestPassEmail()}
   />

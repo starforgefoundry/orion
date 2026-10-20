@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { TARGET_EXPOSURE_COMPENSATION_EV, TARGET_ZOOM, cameraTuning } from './kiosk_camera';
+import {
+  TARGET_EXPOSURE_COMPENSATION_EV,
+  TARGET_ZOOM,
+  cameraTuning,
+  nativeCameraFrame,
+} from './kiosk_camera';
 
 describe('cameraTuning', () => {
   it('lowers exposure when the camera supports it', () => {
@@ -30,5 +35,17 @@ describe('cameraTuning', () => {
 
   it('changes nothing on a camera without these controls', () => {
     expect(cameraTuning({})).toEqual({});
+  });
+});
+
+describe('nativeCameraFrame', () => {
+  const inner = { x: 36, y: 36, width: 800, height: 600 };
+
+  it('rounds the camera to fit inside the frame border', () => {
+    expect(nativeCameraFrame(inner, 24, 4)).toEqual({ ...inner, cornerRadius: 20 });
+  });
+
+  it('keeps square corners when the border is wider than the rounding', () => {
+    expect(nativeCameraFrame(inner, 2, 4).cornerRadius).toBe(0);
   });
 });

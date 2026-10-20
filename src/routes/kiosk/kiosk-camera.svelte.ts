@@ -1,6 +1,6 @@
 import { cameraTuning, type CameraTuningCapabilities } from '$lib/utils/kiosk_camera';
 
-const CAMERA_RETRY_MS = 10_000;
+export const CAMERA_RETRY_MS = 10_000;
 
 /**
  * Keeps the kiosk camera running unattended. iOS cuts the camera when the iPad sleeps and
