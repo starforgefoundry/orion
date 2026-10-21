@@ -20,7 +20,9 @@
   }
 </script>
 
-<div class="grid h-full grid-cols-1 gap-8 p-8 landscape:grid-cols-[3fr_2fr]">
+<div
+  class="grid h-full grid-cols-1 grid-rows-[1fr_auto] gap-8 p-8 landscape:grid-cols-[3fr_2fr] landscape:grid-rows-1"
+>
   <KioskCameraView busy={pairing} {onScan} />
 
   <div class="flex flex-col items-center justify-center gap-6 text-center">

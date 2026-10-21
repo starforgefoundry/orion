@@ -71,6 +71,8 @@ export class NativeKioskCamera {
         zoom: NATIVE_ZOOM,
         exposureBias: TARGET_EXPOSURE_COMPENSATION_EV,
       });
+      // Resizes while the camera starts are dropped, so place it again once it's on screen.
+      this.#place();
       this.loading = false;
     } catch (error) {
       console.warn('Kiosk native camera failed to start', error);
