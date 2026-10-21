@@ -3,7 +3,6 @@
   import * as ToggleGroup from '$lib/components/ui/toggle-group';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
-  import { getPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
   import KanbanIcon from '@lucide/svelte/icons/square-kanban';
   import ListIcon from '@lucide/svelte/icons/list';
   import { onMount } from 'svelte';
@@ -23,8 +22,6 @@
     }
   });
 </script>
-
-<svelte:window onfocus={() => getPrintRequests().refresh()} />
 
 <PageHeader title="Request Queue" formHref="/print_request">
   {#snippet actions()}

@@ -5,6 +5,7 @@
   import StatusIndicator from '$lib/frontend/components/StatusIndicator.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
+  import { pollQuery } from '$lib/frontend/poll-query.svelte';
   import { searchPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
   import SearchIcon from '@lucide/svelte/icons/search';
   import RequestDetailModal from './RequestDetailModal.svelte';
@@ -17,6 +18,8 @@
 
   let prints = $derived(printsRequest.current?.data || []);
   let pagination = $derived(printsRequest.current?.pagination);
+
+  pollQuery(() => printsRequest);
 
   function openRequest(requestId: string) {
     goto(`?id=${requestId}`, { replaceState: true, noScroll: true, keepFocus: true });

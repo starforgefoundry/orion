@@ -6,6 +6,7 @@
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import StatusIndicator from '$lib/frontend/components/StatusIndicator.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
+  import { pollQuery } from '$lib/frontend/poll-query.svelte';
   import type { PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
   import { getPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
   import EllipsisVerticalIcon from '@lucide/svelte/icons/ellipsis-vertical';
@@ -62,6 +63,8 @@
     const job = prints.find((print) => print.id === requestId);
     if (job) await changeStatus(job, column);
   });
+
+  pollQuery(() => printRequests, { isPaused: () => drag.draggedId !== null });
 
   let scrollContainer = $state<HTMLElement>();
   $effect(() => drag.setScrollContainer(scrollContainer));
