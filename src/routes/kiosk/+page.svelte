@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner';
   import { getKioskStatus } from '$lib/remotes/endpoints/kiosk.remote';
-  import TabletIcon from '@lucide/svelte/icons/tablet';
   import { onDestroy } from 'svelte';
   import { KIOSK_SCREEN, KioskManager } from './kiosk-manager.svelte';
+  import KioskPairing from './KioskPairing.svelte';
   import KioskPassEmail from './KioskPassEmail.svelte';
   import KioskPassEmailSent from './KioskPassEmailSent.svelte';
   import KioskResult from './KioskResult.svelte';
@@ -25,13 +25,7 @@
     <Spinner class="size-16" />
   </div>
 {:else if unpaired}
-  <div class="flex h-full flex-col items-center justify-center gap-6 p-12 text-center">
-    <TabletIcon class="size-24 text-muted-foreground" />
-    <h1 class="text-5xl font-semibold">This kiosk is not paired</h1>
-    <p class="max-w-2xl text-2xl text-muted-foreground">
-      Staff: open Settings → Check-in Kiosk and scan the pairing code with this iPad.
-    </p>
-  </div>
+  <KioskPairing />
 {:else if kiosk.screen === KIOSK_SCREEN.WAIVER && kiosk.waiver}
   <KioskWaiver
     {kiosk}
