@@ -1,7 +1,7 @@
 import {
   nativeCameraFrame,
   TARGET_EXPOSURE_COMPENSATION_EV,
-  TARGET_ZOOM,
+  NATIVE_ZOOM,
   type NativeCameraFrame,
 } from '$lib/utils/kiosk_camera';
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
@@ -68,7 +68,7 @@ export class NativeKioskCamera {
     try {
       await KioskScanner.start({
         ...this.#frame(this.#element),
-        zoom: TARGET_ZOOM,
+        zoom: NATIVE_ZOOM,
         exposureBias: TARGET_EXPOSURE_COMPENSATION_EV,
       });
       this.loading = false;

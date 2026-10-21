@@ -2,6 +2,8 @@
 export const TARGET_EXPOSURE_COMPENSATION_EV = -2;
 // Safari can't set exposure. Zooming in lets the phone fill the frame, so auto-exposure meters on it.
 export const TARGET_ZOOM = 2;
+// The kiosk app meters on the center of the frame, so it can keep the full view.
+export const NATIVE_ZOOM = 1;
 
 const CONTINUOUS_EXPOSURE = 'continuous';
 
