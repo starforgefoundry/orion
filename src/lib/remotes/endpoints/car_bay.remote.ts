@@ -3,11 +3,13 @@ import {
   bookCarBayDto,
   cancelCarBayBookingDto,
   carBayBookingIdDto,
+  carBayClosureIdDto,
   carBayRangeDto,
   customerEmailDto,
   sendCarBayOverrunInvoiceDto,
   staffBookCarBayDto,
   staffCancelCarBayBookingDto,
+  staffCloseCarBayDto,
 } from '$lib/remotes/dtos/car_bay.dto';
 import { verifyAuth } from '$lib/remotes/utils';
 import { carBayService } from '$lib/server/services/car_bay.service';
@@ -89,4 +91,14 @@ export const sendCarBayOverrunInvoice = command(sendCarBayOverrunInvoiceDto, asy
   const result = await withRuleErrors(() => carBayService.sendOverrunInvoice(dto));
   await getCarBayBookingDetail(dto.bookingId).refresh();
   return result;
+});
+
+export const staffCloseCarBay = command(staffCloseCarBayDto, async (dto) => {
+  const user = verifyAuth();
+  return await withRuleErrors(() => carBayService.staffClose(dto, user.email));
+});
+
+export const reopenCarBay = command(carBayClosureIdDto, async (dto) => {
+  verifyAuth();
+  return await withRuleErrors(() => carBayService.reopen(dto.closureId));
 });

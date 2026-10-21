@@ -10,7 +10,6 @@
     CAR_BAY_TIER_NAMES,
     CarBayRules,
     consecutiveDates,
-    toPeriod,
     type CarBayRequest,
     type CarBayTier,
   } from '$lib/utils/car_bay';
@@ -33,7 +32,7 @@
   const policy = $derived(policyRemote.current);
   const rules = $derived(policy && new CarBayRules(policy));
   const details = $derived(policy && tierDetails(policy)[tier]);
-  const periods = $derived((schedule?.bookings ?? []).map(toPeriod));
+  const blocks = $derived(schedule && rules ? rules.scheduleBlocks(schedule) : []);
   const days = $derived(
     schedule && policy ? consecutiveDates(schedule.today, policy.publicHorizonDays + 1) : [],
   );
@@ -48,7 +47,7 @@
 
   function isSlotOpen(date: string, startHour: number) {
     if (!rules) return false;
-    return rules.requestFits(shortestRequest(rules, date, startHour), periods, DateTime.now(), {
+    return rules.requestFits(shortestRequest(rules, date, startHour), blocks, DateTime.now(), {
       enforceHorizon: true,
     });
   }
@@ -59,7 +58,7 @@
       tier,
       date,
       startHour,
-      bookings: () => periods,
+      bookings: () => blocks,
       rates,
       rules,
       onUnavailable: () => getCarBaySchedule().refresh(),
@@ -121,7 +120,7 @@
         {rules}
         {rates}
         {days}
-        bookings={periods}
+        {blocks}
         isDayOpen={(date) => isSlotOpen(date, rules.slotHours(date)[0])}
         onDayClick={(date) => openCheckout(date, rules.slotHours(date)[0])}
       />
@@ -130,6 +129,7 @@
         {rules}
         {days}
         bookings={schedule.bookings}
+        closures={schedule.closures}
         {isSlotOpen}
         onSlotClick={openCheckout}
       />

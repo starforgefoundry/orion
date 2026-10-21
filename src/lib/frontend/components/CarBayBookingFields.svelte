@@ -8,28 +8,18 @@
   } from '$lib/frontend/components/form/OptionSelect.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
-  import {
-    CAR_BAY_TIER,
-    CAR_BAY_TIER_NAMES,
-    formatPeriod,
-    type CarBayTier,
-  } from '$lib/utils/car_bay';
+  import { CAR_BAY_TIER, CAR_BAY_TIER_NAMES, formatPeriod } from '$lib/utils/car_bay';
   import { DateTime } from 'luxon';
 
   interface Props {
     form: CarBayBookingForm;
-    /** Staff pick the tier and date in the form; customers pick them on the calendar. */
+    /** Staff pick the start time in the form; customers pick it on the calendar. */
     editableSchedule?: boolean;
   }
 
   let { form, editableSchedule = false }: Props = $props();
 
   const fieldId = $props.id();
-
-  const tierOptions: SelectOption[] = Object.values(CAR_BAY_TIER).map((tier) => ({
-    value: tier,
-    label: CAR_BAY_TIER_NAMES[tier],
-  }));
 
   const showsStartTime = $derived(
     form.tier === CAR_BAY_TIER.HOURLY || (editableSchedule && form.tier === CAR_BAY_TIER.QUICK_JOB),
@@ -50,21 +40,6 @@
 <div class="flex flex-col gap-4">
   <Section title="When">
     <div class="flex flex-col gap-4">
-      {#if editableSchedule}
-        <div class="grid gap-4 sm:grid-cols-2">
-          <FormField label="Booking type" required>
-            <OptionSelect
-              options={tierOptions}
-              value={form.tier}
-              onValueChange={(value) => (form.tier = value as CarBayTier)}
-            />
-          </FormField>
-          <FormField label="Date" for="{fieldId}-date" required>
-            <TextInput id="{fieldId}-date" type="date" bind:value={form.date} />
-          </FormField>
-        </div>
-      {/if}
-
       {#if showsStartTime}
         <div class="grid gap-4 sm:grid-cols-2">
           <FormField label="Start time" required>

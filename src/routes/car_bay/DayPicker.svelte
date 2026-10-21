@@ -5,7 +5,7 @@
     CAR_BAY_ZONE,
     formatDollars,
     isWeekend,
-    type CarBayPeriod,
+    type CarBayBlock,
     type CarBayRates,
     type CarBayRules,
   } from '$lib/utils/car_bay';
@@ -15,12 +15,12 @@
     rules: CarBayRules;
     rates: CarBayRates;
     days: string[];
-    bookings: CarBayPeriod[];
+    blocks: CarBayBlock[];
     isDayOpen: (date: string) => boolean;
     onDayClick: (date: string) => void;
   }
 
-  let { rules, rates, days, bookings, isDayOpen, onDayClick }: Props = $props();
+  let { rules, rates, days, blocks, isDayOpen, onDayClick }: Props = $props();
 
   const todayStr = DateTime.now().setZone(CAR_BAY_ZONE).toISODate();
 
@@ -30,7 +30,7 @@
   }
 
   function isBooked(date: string) {
-    return bookings.some((booking) => rules.clipToDay(booking, date) !== null);
+    return blocks.some((block) => rules.clipToDay(block, date) !== null);
   }
 
   function price(date: string) {
@@ -64,7 +64,7 @@
         {#if open}
           <StatusBadge tone="success">Open</StatusBadge>
         {:else if isBooked(date)}
-          <StatusBadge tone="danger">Booked</StatusBadge>
+          <StatusBadge tone="info">Booked</StatusBadge>
         {:else}
           <StatusBadge>Closed</StatusBadge>
         {/if}

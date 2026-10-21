@@ -95,6 +95,11 @@ export type CarBayOverrun =
 
 export type CarBayPeriod = { startAt: DateTime; endAt: DateTime };
 
+/** The span of time something takes the bay out of use, including any turnover after it. */
+export type CarBayBlock = { startAt: DateTime; blockedUntil: DateTime };
+
+export type CarBayClosureRequest = { date: string; startHour: number; endHour: number };
+
 export type CarBayLineItem = { name: string; quantity: number; unitAmount: number };
 
 export class CarBayRuleError extends Error {}
@@ -127,6 +132,13 @@ export function toPeriod(booking: { startAt: string; endAt: string }): CarBayPer
   return {
     startAt: DateTime.fromISO(booking.startAt, { zone: CAR_BAY_ZONE }),
     endAt: DateTime.fromISO(booking.endAt, { zone: CAR_BAY_ZONE }),
+  };
+}
+
+export function toBlock(entry: { startAt: string; blockedUntil: string }): CarBayBlock {
+  return {
+    startAt: DateTime.fromISO(entry.startAt, { zone: CAR_BAY_ZONE }),
+    blockedUntil: DateTime.fromISO(entry.blockedUntil, { zone: CAR_BAY_ZONE }),
   };
 }
 
@@ -233,19 +245,69 @@ export class CarBayRules {
     return endAt.plus({ minutes: this.policy.bufferMinutes });
   }
 
+  bookingBlock(period: CarBayPeriod): CarBayBlock {
+    return { startAt: period.startAt, blockedUntil: this.blockedUntil(period.endAt) };
+  }
+
+  closureBlock(period: CarBayPeriod): CarBayBlock {
+    return { startAt: period.startAt, blockedUntil: period.endAt };
+  }
+
+  scheduleBlocks(schedule: {
+    bookings: { startAt: string; blockedUntil: string }[];
+    closures: { startAt: string; endAt: string }[];
+  }): CarBayBlock[] {
+    return [
+      ...schedule.bookings.map(toBlock),
+      ...schedule.closures.map((closure) => this.closureBlock(toPeriod(closure))),
+    ];
+  }
+
+  bookingConflicts(period: CarBayPeriod, block: CarBayBlock) {
+    return period.startAt < block.blockedUntil && block.startAt < this.blockedUntil(period.endAt);
+  }
+
   periodsConflict(a: CarBayPeriod, b: CarBayPeriod) {
-    return a.startAt < this.blockedUntil(b.endAt) && b.startAt < this.blockedUntil(a.endAt);
+    return this.bookingConflicts(a, this.bookingBlock(b));
   }
 
   requestFits(
     request: CarBayRequest,
-    existing: CarBayPeriod[],
+    existing: CarBayBlock[],
     now: DateTime,
     options: { enforceHorizon: boolean },
   ) {
-    try {
+    return this.#fitsWithoutRuleError(() => {
       const period = this.resolvePeriod(request, now, options);
-      return !existing.some((booking) => this.periodsConflict(period, booking));
+      return !existing.some((block) => this.bookingConflicts(period, block));
+    });
+  }
+
+  resolveClosure(request: CarBayClosureRequest): CarBayPeriod {
+    const startAt = this.#startOfSlot(request.date, request.startHour);
+    const { close } = this.openWindow(request.date);
+    if (
+      !Number.isInteger(request.endHour) ||
+      request.endHour <= request.startHour ||
+      request.endHour > close.hour
+    ) {
+      throw new CarBayRuleError('A closure ends after it starts and by closing time');
+    }
+    return { startAt, endAt: startAt.set({ hour: request.endHour }) };
+  }
+
+  closureFits(request: CarBayClosureRequest, existing: CarBayBlock[]) {
+    return this.#fitsWithoutRuleError(() => {
+      const period = this.resolveClosure(request);
+      return !existing.some(
+        (block) => period.startAt < block.blockedUntil && block.startAt < period.endAt,
+      );
+    });
+  }
+
+  #fitsWithoutRuleError(check: () => boolean) {
+    try {
+      return check();
     } catch (error) {
       if (error instanceof CarBayRuleError) return false;
       throw error;
@@ -260,10 +322,10 @@ export class CarBayRules {
     return startAt.diff(createdAt, 'hours').hours > this.policy.reminderLeadHours;
   }
 
-  clipToDay(period: CarBayPeriod, date: string) {
+  clipToDay(block: CarBayBlock, date: string) {
     const { open, close } = this.openWindow(date);
-    const start = DateTime.max(period.startAt, open);
-    const end = DateTime.min(this.blockedUntil(period.endAt), close);
+    const start = DateTime.max(block.startAt, open);
+    const end = DateTime.min(block.blockedUntil, close);
     return start < end ? { start, end } : null;
   }
 }

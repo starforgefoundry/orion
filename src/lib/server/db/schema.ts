@@ -558,6 +558,27 @@ export const carBayBooking = pgTable(
 
 export type CarBayBooking = InferSelectModel<typeof carBayBooking>;
 
+// Overlapping closures are rejected by the car_bay_closure_no_overlap exclusion constraint.
+export const carBayClosure = pgTable(
+  'car_bay_closure',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    startAt: luxonTimestamp('start_at').notNull(),
+    endAt: luxonTimestamp('end_at').notNull(),
+    reason: text('reason'),
+    createdByEmail: text('created_by_email').references(() => user.email),
+    createdDate: luxonTimestamp('created_date')
+      .notNull()
+      .$defaultFn(() => DateTime.now()),
+  },
+  (table) => [index('car_bay_closure_start_idx').on(table.startAt)],
+);
+
+export type CarBayClosure = InferSelectModel<typeof carBayClosure>;
+
 export const schema = {
   user,
   printRequest,
@@ -584,4 +605,5 @@ export const schema = {
   classInstance,
   classBooking,
   carBayBooking,
+  carBayClosure,
 };

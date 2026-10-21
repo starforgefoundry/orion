@@ -205,7 +205,9 @@ describe('periodsConflict', () => {
 });
 
 describe('requestFits', () => {
-  const booked = [{ startAt: at(`${SATURDAY}T14:00`), endAt: at(`${SATURDAY}T16:00`) }];
+  const booked = [
+    rules.bookingBlock({ startAt: at(`${SATURDAY}T14:00`), endAt: at(`${SATURDAY}T16:00`) }),
+  ];
 
   it('fits a request that clears the booking and its buffer', () => {
     const request = { tier: 'hourly', date: SATURDAY, startHour: 17, hours: 2 } as const;
@@ -225,6 +227,41 @@ describe('requestFits', () => {
   it('does not fit a request that breaks a rule', () => {
     const request = { tier: 'hourly', date: SATURDAY, startHour: 20, hours: 2 } as const;
     expect(rules.requestFits(request, [], SUNDAY_BEFORE, PUBLIC)).toBe(false);
+  });
+
+  it('lets a booking start right when a closure ends', () => {
+    const closed = [
+      rules.closureBlock({ startAt: at(`${SATURDAY}T12:00`), endAt: at(`${SATURDAY}T14:00`) }),
+    ];
+    const request = { tier: 'quick_job', date: SATURDAY, startHour: 14 } as const;
+    expect(rules.requestFits(request, closed, SUNDAY_BEFORE, PUBLIC)).toBe(true);
+  });
+});
+
+describe('closures', () => {
+  it('closes the bay between whole hours', () => {
+    const period = rules.resolveClosure({ date: SATURDAY, startHour: 13, endHour: 17 });
+    expect(period.startAt.toFormat('HH:mm')).toBe('13:00');
+    expect(period.endAt.toFormat('HH:mm')).toBe('17:00');
+  });
+
+  it('can close until closing time but not past it', () => {
+    expect(rules.closureFits({ date: MONDAY, startHour: 16, endHour: 21 }, [])).toBe(true);
+    expect(rules.closureFits({ date: MONDAY, startHour: 16, endHour: 22 }, [])).toBe(false);
+  });
+
+  it('rejects a closure that ends before it starts', () => {
+    expect(() => rules.resolveClosure({ date: MONDAY, startHour: 18, endHour: 18 })).toThrow(
+      CarBayRuleError,
+    );
+  });
+
+  it('cannot close over a booking or its buffer', () => {
+    const booked = [
+      rules.bookingBlock({ startAt: at(`${MONDAY}T16:00`), endAt: at(`${MONDAY}T17:30`) }),
+    ];
+    expect(rules.closureFits({ date: MONDAY, startHour: 17, endHour: 19 }, booked)).toBe(false);
+    expect(rules.closureFits({ date: MONDAY, startHour: 18, endHour: 19 }, booked)).toBe(true);
   });
 });
 
@@ -323,19 +360,22 @@ describe('needsReminder', () => {
 
 describe('clipToDay', () => {
   it('splits a multi-day booking into each day of the window', () => {
-    const period = {
+    const block = rules.bookingBlock({
       startAt: rules.openWindow(FRIDAY).open,
       endAt: rules.openWindow(SATURDAY).close,
-    };
+    });
 
-    expect(rules.clipToDay(period, FRIDAY)?.start.toFormat('HH:mm')).toBe('16:00');
-    expect(rules.clipToDay(period, SATURDAY)?.start.toFormat('HH:mm')).toBe('12:00');
-    expect(rules.clipToDay(period, SUNDAY)).toBeNull();
+    expect(rules.clipToDay(block, FRIDAY)?.start.toFormat('HH:mm')).toBe('16:00');
+    expect(rules.clipToDay(block, SATURDAY)?.start.toFormat('HH:mm')).toBe('12:00');
+    expect(rules.clipToDay(block, SUNDAY)).toBeNull();
   });
 
   it('includes the buffer after a booking', () => {
-    const period = { startAt: at(`${MONDAY}T16:00`), endAt: at(`${MONDAY}T17:30`) };
-    expect(rules.clipToDay(period, MONDAY)?.end.toFormat('HH:mm')).toBe('18:00');
+    const block = rules.bookingBlock({
+      startAt: at(`${MONDAY}T16:00`),
+      endAt: at(`${MONDAY}T17:30`),
+    });
+    expect(rules.clipToDay(block, MONDAY)?.end.toFormat('HH:mm')).toBe('18:00');
   });
 });
 

@@ -2,7 +2,7 @@ import {
   CAR_BAY_TIER,
   bookingLineItems,
   lineItemsTotal,
-  type CarBayPeriod,
+  type CarBayBlock,
   type CarBayRules,
   type CarBayRates,
   type CarBayRequest,
@@ -11,7 +11,7 @@ import {
 import { DateTime } from 'luxon';
 
 type BookingFormContext = {
-  bookings: () => CarBayPeriod[];
+  bookings: () => CarBayBlock[];
   rates: () => CarBayRates | undefined;
   rules: CarBayRules;
   enforceHorizon: boolean;

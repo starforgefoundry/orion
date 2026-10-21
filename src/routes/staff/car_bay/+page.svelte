@@ -1,11 +1,14 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
   import { Spinner } from '$lib/components/ui/spinner';
-  import BayWeekCalendar from '$lib/frontend/components/BayWeekCalendar.svelte';
+  import BayWeekCalendar, {
+    type BayClosureSlot,
+  } from '$lib/frontend/components/BayWeekCalendar.svelte';
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
+  import { submitWithToast } from '$lib/frontend/form-submit';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
-  import { getCarBayStaffSchedule } from '$lib/remotes/endpoints/car_bay.remote';
+  import { getCarBayStaffSchedule, reopenCarBay } from '$lib/remotes/endpoints/car_bay.remote';
   import { getCarBayPolicy } from '$lib/remotes/endpoints/settings.remote';
   import {
     CAR_BAY_STATUS,
@@ -14,6 +17,7 @@
     CAR_BAY_ZONE,
     CarBayRules,
     consecutiveDates,
+    formatPeriod,
     toPeriod,
   } from '$lib/utils/car_bay';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
@@ -34,17 +38,20 @@
   const range = $derived({ from: days[0], to: days.at(-1)! });
   const scheduleRemote = $derived(getCarBayStaffSchedule(range));
   const bookings = $derived(
-    (scheduleRemote.current ?? []).filter((booking) => booking.status === CAR_BAY_STATUS.CONFIRMED),
+    (scheduleRemote.current?.bookings ?? []).filter(
+      (booking) => booking.status === CAR_BAY_STATUS.CONFIRMED,
+    ),
   );
-  const periods = $derived(bookings.map(toPeriod));
+  const closures = $derived(scheduleRemote.current?.closures ?? []);
   const policyRemote = getCarBayPolicy();
   const rules = $derived(policyRemote.current && new CarBayRules(policyRemote.current));
+  const blocks = $derived(rules ? rules.scheduleBlocks({ bookings, closures }) : []);
 
   function isSlotOpen(date: string, startHour: number) {
     if (!rules) return false;
     return rules.requestFits(
       { tier: CAR_BAY_TIER.QUICK_JOB, date, startHour },
-      periods,
+      blocks,
       DateTime.now(),
       STAFF,
     );
@@ -59,10 +66,26 @@
     modalManager.show(StaffBookingModal, {
       date,
       startHour,
-      bookings: () => periods,
+      blocks: () => blocks,
       rules,
       onBooked: refresh,
     });
+  }
+
+  async function reopen(closure: BayClosureSlot) {
+    const { startAt, endAt } = toPeriod(closure);
+    const confirmed = await modalManager.confirm({
+      title: 'Reopen Car Bay',
+      prompt: `Remove the closure on ${formatPeriod({ startAt, endAt })}? Customers can book this time again.`,
+      confirmText: 'Reopen',
+    });
+    if (!confirmed) return;
+
+    const ok = await submitWithToast(() => reopenCarBay({ closureId: closure.id }), {
+      success: 'Bay reopened',
+      error: 'Failed to reopen the bay',
+    });
+    if (ok) await refresh();
   }
 
   function openFirstAvailable() {
@@ -111,8 +134,11 @@
       {rules}
       {days}
       {bookings}
+      {closures}
       {isSlotOpen}
+      showDetails
       onSlotClick={openNewBooking}
+      onClosureClick={reopen}
       onBookingClick={(booking) =>
         modalManager.show(BookingDetailModal, {
           bookingId: booking.id,

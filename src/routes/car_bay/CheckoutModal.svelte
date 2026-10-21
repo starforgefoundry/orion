@@ -19,7 +19,7 @@
   import { getSquareConfig } from '$lib/remotes/endpoints/class.remote';
   import {
     formatDollars,
-    type CarBayPeriod,
+    type CarBayBlock,
     type CarBayRates,
     type CarBayRules,
     type CarBayTier,
@@ -35,7 +35,7 @@
     tier: CarBayTier;
     date: string;
     startHour: number;
-    bookings: () => CarBayPeriod[];
+    bookings: () => CarBayBlock[];
     rates: CarBayRates;
     rules: CarBayRules;
     onUnavailable: () => Promise<void>;

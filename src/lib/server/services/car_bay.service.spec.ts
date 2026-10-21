@@ -69,6 +69,9 @@ describe('CarBayService', () => {
       hasConfirmedForCustomer: vi.fn(async () => false),
       getReminderCandidates: vi.fn(async () => []),
       getOverrunPayments: vi.fn(async () => []),
+      getClosuresInRange: vi.fn(async () => []),
+      createClosure: vi.fn(async (data) => ({ id: 'closure-1', reason: null, ...data })),
+      deleteClosure: vi.fn(async () => null),
     };
     squareRepo = {
       upsertCustomer: vi.fn(async () => ({ id: 'cust-1' })),
@@ -269,6 +272,38 @@ describe('CarBayService', () => {
       await expect(
         service.staffBook({ request, ...CUSTOMER }, 'staff@starforgefoundry.com', NOW),
       ).resolves.toBeDefined();
+    });
+
+    it('rejects a booking while the bay is closed', async () => {
+      carBayRepo.getClosuresInRange.mockResolvedValue([
+        { id: 'closure-1', startAt: at(`${MONDAY}T16:00`), endAt: at(`${MONDAY}T21:00`) },
+      ]);
+
+      await expect(
+        service.staffBook({ request: QUICK_JOB, ...CUSTOMER }, 'staff@starforgefoundry.com', NOW),
+      ).rejects.toThrow('closed');
+      expect(carBayRepo.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('staffClose', () => {
+    const CLOSURE = { date: MONDAY, startHour: 17, endHour: 19, reason: 'Lift inspection' };
+
+    it('closes the bay without touching bookings', async () => {
+      await service.staffClose(CLOSURE, 'staff@starforgefoundry.com');
+
+      expect(carBayRepo.createClosure).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'Lift inspection' }),
+      );
+    });
+
+    it('refuses to close over a confirmed booking', async () => {
+      carBayRepo.getConfirmedInRange.mockResolvedValue([storedBooking()]);
+
+      await expect(service.staffClose(CLOSURE, 'staff@starforgefoundry.com')).rejects.toThrow(
+        'Cancel the bookings',
+      );
+      expect(carBayRepo.createClosure).not.toHaveBeenCalled();
     });
   });
 

@@ -3,13 +3,16 @@ import type {
   BookCarBayDto,
   CarBayBookingDetail,
   CarBayBookingView,
+  CarBayClosureView,
+  CarBayStaffSchedule,
   CustomerCarBayBooking,
   PublicCarBaySchedule,
   SendCarBayOverrunInvoiceDto,
   StaffBookCarBayDto,
   StaffCancelCarBayBookingDto,
+  StaffCloseCarBayDto,
 } from '$lib/remotes/dtos/car_bay.dto';
-import type { CarBayBooking } from '$lib/server/db/schema';
+import type { CarBayBooking, CarBayClosure } from '$lib/server/db/schema';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { hasMembership } from '$lib/server/utils/member_access';
@@ -39,6 +42,7 @@ const CAR_BAY_SENDER = `Starforge Car Bay <${CAR_BAY_EMAIL}>`;
 const APPROVED_PAYMENT_STATUS = 'APPROVED';
 const OVERRUN_PAYMENT_TYPE = 'car_bay_overrun';
 const PAYMENT_FAILED_MESSAGE = 'Payment failed. Please check your card details and try again.';
+const CLOSED_MESSAGE = 'The bay is closed at that time. Please pick another time.';
 
 type CustomerDetails = Pick<
   StaffBookCarBayDto,
@@ -59,7 +63,17 @@ function toView(booking: CarBayBooking): CarBayBookingView {
     ...rest,
     startAt: startAt.toISO()!,
     endAt: endAt.toISO()!,
+    blockedUntil: blockedUntil.toISO()!,
     createdDate: createdDate.toISO()!,
+  };
+}
+
+function toClosureView(closure: CarBayClosure): CarBayClosureView {
+  return {
+    id: closure.id,
+    startAt: closure.startAt.toISO()!,
+    endAt: closure.endAt.toISO()!,
+    reason: closure.reason,
   };
 }
 
@@ -75,7 +89,10 @@ export class CarBayService extends BaseService {
     const rules = await this.rules();
     const from = now.setZone(CAR_BAY_ZONE).startOf('day');
     const to = from.plus({ days: rules.policy.publicHorizonDays + 1 });
-    const bookings = await this.carBayRepository.getConfirmedInRange(from, to);
+    const [bookings, closures] = await Promise.all([
+      this.carBayRepository.getConfirmedInRange(from, to),
+      this.carBayRepository.getClosuresInRange(from, to),
+    ]);
 
     return {
       today: from.toISODate()!,
@@ -83,15 +100,24 @@ export class CarBayService extends BaseService {
         id: booking.id,
         startAt: booking.startAt.toISO()!,
         endAt: booking.endAt.toISO()!,
+        blockedUntil: booking.blockedUntil.toISO()!,
+      })),
+      closures: closures.map(({ id, startAt, endAt }) => ({
+        id,
+        startAt: startAt.toISO()!,
+        endAt: endAt.toISO()!,
       })),
     };
   }
 
-  async getStaffSchedule(fromDate: string, toDate: string) {
+  async getStaffSchedule(fromDate: string, toDate: string): Promise<CarBayStaffSchedule> {
     const from = DateTime.fromISO(fromDate, { zone: CAR_BAY_ZONE }).startOf('day');
     const to = DateTime.fromISO(toDate, { zone: CAR_BAY_ZONE }).endOf('day');
-    const bookings = await this.carBayRepository.getAllInRange(from, to);
-    return bookings.map(toView);
+    const [bookings, closures] = await Promise.all([
+      this.carBayRepository.getAllInRange(from, to),
+      this.carBayRepository.getClosuresInRange(from, to),
+    ]);
+    return { bookings: bookings.map(toView), closures: closures.map(toClosureView) };
   }
 
   async getBookingDetail(
@@ -161,13 +187,39 @@ export class CarBayService extends BaseService {
       }
     }
 
-    const overlapping = await this.carBayRepository.getConfirmedInRange(
-      period.startAt,
-      rules.blockedUntil(period.endAt),
-    );
+    const blockedUntil = rules.blockedUntil(period.endAt);
+    const [overlapping, closures] = await Promise.all([
+      this.carBayRepository.getConfirmedInRange(period.startAt, blockedUntil),
+      this.carBayRepository.getClosuresInRange(period.startAt, blockedUntil),
+    ]);
+    if (closures.length > 0) throw new CarBayRuleError(CLOSED_MESSAGE);
     if (overlapping.length > 0) throw new CarBaySlotTakenError();
 
     return period;
+  }
+
+  async staffClose(dto: StaffCloseCarBayDto, staffEmail: string) {
+    const rules = await this.rules();
+    const period = rules.resolveClosure(dto);
+
+    const bookings = await this.carBayRepository.getConfirmedInRange(period.startAt, period.endAt);
+    if (bookings.length > 0) {
+      throw new CarBayRuleError('Cancel the bookings in that time before closing the bay');
+    }
+
+    const closure = await this.carBayRepository.createClosure({
+      startAt: period.startAt,
+      endAt: period.endAt,
+      reason: dto.reason || null,
+      createdByEmail: staffEmail,
+    });
+    return toClosureView(closure);
+  }
+
+  async reopen(closureId: string) {
+    const closure = await this.carBayRepository.deleteClosure(closureId);
+    if (!closure) throw new CarBayRuleError('Closure not found');
+    return toClosureView(closure);
   }
 
   async isMember(customerEmail: string) {

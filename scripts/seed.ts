@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { DateTime } from 'luxon';
 import postgres from 'postgres';
 
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
@@ -201,6 +202,126 @@ const COMMENTS = [
   'Attached the updated slicer profile.',
 ];
 
+const CAR_BAY_ZONE = 'America/Chicago';
+const CAR_BAY_BUFFER_MINUTES = 30;
+const CAR_BAY_WEEKDAY_OPEN_HOUR = 16;
+const CAR_BAY_WEEKEND_OPEN_HOUR = 12;
+const CAR_BAY_CLOSE_HOUR = 21;
+const WEEKEND_DAYS = [6, 7];
+
+function bayDay(offsetDays: number) {
+  return DateTime.now().setZone(CAR_BAY_ZONE).startOf('day').plus({ days: offsetDays });
+}
+
+function bayTime(offsetDays: number, hour: number, minute = 0) {
+  return bayDay(offsetDays).set({ hour, minute });
+}
+
+function bayOpenHour(offsetDays: number) {
+  return WEEKEND_DAYS.includes(bayDay(offsetDays).weekday)
+    ? CAR_BAY_WEEKEND_OPEN_HOUR
+    : CAR_BAY_WEEKDAY_OPEN_HOUR;
+}
+
+const carBayBookings = [
+  // Past days, so staff can see history behind the striped past slots.
+  {
+    tier: 'hourly',
+    status: 'confirmed',
+    startAt: bayTime(-2, 17),
+    endAt: bayTime(-2, 20),
+    customer: 0,
+    amountPaid: 3000,
+  },
+  {
+    tier: 'quick_job',
+    status: 'no_show',
+    startAt: bayTime(-1, 16),
+    endAt: bayTime(-1, 17, 30),
+    customer: 1,
+    amountPaid: 1800,
+  },
+  {
+    tier: 'quick_job',
+    status: 'confirmed',
+    startAt: bayTime(-1, 18),
+    endAt: bayTime(-1, 19, 30),
+    customer: 2,
+    amountPaid: 1200,
+  },
+  // Today, later in the evening.
+  {
+    tier: 'hourly',
+    status: 'confirmed',
+    startAt: bayTime(0, 18),
+    endAt: bayTime(0, 20),
+    customer: 3,
+    amountPaid: 3000,
+  },
+  // Back to back: the second booking starts right after the first one's turnover.
+  {
+    tier: 'quick_job',
+    status: 'confirmed',
+    startAt: bayTime(1, 16),
+    endAt: bayTime(1, 17, 30),
+    customer: 4,
+    amountPaid: 1200,
+  },
+  {
+    tier: 'hourly',
+    status: 'confirmed',
+    startAt: bayTime(1, 18),
+    endAt: bayTime(1, 20),
+    customer: 5,
+    amountPaid: 0,
+  },
+  // A canceled booking that should not block anything.
+  {
+    tier: 'hourly',
+    status: 'canceled',
+    startAt: bayTime(2, 19),
+    endAt: bayTime(2, 21),
+    customer: 6,
+    amountPaid: 3000,
+  },
+  // Single full day, then a two day full day booking.
+  {
+    tier: 'full_day',
+    status: 'confirmed',
+    startAt: bayTime(3, bayOpenHour(3)),
+    endAt: bayTime(3, CAR_BAY_CLOSE_HOUR),
+    customer: 7,
+    amountPaid: 2500,
+  },
+  {
+    tier: 'full_day',
+    status: 'confirmed',
+    startAt: bayTime(4, bayOpenHour(4)),
+    endAt: bayTime(5, CAR_BAY_CLOSE_HOUR),
+    customer: 0,
+    amountPaid: 8000,
+  },
+  // Next week, so the staff schedule has something after paging forward.
+  {
+    tier: 'hourly',
+    status: 'confirmed',
+    startAt: bayTime(8, 17),
+    endAt: bayTime(8, 20),
+    customer: 1,
+    amountPaid: 4500,
+  },
+];
+
+const carBayClosures = [
+  { startAt: bayTime(2, 16), endAt: bayTime(2, 18), reason: 'Lift inspection' },
+  {
+    startAt: bayTime(6, bayOpenHour(6)),
+    endAt: bayTime(6, CAR_BAY_CLOSE_HOUR),
+    reason: 'Shop event',
+  },
+  { startAt: bayTime(9, 16), endAt: bayTime(9, 19), reason: null },
+];
+
 async function seed() {
   await sql.begin(async (tx) => {
     await tx`
@@ -208,7 +329,7 @@ async function seed() {
         print_request_comment_file, payment, print_material, settings, billing_code,
         organization, organization_charge, inventory_item, purchase_list, member, waiver,
         member_subscription, day_pass, organization_member, visit, member_email,
-        class_catalog, class_instance, class_booking, car_bay_booking
+        class_catalog, class_instance, class_booking, car_bay_booking, car_bay_closure
       CASCADE`;
 
     for (const user of users) {
@@ -455,6 +576,25 @@ async function seed() {
             ${booking === 2 ? 'canceled' : 'confirmed'}, ${randomUUID()}, ${1 + (booking % 2)},
             ${Number(entry.price) * (1 + (booking % 2))}, now())`;
       }
+    }
+
+    for (const booking of carBayBookings) {
+      const [customerName, customerEmail] = pick(customers, booking.customer);
+      await tx`
+        INSERT INTO car_bay_booking (id, tier, status, start_at, end_at, blocked_until, is_member,
+          customer_name, customer_email, customer_phone, amount_paid, created_by_email, booking_token, created_date)
+        VALUES (${randomUUID()}, ${booking.tier}, ${booking.status}, ${booking.startAt.toISO()},
+          ${booking.endAt.toISO()}, ${booking.endAt.plus({ minutes: CAR_BAY_BUFFER_MINUTES }).toISO()},
+          ${booking.customer % 2 === 0}, ${customerName}, ${customerEmail}, '555-0100',
+          ${booking.amountPaid}, ${booking.amountPaid === 0 ? DEV_USER_EMAIL : null}, ${randomUUID()},
+          ${daysAgo(3)})`;
+    }
+
+    for (const closure of carBayClosures) {
+      await tx`
+        INSERT INTO car_bay_closure (id, start_at, end_at, reason, created_by_email, created_date)
+        VALUES (${randomUUID()}, ${closure.startAt.toISO()}, ${closure.endAt.toISO()}, ${closure.reason},
+          ${DEV_USER_EMAIL}, ${daysAgo(1)})`;
     }
   });
 }

@@ -71,6 +71,19 @@ export const sendCarBayOverrunInvoiceDto = v.object({
 
 export type SendCarBayOverrunInvoiceDto = v.InferOutput<typeof sendCarBayOverrunInvoiceDto>;
 
+export const staffCloseCarBayDto = v.object({
+  date: isoDate,
+  startHour: wholeNumber,
+  endHour: wholeNumber,
+  reason: v.pipe(v.string(), v.trim()),
+});
+
+export type StaffCloseCarBayDto = v.InferOutput<typeof staffCloseCarBayDto>;
+
+export const carBayClosureIdDto = v.object({
+  closureId: v.string(),
+});
+
 export const carBayRangeDto = v.object({
   from: isoDate,
   to: isoDate,
@@ -81,11 +94,21 @@ export type PublicCarBaySlot = {
   id: string;
   startAt: string;
   endAt: string;
+  blockedUntil: string;
 };
+
+export type PublicCarBayClosure = {
+  id: string;
+  startAt: string;
+  endAt: string;
+};
+
+export type CarBayClosureView = PublicCarBayClosure & { reason: string | null };
 
 export type PublicCarBaySchedule = {
   today: string;
   bookings: PublicCarBaySlot[];
+  closures: PublicCarBayClosure[];
 };
 
 export type CarBayBookingView = Omit<
@@ -94,7 +117,13 @@ export type CarBayBookingView = Omit<
 > & {
   startAt: string;
   endAt: string;
+  blockedUntil: string;
   createdDate: string;
+};
+
+export type CarBayStaffSchedule = {
+  bookings: CarBayBookingView[];
+  closures: CarBayClosureView[];
 };
 
 export type CarBayOverrunInvoiceView = Pick<Payment, 'id' | 'status' | 'total' | 'paymentUrl'> & {

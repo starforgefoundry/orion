@@ -1,6 +1,11 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { CAR_BAY_STATUS, CarBaySlotTakenError, type CarBayTier } from '$lib/utils/car_bay';
+import {
+  CAR_BAY_STATUS,
+  CarBayRuleError,
+  CarBaySlotTakenError,
+  type CarBayTier,
+} from '$lib/utils/car_bay';
 import { and, asc, eq, gt, gte, isNull, lt, lte, type InferInsertModel } from 'drizzle-orm';
 import type { DateTime } from 'luxon';
 
@@ -112,5 +117,31 @@ export class CarBayRepository extends BaseRepository {
       .from(schema.payment)
       .where(eq(schema.payment.carBayBookingId, bookingId))
       .orderBy(asc(schema.payment.issuedDate));
+  }
+
+  async createClosure(data: InferInsertModel<typeof schema.carBayClosure>) {
+    try {
+      const [closure] = await this.db.insert(schema.carBayClosure).values(data).returning();
+      return closure;
+    } catch (error) {
+      if (isExclusionViolation(error)) throw new CarBayRuleError('The bay is already closed then');
+      throw error;
+    }
+  }
+
+  async deleteClosure(id: string) {
+    const [closure] = await this.db
+      .delete(schema.carBayClosure)
+      .where(eq(schema.carBayClosure.id, id))
+      .returning();
+    return closure ?? null;
+  }
+
+  async getClosuresInRange(from: DateTime, to: DateTime) {
+    return await this.db
+      .select()
+      .from(schema.carBayClosure)
+      .where(and(lt(schema.carBayClosure.startAt, to), gt(schema.carBayClosure.endAt, from)))
+      .orderBy(asc(schema.carBayClosure.startAt));
   }
 }
