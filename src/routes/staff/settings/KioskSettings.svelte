@@ -51,8 +51,8 @@
 {:else}
   <div class="flex flex-col gap-5">
     <p class="text-sm text-muted-foreground">
-      Hold this code up to the kiosk's pairing screen. The iPad stays paired
-      until a new link is generated.
+      Hold this code up to the kiosk's pairing screen. The iPad stays paired until a new link is
+      generated.
     </p>
 
     {#if pairingUrl}
