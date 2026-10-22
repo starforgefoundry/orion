@@ -47,6 +47,13 @@ function hasActiveOrganization(organizations: MemberAccessContext['organizations
   );
 }
 
+/** Ignores whether the organization currently grants access. */
+export function belongsToOrganization(context: MemberAccessContext) {
+  return context.organizations.some(
+    ({ membership, organization }) => !membership.removedDate && !organization.archived,
+  );
+}
+
 /** Membership perks (like print discounts) come from a subscription or an organization, never a day pass. */
 export function hasMembership(context: MemberAccessContext, now: DateTime) {
   return (

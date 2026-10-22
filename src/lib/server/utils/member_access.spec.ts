@@ -7,6 +7,7 @@ import type {
 import { DateTime } from 'luxon';
 import { describe, expect, it } from 'vitest';
 import {
+  belongsToOrganization,
   hasMembership,
   resolveAccess,
   SPACE_ZONE,
@@ -106,6 +107,21 @@ describe('hasMembership', () => {
     expect(hasMembership(context({ subscriptions: [refunded], organizations: [off] }), NOW)).toBe(
       false,
     );
+  });
+});
+
+describe('belongsToOrganization', () => {
+  it('counts an organization with access off', () => {
+    expect(
+      belongsToOrganization(context({ organizations: [organization({ grantsAccess: false })] })),
+    ).toBe(true);
+  });
+
+  it('does not count a removed membership or an archived organization', () => {
+    const removed = organization({}, true);
+    const archived = organization({ archived: true });
+
+    expect(belongsToOrganization(context({ organizations: [removed, archived] }))).toBe(false);
   });
 });
 

@@ -240,6 +240,36 @@ describe('OnboardingService', () => {
       expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
     });
 
+    it('sends onboarding to an organization member whose organization grants no access', async () => {
+      memberRepo.getAccessContextByEmail.mockResolvedValue({
+        ...ACTIVE_CONTEXT,
+        dayPasses: [],
+        organizations: [
+          {
+            membership: {
+              id: 'om-1',
+              organizationId: 'org-1',
+              memberId: MEMBER.id,
+              addedDate: DateTime.now(),
+              removedDate: null,
+            },
+            organization: {
+              id: 'org-1',
+              name: 'FLiNT',
+              email: 'flint@example.com',
+              archived: false,
+              grantsAccess: false,
+              accessEndDate: null,
+            },
+          },
+        ],
+      });
+
+      await service.requestOnboardingEmail('sam@example.com');
+
+      expect(notificationRepo.sendOnboarding).toHaveBeenCalledWith(MEMBER, 'self_service');
+    });
+
     it('sends nothing when an onboarding email went out within the cooldown', async () => {
       memberEmailRepo.listByMember.mockResolvedValue([
         { type: 'onboarding', sentDate: DateTime.now().minus({ minutes: 1 }) },

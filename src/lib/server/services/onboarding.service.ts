@@ -14,7 +14,7 @@ import {
 import { BaseService } from '$lib/server/services/base.service';
 import { appleWalletConfig, buildApplePass } from '$lib/server/utils/apple_wallet';
 import { googleWalletConfig, googleWalletSaveUrl } from '$lib/server/utils/google_wallet';
-import { resolveAccess } from '$lib/server/utils/member_access';
+import { belongsToOrganization, resolveAccess } from '$lib/server/utils/member_access';
 import { passUrl } from '$lib/server/utils/member_links';
 import { DateTime, Duration } from 'luxon';
 
@@ -67,7 +67,8 @@ export class OnboardingService extends BaseService {
     if (!context) return;
 
     const now = DateTime.now();
-    if (resolveAccess(context, now).basis === ACCESS_BASIS.NONE) return;
+    const hasAccess = resolveAccess(context, now).basis !== ACCESS_BASIS.NONE;
+    if (!hasAccess && !belongsToOrganization(context)) return;
 
     const emails = await this.memberEmailRepository.listByMember(context.member.id);
     const lastOnboarding = emails.find((sent) => sent.type === MEMBER_EMAIL_TYPE.ONBOARDING);
