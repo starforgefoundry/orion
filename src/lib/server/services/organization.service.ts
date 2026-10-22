@@ -6,12 +6,18 @@ import type {
 } from '$lib/remotes/dtos/organization.dto';
 import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
 import { MEMBER_EMAIL_TRIGGER } from '$lib/member_enums';
+import type { Member } from '$lib/server/db/schema';
+import { MailgunRateLimitError } from '$lib/server/repositories/mailgun.repository';
 import { BaseService } from '$lib/server/services/base.service';
+import { runInBackground } from '$lib/server/utils/background';
 import { SPACE_ZONE } from '$lib/server/utils/member_access';
 import { parseMemberLines, type ParsedMemberLine } from '$lib/server/utils/member_lines';
 import { DateTime } from 'luxon';
 
 export const ORGANIZATION_NOT_FOUND = 'Organization not found';
+const MAX_RATE_LIMIT_ATTEMPTS = 5;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Access lasts through the whole chosen day in the space's time zone. */
 export function accessEndOfDay(date: string | null) {
@@ -108,7 +114,7 @@ export class OrganizationService extends BaseService {
     const { members, errors } = parseMemberLines(dto.lines);
     const added: ParsedMemberLine[] = [];
     const alreadyMembers: ParsedMemberLine[] = [];
-    const onboardingFailed: ParsedMemberLine[] = [];
+    const toOnboard: Member[] = [];
 
     for (const line of members) {
       const member = await this.memberRepository.upsertByEmail(line.name, line.email);
@@ -119,18 +125,36 @@ export class OrganizationService extends BaseService {
       }
 
       added.push(line);
-      try {
-        await this.memberNotificationRepository.sendOnboarding(
-          member,
-          MEMBER_EMAIL_TRIGGER.ORGANIZATION,
-        );
-      } catch (error) {
-        console.error(`Onboarding email failed for ${line.email}`, error);
-        onboardingFailed.push(line);
-      }
+      toOnboard.push(member);
     }
 
-    return { added, alreadyMembers, onboardingFailed, errors };
+    runInBackground(this.sendOrganizationOnboardings(toOnboard), 'organization onboarding emails');
+
+    return { added, alreadyMembers, errors };
+  }
+
+  /** Bulk adds can exceed Mailgun's send limit, so wait out the limit instead of dropping emails. */
+  async sendOrganizationOnboardings(members: Member[]) {
+    for (const member of members) {
+      try {
+        await this.sendOrganizationOnboarding(member, MAX_RATE_LIMIT_ATTEMPTS);
+      } catch (error) {
+        console.error(`Onboarding email failed for ${member.email}`, error);
+      }
+    }
+  }
+
+  private async sendOrganizationOnboarding(member: Member, attemptsLeft: number): Promise<void> {
+    try {
+      await this.memberNotificationRepository.sendOnboarding(
+        member,
+        MEMBER_EMAIL_TRIGGER.ORGANIZATION,
+      );
+    } catch (error) {
+      if (!(error instanceof MailgunRateLimitError) || attemptsLeft <= 1) throw error;
+      await sleep(Math.max(error.retryAt.diffNow().toMillis(), 0));
+      await this.sendOrganizationOnboarding(member, attemptsLeft - 1);
+    }
   }
 
   async archiveOrganization(id: string) {

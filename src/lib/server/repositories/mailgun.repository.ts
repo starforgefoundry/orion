@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { templates, type Templates } from '$lib/server/utils/email_templates';
+import { DateTime } from 'luxon';
 
 export class MailgunRepository extends BaseRepository {
   async sendTemplate<T extends keyof Templates>(
@@ -37,11 +38,40 @@ export class MailgunRepository extends BaseRepository {
       body,
     });
 
-    const data = await response.json();
+    if (response.ok) return;
 
-    if (!response.ok) {
-      console.error('Mailgun error response:', data);
-      throw new Error(`Failed to send email via Mailgun: ${data || response.statusText}`);
+    const reason = await errorReason(response);
+    if (response.status === HTTP_TOO_MANY_REQUESTS) {
+      throw new MailgunRateLimitError(reason, retryAfter(reason));
     }
+    throw new Error(`Failed to send email via Mailgun: ${reason}`);
   }
+}
+
+const HTTP_TOO_MANY_REQUESTS = 429;
+const DEFAULT_RATE_LIMIT_WAIT = { minutes: 1 };
+const RETRY_AFTER_PATTERN = /try again after (.+)$/;
+
+export class MailgunRateLimitError extends Error {
+  constructor(
+    reason: string,
+    readonly retryAt: DateTime,
+  ) {
+    super(`Mailgun rate limit: ${reason}`);
+  }
+}
+
+async function errorReason(response: Response) {
+  const text = await response.text();
+  try {
+    return (JSON.parse(text) as { message?: string }).message ?? text;
+  } catch {
+    return text || response.statusText;
+  }
+}
+
+export function retryAfter(reason: string) {
+  const match = reason.match(RETRY_AFTER_PATTERN);
+  const retryAt = match ? DateTime.fromJSDate(new Date(match[1])) : undefined;
+  return retryAt?.isValid ? retryAt : DateTime.now().plus(DEFAULT_RATE_LIMIT_WAIT);
 }

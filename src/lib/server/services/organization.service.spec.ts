@@ -6,6 +6,8 @@ import type {
 import { DateTime } from 'luxon';
 import type { Customer, Invoice, Order } from 'square';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Member } from '$lib/server/db/schema';
+import { MailgunRateLimitError } from '$lib/server/repositories/mailgun.repository';
 import { SPACE_ZONE } from '$lib/server/utils/member_access';
 import { ORGANIZATION_NOT_FOUND, OrganizationService } from './organization.service';
 
@@ -909,9 +911,11 @@ describe('OrganizationService student members', () => {
         organization.id,
         'id-ada@example.com',
       );
-      expect(memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'id-grace@example.com' }),
-        'organization',
+      await vi.waitFor(() =>
+        expect(memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'id-grace@example.com' }),
+          'organization',
+        ),
       );
       expect(result.added.map((line) => line.email)).toEqual([
         'ada@example.com',
@@ -945,7 +949,7 @@ describe('OrganizationService student members', () => {
 
     it('keeps the membership when the onboarding email fails', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
-      memberNotificationRepository.sendOnboarding.mockRejectedValueOnce(new Error('mailgun'));
+      memberNotificationRepository.sendOnboarding.mockRejectedValue(new Error('mailgun'));
 
       const result = await service.addOrganizationMembers({
         organizationId: organization.id,
@@ -953,7 +957,46 @@ describe('OrganizationService student members', () => {
       });
 
       expect(result.added).toHaveLength(2);
-      expect(result.onboardingFailed.map((line) => line.email)).toEqual(['ada@example.com']);
+    });
+  });
+
+  describe('sendOrganizationOnboardings', () => {
+    const ada = { id: 'ada', email: 'ada@example.com' } as Member;
+    const grace = { id: 'grace', email: 'grace@example.com' } as Member;
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('waits out the Mailgun rate limit and resends', async () => {
+      vi.useFakeTimers();
+      memberNotificationRepository.sendOnboarding.mockRejectedValueOnce(
+        new MailgunRateLimitError('limit', DateTime.now().plus({ minutes: 2 })),
+      );
+
+      const sending = service.sendOrganizationOnboardings([ada, grace]);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(memberNotificationRepository.sendOnboarding).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      await sending;
+      expect(memberNotificationRepository.sendOnboarding.mock.calls.map(([m]) => m.id)).toEqual([
+        'ada',
+        'ada',
+        'grace',
+      ]);
+    });
+
+    it('moves on to the next member after a non rate limit failure', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      memberNotificationRepository.sendOnboarding.mockRejectedValueOnce(new Error('mailgun'));
+
+      await service.sendOrganizationOnboardings([ada, grace]);
+
+      expect(memberNotificationRepository.sendOnboarding.mock.calls.map(([m]) => m.id)).toEqual([
+        'ada',
+        'grace',
+      ]);
     });
 
     it('throws when the organization does not exist', async () => {

@@ -106,9 +106,7 @@ export class AddOrganizationMembersManager {
   }
 
   get hasProblems() {
-    return Boolean(
-      this.result && (this.result.errors.length || this.result.onboardingFailed.length),
-    );
+    return Boolean(this.result?.errors.length);
   }
 
   /** Resolves true when every line was added cleanly. */

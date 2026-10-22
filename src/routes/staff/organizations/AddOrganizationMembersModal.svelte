@@ -61,17 +61,5 @@
         </Alert.Description>
       </Alert.Root>
     {/if}
-    {#if result.onboardingFailed.length}
-      <Alert.Root variant="destructive">
-        <Alert.Title>Added, but the onboarding email failed</Alert.Title>
-        <Alert.Description>
-          <ul class="list-inside list-disc">
-            {#each result.onboardingFailed as line (line.line)}
-              <li>{line.name} &lt;{line.email}&gt;</li>
-            {/each}
-          </ul>
-        </Alert.Description>
-      </Alert.Root>
-    {/if}
   {/if}
 </ModalForm>
