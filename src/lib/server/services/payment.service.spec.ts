@@ -1,57 +1,51 @@
+import type { Payment } from '$lib/server/db/schema';
 import { PaymentStateError } from '$lib/server/repositories/payment.repository';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
-import { DateTime } from 'luxon';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { factory } from '$test/factory';
+import { newTestService, type ServiceMocks } from '$test/utils';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { PaymentService } from './payment.service';
 
-vi.mock('$env/dynamic/private', () => ({ env: {} }));
+const PAYMENT_ID = 'payment-1';
 
-function storedPayment(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'payment-1',
+function storedPayment(overrides: Partial<Payment> = {}) {
+  return factory.payment({
+    id: PAYMENT_ID,
     type: PAYMENT_TYPE.CAR_BAY_OVERRUN,
-    status: PAYMENT_STATUS.PENDING,
-    customerName: 'Jane Doe',
-    issuedDate: DateTime.now(),
-    paymentDate: null,
-    lineItems: [],
-    discounts: [],
     total: 2000,
-    organizationId: null,
-    squareInvoiceId: null,
-    paymentUrl: null,
     ...overrides,
-  };
+  });
 }
 
-describe('PaymentService', () => {
-  let service: PaymentService;
-  let paymentRepo: any;
+describe(PaymentService.name, () => {
+  let sut: PaymentService;
+  let mocks: ServiceMocks;
 
   beforeEach(() => {
-    paymentRepo = {
-      getById: vi.fn(async () => storedPayment()),
-      pay: vi.fn(async (payment) => ({ ...payment, status: PAYMENT_STATUS.PAID })),
-    };
-    service = new PaymentService(undefined, undefined, undefined, paymentRepo);
+    ({ sut, mocks } = newTestService(PaymentService));
+    mocks.paymentRepository.getById.mockResolvedValue(storedPayment());
+    mocks.paymentRepository.pay.mockImplementation(async (payment) => ({
+      ...payment,
+      status: PAYMENT_STATUS.PAID,
+    }));
   });
 
   it('charges the card for an unpaid bill', async () => {
-    const paid = await service.pay({ id: 'payment-1', sourceId: 'card-token' });
+    const paid = await sut.pay({ id: PAYMENT_ID, sourceId: 'card-token' });
 
     expect(paid.status).toBe(PAYMENT_STATUS.PAID);
   });
 
   it('lets an organization pay its balance', async () => {
-    paymentRepo.getById.mockResolvedValue(
+    mocks.paymentRepository.getById.mockResolvedValue(
       storedPayment({ type: PAYMENT_TYPE.BALANCE, organizationId: 'org-1' }),
     );
 
-    expect((await service.getCheckout('payment-1'))?.payable).toBe(true);
-    await expect(service.pay({ id: 'payment-1', sourceId: 'card-token' })).resolves.toBeDefined();
+    expect((await sut.getCheckout(PAYMENT_ID))?.payable).toBe(true);
+    await expect(sut.pay({ id: PAYMENT_ID, sourceId: 'card-token' })).resolves.toBeDefined();
   });
 
-  it.each([
+  it.each<[string, Partial<Payment>]>([
     [
       'a print billed to an organization',
       { type: PAYMENT_TYPE.PRINT_REQUEST, organizationId: 'org-1' },
@@ -60,12 +54,12 @@ describe('PaymentService', () => {
     ['a Square invoice', { squareInvoiceId: 'invoice-1' }],
     ['a paid bill', { status: PAYMENT_STATUS.PAID }],
   ])('refuses to take a card for %s', async (_, overrides) => {
-    paymentRepo.getById.mockResolvedValue(storedPayment(overrides));
+    mocks.paymentRepository.getById.mockResolvedValue(storedPayment(overrides));
 
-    expect((await service.getCheckout('payment-1'))?.payable).toBe(false);
-    await expect(service.pay({ id: 'payment-1', sourceId: 'card-token' })).rejects.toThrow(
+    expect((await sut.getCheckout(PAYMENT_ID))?.payable).toBe(false);
+    await expect(sut.pay({ id: PAYMENT_ID, sourceId: 'card-token' })).rejects.toThrow(
       PaymentStateError,
     );
-    expect(paymentRepo.pay).not.toHaveBeenCalled();
+    expect(mocks.paymentRepository.pay).not.toHaveBeenCalled();
   });
 });
