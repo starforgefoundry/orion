@@ -7,7 +7,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PaymentDeclinedError, PaymentRepository, type NewPayment } from './payment.repository';
+import {
+  PaymentDeclinedError,
+  PaymentRepository,
+  PaymentStateError,
+  type NewPayment,
+} from './payment.repository';
 
 vi.mock('$env/dynamic/private', () => ({ env: {} }));
 
@@ -110,6 +115,21 @@ describe.skipIf(!TEST_DATABASE_URL)('PaymentRepository', () => {
       expect(second.total).toBe(500);
       expect(second.squareInvoiceId).toBeNull();
     });
+
+    it.each([
+      PAYMENT_STATUS.PROCESSING,
+      PAYMENT_STATUS.PAID,
+      PAYMENT_STATUS.CANCELED,
+      PAYMENT_STATUS.REFUNDED,
+    ])('will not overwrite a %s payment', async (status) => {
+      const first = await repository.save(NEW_PAYMENT);
+      await repository.update(first.id, { status });
+
+      await expect(
+        repository.save({ ...NEW_PAYMENT, bill: { ...BILL, total: 500 } }, first.id),
+      ).rejects.toThrow(PaymentStateError);
+      expect(await repository.getById(first.id)).toMatchObject({ status, total: 1080 });
+    });
   });
 
   describe('pay', () => {
@@ -167,6 +187,47 @@ describe.skipIf(!TEST_DATABASE_URL)('PaymentRepository', () => {
       const saved = await repository.save({ ...NEW_PAYMENT, status: PAYMENT_STATUS.QUOTE });
 
       await expect(repository.pay(saved, 'card-token')).rejects.toThrow('not waiting');
+    });
+
+    it('charges only once when the customer pays twice at the same time', async () => {
+      const saved = await repository.save(NEW_PAYMENT);
+
+      const results = await Promise.allSettled([
+        repository.pay(saved, 'card-token-1'),
+        repository.pay(saved, 'card-token-2'),
+      ]);
+
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(square.createPayment).toHaveBeenCalledOnce();
+      expect((await repository.getById(saved.id)).status).toBe(PAYMENT_STATUS.PAID);
+    });
+
+    it('charges the bill as stored, not a copy the caller read earlier', async () => {
+      const stale = await repository.save(NEW_PAYMENT);
+      await repository.save(
+        {
+          ...NEW_PAYMENT,
+          bill: {
+            lineItems: [{ name: 'Repriced', quantity: 1, unitAmount: 500 }],
+            discounts: [],
+            total: 500,
+          },
+        },
+        stale.id,
+      );
+
+      const paid = await repository.pay(stale, 'card-token');
+
+      expect(square.createPayment.mock.calls[0][0].amountMoney.amount).toBe(500n);
+      expect(paid?.total).toBe(500);
+    });
+
+    it('lets the customer try again after a declined card', async () => {
+      const saved = await repository.save(NEW_PAYMENT);
+      square.createPayment.mockRejectedValueOnce(new Error('CARD_DECLINED'));
+
+      await expect(repository.pay(saved, 'bad-card')).rejects.toThrow(PaymentDeclinedError);
+      expect((await repository.pay(saved, 'good-card'))?.status).toBe(PAYMENT_STATUS.PAID);
     });
   });
 

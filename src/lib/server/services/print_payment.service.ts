@@ -6,31 +6,27 @@ import type {
   RespondToQuoteDto,
   UpdatePrintRequestDiscountDto,
 } from '$lib/remotes/dtos/print_request.dto';
+import { PaymentError } from '$lib/server/repositories/payment.repository';
 import { BaseService } from '$lib/server/services/base.service';
-import { printRequestService } from '$lib/server/services/print_request.service';
 import { runInBackground } from '$lib/server/utils/background';
+import { printSender } from '$lib/server/utils/email_templates/senders';
 import { hasMembership } from '$lib/server/utils/member_access';
-import { printRequestStatusUrl } from '$lib/server/utils/payment_links';
+import { printQueueUrl, printRequestStatusUrl } from '$lib/server/utils/payment_links';
 import {
-  CENTS_PER_DOLLAR,
+  centsToDollars,
+  formatCents,
   PAYMENT_STATUS,
   PAYMENT_TYPE,
   type PaymentStatus,
 } from '$lib/utils/billing';
 import { printBill } from '$lib/utils/print_pricing';
+import { PRINT_REQUEST_STATUS } from '$lib/utils/print_request';
 import { DateTime } from 'luxon';
 
-function printSender() {
-  return `Starforge 3D Prints <${publicEnv.PUBLIC_PRINT_REQUEST_EMAIL}>`;
-}
-
+const DISCORD_SUCCESS_COLOR = 0x57f287;
 const ACTIVE_STATUSES = new Set<PaymentStatus>([PAYMENT_STATUS.QUOTE, PAYMENT_STATUS.PENDING]);
 
-export class PrintPaymentError extends Error {}
-
-function formatTotal(cents: number) {
-  return (cents / CENTS_PER_DOLLAR).toFixed(2);
-}
+export class PrintPaymentError extends PaymentError {}
 
 export class PrintPaymentService extends BaseService {
   async getById(id: string) {
@@ -69,6 +65,9 @@ export class PrintPaymentService extends BaseService {
     const existing = request.payment;
     if (existing?.status === PAYMENT_STATUS.PAID) {
       throw new Error('Payment has already been paid');
+    }
+    if (existing && !ACTIVE_STATUSES.has(existing.status)) {
+      throw new Error('This payment can no longer be changed');
     }
 
     const [pricing, isMember, organization] = await Promise.all([
@@ -131,7 +130,7 @@ export class PrintPaymentService extends BaseService {
       {
         customerName: request.customerName,
         projectName: request.projectName,
-        quotePrice: formatTotal(total),
+        quotePrice: centsToDollars(total),
         quoteURL: printRequestStatusUrl(request.id),
       },
     );
@@ -147,7 +146,7 @@ export class PrintPaymentService extends BaseService {
       {
         customerName: request.customerName,
         projectName: request.projectName,
-        total: formatTotal(total),
+        total: centsToDollars(total),
         paymentURL: printRequestStatusUrl(request.id),
       },
     );
@@ -188,7 +187,11 @@ export class PrintPaymentService extends BaseService {
     const { request, payment } = await this.requireQuote(dto.id);
 
     if (!dto.approve) {
-      await printRequestService.updatePrintRequestStatus(dto.id, { status: 'canceled' });
+      await this.paymentRepository.cancel(payment);
+      await this.printRequestRepository.update(request.id, {
+        status: PRINT_REQUEST_STATUS.CANCELED,
+        completionDate: DateTime.now(),
+      });
       return null;
     }
 
@@ -196,11 +199,35 @@ export class PrintPaymentService extends BaseService {
     if (!approved) throw new PrintPaymentError('This quote has already been answered');
 
     runInBackground(
-      printRequestService.sendQuoteApprovedDiscordNotification(request.id),
+      this.sendQuoteApprovedNotification(request, approved.total),
       'send quote approved notification',
     );
 
     return approved;
+  }
+
+  private async sendQuoteApprovedNotification(request: PrintRequestDto, total: number) {
+    const { discordWebhookUrl } = await this.settingsRepository.getSetting('printRequest');
+    if (!discordWebhookUrl) {
+      console.warn('Discord webhook URL not configured for print requests');
+      return;
+    }
+
+    await this.discordRepository.sendWebhookNotification(discordWebhookUrl, {
+      content: `A quote has been approved! [View in Print Queue](${printQueueUrl(request.id)})`,
+      embeds: [
+        {
+          title: '✅ Quote Approved',
+          color: DISCORD_SUCCESS_COLOR,
+          fields: [
+            { name: 'Project Name', value: request.projectName, inline: true },
+            { name: 'Customer', value: request.customerName, inline: true },
+            { name: 'Total', value: formatCents(total), inline: false },
+          ],
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    });
   }
 
   async payPrintRequest(dto: PayPaymentDto) {

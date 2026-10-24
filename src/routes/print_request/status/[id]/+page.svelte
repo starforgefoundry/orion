@@ -9,71 +9,29 @@
   import PaymentBreakdown from '$lib/frontend/components/PaymentBreakdown.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
   import StepProgress from '$lib/frontend/components/StepProgress.svelte';
-  import { submitWithToast } from '$lib/frontend/form-submit';
-  import { modalManager } from '$lib/frontend/modal-manager.svelte';
-  import {
-    getPrintRequestStatus,
-    payPrintRequest,
-    respondToPrintRequestQuote,
-  } from '$lib/remotes/endpoints/print_request.remote';
   import { PAYMENT_STATUS } from '$lib/utils/billing';
+  import { PRINT_REQUEST_STATUS } from '$lib/utils/print_request';
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
   import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
   import XIcon from '@lucide/svelte/icons/x';
   import { DateTime } from 'luxon';
-  import { toast } from 'svelte-sonner';
+  import { PrintRequestStatusManager } from './print-request-status.svelte';
 
   const CONTACT_EMAIL = '3dprint@starforgefoundry.com';
-  const CANCELED = 'canceled';
 
   const STEPS = [
-    { id: 'in_queue', label: 'In Queue' },
-    { id: 'printing', label: 'Printing' },
-    { id: 'done', label: 'Ready for Pickup' },
-    { id: 'picked_up', label: 'Picked Up' },
+    { id: PRINT_REQUEST_STATUS.IN_QUEUE, label: 'In Queue' },
+    { id: PRINT_REQUEST_STATUS.PRINTING, label: 'Printing' },
+    { id: PRINT_REQUEST_STATUS.DONE, label: 'Ready for Pickup' },
+    { id: PRINT_REQUEST_STATUS.PICKED_UP, label: 'Picked Up' },
   ] as const;
 
-  const statusQuery = $derived(getPrintRequestStatus(page.params.id ?? ''));
-  const request = $derived(statusQuery.current);
-  const payment = $derived(request?.payment);
-  const isCanceled = $derived(request?.status === CANCELED);
-
-  let responding = $state(false);
+  const manager = new PrintRequestStatusManager(page.params.id ?? '');
+  const request = $derived(manager.request);
+  const payment = $derived(manager.payment);
 
   function formatDate(iso: string) {
     return DateTime.fromISO(iso).toLocaleString(DateTime.DATE_MED);
-  }
-
-  async function approve() {
-    responding = true;
-    await submitWithToast(() => respondToPrintRequestQuote({ id: request!.id, approve: true }), {
-      success: 'Quote approved',
-      error: 'Could not approve the quote',
-    });
-    responding = false;
-  }
-
-  async function decline() {
-    const confirmed = await modalManager.confirm({
-      title: 'Cancel Print Request',
-      prompt: 'Are you sure you want to cancel this print request? This cannot be undone.',
-      confirmText: 'Cancel Request',
-      cancelText: 'Keep Request',
-      variant: 'destructive',
-    });
-    if (!confirmed) return;
-
-    responding = true;
-    await submitWithToast(() => respondToPrintRequestQuote({ id: request!.id, approve: false }), {
-      success: 'Print request canceled',
-      error: 'Could not cancel the request',
-    });
-    responding = false;
-  }
-
-  async function pay(sourceId: string) {
-    await payPrintRequest({ id: request!.id, sourceId });
-    toast.success('Payment received. Thank you!');
   }
 </script>
 
@@ -92,7 +50,7 @@
 </Card.Header>
 
 <Card.Content>
-  {#if statusQuery.loading}
+  {#if manager.query.loading}
     <Spinner class="mx-auto my-6 size-8" />
   {:else if !request}
     <p class="font-medium text-destructive">We couldn't find this print request.</p>
@@ -102,7 +60,7 @@
     </p>
   {:else}
     <div class="flex flex-col gap-4">
-      {#if isCanceled}
+      {#if manager.isCanceled}
         <Alert.Root variant="destructive">
           <XIcon />
           <Alert.Title>This print request was canceled</Alert.Title>
@@ -129,22 +87,22 @@
               total={payment.total}
             />
 
-            {#if isCanceled}
+            {#if manager.isCanceled}
               <p class="text-sm text-muted-foreground">Nothing is due on a canceled request.</p>
             {:else if payment.status === PAYMENT_STATUS.QUOTE}
               <p class="text-sm text-muted-foreground">
                 We won't start printing until you approve this quote. You can pay right after
                 approving it.
               </p>
-              {#if responding}
+              {#if manager.responding}
                 <Spinner class="mx-auto my-2 size-6" />
               {:else}
                 <div class="grid gap-2 sm:grid-cols-2">
-                  <Button onclick={approve}>
+                  <Button onclick={() => manager.approve()}>
                     <CircleCheckIcon />
                     Approve Quote
                   </Button>
-                  <Button variant="outline" onclick={decline}>
+                  <Button variant="outline" onclick={() => manager.decline()}>
                     <XIcon />
                     Cancel Request
                   </Button>
@@ -164,7 +122,7 @@
             {:else if payment.status === PAYMENT_STATUS.PENDING && payment.invoiceUrl}
               <Button href={payment.invoiceUrl} target="_blank">Pay Invoice</Button>
             {:else if payment.status === PAYMENT_STATUS.PENDING}
-              <CardCheckout total={payment.total} onPay={pay} />
+              <CardCheckout total={payment.total} onPay={(sourceId) => manager.pay(sourceId)} />
             {/if}
           </div>
         {/if}

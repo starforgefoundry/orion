@@ -51,6 +51,11 @@ export const PAYMENT_STATUS_DISPLAY: Record<Payment['status'], StatusDisplay> = 
     tone: 'warning',
     icon: ClockIcon,
   },
+  processing: {
+    label: 'Processing',
+    tone: 'info',
+    icon: ClockIcon,
+  },
   paid: {
     label: 'Paid',
     tone: 'success',

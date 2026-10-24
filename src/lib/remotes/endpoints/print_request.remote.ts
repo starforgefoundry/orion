@@ -12,8 +12,8 @@ import {
 import { payPaymentDto } from '$lib/remotes/dtos/payment.dto';
 import { verifyAuth } from '$lib/remotes/utils';
 import { printFilesService } from '$lib/server/services/print_files.service';
-import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
-import { PrintPaymentError, printPaymentService } from '$lib/server/services/print_payment.service';
+import { PaymentError } from '$lib/server/repositories/payment.repository';
+import { printPaymentService } from '$lib/server/services/print_payment.service';
 import { printRequestService } from '$lib/server/services/print_request.service';
 import { printRequestCommentService } from '$lib/server/services/print_request_comment.service';
 import { error } from '@sveltejs/kit';
@@ -45,9 +45,7 @@ async function asCustomerError<T>(action: () => Promise<T>) {
   try {
     return await action();
   } catch (cause) {
-    if (cause instanceof PrintPaymentError || cause instanceof PaymentDeclinedError) {
-      error(BAD_REQUEST, cause.message);
-    }
+    if (cause instanceof PaymentError) error(BAD_REQUEST, cause.message);
     throw cause;
   }
 }

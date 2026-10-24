@@ -12,7 +12,7 @@ import {
   type PaymentStatus,
   type PaymentType,
 } from '$lib/utils/billing';
-import { and, eq, type InferInsertModel } from 'drizzle-orm';
+import { and, eq, inArray, type InferInsertModel } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { SquareClient } from 'square';
 
@@ -30,11 +30,18 @@ export type NewPayment = {
   paymentUrl?: string | null;
 };
 
-export class PaymentDeclinedError extends Error {
+/** Safe to show the customer. */
+export class PaymentError extends Error {}
+
+export class PaymentDeclinedError extends PaymentError {
   constructor(options?: ErrorOptions) {
     super('Payment failed. Please check your card details and try again.', options);
   }
 }
+
+export class PaymentStateError extends PaymentError {}
+
+const EDITABLE_STATUSES = [PAYMENT_STATUS.QUOTE, PAYMENT_STATUS.PENDING];
 
 export class PaymentRepository extends BaseRepository {
   private squareRepository: SquareRepository;
@@ -59,7 +66,10 @@ export class PaymentRepository extends BaseRepository {
     return payment;
   }
 
-  /** Writes `payment` over the row with `id`, or a new row when there is none. */
+  /**
+   * Writes `payment` over the row with `id`, or a new row when there is none. Only a quote or an
+   * unpaid bill can be overwritten.
+   */
   async save(payment: NewPayment, id?: string) {
     const status = initialStatus(payment.status, payment.bill.total);
     const values = {
@@ -80,8 +90,13 @@ export class PaymentRepository extends BaseRepository {
     const [result] = await this.db
       .insert(schema.payment)
       .values({ ...values, ...(id && { id }) })
-      .onConflictDoUpdate({ target: schema.payment.id, set: values })
+      .onConflictDoUpdate({
+        target: schema.payment.id,
+        set: values,
+        setWhere: inArray(schema.payment.status, EDITABLE_STATUSES),
+      })
       .returning();
+    if (!result) throw new PaymentStateError('This payment can no longer be changed');
     return result;
   }
 
@@ -166,13 +181,26 @@ export class PaymentRepository extends BaseRepository {
 
   /** Charges the card for a payment the customer was asked to pay. */
   async pay(payment: Payment, sourceId: string) {
-    if (payment.status !== PAYMENT_STATUS.PENDING) {
-      throw new Error('This payment is not waiting to be paid');
+    const claimed = await this.transition(payment.id, PAYMENT_STATUS.PENDING, {
+      status: PAYMENT_STATUS.PROCESSING,
+    });
+    if (!claimed) throw new PaymentStateError('This payment is not waiting to be paid');
+
+    let ids: Awaited<ReturnType<typeof this.chargeCard>>;
+    try {
+      ids = await this.chargeCard(claimed, sourceId, true);
+    } catch (error) {
+      await this.transition(claimed.id, PAYMENT_STATUS.PROCESSING, {
+        status: PAYMENT_STATUS.PENDING,
+      });
+      throw error;
     }
 
-    const ids = await this.chargeCard(payment, sourceId, true);
-    await this.update(payment.id, ids);
-    return (await this.markPaid(payment.id)) ?? (await this.getById(payment.id));
+    return await this.transition(claimed.id, PAYMENT_STATUS.PROCESSING, {
+      ...ids,
+      status: PAYMENT_STATUS.PAID,
+      paymentDate: DateTime.now(),
+    });
   }
 
   async refund(payment: Payment) {
@@ -232,12 +260,15 @@ export class PaymentRepository extends BaseRepository {
   }
 
   /** Square invoices only exist on payments made before Orion billing. */
-  async updateInvoiceStatus(invoiceId: string, status: 'paid' | 'canceled') {
+  async updateInvoiceStatus(
+    invoiceId: string,
+    status: typeof PAYMENT_STATUS.PAID | typeof PAYMENT_STATUS.CANCELED,
+  ) {
     await this.db
       .update(schema.payment)
       .set({
         status: status,
-        paymentDate: status === 'paid' ? DateTime.now() : undefined,
+        paymentDate: status === PAYMENT_STATUS.PAID ? DateTime.now() : undefined,
       })
       .where(eq(schema.payment.squareInvoiceId, invoiceId))
       .execute();

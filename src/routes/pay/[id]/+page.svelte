@@ -69,8 +69,14 @@
             </p>
           {:else if checkout.status === PAYMENT_STATUS.PENDING && checkout.invoiceUrl}
             <Button href={checkout.invoiceUrl} target="_blank">Pay Invoice</Button>
-          {:else if checkout.status === PAYMENT_STATUS.PENDING}
+          {:else if checkout.payable}
             <CardCheckout total={checkout.total} onPay={pay} />
+          {:else if checkout.status === PAYMENT_STATUS.PENDING}
+            <p class="text-sm text-muted-foreground">
+              This is billed to your organization. There is nothing for you to pay.
+            </p>
+          {:else if checkout.status === PAYMENT_STATUS.PROCESSING}
+            <p class="text-sm text-muted-foreground">Your payment is being processed.</p>
           {:else}
             <p class="text-sm text-muted-foreground">This payment is no longer due.</p>
           {/if}

@@ -16,6 +16,8 @@ export type PaymentType = EnumValue<typeof PAYMENT_TYPE>;
 export const PAYMENT_STATUS = {
   QUOTE: 'quote',
   PENDING: 'pending',
+  /** A card is being charged right now, so nothing else may charge or re-price it. */
+  PROCESSING: 'processing',
   PAID: 'paid',
   CANCELED: 'canceled',
   REFUNDED: 'refunded',
@@ -62,11 +64,21 @@ export function buildBill(lineItems: BillingLineItem[], rates: BillingDiscountRa
   return { lineItems, discounts, subtotal, total };
 }
 
+/** "12.50" for 1250, for places that print their own dollar sign. */
+export function centsToDollars(cents: number) {
+  return (cents / CENTS_PER_DOLLAR).toFixed(2);
+}
+
 export function formatCents(cents: number) {
-  return `$${(cents / CENTS_PER_DOLLAR).toFixed(2)}`;
+  return `$${centsToDollars(cents)}`;
 }
 
 /** Settles a payment the customer owes nothing on, so it never asks for a card. */
 export function initialStatus(status: PaymentStatus, total: number): PaymentStatus {
   return status === PAYMENT_STATUS.PENDING && total === 0 ? PAYMENT_STATUS.PAID : status;
+}
+
+/** What the customer has actually paid and not been refunded. */
+export function amountPaid(payment: { status: PaymentStatus; total: number } | null) {
+  return payment?.status === PAYMENT_STATUS.PAID ? payment.total : 0;
 }

@@ -27,20 +27,19 @@ import {
 import { SettingsRepository } from '$lib/server/repositories/settings.repository';
 import {
   buildBill,
-  CENTS_PER_DOLLAR,
+  amountPaid,
+  centsToDollars,
   formatCents,
   PAYMENT_STATUS,
   PAYMENT_TYPE,
 } from '$lib/utils/billing';
+import { SPACE_ZONE } from '$lib/space';
+import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '$lib/utils/classes';
 import { DateTime } from 'luxon';
 
 const PAYMENT_FAILED_MESSAGE = 'Payment failed';
 
 type PaidBooking = { payment: Payment | null };
-
-function amountPaid(booking: PaidBooking) {
-  return booking.payment?.total ?? 0;
-}
 
 export class ClassService {
   private classRepository: ClassRepository;
@@ -112,7 +111,7 @@ export class ClassService {
 
   async getActiveCatalogsWithInstances() {
     const catalogs = await this.classRepository.getAllCatalogs();
-    const today = DateTime.now().setZone('America/Chicago').toISODate()!;
+    const today = DateTime.now().setZone(SPACE_ZONE).toISODate()!;
     const results = [];
 
     for (const catalog of catalogs) {
@@ -141,8 +140,8 @@ export class ClassService {
 
   async generateInstances(dto: GenerateInstancesDto) {
     const recurrenceGroupId = crypto.randomUUID();
-    const startDt = DateTime.fromISO(dto.startDate, { zone: 'America/Chicago' });
-    const endDt = DateTime.fromISO(dto.endDate, { zone: 'America/Chicago' });
+    const startDt = DateTime.fromISO(dto.startDate, { zone: SPACE_ZONE });
+    const endDt = DateTime.fromISO(dto.endDate, { zone: SPACE_ZONE });
 
     const instances: {
       classId: string;
@@ -151,7 +150,7 @@ export class ClassService {
       startTime: string;
       durationMinutes: number;
       seats: number;
-      status: 'scheduled';
+      status: typeof CLASS_INSTANCE_STATUS.SCHEDULED;
       recurrenceGroupId: string;
     }[] = [];
 
@@ -167,7 +166,7 @@ export class ClassService {
           startTime: dto.startTime,
           durationMinutes: dto.durationMinutes,
           seats: dto.seats,
-          status: 'scheduled',
+          status: CLASS_INSTANCE_STATUS.SCHEDULED,
           recurrenceGroupId,
         });
       }
@@ -190,7 +189,7 @@ export class ClassService {
       startTime: dto.startTime,
       durationMinutes: dto.durationMinutes,
       seats: dto.seats,
-      status: 'scheduled',
+      status: CLASS_INSTANCE_STATUS.SCHEDULED,
     });
     runInBackground(this.syncInstanceToCalendar(instance.id), 'sync created instance to calendar');
     return instance;
@@ -236,10 +235,14 @@ export class ClassService {
           console.error(`Failed to refund booking ${booking.id}:`, err);
         }
       }
-      await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
+      await this.classRepository.updateBooking(booking.id, {
+        status: CLASS_BOOKING_STATUS.CANCELED,
+      });
     }
 
-    await this.classRepository.updateInstance(instanceId, { status: 'canceled' });
+    await this.classRepository.updateInstance(instanceId, {
+      status: CLASS_INSTANCE_STATUS.CANCELED,
+    });
 
     // syncInstanceToCalendar detects the canceled status and deletes the event.
     runInBackground(
@@ -293,15 +296,16 @@ export class ClassService {
   async bookClass(dto: BookClassDto) {
     const instance = await this.classRepository.getInstanceById(dto.instanceId);
     if (!instance) throw new Error('Class not found');
-    if (instance.status !== 'scheduled') throw new Error('This class has been canceled');
+    if (instance.status !== CLASS_INSTANCE_STATUS.SCHEDULED)
+      throw new Error('This class has been canceled');
 
     const catalog = instance.catalog;
     if (!catalog) throw new Error('Class not found');
 
     // Verify the instance start time is in the future
-    const now = DateTime.now().setZone('America/Chicago');
+    const now = DateTime.now().setZone(SPACE_ZONE);
     const instanceStart = DateTime.fromISO(`${instance.date}T${instance.startTime}`, {
-      zone: 'America/Chicago',
+      zone: SPACE_ZONE,
     });
     if (instanceStart <= now) {
       throw new Error('Cannot book a class in the past');
@@ -317,7 +321,7 @@ export class ClassService {
       );
     }
 
-    const formattedDate = DateTime.fromISO(instance.date, { zone: 'America/Chicago' }).toFormat(
+    const formattedDate = DateTime.fromISO(instance.date, { zone: SPACE_ZONE }).toFormat(
       'MMM d, yyyy',
     );
     const authorized = await this.paymentRepository
@@ -351,7 +355,7 @@ export class ClassService {
         customerEmail: dto.customerEmail,
         customerPhone: dto.customerPhone,
         paymentId: authorized.id,
-        status: 'confirmed',
+        status: CLASS_BOOKING_STATUS.CONFIRMED,
         quantity: dto.quantity,
       });
     } catch (error) {
@@ -362,7 +366,9 @@ export class ClassService {
     // Re-check booking count after insert (overbooking prevention)
     const newCount = await this.classRepository.getConfirmedBookingCount(dto.instanceId);
     if (newCount > instance.seats) {
-      await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
+      await this.classRepository.updateBooking(booking.id, {
+        status: CLASS_BOOKING_STATUS.CANCELED,
+      });
       await this.paymentRepository.void(authorized);
       throw new Error('This class is fully booked');
     }
@@ -370,7 +376,9 @@ export class ClassService {
     try {
       await this.paymentRepository.capture(authorized);
     } catch (error) {
-      await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
+      await this.classRepository.updateBooking(booking.id, {
+        status: CLASS_BOOKING_STATUS.CANCELED,
+      });
       throw new Error(PAYMENT_FAILED_MESSAGE, { cause: error });
     }
 
@@ -391,17 +399,18 @@ export class ClassService {
     if (!booking) return null;
 
     const { payment, ...rest } = booking;
-    return { ...rest, amountPaid: amountPaid(booking) };
+    return { ...rest, amountPaid: amountPaid(booking.payment) };
   }
 
   async cancelBooking(dto: CancelBookingDto) {
     const booking = await this.classRepository.getBookingByToken(dto.bookingToken);
     if (!booking) throw new Error('Booking not found');
-    if (booking.status === 'canceled') throw new Error('Booking is already canceled');
+    if (booking.status === CLASS_BOOKING_STATUS.CANCELED)
+      throw new Error('Booking is already canceled');
 
     await this.refund(booking);
 
-    await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
+    await this.classRepository.updateBooking(booking.id, { status: CLASS_BOOKING_STATUS.CANCELED });
 
     runInBackground(
       this.syncInstanceToCalendar(booking.instanceId),
@@ -414,11 +423,12 @@ export class ClassService {
   async cancelBookingStaff(dto: CancelBookingStaffDto) {
     const booking = await this.classRepository.getBookingById(dto.bookingId);
     if (!booking) throw new Error('Booking not found');
-    if (booking.status === 'canceled') throw new Error('Booking is already canceled');
+    if (booking.status === CLASS_BOOKING_STATUS.CANCELED)
+      throw new Error('Booking is already canceled');
 
     await this.refund(booking);
 
-    await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
+    await this.classRepository.updateBooking(booking.id, { status: CLASS_BOOKING_STATUS.CANCELED });
 
     runInBackground(
       this.syncInstanceToCalendar(booking.instanceId),
@@ -431,7 +441,8 @@ export class ClassService {
   async manualBookClass(dto: ManualBookClassDto) {
     const instance = await this.classRepository.getInstanceById(dto.instanceId);
     if (!instance) throw new Error('Class not found');
-    if (instance.status !== 'scheduled') throw new Error('This class has been canceled');
+    if (instance.status !== CLASS_INSTANCE_STATUS.SCHEDULED)
+      throw new Error('This class has been canceled');
 
     // Check seat availability
     const confirmedCount = await this.classRepository.getConfirmedBookingCount(dto.instanceId);
@@ -449,14 +460,16 @@ export class ClassService {
       customerName: dto.customerName,
       customerEmail: dto.customerEmail,
       customerPhone: dto.customerPhone,
-      status: 'confirmed',
+      status: CLASS_BOOKING_STATUS.CONFIRMED,
       quantity: dto.quantity,
     });
 
     // Re-check booking count after insert (overbooking prevention)
     const newCount = await this.classRepository.getConfirmedBookingCount(dto.instanceId);
     if (newCount > instance.seats) {
-      await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
+      await this.classRepository.updateBooking(booking.id, {
+        status: CLASS_BOOKING_STATUS.CANCELED,
+      });
       throw new Error('This class is fully booked');
     }
 
@@ -471,7 +484,7 @@ export class ClassService {
       throw new Error('Booking not found');
     }
 
-    const dateDt = DateTime.fromISO(booking.instance.date, { zone: 'America/Chicago' });
+    const dateDt = DateTime.fromISO(booking.instance.date, { zone: SPACE_ZONE });
     const bookingUrl = `${env.FRONTEND_URL}/classes/booking/${booking.bookingToken}`;
 
     await this.mailgunRepository.sendTemplate(
@@ -487,7 +500,7 @@ export class ClassService {
         classTime: formatTime(booking.instance.startTime),
         classDuration: booking.instance.durationMinutes.toString(),
         quantity: booking.quantity.toString(),
-        amountPaid: (amountPaid(booking) / CENTS_PER_DOLLAR).toFixed(2),
+        amountPaid: centsToDollars(amountPaid(booking.payment)),
         bookingUrl,
       },
     );
@@ -506,7 +519,7 @@ export class ClassService {
       return;
     }
 
-    const dateDt = DateTime.fromISO(booking.instance.date, { zone: 'America/Chicago' });
+    const dateDt = DateTime.fromISO(booking.instance.date, { zone: SPACE_ZONE });
     const confirmedCount = await this.classRepository.getConfirmedBookingCount(booking.instance.id);
 
     const embed = {
@@ -540,7 +553,7 @@ export class ClassService {
         },
         {
           name: 'Amount Paid',
-          value: formatCents(amountPaid(booking)),
+          value: formatCents(amountPaid(booking.payment)),
           inline: true,
         },
       ],
@@ -609,7 +622,7 @@ export class ClassService {
     if (!instance || !instance.teacher || !instance.catalog) return;
 
     // If the instance was canceled, remove the event instead.
-    if (instance.status !== 'scheduled') {
+    if (instance.status !== CLASS_INSTANCE_STATUS.SCHEDULED) {
       await this.deleteInstanceFromCalendar(instance);
       return;
     }
@@ -679,7 +692,7 @@ export class ClassService {
     bookings: Array<{ customerName: string; customerPhone: string; quantity: number }>,
   ): GoogleCalendarEventInput {
     const [hours, minutes] = startTime.split(':').map(Number);
-    const startDt = DateTime.fromISO(date, { zone: 'America/Chicago' }).set({
+    const startDt = DateTime.fromISO(date, { zone: SPACE_ZONE }).set({
       hour: hours,
       minute: minutes,
       second: 0,
@@ -706,7 +719,7 @@ export class ClassService {
       description: descriptionLines.join('\n'),
       startDateTime: startDt.toISO({ suppressMilliseconds: true })!,
       endDateTime: endDt.toISO({ suppressMilliseconds: true })!,
-      timeZone: 'America/Chicago',
+      timeZone: SPACE_ZONE,
     };
   }
 }

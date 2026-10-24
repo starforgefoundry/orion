@@ -19,7 +19,13 @@ import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { hasMembership } from '$lib/server/utils/member_access';
 import { payUrl } from '$lib/server/utils/payment_links';
-import { buildBill, CENTS_PER_DOLLAR, PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
+import {
+  amountPaid,
+  buildBill,
+  centsToDollars,
+  PAYMENT_STATUS,
+  PAYMENT_TYPE,
+} from '$lib/utils/billing';
 import {
   CAR_BAY_EMAIL,
   CAR_BAY_STATUS,
@@ -44,10 +50,6 @@ type CustomerDetails = Pick<
   StaffBookCarBayDto,
   'customerName' | 'customerEmail' | 'customerPhone' | 'isMember'
 >;
-
-function amountPaid(payment: Payment | null) {
-  return payment?.total ?? 0;
-}
 
 function toView(booking: CarBayBooking, payment: Payment | null): CarBayBookingView {
   const { startAt, endAt, blockedUntil, createdDate, reminderSentDate, ...rest } = booking;
@@ -75,10 +77,6 @@ function toClosureView(closure: CarBayClosure): CarBayClosureView {
     endAt: closure.endAt.toISO()!,
     reason: closure.reason,
   };
-}
-
-function formatCents(cents: number) {
-  return (cents / CENTS_PER_DOLLAR).toFixed(2);
 }
 
 export class CarBayService extends BaseService {
@@ -380,7 +378,7 @@ export class CarBayService extends BaseService {
       {
         customerName: booking.customerName,
         description: `car bay overrun on ${booking.endAt.setZone(CAR_BAY_ZONE).toFormat('MMMM d')}`,
-        total: formatCents(payment.total),
+        total: centsToDollars(payment.total),
         paymentUrl: payUrl(payment),
       },
     );
@@ -436,7 +434,7 @@ export class CarBayService extends BaseService {
         customerName: booking.customerName,
         tierName: CAR_BAY_TIER_NAMES[booking.tier],
         bookingWhen: formatPeriod(booking),
-        amountPaid: formatCents(amountPaid(payment)),
+        amountPaid: centsToDollars(amountPaid(payment)),
         refundCutoffHours: policy.refundCutoffHours.toString(),
         storageDays: policy.storageDays.toString(),
         bookingUrl: this.bookingUrl(booking),

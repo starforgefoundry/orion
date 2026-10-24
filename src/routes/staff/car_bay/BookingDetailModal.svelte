@@ -13,6 +13,7 @@
   const INVOICE_BADGES: Record<CarBayOverrunInvoiceView['status'], Badge> = {
     quote: { label: 'Quote', tone: 'neutral' },
     pending: { label: 'Sent', tone: 'info' },
+    processing: { label: 'Processing', tone: 'info' },
     paid: { label: 'Paid', tone: 'success' },
     canceled: { label: 'Canceled', tone: 'danger' },
     refunded: { label: 'Refunded', tone: 'neutral' },

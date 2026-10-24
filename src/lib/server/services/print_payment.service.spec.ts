@@ -9,15 +9,8 @@ vi.mock('$env/dynamic/public', () => ({
   env: { PUBLIC_PRINT_REQUEST_EMAIL: '3dprint@example.com' },
 }));
 
-const { updatePrintRequestStatus, sendQuoteApprovedDiscordNotification } = vi.hoisted(() => ({
-  updatePrintRequestStatus: vi.fn(),
-  sendQuoteApprovedDiscordNotification: vi.fn(async () => {}),
-}));
-vi.mock('$lib/server/services/print_request.service', () => ({
-  printRequestService: { updatePrintRequestStatus, sendQuoteApprovedDiscordNotification },
-}));
-
 const STATUS_URL = 'https://orion.test/print_request/status/request-1';
+const WEBHOOK_URL = 'https://discord.test/webhook';
 const PRICING = { additionalBuildPlatePrice: 250, memberDiscountPercent: 10 };
 const MEMBER_CONTEXT = {
   subscriptions: [{ status: 'active', accessEndedDate: null }],
@@ -68,6 +61,7 @@ describe('PrintPaymentService', () => {
   let requestRepo: any;
   let squareRepo: any;
   let mailgunRepo: any;
+  let discordRepo: any;
   let billingCodeRepo: any;
   let memberRepo: any;
 
@@ -85,13 +79,19 @@ describe('PrintPaymentService', () => {
       })),
       approveQuote: vi.fn(async (p) => ({ ...p, status: PAYMENT_STATUS.PENDING })),
       pay: vi.fn(async (p) => ({ ...p, status: PAYMENT_STATUS.PAID })),
+      cancel: vi.fn(),
     };
     requestRepo = { getById: vi.fn(async () => printRequest()), update: vi.fn() };
     squareRepo = { cancelInvoice: vi.fn() };
     mailgunRepo = { sendTemplate: vi.fn() };
+    discordRepo = { sendWebhookNotification: vi.fn() };
     billingCodeRepo = { getByCode: vi.fn(async () => undefined) };
     memberRepo = { getAccessContextByEmail: vi.fn(async () => undefined) };
-    const settingsRepo = { getSetting: vi.fn(async () => PRICING) };
+    const settingsRepo = {
+      getSetting: vi.fn(async (key: string) =>
+        key === 'printRequest' ? { discordWebhookUrl: WEBHOOK_URL } : PRICING,
+      ),
+    };
 
     service = new PrintPaymentService(
       undefined,
@@ -101,7 +101,7 @@ describe('PrintPaymentService', () => {
       settingsRepo as any,
       squareRepo,
       mailgunRepo,
-      undefined,
+      discordRepo,
       undefined,
       billingCodeRepo,
       undefined,
@@ -239,6 +239,18 @@ describe('PrintPaymentService', () => {
       await expect(service.upsertPayment(dto)).rejects.toThrow('already been paid');
       expect(paymentRepo.save).not.toHaveBeenCalled();
     });
+
+    it.each([PAYMENT_STATUS.PROCESSING, PAYMENT_STATUS.CANCELED, PAYMENT_STATUS.REFUNDED])(
+      'refuses to re-price a %s bill',
+      async (status) => {
+        requestRepo.getById.mockResolvedValue(
+          printRequest({ payment: payment({ status }) as any }),
+        );
+
+        await expect(service.upsertPayment(dto)).rejects.toThrow('can no longer be changed');
+        expect(paymentRepo.save).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('updatePrintRequestDiscount', () => {
@@ -280,13 +292,29 @@ describe('PrintPaymentService', () => {
       const approved = await service.respondToQuote({ id: 'request-1', approve: true });
 
       expect(approved?.status).toBe(PAYMENT_STATUS.PENDING);
-      expect(sendQuoteApprovedDiscordNotification).toHaveBeenCalledWith('request-1');
+      await vi.waitFor(() =>
+        expect(discordRepo.sendWebhookNotification).toHaveBeenCalledWith(
+          WEBHOOK_URL,
+          expect.objectContaining({
+            content: expect.stringContaining('/staff/print_requests/queue?id=request-1'),
+            embeds: [
+              expect.objectContaining({
+                fields: expect.arrayContaining([{ name: 'Total', value: '$10.00', inline: false }]),
+              }),
+            ],
+          }),
+        ),
+      );
     });
 
-    it('cancels the request when the customer declines', async () => {
+    it('cancels the request and its quote when the customer declines', async () => {
       await service.respondToQuote({ id: 'request-1', approve: false });
 
-      expect(updatePrintRequestStatus).toHaveBeenCalledWith('request-1', { status: 'canceled' });
+      expect(paymentRepo.cancel).toHaveBeenCalledWith(expect.objectContaining({ id: 'payment-1' }));
+      expect(requestRepo.update).toHaveBeenCalledWith('request-1', {
+        status: 'canceled',
+        completionDate: expect.any(DateTime),
+      });
       expect(paymentRepo.approveQuote).not.toHaveBeenCalled();
     });
 

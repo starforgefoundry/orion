@@ -12,10 +12,11 @@ import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { SPACE_ZONE } from '$lib/server/utils/member_access';
 import { parseMemberLines, type ParsedMemberLine } from '$lib/server/utils/member_lines';
+import { foundrySender } from '$lib/server/utils/email_templates/senders';
 import { payUrl } from '$lib/server/utils/payment_links';
 import {
   buildBill,
-  CENTS_PER_DOLLAR,
+  centsToDollars,
   PAYMENT_STATUS,
   PAYMENT_TYPE,
   type PaymentStatus,
@@ -27,7 +28,11 @@ export const ORGANIZATION_NOT_FOUND = 'Organization not found';
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
 const BALANCE_LINE_ITEM_NAME = 'Organization Balance Payment';
 const BALANCE_DESCRIPTION = "your organization's outstanding balance";
-const OWED_STATUSES = new Set<PaymentStatus>([PAYMENT_STATUS.PENDING, PAYMENT_STATUS.PAID]);
+const OWED_STATUSES = new Set<PaymentStatus>([
+  PAYMENT_STATUS.PENDING,
+  PAYMENT_STATUS.PROCESSING,
+  PAYMENT_STATUS.PAID,
+]);
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -218,15 +223,15 @@ export class OrganizationService extends BaseService {
 
     await this.mailgunRepository.sendTemplate(
       organization.email,
-      `Starforge Foundry <${publicEnv.PUBLIC_PRINT_REQUEST_EMAIL}>`,
+      foundrySender(),
       publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
       'Starforge Organization Balance Due',
       'payment_request',
       {
         customerName: organization.name,
         description: BALANCE_DESCRIPTION,
-        total: (payment.total / CENTS_PER_DOLLAR).toFixed(2),
-        paymentUrl: payment.paymentUrl ?? payUrl(payment),
+        total: centsToDollars(payment.total),
+        paymentUrl: payUrl(payment),
       },
     );
 

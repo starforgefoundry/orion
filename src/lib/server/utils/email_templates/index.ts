@@ -10,7 +10,7 @@ import PRINT_PAYMENT_TEMPLATE from './print_payment.html?raw';
 
 export type Templates = {
   print_submitted: { customerName: string; projectName: string; statusURL: string };
-  print_pickup: { projectName: string; statusURL: string };
+  print_pickup: { projectName: string; paymentNote: string; statusURL: string };
   print_quote: { customerName: string; projectName: string; quotePrice: string; quoteURL: string };
   print_payment: { customerName: string; projectName: string; total: string; paymentURL: string };
   payment_request: { customerName: string; description: string; total: string; paymentUrl: string };

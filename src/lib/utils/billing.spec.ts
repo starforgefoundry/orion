@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildBill, initialStatus, lineItemsTotal, PAYMENT_STATUS } from './billing';
+import { amountPaid, buildBill, initialStatus, lineItemsTotal, PAYMENT_STATUS } from './billing';
 
 const ITEMS = [
   { name: 'Material', quantity: 1, unitAmount: 700 },
@@ -56,5 +56,14 @@ describe('initialStatus', () => {
 
   it('leaves a bill with money owed pending', () => {
     expect(initialStatus(PAYMENT_STATUS.PENDING, 100)).toBe(PAYMENT_STATUS.PENDING);
+  });
+});
+
+describe('amountPaid', () => {
+  it('counts only money the customer still has paid', () => {
+    expect(amountPaid({ status: PAYMENT_STATUS.PAID, total: 500 })).toBe(500);
+    expect(amountPaid({ status: PAYMENT_STATUS.REFUNDED, total: 500 })).toBe(0);
+    expect(amountPaid({ status: PAYMENT_STATUS.CANCELED, total: 500 })).toBe(0);
+    expect(amountPaid(null)).toBe(0);
   });
 });

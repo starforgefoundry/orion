@@ -10,3 +10,7 @@ export function payUrl(payment: Pick<Payment, 'id'>) {
 export function printRequestStatusUrl(printRequestId: string) {
   return `${env.FRONTEND_URL}/print_request/status/${printRequestId}`;
 }
+
+export function printQueueUrl(printRequestId: string) {
+  return `${env.FRONTEND_URL}/staff/print_requests/queue?id=${printRequestId}`;
+}

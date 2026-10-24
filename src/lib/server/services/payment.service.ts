@@ -1,13 +1,8 @@
 import type { PayPaymentDto } from '$lib/remotes/dtos/payment.dto';
 import type { Payment } from '$lib/server/db/schema';
+import { PaymentStateError } from '$lib/server/repositories/payment.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { PAYMENT_STATUS, PAYMENT_TYPE, type PaymentType } from '$lib/utils/billing';
-
-export class PaymentNotPayableError extends Error {
-  constructor() {
-    super('This payment cannot be paid online');
-  }
-}
 
 const PAYMENT_TITLES: Record<PaymentType, string> = {
   [PAYMENT_TYPE.PRINT_REQUEST]: '3D Print Request',
@@ -17,6 +12,15 @@ const PAYMENT_TITLES: Record<PaymentType, string> = {
   [PAYMENT_TYPE.ORG_CHARGE]: 'Organization Charge',
   [PAYMENT_TYPE.BALANCE]: 'Organization Balance',
 };
+
+/** Organization charges are settled through the organization's balance, not one by one. */
+function isPayableOnline(payment: Payment) {
+  const billedToOrganization =
+    payment.organizationId !== null && payment.type !== PAYMENT_TYPE.BALANCE;
+  return (
+    payment.status === PAYMENT_STATUS.PENDING && !payment.squareInvoiceId && !billedToOrganization
+  );
+}
 
 function toCheckout(payment: Payment) {
   return {
@@ -30,6 +34,7 @@ function toCheckout(payment: Payment) {
     discounts: payment.discounts,
     total: payment.total,
     invoiceUrl: payment.squareInvoiceId ? payment.paymentUrl : null,
+    payable: isPayableOnline(payment),
   };
 }
 
@@ -43,8 +48,8 @@ export class PaymentService extends BaseService {
 
   async pay(dto: PayPaymentDto) {
     const payment = await this.paymentRepository.getById(dto.id);
-    if (!payment || payment.status !== PAYMENT_STATUS.PENDING || payment.squareInvoiceId) {
-      throw new PaymentNotPayableError();
+    if (!payment || !isPayableOnline(payment)) {
+      throw new PaymentStateError('This payment cannot be paid online');
     }
 
     return toCheckout(await this.paymentRepository.pay(payment, dto.sourceId));

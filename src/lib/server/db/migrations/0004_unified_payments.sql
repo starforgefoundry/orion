@@ -82,11 +82,19 @@ SELECT
 	"class_booking"."created_date",
 	"class_booking"."customer_name",
 	"class_booking"."customer_email",
-	jsonb_build_array(jsonb_build_object(
-		'name', COALESCE("class_catalog"."name", 'Class Booking'),
-		'quantity', "class_booking"."quantity",
-		'unitAmount', "class_booking"."amount_paid" / GREATEST("class_booking"."quantity", 1)
-	)),
+	-- A total that doesn't split evenly per seat stays one line so the items still add up to it.
+	CASE WHEN "class_booking"."quantity" > 0 AND "class_booking"."amount_paid" % "class_booking"."quantity" = 0
+		THEN jsonb_build_array(jsonb_build_object(
+			'name', COALESCE("class_catalog"."name", 'Class Booking'),
+			'quantity', "class_booking"."quantity",
+			'unitAmount', "class_booking"."amount_paid" / "class_booking"."quantity"
+		))
+		ELSE jsonb_build_array(jsonb_build_object(
+			'name', COALESCE("class_catalog"."name", 'Class Booking') || ' (' || "class_booking"."quantity" || ' seats)',
+			'quantity', 1,
+			'unitAmount', "class_booking"."amount_paid"
+		))
+	END,
 	"class_booking"."amount_paid",
 	"class_booking"."square_payment_id"
 FROM "class_booking"

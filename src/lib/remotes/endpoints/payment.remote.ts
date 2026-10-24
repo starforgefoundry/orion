@@ -1,7 +1,7 @@
 import { command, query } from '$app/server';
 import { payPaymentDto } from '$lib/remotes/dtos/payment.dto';
-import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
-import { PaymentNotPayableError, paymentService } from '$lib/server/services/payment.service';
+import { PaymentError } from '$lib/server/repositories/payment.repository';
+import { paymentService } from '$lib/server/services/payment.service';
 import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 
@@ -17,9 +17,7 @@ export const payPayment = command(payPaymentDto, async (dto) => {
     await getPaymentCheckout(dto.id).refresh();
     return paid;
   } catch (cause) {
-    if (cause instanceof PaymentDeclinedError || cause instanceof PaymentNotPayableError) {
-      error(BAD_REQUEST, cause.message);
-    }
+    if (cause instanceof PaymentError) error(BAD_REQUEST, cause.message);
     throw cause;
   }
 });

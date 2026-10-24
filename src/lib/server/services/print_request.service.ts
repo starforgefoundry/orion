@@ -7,11 +7,24 @@ import type {
   UpdatePrintRequestDto,
   UpdatePrintRequestStatusDto,
 } from '$lib/remotes/dtos/print_request.dto';
-import type { PrintRequest } from '$lib/server/db/schema';
+import type { Payment, PrintRequest } from '$lib/server/db/schema';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
+import { printSender } from '$lib/server/utils/email_templates/senders';
 import { printRequestStatusUrl } from '$lib/server/utils/payment_links';
+import { PAYMENT_STATUS } from '$lib/utils/billing';
+import { PRINT_REQUEST_STATUS } from '$lib/utils/print_request';
 import { DateTime } from 'luxon';
+
+function pickupPaymentNote(payment: Payment | null) {
+  if (payment?.organizationId) {
+    return 'This print is billed to your organization, so there is nothing for you to pay. You can check on it here:';
+  }
+  if (payment?.status === PAYMENT_STATUS.PENDING) {
+    return 'Please pay before you pick it up. You can see the cost breakdown and pay here:';
+  }
+  return 'You can see your print request and its cost breakdown here:';
+}
 
 export class PrintRequestService extends BaseService {
   async submitPrintRequest(dto: SubmitPrintRequestDto) {
@@ -53,19 +66,17 @@ export class PrintRequestService extends BaseService {
 
     const updates: Partial<PrintRequest> = { status: dto.status };
 
-    if (dto.status === 'done') {
+    if (dto.status === PRINT_REQUEST_STATUS.DONE) {
       updates.completionDate = DateTime.now();
 
-      // Mark organization payment as paid when print request is done
       if (payment?.organizationId) {
         await this.paymentRepository.markPaid(payment.id);
       }
 
-      // Send pickup notification email to customer
       runInBackground(this.sendPickupNotification(id), 'send pickup notification');
     }
 
-    if (dto.status === 'canceled') {
+    if (dto.status === PRINT_REQUEST_STATUS.CANCELED) {
       updates.completionDate = DateTime.now();
 
       if (payment) {
@@ -94,12 +105,13 @@ export class PrintRequestService extends BaseService {
 
     await this.mailgunRepository.sendTemplate(
       request.email,
-      `Starforge 3D Prints <${publicEnv.PUBLIC_PRINT_REQUEST_EMAIL}>`,
+      printSender(),
       publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
       `Your Print Request is Ready! - ${request.projectName}`,
       'print_pickup',
       {
         projectName: request.projectName,
+        paymentNote: pickupPaymentNote(request.payment),
         statusURL: printRequestStatusUrl(request.id),
       },
     );
@@ -113,7 +125,7 @@ export class PrintRequestService extends BaseService {
 
     await this.mailgunRepository.sendTemplate(
       request.email,
-      `Starforge 3D Prints <${publicEnv.PUBLIC_PRINT_REQUEST_EMAIL}>`,
+      printSender(),
       publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
       `We Received Your Print Request - ${request.projectName}`,
       'print_submitted',
@@ -202,52 +214,6 @@ export class PrintRequestService extends BaseService {
 
     await this.discordRepository.sendWebhookNotification(webhookUrl, {
       content: `A new print request has been submitted! [View in Print Queue](${printQueueUrl})`,
-      embeds: [embed],
-    });
-  }
-
-  async sendQuoteApprovedDiscordNotification(printRequestId: string) {
-    const request = await this.printRequestRepository.getById(printRequestId);
-    if (!request) {
-      throw new Error('Print request not found');
-    }
-
-    const settings = await this.settingsRepository.getSetting('printRequest');
-    const webhookUrl = settings.discordWebhookUrl;
-    if (!webhookUrl) {
-      console.warn('Discord webhook URL not configured for print requests');
-      return;
-    }
-
-    const event = getRequestEvent();
-    const origin = event?.url?.origin || 'http://localhost:5173';
-    const printQueueUrl = `${origin}/staff/print_requests/queue?id=${printRequestId}`;
-
-    const embed = {
-      title: '✅ Quote Approved',
-      color: 0x57f287,
-      fields: [
-        {
-          name: 'Project Name',
-          value: request.projectName,
-          inline: true,
-        },
-        {
-          name: 'Customer',
-          value: request.customerName,
-          inline: true,
-        },
-        {
-          name: 'Total',
-          value: `$${((request.payment?.total ?? 0) / 100).toFixed(2)}`,
-          inline: false,
-        },
-      ],
-      timestamp: new Date().toISOString(),
-    };
-
-    await this.discordRepository.sendWebhookNotification(webhookUrl, {
-      content: `A quote has been approved! [View in Print Queue](${printQueueUrl})`,
       embeds: [embed],
     });
   }

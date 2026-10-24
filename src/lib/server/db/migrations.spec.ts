@@ -282,7 +282,8 @@ describe.skipIf(!TEST_DATABASE_URL)('unified payments migration', () => {
         square_payment_id, status, quantity, amount_paid, booking_token, created_date) VALUES
         ('class-paid', 'class-1', 'Ann', 'ann@example.com', '1', 'sq-1', 'confirmed', 2, 8000, 't1', now()),
         ('class-canceled', 'class-1', 'Bo', 'bo@example.com', '1', 'sq-2', 'canceled', 1, 4000, 't2', now()),
-        ('class-free', 'class-1', 'Cy', 'cy@example.com', '1', NULL, 'confirmed', 1, 0, 't3', now())
+        ('class-free', 'class-1', 'Cy', 'cy@example.com', '1', NULL, 'confirmed', 1, 0, 't3', now()),
+        ('class-uneven', 'class-1', 'Di', 'di@example.com', '1', 'sq-9', 'confirmed', 3, 10000, 't6', now())
     `;
     await sql`
       INSERT INTO car_bay_booking (id, tier, status, start_at, end_at, blocked_until, is_member,
@@ -353,7 +354,15 @@ describe.skipIf(!TEST_DATABASE_URL)('unified payments migration', () => {
       { id: 'class-canceled', payment_id: 'class-canceled' },
       { id: 'class-free', payment_id: null },
       { id: 'class-paid', payment_id: 'class-paid' },
+      { id: 'class-uneven', payment_id: 'class-uneven' },
     ]);
+  });
+
+  it('keeps a class total that does not split evenly per seat as one line', async () => {
+    expect(await paymentRow('class-uneven')).toMatchObject({
+      total: 10000,
+      line_items: [{ name: 'Welding 101 (3 seats)', quantity: 1, unitAmount: 10000 }],
+    });
   });
 
   it('moves paid car bay bookings and their overruns into payments', async () => {
