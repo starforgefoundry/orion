@@ -72,20 +72,29 @@ export type UpdatePartQuantityDto = v.InferInput<typeof updatePartQuantityDto>;
 
 export const MAX_COMMENT_ATTACHMENTS = 5;
 
-export const addPrintRequestCommentDto = v.object({
-  printRequestId: v.string(),
-  body: v.pipe(v.string(), v.trim(), v.minLength(1, 'Write a comment before posting.')),
-  attachments: v.optional(
-    v.pipe(
-      v.array(v.file()),
-      v.maxLength(
-        MAX_COMMENT_ATTACHMENTS,
-        `Attach at most ${MAX_COMMENT_ATTACHMENTS} files per comment.`,
+export const addPrintRequestCommentDto = v.pipe(
+  v.object({
+    printRequestId: v.string(),
+    body: v.pipe(v.string(), v.trim()),
+    attachments: v.optional(
+      v.pipe(
+        v.array(v.file()),
+        v.maxLength(
+          MAX_COMMENT_ATTACHMENTS,
+          `Attach at most ${MAX_COMMENT_ATTACHMENTS} files per comment.`,
+        ),
       ),
+      [],
     ),
-    [],
+  }),
+  v.forward(
+    v.check(
+      (comment) => comment.body.length > 0 || comment.attachments.length > 0,
+      'Write a comment or attach a file before posting.',
+    ),
+    ['body'],
   ),
-});
+);
 
 export type AddPrintRequestCommentDto = v.InferInput<typeof addPrintRequestCommentDto>;
 

@@ -44,7 +44,10 @@
 
   initForm(addPrintRequestCommentForm, () => ({ printRequestId: requestId, body: '' }));
 
-  const canPost = $derived(addPrintRequestCommentForm.fields.body.value().trim().length > 0);
+  const canPost = $derived(
+    addPrintRequestCommentForm.fields.body.value().trim().length > 0 ||
+      composer.attachments.length > 0,
+  );
 
   function initials(name: string) {
     return name
@@ -131,7 +134,9 @@
           </time>
         </header>
 
-        <p class="mt-1.5 text-sm whitespace-pre-line">{comment.body}</p>
+        {#if comment.body}
+          <p class="mt-1.5 text-sm whitespace-pre-line">{comment.body}</p>
+        {/if}
 
         {#if comment.attachments.length > 0}
           <div class="mt-2 flex flex-col gap-1">
