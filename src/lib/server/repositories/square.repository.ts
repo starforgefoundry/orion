@@ -25,6 +25,11 @@ export class SquareRepository extends BaseRepository {
     return response.data ?? [];
   }
 
+  async getCatalogObjects(ids: string[]) {
+    const response = await this.square.catalog.batchGet({ objectIds: ids });
+    return response.objects ?? [];
+  }
+
   async getOrderById(orderId: string) {
     const response = await this.square.orders.get({
       orderId,

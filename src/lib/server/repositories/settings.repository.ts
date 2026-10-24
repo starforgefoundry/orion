@@ -70,6 +70,15 @@ const defaults: SettingsMap = {
 };
 
 export class SettingsRepository extends BaseRepository {
+  /** The saved value without defaults filled in, or undefined when it was never saved. */
+  async getStoredSetting(key: keyof SettingsMap) {
+    const [setting] = await this.db
+      .select()
+      .from(schema.settings)
+      .where(eq(schema.settings.key, key));
+    return setting?.value as Record<string, unknown> | undefined;
+  }
+
   async getSetting<K extends keyof SettingsMap>(key: K) {
     const [setting] = await this.db
       .select()

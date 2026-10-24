@@ -2,6 +2,7 @@ import { building, dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
 import type { User } from '$lib/server/db/schema';
 import { carBayService } from '$lib/server/services/car_bay.service';
+import { settingsService } from '$lib/server/services/settings.service';
 import { squareService } from '$lib/server/services/square.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { scheduleDaily } from '$lib/server/utils/daily_schedule';
@@ -29,6 +30,8 @@ export const handle: Handle = sequence(authenticationHandle, userPopulation);
 
 export const init: ServerInit = () => {
   if (building) return;
+
+  runInBackground(settingsService.importLegacyPrintPricing(), 'import print pricing from Square');
 
   setInterval(
     () => runInBackground(carBayService.sendDueReminders(), 'send car bay reminders'),
