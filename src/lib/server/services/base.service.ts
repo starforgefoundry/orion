@@ -1,7 +1,9 @@
 import { BambuddyRepository } from '$lib/server/repositories/bambuddy.repository';
 import { BillingCodeRepository } from '$lib/server/repositories/billing_code.repository';
 import { CarBayRepository } from '$lib/server/repositories/car_bay.repository';
+import { ClassRepository } from '$lib/server/repositories/class.repository';
 import { DiscordRepository } from '$lib/server/repositories/discord.repository';
+import { GoogleCalendarRepository } from '$lib/server/repositories/google_calendar.repository';
 import { InventoryRepository } from '$lib/server/repositories/inventory.repository';
 import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
 import { DayPassRepository } from '$lib/server/repositories/day_pass.repository';
@@ -21,84 +23,91 @@ import { SettingsRepository } from '$lib/server/repositories/settings.repository
 import { SquareRepository } from '$lib/server/repositories/square.repository';
 import { WaiverRepository } from '$lib/server/repositories/waiver.repository';
 
-export type MemberRepositories = {
-  memberRepository: MemberRepository;
-  memberSubscriptionRepository: MemberSubscriptionRepository;
+export type ServiceRepositories = {
+  bambuddyRepository: BambuddyRepository;
+  billingCodeRepository: BillingCodeRepository;
+  carBayRepository: CarBayRepository;
+  classRepository: ClassRepository;
   dayPassRepository: DayPassRepository;
-  organizationMemberRepository: OrganizationMemberRepository;
-  visitRepository: VisitRepository;
+  discordRepository: DiscordRepository;
+  googleCalendarRepository: GoogleCalendarRepository;
+  inventoryRepository: InventoryRepository;
+  mailgunRepository: MailgunRepository;
   memberEmailRepository: MemberEmailRepository;
   memberNotificationRepository: MemberNotificationRepository;
+  memberRepository: MemberRepository;
+  memberSubscriptionRepository: MemberSubscriptionRepository;
+  organizationMemberRepository: OrganizationMemberRepository;
+  organizationRepository: OrganizationRepository;
+  paymentRepository: PaymentRepository;
+  printFilesRepository: PrintFilesRepository;
+  printMaterialsRepository: PrintMaterialsRepository;
+  printRequestCommentRepository: PrintRequestCommentRepository;
+  printRequestRepository: PrintRequestRepository;
+  settingsRepository: SettingsRepository;
+  squareRepository: SquareRepository;
+  visitRepository: VisitRepository;
+  waiverRepository: WaiverRepository;
 };
 
 export class BaseService {
-  protected printFilesRepository: PrintFilesRepository;
-  protected printMaterialsRepository: PrintMaterialsRepository;
-  protected printRequestRepository: PrintRequestRepository;
-  protected printRequestCommentRepository: PrintRequestCommentRepository;
-  protected paymentRepository: PaymentRepository;
-  protected settingsRepository: SettingsRepository;
-  protected squareRepository: SquareRepository;
-  protected mailgunRepository: MailgunRepository;
-  protected discordRepository: DiscordRepository;
-  protected organizationRepository: OrganizationRepository;
-  protected billingCodeRepository: BillingCodeRepository;
-  protected inventoryRepository: InventoryRepository;
   protected bambuddyRepository: BambuddyRepository;
-  protected waiverRepository: WaiverRepository;
+  protected billingCodeRepository: BillingCodeRepository;
   protected carBayRepository: CarBayRepository;
-  protected memberRepository: MemberRepository;
-  protected memberSubscriptionRepository: MemberSubscriptionRepository;
+  protected classRepository: ClassRepository;
   protected dayPassRepository: DayPassRepository;
-  protected organizationMemberRepository: OrganizationMemberRepository;
-  protected visitRepository: VisitRepository;
+  protected discordRepository: DiscordRepository;
+  protected googleCalendarRepository: GoogleCalendarRepository;
+  protected inventoryRepository: InventoryRepository;
+  protected mailgunRepository: MailgunRepository;
   protected memberEmailRepository: MemberEmailRepository;
   protected memberNotificationRepository: MemberNotificationRepository;
+  protected memberRepository: MemberRepository;
+  protected memberSubscriptionRepository: MemberSubscriptionRepository;
+  protected organizationMemberRepository: OrganizationMemberRepository;
+  protected organizationRepository: OrganizationRepository;
+  protected paymentRepository: PaymentRepository;
+  protected printFilesRepository: PrintFilesRepository;
+  protected printMaterialsRepository: PrintMaterialsRepository;
+  protected printRequestCommentRepository: PrintRequestCommentRepository;
+  protected printRequestRepository: PrintRequestRepository;
+  protected settingsRepository: SettingsRepository;
+  protected squareRepository: SquareRepository;
+  protected visitRepository: VisitRepository;
+  protected waiverRepository: WaiverRepository;
 
-  constructor(
-    printFilesRepository?: PrintFilesRepository,
-    printMaterialsRepository?: PrintMaterialsRepository,
-    printRequestRepository?: PrintRequestRepository,
-    paymentRepository?: PaymentRepository,
-    settingsRepository?: SettingsRepository,
-    squareRepository?: SquareRepository,
-    mailgunRepository?: MailgunRepository,
-    discordRepository?: DiscordRepository,
-    organizationRepository?: OrganizationRepository,
-    billingCodeRepository?: BillingCodeRepository,
-    inventoryRepository?: InventoryRepository,
-    bambuddyRepository?: BambuddyRepository,
-    waiverRepository?: WaiverRepository,
-    printRequestCommentRepository?: PrintRequestCommentRepository,
-    carBayRepository?: CarBayRepository,
-    memberRepositories: Partial<MemberRepositories> = {},
-  ) {
-    this.printFilesRepository = printFilesRepository ?? new PrintFilesRepository();
-    this.printMaterialsRepository = printMaterialsRepository ?? new PrintMaterialsRepository();
-    this.printRequestRepository = printRequestRepository ?? new PrintRequestRepository();
-    this.paymentRepository = paymentRepository ?? new PaymentRepository();
-    this.settingsRepository = settingsRepository ?? new SettingsRepository();
-    this.squareRepository = squareRepository ?? new SquareRepository();
-    this.mailgunRepository = mailgunRepository ?? new MailgunRepository();
-    this.discordRepository = discordRepository ?? new DiscordRepository();
-    this.organizationRepository = organizationRepository ?? new OrganizationRepository();
-    this.billingCodeRepository = billingCodeRepository ?? new BillingCodeRepository();
-    this.inventoryRepository = inventoryRepository ?? new InventoryRepository();
-    this.bambuddyRepository = bambuddyRepository ?? new BambuddyRepository();
-    this.waiverRepository = waiverRepository ?? new WaiverRepository();
-    this.printRequestCommentRepository =
-      printRequestCommentRepository ?? new PrintRequestCommentRepository();
-    this.carBayRepository = carBayRepository ?? new CarBayRepository();
-    this.memberRepository = memberRepositories.memberRepository ?? new MemberRepository();
-    this.memberSubscriptionRepository =
-      memberRepositories.memberSubscriptionRepository ?? new MemberSubscriptionRepository();
-    this.dayPassRepository = memberRepositories.dayPassRepository ?? new DayPassRepository();
-    this.organizationMemberRepository =
-      memberRepositories.organizationMemberRepository ?? new OrganizationMemberRepository();
-    this.visitRepository = memberRepositories.visitRepository ?? new VisitRepository();
-    this.memberEmailRepository =
-      memberRepositories.memberEmailRepository ?? new MemberEmailRepository();
+  constructor(repositories: Partial<ServiceRepositories> = {}) {
+    this.bambuddyRepository = repositories.bambuddyRepository ?? new BambuddyRepository();
+    this.billingCodeRepository = repositories.billingCodeRepository ?? new BillingCodeRepository();
+    this.carBayRepository = repositories.carBayRepository ?? new CarBayRepository();
+    this.classRepository = repositories.classRepository ?? new ClassRepository();
+    this.dayPassRepository = repositories.dayPassRepository ?? new DayPassRepository();
+    this.discordRepository = repositories.discordRepository ?? new DiscordRepository();
+    this.googleCalendarRepository =
+      repositories.googleCalendarRepository ?? new GoogleCalendarRepository();
+    this.inventoryRepository = repositories.inventoryRepository ?? new InventoryRepository();
+    this.mailgunRepository = repositories.mailgunRepository ?? new MailgunRepository();
+    this.memberEmailRepository = repositories.memberEmailRepository ?? new MemberEmailRepository();
     this.memberNotificationRepository =
-      memberRepositories.memberNotificationRepository ?? new MemberNotificationRepository();
+      repositories.memberNotificationRepository ?? new MemberNotificationRepository();
+    this.memberRepository = repositories.memberRepository ?? new MemberRepository();
+    this.memberSubscriptionRepository =
+      repositories.memberSubscriptionRepository ?? new MemberSubscriptionRepository();
+    this.organizationMemberRepository =
+      repositories.organizationMemberRepository ?? new OrganizationMemberRepository();
+    this.organizationRepository =
+      repositories.organizationRepository ?? new OrganizationRepository();
+    this.paymentRepository = repositories.paymentRepository ?? new PaymentRepository();
+    this.printFilesRepository = repositories.printFilesRepository ?? new PrintFilesRepository();
+    this.printMaterialsRepository =
+      repositories.printMaterialsRepository ?? new PrintMaterialsRepository();
+    this.printRequestCommentRepository =
+      repositories.printRequestCommentRepository ?? new PrintRequestCommentRepository();
+    this.printRequestRepository =
+      repositories.printRequestRepository ?? new PrintRequestRepository();
+    this.settingsRepository = repositories.settingsRepository ?? new SettingsRepository();
+    this.squareRepository = repositories.squareRepository ?? new SquareRepository();
+    this.visitRepository = repositories.visitRepository ?? new VisitRepository();
+    this.waiverRepository = repositories.waiverRepository ?? new WaiverRepository();
   }
 }
