@@ -1,62 +1,37 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { BillingCode, Organization } from '$lib/server/db/schema';
 import {
   BILLING_CODE_NOT_FOUND,
   BILLING_CODE_TAKEN,
   BillingCodeService,
-} from './billing_code.service';
+} from '$lib/server/services/billing_code.service';
+import { factory } from '$test/factory';
+import { newTestService, type ServiceMocks } from '$test/utils';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-const ORGANIZATION = {
-  id: 'org-1',
-  name: 'Engineering Club',
-  email: 'club@example.com',
-  archived: false,
-};
+const ORGANIZATION = factory.organization({ id: 'org-1', name: 'Engineering Club' });
 
-function codeRow(overrides: Record<string, unknown> = {}, organization: unknown = ORGANIZATION) {
+function codeRow(
+  overrides: Partial<BillingCode> = {},
+  organization: Organization | null = ORGANIZATION,
+) {
   return {
-    billingCode: {
-      id: 'code-1',
-      code: 'ENGCLUB',
-      description: 'Engineering Club',
-      organizationId: 'org-1',
-      archived: false,
-      ...overrides,
-    },
+    billingCode: factory.billingCode({ id: 'code-1', organizationId: 'org-1', ...overrides }),
     organization,
   };
 }
 
-describe('BillingCodeService', () => {
-  let service: BillingCodeService;
-  let billingCodeRepo: any;
+describe(BillingCodeService.name, () => {
+  let sut: BillingCodeService;
+  let mocks: ServiceMocks;
 
   beforeEach(() => {
-    billingCodeRepo = {
-      create: vi.fn(async (data) => ({ id: 'code-new', archived: false, ...data })),
-      getAll: vi.fn(async () => [codeRow()]),
-      getByOrganization: vi.fn(async () => [codeRow()]),
-      getById: vi.fn(async () => codeRow()),
-      getByCode: vi.fn(async () => undefined),
-      update: vi.fn(async (id, updates) => ({ ...codeRow({ id, ...updates }).billingCode })),
-      delete: vi.fn(),
-    };
-
-    service = new BillingCodeService(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      billingCodeRepo,
-    );
+    ({ sut, mocks } = newTestService(BillingCodeService));
   });
 
   it('lists codes with the organization they bill', async () => {
-    const codes = await service.getBillingCodes();
+    mocks.billingCodeRepository.getAll.mockResolvedValue([codeRow()]);
+
+    const codes = await sut.getBillingCodes();
 
     expect(codes).toEqual([
       expect.objectContaining({ code: 'ENGCLUB', organizationName: 'Engineering Club' }),
@@ -64,66 +39,78 @@ describe('BillingCodeService', () => {
   });
 
   it('lists only the codes of one organization', async () => {
-    const codes = await service.getBillingCodesForOrganization('org-1');
+    mocks.billingCodeRepository.getByOrganization.mockResolvedValue([codeRow()]);
 
-    expect(billingCodeRepo.getByOrganization).toHaveBeenCalledWith('org-1');
+    const codes = await sut.getBillingCodesForOrganization('org-1');
+
+    expect(mocks.billingCodeRepository.getByOrganization).toHaveBeenCalledWith('org-1');
     expect(codes[0].organizationName).toBe('Engineering Club');
   });
 
   it('reports no organization name for a code whose organization is gone', async () => {
-    billingCodeRepo.getById.mockResolvedValue(codeRow({ organizationId: null }, null));
+    mocks.billingCodeRepository.getById.mockResolvedValue(codeRow({ organizationId: null }, null));
 
-    const code = await service.getBillingCodeById('code-1');
+    const code = await sut.getBillingCodeById('code-1');
 
     expect(code.organizationName).toBeNull();
   });
 
   it('throws when a code id does not exist', async () => {
-    billingCodeRepo.getById.mockResolvedValue(undefined);
+    mocks.billingCodeRepository.getById.mockResolvedValue(undefined as never);
 
-    await expect(service.getBillingCodeById('missing')).rejects.toThrow(BILLING_CODE_NOT_FOUND);
+    await expect(sut.getBillingCodeById('missing')).rejects.toThrow(BILLING_CODE_NOT_FOUND);
   });
 
   it('looks a code up by its text', async () => {
-    billingCodeRepo.getByCode.mockResolvedValue(codeRow());
+    mocks.billingCodeRepository.getByCode.mockResolvedValue(codeRow());
 
-    expect(await service.getBillingCodeByCode('engclub')).toEqual(
+    expect(await sut.getBillingCodeByCode('engclub')).toEqual(
       expect.objectContaining({ code: 'ENGCLUB', organizationName: 'Engineering Club' }),
     );
   });
 
   it('returns null for an unknown code', async () => {
-    expect(await service.getBillingCodeByCode('NOPE')).toBeNull();
+    mocks.billingCodeRepository.getByCode.mockResolvedValue(undefined as never);
+
+    expect(await sut.getBillingCodeByCode('NOPE')).toBeNull();
   });
 
   it('creates a code for an organization', async () => {
     const dto = { code: 'NEW', description: 'New club', organizationId: 'org-1' };
+    mocks.billingCodeRepository.getByCode.mockResolvedValue(undefined as never);
+    mocks.billingCodeRepository.create.mockResolvedValue(factory.billingCode(dto));
 
-    const created = await service.createBillingCode(dto);
+    const created = await sut.createBillingCode(dto);
 
-    expect(billingCodeRepo.create).toHaveBeenCalledWith(dto);
+    expect(mocks.billingCodeRepository.create).toHaveBeenCalledWith(dto);
     expect(created.organizationId).toBe('org-1');
   });
 
   it('rejects a code that is already in use', async () => {
-    billingCodeRepo.getByCode.mockResolvedValue(codeRow());
+    mocks.billingCodeRepository.getByCode.mockResolvedValue(codeRow());
 
     await expect(
-      service.createBillingCode({ code: 'ENGCLUB', description: 'Dup', organizationId: 'org-1' }),
+      sut.createBillingCode({ code: 'ENGCLUB', description: 'Dup', organizationId: 'org-1' }),
     ).rejects.toThrow(BILLING_CODE_TAKEN);
-    expect(billingCodeRepo.create).not.toHaveBeenCalled();
+    expect(mocks.billingCodeRepository.create).not.toHaveBeenCalled();
   });
 
   it('archives a code through an update', async () => {
-    const updated = await service.updateBillingCode('code-1', { archived: true });
+    mocks.billingCodeRepository.update.mockResolvedValue(
+      factory.billingCode({ id: 'code-1', archived: true }),
+    );
 
-    expect(billingCodeRepo.update).toHaveBeenCalledWith('code-1', { archived: true });
+    const updated = await sut.updateBillingCode('code-1', { archived: true });
+
+    expect(mocks.billingCodeRepository.update).toHaveBeenCalledWith('code-1', { archived: true });
     expect(updated.archived).toBe(true);
   });
 
   it('deletes a code', async () => {
-    await service.deleteBillingCode('code-1');
+    mocks.billingCodeRepository.delete.mockResolvedValue();
 
-    expect(billingCodeRepo.delete).toHaveBeenCalledWith('code-1');
+    await sut.deleteBillingCode('code-1');
+
+    expect(mocks.billingCodeRepository.delete).toHaveBeenCalledWith('code-1');
   });
 });

@@ -38,11 +38,10 @@ export function classBooking(overrides: Partial<ClassBooking> = {}): ClassBookin
     customerName: 'Test Customer',
     customerEmail: 'customer@example.com',
     customerPhone: '555-0100',
-    squarePaymentId: null,
     status: 'confirmed',
     bookingToken: newId(),
     quantity: 1,
-    amountPaid: 0,
+    paymentId: null,
     createdDate: DateTime.now(),
     ...overrides,
   };

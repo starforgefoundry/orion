@@ -1,296 +1,133 @@
-import type {
-  ChargeOrganizationBalanceDto,
-  CreateOrganizationDto,
-  UpdateOrganizationDto,
-} from '$lib/remotes/dtos/organization.dto';
-import { DateTime } from 'luxon';
-
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Member } from '$lib/server/db/schema';
+import type { Payment } from '$lib/server/db/schema';
 import { MailgunRateLimitError } from '$lib/server/repositories/mailgun.repository';
 import { SPACE_ZONE } from '$lib/server/utils/member_access';
+import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
+import { factory } from '$test/factory';
+import { newTestService, type ServiceMocks } from '$test/utils';
+import { DateTime } from 'luxon';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ORGANIZATION_NOT_FOUND, OrganizationService } from './organization.service';
 
-vi.mock('$env/dynamic/private', () => ({ env: { FRONTEND_URL: 'https://example.com' } }));
-vi.mock('$env/dynamic/public', () => ({
-  env: { PUBLIC_PRINT_REQUEST_EMAIL: '3dprint@example.com' },
-}));
+const PAY_URL = 'https://orion.example.com/pay';
 
-// Mock remote endpoints to avoid SvelteKit request store errors
-vi.mock('$lib/remotes/endpoints/organization.remote', () => ({
-  getOrganizations: vi.fn(() => ({
-    refresh: vi.fn().mockResolvedValue(undefined),
-  })),
-  getOrganizationById: vi.fn(() => ({
-    refresh: vi.fn().mockResolvedValue(undefined),
-  })),
-}));
+function payment(total: number, status: Payment['status'], type: Payment['type']) {
+  return factory.payment({ total, status, type });
+}
 
-describe('OrganizationService', () => {
-  let organizationService: OrganizationService;
-  let mockOrganizationRepo: any;
-  let mockPaymentRepo: any;
-  let mockMailgunRepo: any;
+describe(OrganizationService.name, () => {
+  let sut: OrganizationService;
+  let mocks: ServiceMocks;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-
-    mockOrganizationRepo = {
-      create: vi.fn(),
-      getAll: vi.fn(),
-      getById: vi.fn(),
-      update: vi.fn(),
-      archive: vi.fn(),
-      getPayments: vi.fn(),
-      getPrintRequests: vi.fn(),
-      getCharges: vi.fn(),
-      getBalancePayments: vi.fn(),
-    };
-
-    mockPaymentRepo = {
-      save: vi.fn(async (payment, id) => ({
-        id,
-        total: payment.bill.total,
-        paymentUrl: payment.paymentUrl,
-      })),
-    };
-
-    mockMailgunRepo = { sendTemplate: vi.fn() };
-
-    organizationService = new OrganizationService(
-      undefined,
-      undefined,
-      undefined,
-      mockPaymentRepo,
-      undefined,
-      undefined,
-      mockMailgunRepo,
-      undefined,
-      mockOrganizationRepo,
-      undefined,
-    );
-  });
-  afterEach(() => {
-    vi.clearAllMocks();
+    ({ sut, mocks } = newTestService(OrganizationService));
   });
 
   describe('getOrganizations', () => {
     it('should return all non-archived organizations', async () => {
-      // Arrange
-      const mockOrganizations = [
-        {
-          id: 'org-1',
-          name: 'Organization 1',
-          email: 'org1@test.com',
-          archived: false,
-        },
-        {
-          id: 'org-2',
-          name: 'Organization 2',
-          email: 'org2@test.com',
-          archived: false,
-        },
-      ];
+      const organizations = [factory.organization(), factory.organization()];
+      mocks.organizationRepository.getAll.mockResolvedValue(organizations);
 
-      vi.mocked(mockOrganizationRepo.getAll).mockResolvedValue(mockOrganizations);
+      const result = await sut.getOrganizations();
 
-      // Act
-      const result = await organizationService.getOrganizations();
-
-      // Assert
-      expect(mockOrganizationRepo.getAll).toHaveBeenCalled();
-      expect(result).toEqual(mockOrganizations);
+      expect(mocks.organizationRepository.getAll).toHaveBeenCalled();
+      expect(result).toEqual(organizations);
     });
 
     it('should return empty array when no organizations exist', async () => {
-      // Arrange
-      vi.mocked(mockOrganizationRepo.getAll).mockResolvedValue([]);
+      mocks.organizationRepository.getAll.mockResolvedValue([]);
 
-      // Act
-      const result = await organizationService.getOrganizations();
+      const result = await sut.getOrganizations();
 
-      // Assert
       expect(result).toEqual([]);
     });
   });
 
   describe('getOrganizationById', () => {
     it('should return organization by id', async () => {
-      // Arrange
-      const mockOrganization = {
-        id: 'org-123',
-        name: 'Test Organization',
-        email: 'test@org.com',
-        archived: false,
-      };
+      const organization = factory.organization();
+      mocks.organizationRepository.getById.mockResolvedValue(organization);
 
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
+      const result = await sut.getOrganizationById(organization.id);
 
-      // Act
-      const result = await organizationService.getOrganizationById('org-123');
-
-      // Assert
-      expect(mockOrganizationRepo.getById).toHaveBeenCalledWith('org-123');
-      expect(result).toEqual(mockOrganization);
+      expect(mocks.organizationRepository.getById).toHaveBeenCalledWith(organization.id);
+      expect(result).toEqual(organization);
     });
 
     it('should return null when organization not found', async () => {
-      // Arrange
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(null);
+      mocks.organizationRepository.getById.mockResolvedValue(null as never);
 
-      // Act
-      const result = await organizationService.getOrganizationById('nonexistent');
+      const result = await sut.getOrganizationById('nonexistent');
 
-      // Assert
       expect(result).toBeNull();
     });
   });
 
   describe('getOrganizationDetail', () => {
     it('should return organization detail with outstanding balance, print requests, and payments', async () => {
-      // Arrange
-      const mockOrganization = {
-        id: 'org-detail',
-        name: 'Detail Org',
-        email: 'detail@org.com',
-        archived: false,
-      };
-
-      const mockPrintRequests = [
-        {
-          id: 'request-1',
-          customerName: 'Customer 1',
-          email: 'customer1@test.com',
-          status: 'completed',
-          projectName: 'Project 1',
-          submissionDate: DateTime.now(),
-          payment: {
-            id: 'payment-1',
-            total: 5000,
-            status: 'pending',
-          },
-        },
-        {
-          id: 'request-2',
-          customerName: 'Customer 2',
-          email: 'customer2@test.com',
-          status: 'in_queue',
-          projectName: 'Project 2',
-          submissionDate: DateTime.now(),
-          payment: {
-            id: 'payment-2',
-            total: 3000,
-            status: 'pending',
-          },
-        },
+      const organization = factory.organization({ name: 'Detail Org', email: 'detail@org.com' });
+      const printPayments = [
+        payment(5000, PAYMENT_STATUS.PENDING, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(3000, PAYMENT_STATUS.PENDING, PAYMENT_TYPE.PRINT_REQUEST),
       ];
-
-      const mockBalancePayments = [
+      const balancePayment = payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE);
+      const chargePayment = payment(1000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.ORG_CHARGE);
+      mocks.organizationRepository.getById.mockResolvedValue(organization);
+      mocks.organizationRepository.getPayments.mockResolvedValue([
+        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(3000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        balancePayment,
+        chargePayment,
+      ]);
+      mocks.organizationRepository.getPrintRequests.mockResolvedValue([
+        { ...factory.printRequest({ status: 'done' }), payment: printPayments[0] },
+        { ...factory.printRequest({ status: 'in_queue' }), payment: printPayments[1] },
+      ]);
+      mocks.organizationRepository.getCharges.mockResolvedValue([
         {
-          id: 'balance-payment-1',
-          total: 2000,
-          status: 'paid',
-          type: 'balance',
+          ...factory.organizationCharge({
+            organizationId: organization.id,
+            description: 'Misc Charge',
+          }),
+          payment: chargePayment,
         },
-      ];
+      ]);
+      mocks.organizationRepository.getBalancePayments.mockResolvedValue([balancePayment]);
 
-      const mockOrgCharges = [
-        {
-          id: 'charge-1',
-          organizationId: 'org-detail',
-          description: 'Misc Charge',
-          amount: 1000,
-          creationDate: DateTime.now(),
-          payment: {
-            id: 'charge-payment-1',
-            total: 1000,
-            status: 'paid',
-            type: 'organization_charge',
-          },
-        },
-      ];
+      const result = await sut.getOrganizationDetail(organization.id);
 
-      const mockPayments = [
-        {
-          id: 'payment-1',
-          total: 5000,
-          status: 'paid',
-          type: 'print',
-        },
-        {
-          id: 'payment-2',
-          total: 3000,
-          status: 'paid',
-          type: 'print',
-        },
-        {
-          id: 'balance-payment-1',
-          total: 2000,
-          status: 'paid',
-          type: 'balance',
-        },
-        {
-          id: 'charge-payment-1',
-          total: 1000,
-          status: 'paid',
-          type: 'organization_charge',
-        },
-      ];
-
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
-      vi.mocked(mockOrganizationRepo.getPrintRequests).mockResolvedValue(mockPrintRequests);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue(mockOrgCharges);
-      vi.mocked(mockOrganizationRepo.getBalancePayments).mockResolvedValue(mockBalancePayments);
-
-      // Act
-      const result = await organizationService.getOrganizationDetail('org-detail');
-
-      // Assert
-      expect(mockOrganizationRepo.getById).toHaveBeenCalledWith('org-detail');
-      expect(mockOrganizationRepo.getPayments).toHaveBeenCalledWith('org-detail');
-      expect(mockOrganizationRepo.getPrintRequests).toHaveBeenCalledWith('org-detail');
-      expect(mockOrganizationRepo.getCharges).toHaveBeenCalledWith('org-detail');
-      expect(mockOrganizationRepo.getBalancePayments).toHaveBeenCalledWith('org-detail');
-      expect(result.id).toBe('org-detail');
+      expect(mocks.organizationRepository.getById).toHaveBeenCalledWith(organization.id);
+      expect(mocks.organizationRepository.getPayments).toHaveBeenCalledWith(organization.id);
+      expect(mocks.organizationRepository.getPrintRequests).toHaveBeenCalledWith(organization.id);
+      expect(mocks.organizationRepository.getCharges).toHaveBeenCalledWith(organization.id);
+      expect(mocks.organizationRepository.getBalancePayments).toHaveBeenCalledWith(organization.id);
+      expect(result.id).toBe(organization.id);
       expect(result.name).toBe('Detail Org');
       expect(result.email).toBe('detail@org.com');
       expect(result.outstandingBalance).toBe(7000);
-      expect(result.charges).toHaveLength(3); // 2 print requests + 1 org charge
+      expect(result.charges).toHaveLength(3);
       expect(result.charges.some((c) => c.type === 'print')).toBe(true);
       expect(result.charges.some((c) => c.type === 'charge')).toBe(true);
-      expect(result.balancePayments).toEqual(mockBalancePayments);
+      expect(result.balancePayments).toEqual([balancePayment]);
     });
 
     it('should throw error when organization not found', async () => {
-      // Arrange
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(null);
+      mocks.organizationRepository.getById.mockResolvedValue(null as never);
 
-      // Act & Assert
-      await expect(organizationService.getOrganizationDetail('nonexistent')).rejects.toThrow(
+      await expect(sut.getOrganizationDetail('nonexistent')).rejects.toThrow(
         'Organization not found',
       );
     });
 
     it('should return organization detail with zero balance when no payments exist', async () => {
-      // Arrange
-      const mockOrganization = {
-        id: 'org-zero',
-        name: 'Zero Balance Org',
-        email: 'zero@org.com',
-        archived: false,
-      };
+      const organization = factory.organization();
+      mocks.organizationRepository.getById.mockResolvedValue(organization);
+      mocks.organizationRepository.getPayments.mockResolvedValue([]);
+      mocks.organizationRepository.getPrintRequests.mockResolvedValue([]);
+      mocks.organizationRepository.getCharges.mockResolvedValue([]);
+      mocks.organizationRepository.getBalancePayments.mockResolvedValue([]);
 
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue([]);
-      vi.mocked(mockOrganizationRepo.getPrintRequests).mockResolvedValue([]);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
-      vi.mocked(mockOrganizationRepo.getBalancePayments).mockResolvedValue([]);
+      const result = await sut.getOrganizationDetail(organization.id);
 
-      // Act
-      const result = await organizationService.getOrganizationDetail('org-zero');
-
-      // Assert
       expect(result.outstandingBalance).toBe(0);
       expect(result.charges).toEqual([]);
       expect(result.balancePayments).toEqual([]);
@@ -299,247 +136,198 @@ describe('OrganizationService', () => {
 
   describe('createOrganization', () => {
     it('should create a new organization', async () => {
-      // Arrange
-      const dto: CreateOrganizationDto = {
-        name: 'New Organization',
-        email: 'new@org.com',
-      };
+      const dto = { name: 'New Organization', email: 'new@org.com' };
+      const created = factory.organization(dto);
+      mocks.organizationRepository.create.mockResolvedValue(created);
 
-      const mockCreated = {
-        id: 'org-new',
-        name: 'New Organization',
-        email: 'new@org.com',
-        archived: false,
-      };
+      const result = await sut.createOrganization(dto);
 
-      vi.mocked(mockOrganizationRepo.create).mockResolvedValue(mockCreated);
-
-      // Act
-      const result = await organizationService.createOrganization(dto);
-
-      // Assert
-      expect(mockOrganizationRepo.create).toHaveBeenCalledWith(dto);
-      expect(result).toEqual(mockCreated);
+      expect(mocks.organizationRepository.create).toHaveBeenCalledWith(dto);
+      expect(result).toEqual(created);
     });
   });
 
   describe('updateOrganization', () => {
     it('should update an existing organization', async () => {
-      // Arrange
-      const updates: Omit<UpdateOrganizationDto, 'id'> = {
-        name: 'Updated Name',
-        email: 'updated@org.com',
-      };
+      const updates = { name: 'Updated Name', email: 'updated@org.com' };
+      const updated = factory.organization(updates);
+      mocks.organizationRepository.update.mockResolvedValue(updated);
 
-      const mockUpdated = {
-        id: 'org-update',
-        name: 'Updated Name',
-        email: 'updated@org.com',
-        archived: false,
-      };
+      const result = await sut.updateOrganization(updated.id, updates);
 
-      vi.mocked(mockOrganizationRepo.update).mockResolvedValue(mockUpdated);
-
-      // Act
-      const result = await organizationService.updateOrganization('org-update', updates);
-
-      // Assert
-      expect(mockOrganizationRepo.update).toHaveBeenCalledWith('org-update', updates);
-      expect(result).toEqual(mockUpdated);
+      expect(mocks.organizationRepository.update).toHaveBeenCalledWith(updated.id, updates);
+      expect(result).toEqual(updated);
     });
 
     it('should update only email', async () => {
-      // Arrange
-      const updates: Omit<UpdateOrganizationDto, 'id'> = {
-        email: 'newemail@org.com',
-      };
+      const updates = { email: 'newemail@org.com' };
+      const updated = factory.organization(updates);
+      mocks.organizationRepository.update.mockResolvedValue(updated);
 
-      const mockUpdated = {
-        id: 'org-email',
-        name: 'Same Name',
-        email: 'newemail@org.com',
-        archived: false,
-      };
+      const result = await sut.updateOrganization(updated.id, updates);
 
-      vi.mocked(mockOrganizationRepo.update).mockResolvedValue(mockUpdated);
-
-      // Act
-      const result = await organizationService.updateOrganization('org-email', updates);
-
-      // Assert
-      expect(mockOrganizationRepo.update).toHaveBeenCalledWith('org-email', updates);
+      expect(mocks.organizationRepository.update).toHaveBeenCalledWith(updated.id, updates);
       expect(result.email).toBe('newemail@org.com');
+    });
+
+    describe('access end date', () => {
+      const organization = factory.organization();
+
+      beforeEach(() => {
+        mocks.organizationRepository.update.mockResolvedValue(organization);
+      });
+
+      it('stores the end of the chosen day in the space time zone', async () => {
+        await sut.updateOrganization(organization.id, { accessEndDate: '2026-12-15' });
+
+        const { accessEndDate } = mocks.organizationRepository.update.mock.calls[0][1];
+        expect(accessEndDate?.zoneName).toBe(SPACE_ZONE);
+        expect(accessEndDate?.toISO()).toBe('2026-12-15T23:59:59.999-06:00');
+      });
+
+      it('clears the end date when null', async () => {
+        await sut.updateOrganization(organization.id, { accessEndDate: null });
+
+        expect(mocks.organizationRepository.update).toHaveBeenCalledWith(organization.id, {
+          accessEndDate: null,
+        });
+      });
+
+      it('switches member access off without touching the end date', async () => {
+        await sut.updateOrganization(organization.id, { grantsAccess: false });
+
+        expect(mocks.organizationRepository.update).toHaveBeenCalledWith(organization.id, {
+          grantsAccess: false,
+        });
+      });
     });
   });
 
   describe('archiveOrganization', () => {
     it('should archive an organization', async () => {
-      // Arrange
-      vi.mocked(mockOrganizationRepo.archive).mockResolvedValue(undefined);
+      mocks.organizationRepository.archive.mockResolvedValue(undefined);
 
-      // Act
-      await organizationService.archiveOrganization('org-archive');
+      await sut.archiveOrganization('org-archive');
 
-      // Assert
-      expect(mockOrganizationRepo.archive).toHaveBeenCalledWith('org-archive');
+      expect(mocks.organizationRepository.archive).toHaveBeenCalledWith('org-archive');
     });
   });
 
   describe('getOutstandingBalance', () => {
     it('should calculate outstanding balance correctly with paid print requests', async () => {
-      // Arrange
-      const mockPayments = [
-        { id: 'p1', total: 5000, status: 'paid', type: 'print' },
-        { id: 'p2', total: 3000, status: 'paid', type: 'print' },
-      ];
+      mocks.organizationRepository.getPayments.mockResolvedValue([
+        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(3000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+      ]);
 
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
+      const result = await sut.getOutstandingBalance('org-123');
 
-      // Act
-      const result = await organizationService.getOutstandingBalance('org-123');
-
-      // Assert
-      expect(mockOrganizationRepo.getPayments).toHaveBeenCalledWith('org-123');
-      expect(result).toBe(8000); // 5000 + 3000
+      expect(mocks.organizationRepository.getPayments).toHaveBeenCalledWith('org-123');
+      expect(result).toBe(8000);
     });
 
     it('should subtract balance payments from outstanding balance', async () => {
-      // Arrange
-      const mockPayments = [
-        { id: 'p1', total: 5000, status: 'paid', type: 'print' },
-        { id: 'p2', total: 3000, status: 'paid', type: 'print' },
-        { id: 'p3', total: 2000, status: 'paid', type: 'balance' },
-      ];
+      mocks.organizationRepository.getPayments.mockResolvedValue([
+        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(3000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
+      ]);
 
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
+      const result = await sut.getOutstandingBalance('org-123');
 
-      // Act
-      const result = await organizationService.getOutstandingBalance('org-123');
-
-      // Assert
-      expect(result).toBe(6000); // 5000 + 3000 - 2000
+      expect(result).toBe(6000);
     });
 
     it('should only count non quote or canceled payments', async () => {
-      // Arrange
-      const mockPayments = [
-        { id: 'p1', total: 5000, status: 'paid', type: 'print' },
-        { id: 'p2', total: 3000, status: 'pending', type: 'print' },
-        { id: 'p3', total: 4000, status: 'quote', type: 'print' },
-        { id: 'p4', total: 2000, status: 'canceled', type: 'print' },
-      ];
+      mocks.organizationRepository.getPayments.mockResolvedValue([
+        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(3000, PAYMENT_STATUS.PENDING, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(4000, PAYMENT_STATUS.QUOTE, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(2000, PAYMENT_STATUS.CANCELED, PAYMENT_TYPE.PRINT_REQUEST),
+      ]);
 
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
+      const result = await sut.getOutstandingBalance('org-123');
 
-      // Act
-      const result = await organizationService.getOutstandingBalance('org-123');
-
-      // Assert
-      expect(result).toBe(8000); // Only paid payment counts
+      expect(result).toBe(8000);
     });
 
     it('should return 0 when no payments exist', async () => {
-      // Arrange
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue([]);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
+      mocks.organizationRepository.getPayments.mockResolvedValue([]);
 
-      // Act
-      const result = await organizationService.getOutstandingBalance('org-empty');
+      const result = await sut.getOutstandingBalance('org-empty');
 
-      // Assert
       expect(result).toBe(0);
     });
 
     it('should return negative balance when balance payments exceed print payments', async () => {
-      // Arrange
-      const mockPayments = [
-        { id: 'p1', total: 1000, status: 'paid', type: 'print' },
-        { id: 'p2', total: 2000, status: 'paid', type: 'balance' },
-      ];
+      mocks.organizationRepository.getPayments.mockResolvedValue([
+        payment(1000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
+      ]);
 
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
+      const result = await sut.getOutstandingBalance('org-overpaid');
 
-      // Act
-      const result = await organizationService.getOutstandingBalance('org-overpaid');
-
-      // Assert
-      expect(result).toBe(-1000); // 1000 - 2000
+      expect(result).toBe(-1000);
     });
 
     it('should handle multiple balance payments', async () => {
-      // Arrange
-      const mockPayments = [
-        { id: 'p1', total: 10000, status: 'paid', type: 'print' },
-        { id: 'p2', total: 3000, status: 'paid', type: 'balance' },
-        { id: 'p3', total: 2000, status: 'paid', type: 'balance' },
-        { id: 'p4', total: 5000, status: 'paid', type: 'print' },
-      ];
+      mocks.organizationRepository.getPayments.mockResolvedValue([
+        payment(10000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(3000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
+        payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
+        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+      ]);
 
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
+      const result = await sut.getOutstandingBalance('org-multi');
 
-      // Act
-      const result = await organizationService.getOutstandingBalance('org-multi');
-
-      // Assert
-      expect(result).toBe(10000); // (10000 + 5000) - (3000 + 2000)
+      expect(result).toBe(10000);
     });
 
     it('should include organization charges in outstanding balance', async () => {
-      // Arrange
-      const mockPayments = [
-        { id: 'p1', total: 5000, status: 'paid', type: 'print' },
-        { id: 'p2', total: 2000, status: 'paid', type: 'balance' },
-        { id: 'charge-payment-1', total: 1500, status: 'paid', type: 'charge' },
-        { id: 'charge-payment-2', total: 500, status: 'paid', type: 'charge' },
-      ];
+      mocks.organizationRepository.getPayments.mockResolvedValue([
+        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
+        payment(1500, PAYMENT_STATUS.PAID, PAYMENT_TYPE.ORG_CHARGE),
+        payment(500, PAYMENT_STATUS.PAID, PAYMENT_TYPE.ORG_CHARGE),
+      ]);
 
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
+      const result = await sut.getOutstandingBalance('org-123');
 
-      // Act
-      const result = await organizationService.getOutstandingBalance('org-123');
-
-      // Assert
-      expect(result).toBe(5000); // 5000 - 2000 + 1500 + 500
+      expect(result).toBe(5000);
     });
   });
 
-  describe('chargeOrganizationBalance', () => {
-    const organization = {
-      id: 'org-charge',
-      name: 'Charge Org',
-      email: 'charge@org.com',
-      archived: false,
-    };
+  describe('chargeBalance', () => {
+    const organization = factory.organization({ name: 'Charge Org', email: 'charge@org.com' });
 
     beforeEach(() => {
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(organization);
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue([
-        { id: 'p1', total: 5000, status: 'paid', type: 'print_request' },
-        { id: 'p2', total: 3000, status: 'pending', type: 'print_request' },
+      mocks.organizationRepository.getById.mockResolvedValue(organization);
+      mocks.organizationRepository.getPayments.mockResolvedValue([
+        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(3000, PAYMENT_STATUS.PENDING, PAYMENT_TYPE.PRINT_REQUEST),
       ]);
+      mocks.paymentRepository.save.mockImplementation(async (data, id) =>
+        factory.payment({ id, total: data.bill.total, paymentUrl: data.paymentUrl }),
+      );
+      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
     });
 
     it('saves a pending balance payment and emails the organization a pay link', async () => {
-      const result = await organizationService.chargeBalance({ organizationId: 'org-charge' });
+      const result = await sut.chargeBalance({ organizationId: organization.id });
 
-      const [payment, id] = mockPaymentRepo.save.mock.calls[0];
-      expect(payment).toEqual({
-        type: 'balance',
-        status: 'pending',
+      const [saved, id] = mocks.paymentRepository.save.mock.calls[0];
+      expect(saved).toEqual({
+        type: PAYMENT_TYPE.BALANCE,
+        status: PAYMENT_STATUS.PENDING,
         customer: { name: 'Charge Org', email: 'charge@org.com' },
         bill: expect.objectContaining({
           lineItems: [{ name: 'Organization Balance Payment', quantity: 1, unitAmount: 8000 }],
           total: 8000,
         }),
-        organizationId: 'org-charge',
-        paymentUrl: `https://example.com/pay/${id}`,
+        organizationId: organization.id,
+        paymentUrl: `${PAY_URL}/${id}`,
       });
-      expect(mockMailgunRepo.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'charge@org.com',
         expect.any(String),
         expect.any(String),
@@ -548,126 +336,84 @@ describe('OrganizationService', () => {
         expect.objectContaining({
           customerName: 'Charge Org',
           total: '80.00',
-          paymentUrl: `https://example.com/pay/${id}`,
+          paymentUrl: `${PAY_URL}/${id}`,
         }),
       );
       expect(result.id).toBe(id);
     });
 
     it('throws when the organization does not exist', async () => {
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(null);
+      mocks.organizationRepository.getById.mockResolvedValue(null as never);
 
-      await expect(
-        organizationService.chargeBalance({ organizationId: 'nonexistent' }),
-      ).rejects.toThrow('Organization not found');
+      await expect(sut.chargeBalance({ organizationId: 'nonexistent' })).rejects.toThrow(
+        'Organization not found',
+      );
     });
 
     it('throws when nothing is owed', async () => {
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue([
-        { id: 'p1', total: 1000, status: 'paid', type: 'print_request' },
-        { id: 'p2', total: 2000, status: 'paid', type: 'balance' },
+      mocks.organizationRepository.getPayments.mockResolvedValue([
+        payment(1000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
       ]);
 
-      await expect(
-        organizationService.chargeBalance({ organizationId: 'org-charge' }),
-      ).rejects.toThrow('No outstanding balance to charge');
-      expect(mockPaymentRepo.save).not.toHaveBeenCalled();
-      expect(mockMailgunRepo.sendTemplate).not.toHaveBeenCalled();
+      await expect(sut.chargeBalance({ organizationId: organization.id })).rejects.toThrow(
+        'No outstanding balance to charge',
+      );
+      expect(mocks.paymentRepository.save).not.toHaveBeenCalled();
+      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
     });
   });
 
   describe('createCharge', () => {
     it('records the charge against the organization', async () => {
-      const organization = { id: 'org-1', name: 'Org', email: 'org@x.com', archived: false };
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(organization);
-      mockOrganizationRepo.createCharge = vi.fn(async () => ({ id: 'charge-1' }));
-      const dto = { organizationId: 'org-1', description: 'Laser time', amount: 2500 };
+      const organization = factory.organization();
+      mocks.organizationRepository.getById.mockResolvedValue(organization);
+      mocks.organizationRepository.createCharge.mockResolvedValue(
+        factory.organizationCharge({ organizationId: organization.id }),
+      );
+      const dto = { organizationId: organization.id, description: 'Laser time', amount: 2500 };
 
-      await organizationService.createCharge(dto);
+      await sut.createCharge(dto);
 
-      expect(mockOrganizationRepo.createCharge).toHaveBeenCalledWith(dto, organization);
+      expect(mocks.organizationRepository.createCharge).toHaveBeenCalledWith(dto, organization);
     });
 
     it('throws when the organization does not exist', async () => {
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(undefined);
+      mocks.organizationRepository.getById.mockResolvedValue(undefined as never);
 
       await expect(
-        organizationService.createCharge({ organizationId: 'x', description: 'd', amount: 1 }),
+        sut.createCharge({ organizationId: 'x', description: 'd', amount: 1 }),
       ).rejects.toThrow(ORGANIZATION_NOT_FOUND);
     });
   });
-});
-
-describe('OrganizationService student members', () => {
-  const organization = { id: 'org-1', name: 'Robotics Club', email: 'club@example.com' };
-  let service: OrganizationService;
-  let organizationRepository: {
-    getById: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
-  };
-  let memberRepository: { upsertByEmail: ReturnType<typeof vi.fn> };
-  let organizationMemberRepository: {
-    add: ReturnType<typeof vi.fn>;
-    removeMany: ReturnType<typeof vi.fn>;
-  };
-  let memberNotificationRepository: { sendOnboarding: ReturnType<typeof vi.fn> };
-
-  beforeEach(() => {
-    organizationRepository = {
-      getById: vi.fn().mockResolvedValue(organization),
-      update: vi.fn(),
-    };
-    memberRepository = {
-      upsertByEmail: vi.fn(async (name: string, email: string) => ({
-        id: `id-${email}`,
-        name,
-        email,
-      })),
-    };
-    organizationMemberRepository = {
-      add: vi.fn(async (_: string, memberId: string) => ({ id: `membership-${memberId}` })),
-      removeMany: vi.fn(),
-    };
-    memberNotificationRepository = { sendOnboarding: vi.fn() };
-
-    service = new OrganizationService(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      organizationRepository as never,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      {
-        memberRepository,
-        organizationMemberRepository,
-        memberNotificationRepository,
-      } as never,
-    );
-  });
 
   describe('addOrganizationMembers', () => {
+    const organization = factory.organization({ name: 'Robotics Club' });
+
+    beforeEach(() => {
+      mocks.organizationRepository.getById.mockResolvedValue(organization);
+      mocks.memberRepository.upsertByEmail.mockImplementation(async (name, email) =>
+        factory.member({ id: `id-${email}`, name, email }),
+      );
+      mocks.organizationMemberRepository.add.mockImplementation(async (organizationId, memberId) =>
+        factory.organizationMember({ id: `membership-${memberId}`, organizationId, memberId }),
+      );
+      mocks.memberNotificationRepository.sendOnboarding.mockResolvedValue(undefined);
+    });
+
     it('adds each parsed member and sends onboarding', async () => {
-      const result = await service.addOrganizationMembers({
+      const result = await sut.addOrganizationMembers({
         organizationId: organization.id,
         lines: 'Ada <ada@example.com>\nGrace, grace@example.com',
       });
 
-      expect(memberRepository.upsertByEmail).toHaveBeenCalledWith('Ada', 'ada@example.com');
-      expect(organizationMemberRepository.add).toHaveBeenCalledWith(
+      expect(mocks.memberRepository.upsertByEmail).toHaveBeenCalledWith('Ada', 'ada@example.com');
+      expect(mocks.organizationMemberRepository.add).toHaveBeenCalledWith(
         organization.id,
         'id-ada@example.com',
       );
       await vi.waitFor(() =>
-        expect(memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+        expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
           expect.objectContaining({ id: 'id-grace@example.com' }),
           'organization',
         ),
@@ -680,20 +426,20 @@ describe('OrganizationService student members', () => {
     });
 
     it('skips onboarding for existing members', async () => {
-      organizationMemberRepository.add.mockResolvedValue(undefined);
+      mocks.organizationMemberRepository.add.mockResolvedValue(undefined);
 
-      const result = await service.addOrganizationMembers({
+      const result = await sut.addOrganizationMembers({
         organizationId: organization.id,
         lines: 'Ada <ada@example.com>',
       });
 
-      expect(memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
       expect(result.alreadyMembers).toHaveLength(1);
       expect(result.added).toEqual([]);
     });
 
     it('reports unparseable lines and still adds the rest', async () => {
-      const result = await service.addOrganizationMembers({
+      const result = await sut.addOrganizationMembers({
         organizationId: organization.id,
         lines: 'nonsense\nAda <ada@example.com>',
       });
@@ -704,97 +450,76 @@ describe('OrganizationService student members', () => {
 
     it('keeps the membership when the onboarding email fails', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
-      memberNotificationRepository.sendOnboarding.mockRejectedValue(new Error('mailgun'));
+      mocks.memberNotificationRepository.sendOnboarding.mockRejectedValue(new Error('mailgun'));
 
-      const result = await service.addOrganizationMembers({
+      const result = await sut.addOrganizationMembers({
         organizationId: organization.id,
         lines: 'Ada <ada@example.com>\nGrace <grace@example.com>',
       });
 
       expect(result.added).toHaveLength(2);
     });
+
+    it('throws when the organization does not exist', async () => {
+      mocks.organizationRepository.getById.mockResolvedValue(undefined as never);
+
+      await expect(
+        sut.addOrganizationMembers({ organizationId: 'missing', lines: 'Ada <a@b.co>' }),
+      ).rejects.toThrow(ORGANIZATION_NOT_FOUND);
+      expect(mocks.memberRepository.upsertByEmail).not.toHaveBeenCalled();
+    });
   });
 
   describe('sendOrganizationOnboardings', () => {
-    const ada = { id: 'ada', email: 'ada@example.com' } as Member;
-    const grace = { id: 'grace', email: 'grace@example.com' } as Member;
+    const ada = factory.member({ id: 'ada', email: 'ada@example.com' });
+    const grace = factory.member({ id: 'grace', email: 'grace@example.com' });
+
+    beforeEach(() => {
+      mocks.memberNotificationRepository.sendOnboarding.mockResolvedValue(undefined);
+    });
 
     afterEach(() => {
       vi.useRealTimers();
     });
 
+    function sentMemberIds() {
+      return mocks.memberNotificationRepository.sendOnboarding.mock.calls.map(
+        ([member]) => member.id,
+      );
+    }
+
     it('waits out the Mailgun rate limit and resends', async () => {
       vi.useFakeTimers();
-      memberNotificationRepository.sendOnboarding.mockRejectedValueOnce(
+      mocks.memberNotificationRepository.sendOnboarding.mockRejectedValueOnce(
         new MailgunRateLimitError('limit', DateTime.now().plus({ minutes: 2 })),
       );
 
-      const sending = service.sendOrganizationOnboardings([ada, grace]);
+      const sending = sut.sendOrganizationOnboardings([ada, grace]);
       await vi.advanceTimersByTimeAsync(60_000);
-      expect(memberNotificationRepository.sendOnboarding).toHaveBeenCalledTimes(1);
+      expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(60_000);
       await sending;
-      expect(memberNotificationRepository.sendOnboarding.mock.calls.map(([m]) => m.id)).toEqual([
-        'ada',
-        'ada',
-        'grace',
-      ]);
+      expect(sentMemberIds()).toEqual(['ada', 'ada', 'grace']);
     });
 
     it('moves on to the next member after a non rate limit failure', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
-      memberNotificationRepository.sendOnboarding.mockRejectedValueOnce(new Error('mailgun'));
+      mocks.memberNotificationRepository.sendOnboarding.mockRejectedValueOnce(new Error('mailgun'));
 
-      await service.sendOrganizationOnboardings([ada, grace]);
+      await sut.sendOrganizationOnboardings([ada, grace]);
 
-      expect(memberNotificationRepository.sendOnboarding.mock.calls.map(([m]) => m.id)).toEqual([
-        'ada',
-        'grace',
-      ]);
-    });
-
-    it('throws when the organization does not exist', async () => {
-      organizationRepository.getById.mockResolvedValue(undefined);
-
-      await expect(
-        service.addOrganizationMembers({ organizationId: 'missing', lines: 'Ada <a@b.co>' }),
-      ).rejects.toThrow(ORGANIZATION_NOT_FOUND);
-      expect(memberRepository.upsertByEmail).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('updateOrganization access end date', () => {
-    it('stores the end of the chosen day in the space time zone', async () => {
-      await service.updateOrganization(organization.id, { accessEndDate: '2026-12-15' });
-
-      const { accessEndDate } = organizationRepository.update.mock.calls[0][1];
-      expect(accessEndDate.zoneName).toBe(SPACE_ZONE);
-      expect(accessEndDate.toISO()).toBe('2026-12-15T23:59:59.999-06:00');
-    });
-
-    it('clears the end date when null', async () => {
-      await service.updateOrganization(organization.id, { accessEndDate: null });
-
-      expect(organizationRepository.update).toHaveBeenCalledWith(organization.id, {
-        accessEndDate: null,
-      });
-    });
-
-    it('switches member access off without touching the end date', async () => {
-      await service.updateOrganization(organization.id, { grantsAccess: false });
-
-      expect(organizationRepository.update).toHaveBeenCalledWith(organization.id, {
-        grantsAccess: false,
-      });
+      expect(sentMemberIds()).toEqual(['ada', 'grace']);
     });
   });
 
   describe('removeOrganizationMembers', () => {
     it('removes the memberships within the organization', async () => {
-      await service.removeOrganizationMembers(organization.id, ['m1', 'm2']);
+      mocks.organizationMemberRepository.removeMany.mockResolvedValue(undefined);
 
-      expect(organizationMemberRepository.removeMany).toHaveBeenCalledWith(organization.id, [
+      await sut.removeOrganizationMembers('org-1', ['m1', 'm2']);
+
+      expect(mocks.organizationMemberRepository.removeMany).toHaveBeenCalledWith('org-1', [
         'm1',
         'm2',
       ]);

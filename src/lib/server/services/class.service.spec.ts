@@ -1,119 +1,60 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  ClassBooking,
+  ClassCatalog,
+  ClassInstance,
+  Payment,
+  User,
+} from '$lib/server/db/schema';
+import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
+import { PAYMENT_STATUS } from '$lib/utils/billing';
+import { factory } from '$test/factory';
+import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { ClassService } from './class.service';
 
-// Mock dependencies
-vi.mock('$lib/server/repositories/class.repository', () => {
-  const MockClassRepository = vi.fn();
-  MockClassRepository.prototype.createCatalog = vi.fn();
-  MockClassRepository.prototype.updateCatalog = vi.fn();
-  MockClassRepository.prototype.getCatalogById = vi.fn();
-  MockClassRepository.prototype.getAllCatalogs = vi.fn();
-  MockClassRepository.prototype.uploadClassPhoto = vi.fn();
-  MockClassRepository.prototype.createInstance = vi.fn();
-  MockClassRepository.prototype.createInstances = vi.fn();
-  MockClassRepository.prototype.updateInstance = vi.fn();
-  MockClassRepository.prototype.getInstanceById = vi.fn();
-  MockClassRepository.prototype.getInstancesForCatalog = vi.fn();
-  MockClassRepository.prototype.getAllInstances = vi.fn();
-  MockClassRepository.prototype.getScheduledInstancesByRecurrenceGroup = vi.fn();
-  MockClassRepository.prototype.createBooking = vi.fn();
-  MockClassRepository.prototype.getBookingById = vi.fn();
-  MockClassRepository.prototype.getBookingByToken = vi.fn();
-  MockClassRepository.prototype.updateBooking = vi.fn();
-  MockClassRepository.prototype.getBookingsForInstance = vi.fn();
-  MockClassRepository.prototype.getConfirmedBookingsForInstance = vi.fn();
-  MockClassRepository.prototype.getConfirmedBookingCount = vi.fn();
-  MockClassRepository.prototype.getStaffUsers = vi.fn();
-  MockClassRepository.prototype.setGoogleCalendarId = vi.fn();
-  MockClassRepository.prototype.setGoogleEventId = vi.fn();
-  MockClassRepository.prototype.getScheduledInstanceIdsForTeacher = vi.fn();
-  return { ClassRepository: MockClassRepository };
-});
+function paidPayment(total: number) {
+  return factory.payment({ id: 'payment-1', status: PAYMENT_STATUS.PAID, total });
+}
 
-vi.mock('$lib/server/repositories/google_calendar.repository', () => {
-  const MockGoogleCalendarRepository = vi.fn();
-  MockGoogleCalendarRepository.prototype.isConfigured = vi.fn(() => false);
-  MockGoogleCalendarRepository.prototype.createCalendar = vi.fn();
-  MockGoogleCalendarRepository.prototype.makeCalendarPublic = vi.fn();
-  MockGoogleCalendarRepository.prototype.createEvent = vi.fn();
-  MockGoogleCalendarRepository.prototype.updateEvent = vi.fn();
-  MockGoogleCalendarRepository.prototype.deleteEvent = vi.fn();
-  MockGoogleCalendarRepository.prototype.buildAddCalendarUrl = vi.fn();
-  return { GoogleCalendarRepository: MockGoogleCalendarRepository };
-});
+function instanceDetail(
+  overrides: Partial<ClassInstance> = {},
+  catalog: ClassCatalog | null = factory.classCatalog(),
+  teacher: User | null = null,
+) {
+  return { ...factory.classInstance(overrides), teacher, catalog };
+}
 
-vi.mock('$lib/server/repositories/mailgun.repository', () => {
-  const MockMailgunRepository = vi.fn();
-  MockMailgunRepository.prototype.sendTemplate = vi.fn();
-  return { MailgunRepository: MockMailgunRepository };
-});
+function bookingWithPayment(overrides: Partial<ClassBooking> = {}, payment: Payment | null = null) {
+  return { ...factory.classBooking(overrides), payment };
+}
 
-vi.mock('$lib/server/repositories/settings.repository', () => {
-  const MockSettingsRepository = vi.fn();
-  MockSettingsRepository.prototype.getSetting = vi.fn();
-  return { SettingsRepository: MockSettingsRepository };
-});
+function bookingDetail(
+  overrides: Partial<ClassBooking> = {},
+  payment: Payment | null = null,
+  instance: ClassInstance | null = factory.classInstance(),
+  catalog: ClassCatalog | null = factory.classCatalog(),
+) {
+  return { ...bookingWithPayment(overrides, payment), instance, catalog };
+}
 
-vi.mock('$lib/server/repositories/payment.repository', () => {
-  const MockPaymentRepository = vi.fn();
-  MockPaymentRepository.prototype.authorize = vi.fn();
-  MockPaymentRepository.prototype.capture = vi.fn();
-  MockPaymentRepository.prototype.void = vi.fn();
-  MockPaymentRepository.prototype.refund = vi.fn();
-  class PaymentDeclinedError extends Error {}
-  return { PaymentRepository: MockPaymentRepository, PaymentDeclinedError };
-});
+describe(ClassService.name, () => {
+  let sut: ClassService;
+  let mocks: ServiceMocks;
 
-vi.mock('$env/dynamic/private', () => ({
-  env: { FRONTEND_URL: 'https://example.com' },
-}));
-
-vi.mock('$lib/frontend/utils', () => ({
-  formatTime: vi.fn((t: string) => t),
-}));
-
-describe('ClassService', () => {
-  let classService: any;
-  let mockClassRepo: any;
-  let mockMailgunRepo: any;
-  let mockSettingsRepo: any;
-  let mockPaymentRepo: any;
-
-  const paidPayment = (total: number) => ({ id: 'payment-1', status: 'paid', total });
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-
-    const { ClassService } = await import('./class.service');
-    classService = new ClassService();
-
-    const { ClassRepository } = await import('$lib/server/repositories/class.repository');
-    mockClassRepo = ClassRepository.prototype;
-
-    const { MailgunRepository } = await import('$lib/server/repositories/mailgun.repository');
-    mockMailgunRepo = MailgunRepository.prototype;
-
-    const { SettingsRepository } = await import('$lib/server/repositories/settings.repository');
-    mockSettingsRepo = SettingsRepository.prototype;
-
-    const { PaymentRepository } = await import('$lib/server/repositories/payment.repository');
-    mockPaymentRepo = PaymentRepository.prototype;
+  beforeEach(() => {
+    ({ sut, mocks } = newTestService(ClassService));
+    mocks.googleCalendarRepository.isConfigured.mockReturnValue(false);
   });
-
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  // ── Catalog ──
 
   describe('createCatalog', () => {
     it('should create a catalog entry', async () => {
       const dto = { name: 'Welding Class', description: 'Intro class', price: 5000 };
-      const expected = { id: 'cat-1', ...dto };
-      vi.mocked(mockClassRepo.createCatalog).mockResolvedValue(expected);
+      const expected = factory.classCatalog(dto);
+      mocks.classRepository.createCatalog.mockResolvedValue(expected);
 
-      const result = await classService.createCatalog(dto);
+      const result = await sut.createCatalog(dto);
 
-      expect(mockClassRepo.createCatalog).toHaveBeenCalledWith(dto);
+      expect(mocks.classRepository.createCatalog).toHaveBeenCalledWith(dto);
       expect(result).toEqual(expected);
     });
   });
@@ -121,12 +62,12 @@ describe('ClassService', () => {
   describe('updateCatalog', () => {
     it('should update a catalog by id', async () => {
       const dto = { id: 'cat-1', name: 'Pottery 201', description: 'Advanced', price: 7500 };
-      const expected = { ...dto };
-      vi.mocked(mockClassRepo.updateCatalog).mockResolvedValue(expected);
+      const expected = factory.classCatalog(dto);
+      mocks.classRepository.updateCatalog.mockResolvedValue(expected);
 
-      const result = await classService.updateCatalog(dto);
+      const result = await sut.updateCatalog(dto);
 
-      expect(mockClassRepo.updateCatalog).toHaveBeenCalledWith('cat-1', {
+      expect(mocks.classRepository.updateCatalog).toHaveBeenCalledWith('cat-1', {
         name: 'Pottery 201',
         description: 'Advanced',
         price: 7500,
@@ -137,22 +78,24 @@ describe('ClassService', () => {
 
   describe('getCatalogById', () => {
     it('should return catalog by id', async () => {
-      const catalog = { id: 'cat-1', name: 'Welding Class' };
-      vi.mocked(mockClassRepo.getCatalogById).mockResolvedValue(catalog);
+      const catalog = factory.classCatalog({ id: 'cat-1', name: 'Welding Class' });
+      mocks.classRepository.getCatalogById.mockResolvedValue(catalog);
 
-      const result = await classService.getCatalogById('cat-1');
+      const result = await sut.getCatalogById('cat-1');
 
-      expect(mockClassRepo.getCatalogById).toHaveBeenCalledWith('cat-1');
+      expect(mocks.classRepository.getCatalogById).toHaveBeenCalledWith('cat-1');
       expect(result).toEqual(catalog);
     });
   });
 
   describe('getAllCatalogs', () => {
     it('should return all catalogs', async () => {
-      const catalogs = [{ id: 'cat-1' }, { id: 'cat-2' }];
-      vi.mocked(mockClassRepo.getAllCatalogs).mockResolvedValue(catalogs);
+      mocks.classRepository.getAllCatalogs.mockResolvedValue([
+        factory.classCatalog(),
+        factory.classCatalog(),
+      ]);
 
-      const result = await classService.getAllCatalogs();
+      const result = await sut.getAllCatalogs();
 
       expect(result).toHaveLength(2);
     });
@@ -160,17 +103,15 @@ describe('ClassService', () => {
 
   describe('getActiveCatalogsWithInstances', () => {
     it('should return active catalogs with future instances and booking counts', async () => {
-      const catalogs = [{ id: 'cat-1', name: 'Pottery' }];
-      const instances = [
-        { id: 'inst-1', date: '2099-12-01', teacher: null },
-        { id: 'inst-2', date: '2099-12-08', teacher: null },
-      ];
+      const catalog = factory.classCatalog({ name: 'Pottery' });
+      mocks.classRepository.getAllCatalogs.mockResolvedValue([catalog]);
+      mocks.classRepository.getInstancesForCatalog.mockResolvedValue([
+        { ...factory.classInstance({ classId: catalog.id, date: '2099-12-01' }), teacher: null },
+        { ...factory.classInstance({ classId: catalog.id, date: '2099-12-08' }), teacher: null },
+      ]);
+      mocks.classRepository.getConfirmedBookingCount.mockResolvedValue(3);
 
-      vi.mocked(mockClassRepo.getAllCatalogs).mockResolvedValue(catalogs);
-      vi.mocked(mockClassRepo.getInstancesForCatalog).mockResolvedValue(instances);
-      vi.mocked(mockClassRepo.getConfirmedBookingCount).mockResolvedValue(3);
-
-      const result = await classService.getActiveCatalogsWithInstances();
+      const result = await sut.getActiveCatalogsWithInstances();
 
       expect(result).toHaveLength(1);
       expect(result[0].instances).toHaveLength(2);
@@ -178,13 +119,12 @@ describe('ClassService', () => {
     });
 
     it('should exclude catalogs with no future instances', async () => {
-      const catalogs = [{ id: 'cat-1' }];
-      const instances = [{ id: 'inst-1', date: '2000-01-01', teacher: null }];
+      mocks.classRepository.getAllCatalogs.mockResolvedValue([factory.classCatalog()]);
+      mocks.classRepository.getInstancesForCatalog.mockResolvedValue([
+        { ...factory.classInstance({ date: '2000-01-01' }), teacher: null },
+      ]);
 
-      vi.mocked(mockClassRepo.getAllCatalogs).mockResolvedValue(catalogs);
-      vi.mocked(mockClassRepo.getInstancesForCatalog).mockResolvedValue(instances);
-
-      const result = await classService.getActiveCatalogsWithInstances();
+      const result = await sut.getActiveCatalogsWithInstances();
 
       expect(result).toHaveLength(0);
     });
@@ -193,65 +133,61 @@ describe('ClassService', () => {
   describe('uploadClassPhoto', () => {
     it('should upload photo and update catalog', async () => {
       const file = new File(['data'], 'photo.jpg');
-      vi.mocked(mockClassRepo.uploadClassPhoto).mockResolvedValue('https://s3/photo.jpg');
-      vi.mocked(mockClassRepo.updateCatalog).mockResolvedValue({});
+      mocks.classRepository.uploadClassPhoto.mockResolvedValue('https://s3/photo.jpg');
+      mocks.classRepository.updateCatalog.mockResolvedValue(factory.classCatalog());
 
-      const result = await classService.uploadClassPhoto('cat-1', file);
+      const result = await sut.uploadClassPhoto('cat-1', file);
 
-      expect(mockClassRepo.uploadClassPhoto).toHaveBeenCalledWith('cat-1', file);
-      expect(mockClassRepo.updateCatalog).toHaveBeenCalledWith('cat-1', {
+      expect(mocks.classRepository.uploadClassPhoto).toHaveBeenCalledWith('cat-1', file);
+      expect(mocks.classRepository.updateCatalog).toHaveBeenCalledWith('cat-1', {
         photoUrl: 'https://s3/photo.jpg',
       });
       expect(result).toBe('https://s3/photo.jpg');
     });
   });
 
-  // ── Instance ──
-
   describe('generateInstances', () => {
+    const MONDAY = 1;
+    const SUNDAY = 0;
+
     it('should generate weekly instances between start and end dates', async () => {
-      const dto = {
+      mocks.classRepository.createInstances.mockResolvedValue([]);
+
+      await sut.generateInstances({
         classId: 'cat-1',
         teacherEmail: 'teacher@test.com',
-        dayOfWeek: 1, // Monday (0=Sun..6=Sat)
+        dayOfWeek: MONDAY,
         startTime: '10:00',
         durationMinutes: 60,
         seats: 10,
-        startDate: '2099-01-05', // a Monday
-        endDate: '2099-01-19', // 3 Mondays
-      };
+        startDate: '2099-01-05',
+        endDate: '2099-01-19',
+      });
 
-      vi.mocked(mockClassRepo.createInstances).mockResolvedValue([]);
-
-      await classService.generateInstances(dto);
-
-      expect(mockClassRepo.createInstances).toHaveBeenCalledTimes(1);
-      const createdInstances = vi.mocked(mockClassRepo.createInstances).mock.calls[0][0];
+      expect(mocks.classRepository.createInstances).toHaveBeenCalledTimes(1);
+      const createdInstances = mocks.classRepository.createInstances.mock.calls[0][0];
       expect(createdInstances).toHaveLength(3);
       expect(createdInstances[0].date).toBe('2099-01-05');
       expect(createdInstances[1].date).toBe('2099-01-12');
       expect(createdInstances[2].date).toBe('2099-01-19');
-      // All share the same recurrenceGroupId
       expect(createdInstances[0].recurrenceGroupId).toBe(createdInstances[1].recurrenceGroupId);
     });
 
     it('should handle no matching days in range', async () => {
-      const dto = {
+      mocks.classRepository.createInstances.mockResolvedValue([]);
+
+      await sut.generateInstances({
         classId: 'cat-1',
         teacherEmail: 'teacher@test.com',
-        dayOfWeek: 0, // Sunday
+        dayOfWeek: SUNDAY,
         startTime: '10:00',
         durationMinutes: 60,
         seats: 10,
-        startDate: '2099-01-06', // Monday
-        endDate: '2099-01-10', // Friday — no Sunday in this range
-      };
+        startDate: '2099-01-06',
+        endDate: '2099-01-10',
+      });
 
-      vi.mocked(mockClassRepo.createInstances).mockResolvedValue([]);
-
-      await classService.generateInstances(dto);
-
-      const createdInstances = vi.mocked(mockClassRepo.createInstances).mock.calls[0][0];
+      const createdInstances = mocks.classRepository.createInstances.mock.calls[0][0];
       expect(createdInstances).toHaveLength(0);
     });
   });
@@ -266,12 +202,12 @@ describe('ClassService', () => {
         durationMinutes: 90,
         seats: 8,
       };
-      const expected = { id: 'inst-1', ...dto, status: 'scheduled' };
-      vi.mocked(mockClassRepo.createInstance).mockResolvedValue(expected);
+      const expected = factory.classInstance({ ...dto, status: 'scheduled' });
+      mocks.classRepository.createInstance.mockResolvedValue(expected);
 
-      const result = await classService.createInstance(dto);
+      const result = await sut.createInstance(dto);
 
-      expect(mockClassRepo.createInstance).toHaveBeenCalledWith({
+      expect(mocks.classRepository.createInstance).toHaveBeenCalledWith({
         ...dto,
         status: 'scheduled',
       });
@@ -281,121 +217,98 @@ describe('ClassService', () => {
 
   describe('updateInstance', () => {
     it('should update instance with only defined fields', async () => {
-      const dto = { id: 'inst-1', seats: 12, teacherEmail: undefined };
-      vi.mocked(mockClassRepo.updateInstance).mockResolvedValue({});
+      mocks.classRepository.updateInstance.mockResolvedValue(factory.classInstance());
 
-      await classService.updateInstance(dto);
+      await sut.updateInstance({ id: 'inst-1', seats: 12, teacherEmail: undefined });
 
-      expect(mockClassRepo.updateInstance).toHaveBeenCalledWith('inst-1', { seats: 12 });
+      expect(mocks.classRepository.updateInstance).toHaveBeenCalledWith('inst-1', { seats: 12 });
     });
   });
 
   describe('cancelInstance', () => {
     it('should cancel a single instance and refund bookings', async () => {
-      const instance = {
-        id: 'inst-1',
-        status: 'scheduled',
-        recurrenceGroupId: null,
-        date: '2099-06-15',
-      };
-      const bookings = [
-        { id: 'book-1', payment: paidPayment(5000) },
-        { id: 'book-2', payment: null },
-      ];
+      const payment = paidPayment(5000);
+      mocks.classRepository.getInstanceById.mockResolvedValue(
+        instanceDetail({ id: 'inst-1', date: '2099-06-15' }),
+      );
+      mocks.classRepository.getConfirmedBookingsForInstance.mockResolvedValue([
+        bookingWithPayment({ id: 'book-1' }, payment),
+        bookingWithPayment({ id: 'book-2' }, null),
+      ]);
+      mocks.paymentRepository.refund.mockResolvedValue(true);
+      mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
+      mocks.classRepository.updateInstance.mockResolvedValue(factory.classInstance());
 
-      vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue(instance);
-      vi.mocked(mockClassRepo.getConfirmedBookingsForInstance).mockResolvedValue(bookings);
-      vi.mocked(mockPaymentRepo.refund).mockResolvedValue(true);
-      vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
-      vi.mocked(mockClassRepo.updateInstance).mockResolvedValue({});
-
-      const result = await classService.cancelInstance({
-        instanceId: 'inst-1',
-        mode: 'single',
-      });
+      const result = await sut.cancelInstance({ instanceId: 'inst-1', mode: 'single' });
 
       expect(result.canceledCount).toBe(1);
-      expect(mockPaymentRepo.refund).toHaveBeenCalledTimes(1);
-      expect(mockPaymentRepo.refund).toHaveBeenCalledWith(paidPayment(5000));
-      expect(mockClassRepo.updateBooking).toHaveBeenCalledTimes(2);
-      expect(mockClassRepo.updateInstance).toHaveBeenCalledWith('inst-1', { status: 'canceled' });
+      expect(mocks.paymentRepository.refund).toHaveBeenCalledTimes(1);
+      expect(mocks.paymentRepository.refund).toHaveBeenCalledWith(payment);
+      expect(mocks.classRepository.updateBooking).toHaveBeenCalledTimes(2);
+      expect(mocks.classRepository.updateInstance).toHaveBeenCalledWith('inst-1', {
+        status: 'canceled',
+      });
     });
 
     it('should cancel this and future instances in a recurrence group', async () => {
-      const instance = {
-        id: 'inst-2',
-        status: 'scheduled',
-        recurrenceGroupId: 'group-1',
-        date: '2099-06-15',
-      };
-      const futureInstances = [
-        { id: 'inst-2', date: '2099-06-15' },
-        { id: 'inst-3', date: '2099-06-22' },
-      ];
-
-      vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue(instance);
-      vi.mocked(mockClassRepo.getScheduledInstancesByRecurrenceGroup).mockResolvedValue(
-        futureInstances,
+      mocks.classRepository.getInstanceById.mockResolvedValue(
+        instanceDetail({ id: 'inst-2', recurrenceGroupId: 'group-1', date: '2099-06-15' }),
       );
-      vi.mocked(mockClassRepo.getConfirmedBookingsForInstance).mockResolvedValue([]);
-      vi.mocked(mockClassRepo.updateInstance).mockResolvedValue({});
+      mocks.classRepository.getScheduledInstancesByRecurrenceGroup.mockResolvedValue([
+        factory.classInstance({ id: 'inst-2', date: '2099-06-15' }),
+        factory.classInstance({ id: 'inst-3', date: '2099-06-22' }),
+      ]);
+      mocks.classRepository.getConfirmedBookingsForInstance.mockResolvedValue([]);
+      mocks.classRepository.updateInstance.mockResolvedValue(factory.classInstance());
 
-      const result = await classService.cancelInstance({
-        instanceId: 'inst-2',
-        mode: 'this_and_future',
-      });
+      const result = await sut.cancelInstance({ instanceId: 'inst-2', mode: 'this_and_future' });
 
       expect(result.canceledCount).toBe(2);
-      expect(mockClassRepo.updateInstance).toHaveBeenCalledTimes(2);
+      expect(mocks.classRepository.updateInstance).toHaveBeenCalledTimes(2);
     });
 
     it('should throw when instance not found', async () => {
-      vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue(null);
+      mocks.classRepository.getInstanceById.mockResolvedValue(null);
 
-      await expect(
-        classService.cancelInstance({ instanceId: 'bad-id', mode: 'single' }),
-      ).rejects.toThrow('Instance not found');
+      await expect(sut.cancelInstance({ instanceId: 'bad-id', mode: 'single' })).rejects.toThrow(
+        'Instance not found',
+      );
     });
 
     it('should handle refund failure gracefully and still cancel', async () => {
-      const instance = {
-        id: 'inst-1',
-        status: 'scheduled',
-        recurrenceGroupId: null,
-        date: '2099-06-15',
-      };
-      const bookings = [{ id: 'book-1', payment: paidPayment(5000) }];
+      mocks.classRepository.getInstanceById.mockResolvedValue(
+        instanceDetail({ id: 'inst-1', date: '2099-06-15' }),
+      );
+      mocks.classRepository.getConfirmedBookingsForInstance.mockResolvedValue([
+        bookingWithPayment({ id: 'book-1' }, paidPayment(5000)),
+      ]);
+      mocks.paymentRepository.refund.mockRejectedValue(new Error('Square error'));
+      mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
+      mocks.classRepository.updateInstance.mockResolvedValue(factory.classInstance());
 
-      vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue(instance);
-      vi.mocked(mockClassRepo.getConfirmedBookingsForInstance).mockResolvedValue(bookings);
-      vi.mocked(mockPaymentRepo.refund).mockRejectedValue(new Error('Square error'));
-      vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
-      vi.mocked(mockClassRepo.updateInstance).mockResolvedValue({});
+      const result = await sut.cancelInstance({ instanceId: 'inst-1', mode: 'single' });
 
-      const result = await classService.cancelInstance({
-        instanceId: 'inst-1',
-        mode: 'single',
-      });
-
-      // Should still cancel the booking and instance despite refund failure
       expect(result.canceledCount).toBe(1);
-      expect(mockClassRepo.updateBooking).toHaveBeenCalledWith('book-1', { status: 'canceled' });
-      expect(mockClassRepo.updateInstance).toHaveBeenCalledWith('inst-1', { status: 'canceled' });
+      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
+        status: 'canceled',
+      });
+      expect(mocks.classRepository.updateInstance).toHaveBeenCalledWith('inst-1', {
+        status: 'canceled',
+      });
     });
   });
 
   describe('getAllInstances', () => {
     it('should return instances with confirmed counts', async () => {
-      const instances = [
-        { id: 'inst-1', teacher: null, catalog: null },
-        { id: 'inst-2', teacher: null, catalog: null },
-      ];
-      vi.mocked(mockClassRepo.getAllInstances).mockResolvedValue(instances);
-      vi.mocked(mockClassRepo.getConfirmedBookingCount)
+      mocks.classRepository.getAllInstances.mockResolvedValue([
+        instanceDetail({}, null),
+        instanceDetail({}, null),
+      ]);
+      mocks.classRepository.getConfirmedBookingCount
         .mockResolvedValueOnce(2)
         .mockResolvedValueOnce(5);
 
-      const result = await classService.getAllInstances();
+      const result = await sut.getAllInstances();
 
       expect(result).toHaveLength(2);
       expect(result[0].confirmedCount).toBe(2);
@@ -405,21 +318,20 @@ describe('ClassService', () => {
 
   describe('getInstanceDetail', () => {
     it('should return instance with bookings', async () => {
-      const instance = { id: 'inst-1', teacher: null, catalog: null };
-      const bookings = [{ id: 'book-1' }, { id: 'book-2' }];
+      const instance = instanceDetail({ id: 'inst-1' }, null);
+      const bookings = [bookingWithPayment(), bookingWithPayment()];
+      mocks.classRepository.getInstanceById.mockResolvedValue(instance);
+      mocks.classRepository.getBookingsForInstance.mockResolvedValue(bookings);
 
-      vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue(instance);
-      vi.mocked(mockClassRepo.getBookingsForInstance).mockResolvedValue(bookings);
-
-      const result = await classService.getInstanceDetail('inst-1');
+      const result = await sut.getInstanceDetail('inst-1');
 
       expect(result).toEqual({ ...instance, bookings });
     });
 
     it('should return null when instance not found', async () => {
-      vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue(null);
+      mocks.classRepository.getInstanceById.mockResolvedValue(null);
 
-      const result = await classService.getInstanceDetail('bad-id');
+      const result = await sut.getInstanceDetail('bad-id');
 
       expect(result).toBeNull();
     });
@@ -427,16 +339,14 @@ describe('ClassService', () => {
 
   describe('getStaffUsers', () => {
     it('should delegate to repository', async () => {
-      const users = [{ email: 'a@test.com' }];
-      vi.mocked(mockClassRepo.getStaffUsers).mockResolvedValue(users);
+      const users = [factory.user({ email: 'a@test.com' })];
+      mocks.classRepository.getStaffUsers.mockResolvedValue(users);
 
-      const result = await classService.getStaffUsers();
+      const result = await sut.getStaffUsers();
 
       expect(result).toEqual(users);
     });
   });
-
-  // ── Booking ──
 
   describe('bookClass', () => {
     const dto = {
@@ -447,49 +357,46 @@ describe('ClassService', () => {
       quantity: 1,
       sourceId: 'sq-nonce-123',
     };
-
-    const instance = {
-      id: 'inst-1',
-      status: 'scheduled',
-      date: '2099-12-01',
-      startTime: '10:00',
-      seats: 10,
-      catalog: { id: 'cat-1', name: 'Welding Class', price: 5000 },
-    };
-
-    const authorized = { id: 'payment-1', status: 'pending', total: 5000 };
-
-    const booking = {
+    const catalog = factory.classCatalog({ name: 'Welding Class', price: 5000 });
+    const instance = instanceDetail(
+      { id: 'inst-1', date: '2099-12-01', startTime: '10:00', seats: 10 },
+      catalog,
+    );
+    const authorized = factory.payment({
+      id: 'payment-1',
+      status: PAYMENT_STATUS.PENDING,
+      total: 5000,
+    });
+    const booking = factory.classBooking({
       id: 'book-1',
       instanceId: 'inst-1',
       bookingToken: 'tok-abc',
       status: 'confirmed',
-    };
+    });
 
     beforeEach(() => {
-      vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue(instance);
-      vi.mocked(mockClassRepo.getConfirmedBookingCount).mockResolvedValue(0);
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({ locationId: 'loc-1' });
-      vi.mocked(mockPaymentRepo.authorize).mockResolvedValue(authorized);
-      vi.mocked(mockPaymentRepo.capture).mockResolvedValue(paidPayment(5000));
-      vi.mocked(mockClassRepo.createBooking).mockResolvedValue(booking);
-      vi.mocked(mockMailgunRepo.sendTemplate).mockResolvedValue({});
-      vi.mocked(mockClassRepo.getBookingById).mockResolvedValue({
-        ...booking,
-        customerName: dto.customerName,
-        customerEmail: dto.customerEmail,
-        quantity: 1,
-        payment: paidPayment(5000),
-        instance: { date: '2099-12-01', startTime: '10:00', durationMinutes: 60 },
-        catalog: { name: 'Welding Class' },
-      });
+      mocks.classRepository.getInstanceById.mockResolvedValue(instance);
+      mocks.classRepository.getConfirmedBookingCount.mockResolvedValue(0);
+      stubSettings(mocks.settingsRepository, { classSettings: { discordWebhookUrl: '' } });
+      mocks.paymentRepository.authorize.mockResolvedValue(authorized);
+      mocks.paymentRepository.capture.mockResolvedValue(paidPayment(5000));
+      mocks.classRepository.createBooking.mockResolvedValue(booking);
+      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.classRepository.getBookingById.mockResolvedValue(
+        bookingDetail(
+          { ...booking, customerName: dto.customerName, customerEmail: dto.customerEmail },
+          paidPayment(5000),
+          factory.classInstance({ date: '2099-12-01', startTime: '10:00', durationMinutes: 60 }),
+          factory.classCatalog({ name: 'Welding Class' }),
+        ),
+      );
     });
 
     it('should process a booking successfully', async () => {
-      const result = await classService.bookClass(dto);
+      const result = await sut.bookClass(dto);
 
       expect(result).toEqual(booking);
-      expect(mockPaymentRepo.authorize).toHaveBeenCalledWith(
+      expect(mocks.paymentRepository.authorize).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'class_booking',
           customer: { name: 'Jane Doe', email: 'jane@test.com' },
@@ -500,7 +407,7 @@ describe('ClassService', () => {
         }),
         'sq-nonce-123',
       );
-      expect(mockClassRepo.createBooking).toHaveBeenCalledWith({
+      expect(mocks.classRepository.createBooking).toHaveBeenCalledWith({
         instanceId: 'inst-1',
         customerName: 'Jane Doe',
         customerEmail: 'jane@test.com',
@@ -509,117 +416,117 @@ describe('ClassService', () => {
         status: 'confirmed',
         quantity: 1,
       });
-      expect(mockPaymentRepo.capture).toHaveBeenCalledWith(authorized);
+      expect(mocks.paymentRepository.capture).toHaveBeenCalledWith(authorized);
     });
 
     it('should throw when instance not found', async () => {
-      vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue(null);
+      mocks.classRepository.getInstanceById.mockResolvedValue(null);
 
-      await expect(classService.bookClass(dto)).rejects.toThrow('Class not found');
+      await expect(sut.bookClass(dto)).rejects.toThrow('Class not found');
     });
 
     it('should throw when instance is canceled', async () => {
-      vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue({
+      mocks.classRepository.getInstanceById.mockResolvedValue({
         ...instance,
         status: 'canceled',
       });
 
-      await expect(classService.bookClass(dto)).rejects.toThrow('This class has been canceled');
+      await expect(sut.bookClass(dto)).rejects.toThrow('This class has been canceled');
     });
 
     it('should throw when class date is in the past', async () => {
-      vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue({
-        ...instance,
-        date: '2000-01-01',
-      });
+      mocks.classRepository.getInstanceById.mockResolvedValue({ ...instance, date: '2000-01-01' });
 
-      await expect(classService.bookClass(dto)).rejects.toThrow('Cannot book a class in the past');
+      await expect(sut.bookClass(dto)).rejects.toThrow('Cannot book a class in the past');
     });
 
     it('should throw when class is fully booked', async () => {
-      vi.mocked(mockClassRepo.getConfirmedBookingCount).mockResolvedValue(10);
+      mocks.classRepository.getConfirmedBookingCount.mockResolvedValue(10);
 
-      await expect(classService.bookClass(dto)).rejects.toThrow('This class is fully booked');
+      await expect(sut.bookClass(dto)).rejects.toThrow('This class is fully booked');
     });
 
     it('should throw when the card is declined', async () => {
-      const { PaymentDeclinedError } = await import('$lib/server/repositories/payment.repository');
-      vi.mocked(mockPaymentRepo.authorize).mockRejectedValue(new PaymentDeclinedError());
+      mocks.paymentRepository.authorize.mockRejectedValue(new PaymentDeclinedError());
 
-      await expect(classService.bookClass(dto)).rejects.toThrow('Payment failed');
-      expect(mockClassRepo.createBooking).not.toHaveBeenCalled();
+      await expect(sut.bookClass(dto)).rejects.toThrow('Payment failed');
+      expect(mocks.classRepository.createBooking).not.toHaveBeenCalled();
     });
 
     it('should cancel the booking when the capture fails', async () => {
-      vi.mocked(mockPaymentRepo.capture).mockRejectedValue(new Error('capture failed'));
-      vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
+      mocks.paymentRepository.capture.mockRejectedValue(new Error('capture failed'));
+      mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
-      await expect(classService.bookClass(dto)).rejects.toThrow('Payment failed');
-      expect(mockClassRepo.updateBooking).toHaveBeenCalledWith('book-1', { status: 'canceled' });
+      await expect(sut.bookClass(dto)).rejects.toThrow('Payment failed');
+      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
+        status: 'canceled',
+      });
     });
 
     it('should void and cancel if overbooking detected after insert', async () => {
-      // First call returns 0 (pre-check passes), second call returns 11 (overbooked)
-      vi.mocked(mockClassRepo.getConfirmedBookingCount)
+      mocks.classRepository.getConfirmedBookingCount
         .mockResolvedValueOnce(0)
         .mockResolvedValueOnce(11);
-      vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
+      mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
+      mocks.paymentRepository.void.mockResolvedValue(
+        factory.payment({ ...authorized, status: PAYMENT_STATUS.CANCELED }),
+      );
 
-      await expect(classService.bookClass(dto)).rejects.toThrow('This class is fully booked');
-      expect(mockClassRepo.updateBooking).toHaveBeenCalledWith('book-1', { status: 'canceled' });
-      expect(mockPaymentRepo.void).toHaveBeenCalledWith(authorized);
-      expect(mockPaymentRepo.capture).not.toHaveBeenCalled();
+      await expect(sut.bookClass(dto)).rejects.toThrow('This class is fully booked');
+      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
+        status: 'canceled',
+      });
+      expect(mocks.paymentRepository.void).toHaveBeenCalledWith(authorized);
+      expect(mocks.paymentRepository.capture).not.toHaveBeenCalled();
     });
   });
 
   describe('cancelBooking', () => {
     it('should cancel a booking and refund payment', async () => {
-      const booking = {
-        id: 'book-1',
-        status: 'confirmed',
-        payment: paidPayment(5000),
-      };
-      vi.mocked(mockClassRepo.getBookingByToken).mockResolvedValue(booking);
-      vi.mocked(mockPaymentRepo.refund).mockResolvedValue(true);
-      vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
+      const payment = paidPayment(5000);
+      mocks.classRepository.getBookingByToken.mockResolvedValue(
+        bookingDetail({ id: 'book-1', status: 'confirmed' }, payment),
+      );
+      mocks.paymentRepository.refund.mockResolvedValue(true);
+      mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
-      const result = await classService.cancelBooking({ bookingToken: 'tok-abc' });
+      const result = await sut.cancelBooking({ bookingToken: 'tok-abc' });
 
       expect(result).toEqual({ success: true });
-      expect(mockPaymentRepo.refund).toHaveBeenCalledWith(paidPayment(5000));
-      expect(mockClassRepo.updateBooking).toHaveBeenCalledWith('book-1', { status: 'canceled' });
+      expect(mocks.paymentRepository.refund).toHaveBeenCalledWith(payment);
+      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
+        status: 'canceled',
+      });
     });
 
     it('should cancel without refund when no payment exists', async () => {
-      const booking = {
-        id: 'book-1',
-        status: 'confirmed',
-        payment: null,
-      };
-      vi.mocked(mockClassRepo.getBookingByToken).mockResolvedValue(booking);
-      vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
+      mocks.classRepository.getBookingByToken.mockResolvedValue(
+        bookingDetail({ id: 'book-1', status: 'confirmed' }, null),
+      );
+      mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
-      await classService.cancelBooking({ bookingToken: 'tok-abc' });
+      await sut.cancelBooking({ bookingToken: 'tok-abc' });
 
-      expect(mockPaymentRepo.refund).not.toHaveBeenCalled();
-      expect(mockClassRepo.updateBooking).toHaveBeenCalledWith('book-1', { status: 'canceled' });
+      expect(mocks.paymentRepository.refund).not.toHaveBeenCalled();
+      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
+        status: 'canceled',
+      });
     });
 
     it('should throw when booking not found', async () => {
-      vi.mocked(mockClassRepo.getBookingByToken).mockResolvedValue(null);
+      mocks.classRepository.getBookingByToken.mockResolvedValue(null);
 
-      await expect(classService.cancelBooking({ bookingToken: 'bad-token' })).rejects.toThrow(
+      await expect(sut.cancelBooking({ bookingToken: 'bad-token' })).rejects.toThrow(
         'Booking not found',
       );
     });
 
     it('should throw when booking already canceled', async () => {
-      vi.mocked(mockClassRepo.getBookingByToken).mockResolvedValue({
-        id: 'book-1',
-        status: 'canceled',
-      });
+      mocks.classRepository.getBookingByToken.mockResolvedValue(
+        bookingDetail({ id: 'book-1', status: 'canceled' }),
+      );
 
-      await expect(classService.cancelBooking({ bookingToken: 'tok-abc' })).rejects.toThrow(
+      await expect(sut.cancelBooking({ bookingToken: 'tok-abc' })).rejects.toThrow(
         'Booking is already canceled',
       );
     });
@@ -627,59 +534,59 @@ describe('ClassService', () => {
 
   describe('cancelBookingStaff', () => {
     it('should cancel a booking by id and refund', async () => {
-      const booking = {
-        id: 'book-1',
-        status: 'confirmed',
-        payment: paidPayment(3000),
-      };
-      vi.mocked(mockClassRepo.getBookingById).mockResolvedValue(booking);
-      vi.mocked(mockPaymentRepo.refund).mockResolvedValue(true);
-      vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
+      const payment = paidPayment(3000);
+      mocks.classRepository.getBookingById.mockResolvedValue(
+        bookingDetail({ id: 'book-1', status: 'confirmed' }, payment),
+      );
+      mocks.paymentRepository.refund.mockResolvedValue(true);
+      mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
-      const result = await classService.cancelBookingStaff({ bookingId: 'book-1' });
+      const result = await sut.cancelBookingStaff({ bookingId: 'book-1' });
 
       expect(result).toEqual({ success: true });
-      expect(mockPaymentRepo.refund).toHaveBeenCalledWith(paidPayment(3000));
+      expect(mocks.paymentRepository.refund).toHaveBeenCalledWith(payment);
     });
 
     it('should throw when booking not found', async () => {
-      vi.mocked(mockClassRepo.getBookingById).mockResolvedValue(null);
+      mocks.classRepository.getBookingById.mockResolvedValue(null);
 
-      await expect(classService.cancelBookingStaff({ bookingId: 'bad-id' })).rejects.toThrow(
+      await expect(sut.cancelBookingStaff({ bookingId: 'bad-id' })).rejects.toThrow(
         'Booking not found',
       );
     });
 
     it('should throw when booking already canceled', async () => {
-      vi.mocked(mockClassRepo.getBookingById).mockResolvedValue({
-        id: 'book-1',
-        status: 'canceled',
-      });
+      mocks.classRepository.getBookingById.mockResolvedValue(
+        bookingDetail({ id: 'book-1', status: 'canceled' }),
+      );
 
-      await expect(classService.cancelBookingStaff({ bookingId: 'book-1' })).rejects.toThrow(
+      await expect(sut.cancelBookingStaff({ bookingId: 'book-1' })).rejects.toThrow(
         'Booking is already canceled',
       );
     });
   });
 
-  // ── Email ──
-
   describe('sendBookingConfirmationEmail', () => {
     it('should send a confirmation email with correct data', async () => {
-      vi.mocked(mockClassRepo.getBookingById).mockResolvedValue({
-        id: 'book-1',
-        customerName: 'Jane Doe',
-        customerEmail: 'jane@test.com',
-        bookingToken: 'tok-abc',
-        quantity: 1,
-        payment: paidPayment(5000),
-        instance: { date: '2099-12-01', startTime: '10:00', durationMinutes: 60 },
-        catalog: { name: 'Welding Class' },
-      });
+      mocks.classRepository.getBookingById.mockResolvedValue(
+        bookingDetail(
+          {
+            id: 'book-1',
+            customerName: 'Jane Doe',
+            customerEmail: 'jane@test.com',
+            bookingToken: 'tok-abc',
+            quantity: 1,
+          },
+          paidPayment(5000),
+          factory.classInstance({ date: '2099-12-01', startTime: '10:00', durationMinutes: 60 }),
+          factory.classCatalog({ name: 'Welding Class' }),
+        ),
+      );
+      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
 
-      await classService.sendBookingConfirmationEmail('book-1');
+      await sut.sendBookingConfirmationEmail('book-1');
 
-      expect(mockMailgunRepo.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'jane@test.com',
         'Starforge Classes <classes@starforgefoundry.com>',
         'classes@starforgefoundry.com',
@@ -690,30 +597,24 @@ describe('ClassService', () => {
           className: 'Welding Class',
           quantity: '1',
           amountPaid: '50.00',
-          bookingUrl: 'https://example.com/classes/booking/tok-abc',
+          bookingUrl: 'https://orion.example.com/classes/booking/tok-abc',
         }),
       );
     });
 
     it('should throw when booking not found', async () => {
-      vi.mocked(mockClassRepo.getBookingById).mockResolvedValue(null);
+      mocks.classRepository.getBookingById.mockResolvedValue(null);
 
-      await expect(classService.sendBookingConfirmationEmail('bad-id')).rejects.toThrow(
-        'Booking not found',
-      );
+      await expect(sut.sendBookingConfirmationEmail('bad-id')).rejects.toThrow('Booking not found');
     });
   });
 
-  // ── Google Calendar sync ──
-
   describe('getTeacherCalendarLink', () => {
     it('returns null when the Google service account is not configured', async () => {
-      const result = await classService.getTeacherCalendarLink({
-        email: 'teacher@test.com',
-        name: 'Teacher',
-        picture: 'pic.png',
-        googleCalendarId: null,
-      });
+      const result = await sut.getTeacherCalendarLink(
+        factory.user({ email: 'teacher@test.com', googleCalendarId: null }),
+      );
+
       expect(result).toBeNull();
     });
   });

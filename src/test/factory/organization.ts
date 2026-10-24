@@ -1,4 +1,5 @@
 import type { BillingCode, Organization, OrganizationCharge, Payment } from '$lib/server/db/schema';
+import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { DateTime } from 'luxon';
 import { newId } from './id';
 
@@ -33,7 +34,6 @@ export function billingCode(overrides: Partial<BillingCode> = {}): BillingCode {
     code: 'ENGCLUB',
     description: 'Engineering Club',
     organizationId: null,
-    discountId: null,
     archived: false,
     ...overrides,
   };
@@ -44,15 +44,19 @@ export function payment(overrides: Partial<Payment> = {}): Payment {
     id: newId(),
     issuedDate: DateTime.now(),
     paymentDate: null,
-    status: 'pending',
-    squareInvoiceId: null,
-    squareOrderId: null,
-    organizationId: null,
-    type: 'print_request',
+    refundedDate: null,
+    status: PAYMENT_STATUS.PENDING,
+    type: PAYMENT_TYPE.PRINT_REQUEST,
+    customerName: 'Test Customer',
+    customerEmail: 'customer@example.com',
+    lineItems: [],
+    discounts: [],
     total: 1000,
-    orderObject: null,
     paymentUrl: null,
-    carBayBookingId: null,
+    organizationId: null,
+    squareOrderId: null,
+    squarePaymentId: null,
+    squareInvoiceId: null,
     ...overrides,
   };
 }

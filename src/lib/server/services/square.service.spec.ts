@@ -1,74 +1,30 @@
-import type { Location, Subscription } from 'square';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SquareWebhookLog } from '$lib/server/db/schema';
+import { factory } from '$test/factory';
+import { catalogDiscount, squareCustomer, squareOrder } from '$test/factory/square';
+import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
+import type { CatalogObject, Location, Payment, Subscription } from 'square';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SquareService } from './square.service';
 
-// Mock the repositories
-vi.mock('$lib/server/repositories/square.repository', () => {
-  const MockSquareRepository = vi.fn();
-  MockSquareRepository.prototype.getLocations = vi.fn();
-  MockSquareRepository.prototype.getCatalog = vi.fn();
-  MockSquareRepository.prototype.logWebhook = vi.fn();
-  MockSquareRepository.prototype.getSubscription = vi.fn();
-  MockSquareRepository.prototype.listSubscriptions = vi.fn();
-  MockSquareRepository.prototype.getCustomer = vi.fn();
-  MockSquareRepository.prototype.getPayment = vi.fn();
-  MockSquareRepository.prototype.getOrderById = vi.fn();
-  MockSquareRepository.prototype.getPlanVariationName = vi.fn();
-  return { SquareRepository: MockSquareRepository };
-});
+function webhookLog(id = 'evt'): SquareWebhookLog {
+  return { id, payload: {} };
+}
 
-vi.mock('$lib/server/repositories/print_files.repository', () => {
-  const MockPrintFilesRepository = vi.fn();
-  return { PrintFilesRepository: MockPrintFilesRepository };
-});
+function invoiceWebhook(type: string, invoiceId: string) {
+  return { type, data: { id: invoiceId } };
+}
 
-vi.mock('$lib/server/repositories/print_materials.repository', () => {
-  const MockPrintMaterialsRepository = vi.fn();
-  return { PrintMaterialsRepository: MockPrintMaterialsRepository };
-});
+describe(SquareService.name, () => {
+  let sut: SquareService;
+  let mocks: ServiceMocks;
 
-vi.mock('$lib/server/repositories/print_request.repository', () => {
-  const MockPrintRequestRepository = vi.fn();
-  return { PrintRequestRepository: MockPrintRequestRepository };
-});
-
-vi.mock('$lib/server/repositories/payment.repository', () => {
-  const MockPaymentRepository = vi.fn();
-  MockPaymentRepository.prototype.updateInvoiceStatus = vi.fn();
-  return { PaymentRepository: MockPaymentRepository };
-});
-
-vi.mock('$lib/server/repositories/settings.repository', () => {
-  const MockSettingsRepository = vi.fn();
-  MockSettingsRepository.prototype.getSetting = vi.fn();
-  return { SettingsRepository: MockSettingsRepository };
-});
-
-describe('SquareService', () => {
-  let squareService: any;
-  let mockSquareRepo: any;
-  let mockPaymentRepo: any;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-
-    const { SquareService } = await import('./square.service');
-    squareService = new SquareService();
-
-    const { SquareRepository } = await import('$lib/server/repositories/square.repository');
-    mockSquareRepo = SquareRepository.prototype;
-
-    const { PaymentRepository } = await import('$lib/server/repositories/payment.repository');
-    mockPaymentRepo = PaymentRepository.prototype;
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
+  beforeEach(() => {
+    ({ sut, mocks } = newTestService(SquareService));
   });
 
   describe('getLocations', () => {
     it('should return all locations from Square', async () => {
-      // Arrange
-      const mockLocations: Location[] = [
+      const locations: Location[] = [
         {
           id: 'loc-123',
           name: 'Main Location',
@@ -90,162 +46,100 @@ describe('SquareService', () => {
           },
         },
       ];
+      mocks.squareRepository.getLocations.mockResolvedValue(locations);
 
-      vi.mocked(mockSquareRepo.getLocations).mockResolvedValue(mockLocations);
+      const result = await sut.getLocations();
 
-      // Act
-      const result = await squareService.getLocations();
-
-      // Assert
-      expect(mockSquareRepo.getLocations).toHaveBeenCalled();
-      expect(result).toEqual(mockLocations);
+      expect(mocks.squareRepository.getLocations).toHaveBeenCalled();
+      expect(result).toEqual(locations);
       expect(result).toHaveLength(2);
     });
 
     it('should return empty array when no locations exist', async () => {
-      // Arrange
-      vi.mocked(mockSquareRepo.getLocations).mockResolvedValue([]);
+      mocks.squareRepository.getLocations.mockResolvedValue([]);
 
-      // Act
-      const result = await squareService.getLocations();
+      const result = await sut.getLocations();
 
-      // Assert
-      expect(mockSquareRepo.getLocations).toHaveBeenCalled();
+      expect(mocks.squareRepository.getLocations).toHaveBeenCalled();
       expect(result).toEqual([]);
     });
 
     it('should handle single location', async () => {
-      // Arrange
-      const mockLocation: Location = {
-        id: 'loc-single',
-        name: 'Only Location',
-        address: {
-          addressLine1: '789 Lone St',
-        },
-      };
+      mocks.squareRepository.getLocations.mockResolvedValue([
+        { id: 'loc-single', name: 'Only Location', address: { addressLine1: '789 Lone St' } },
+      ]);
 
-      vi.mocked(mockSquareRepo.getLocations).mockResolvedValue([mockLocation]);
+      const result = await sut.getLocations();
 
-      // Act
-      const result = await squareService.getLocations();
-
-      // Assert
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('loc-single');
       expect(result[0].name).toBe('Only Location');
+    });
+
+    it('should handle repository errors gracefully', async () => {
+      mocks.squareRepository.getLocations.mockRejectedValue(new Error('Square API error'));
+
+      await expect(sut.getLocations()).rejects.toThrow('Square API error');
     });
   });
 
   describe('getCatalog', () => {
     it('should return catalog items from Square', async () => {
-      // Arrange
-      const mockCatalog = {
-        objects: [
-          {
-            type: 'ITEM',
-            id: 'item-123',
-            itemData: {
-              name: '3D Print Service',
-            },
-          },
-          {
-            type: 'DISCOUNT',
-            id: 'discount-456',
-            discountData: {
-              name: 'Member Discount',
-              percentage: '10',
-            },
-          },
-        ],
-      };
+      const catalog: CatalogObject[] = [
+        { type: 'ITEM', id: 'item-123', itemData: { name: '3D Print Service' } },
+        catalogDiscount('discount-456', { name: 'Member Discount', percentage: '10' }),
+      ];
+      mocks.squareRepository.getCatalog.mockResolvedValue(catalog);
 
-      vi.mocked(mockSquareRepo.getCatalog).mockResolvedValue(mockCatalog);
+      const result = await sut.getCatalog();
 
-      // Act
-      const result = await squareService.getCatalog();
-
-      // Assert
-      expect(mockSquareRepo.getCatalog).toHaveBeenCalled();
-      expect(result).toEqual(mockCatalog);
-      expect(result.objects).toHaveLength(2);
+      expect(mocks.squareRepository.getCatalog).toHaveBeenCalled();
+      expect(result).toEqual(catalog);
+      expect(result).toHaveLength(2);
     });
 
     it('should return empty catalog when no items exist', async () => {
-      // Arrange
-      const mockEmptyCatalog = { objects: [] };
-      vi.mocked(mockSquareRepo.getCatalog).mockResolvedValue(mockEmptyCatalog);
+      mocks.squareRepository.getCatalog.mockResolvedValue([]);
 
-      // Act
-      const result = await squareService.getCatalog();
+      const result = await sut.getCatalog();
 
-      // Assert
-      expect(mockSquareRepo.getCatalog).toHaveBeenCalled();
-      expect(result.objects).toEqual([]);
-    });
-  });
-
-  describe('edge cases', () => {
-    it('should handle repository errors gracefully in getLocations', async () => {
-      // Arrange
-      vi.mocked(mockSquareRepo.getLocations).mockRejectedValue(new Error('Square API error'));
-
-      // Act & Assert
-      await expect(squareService.getLocations()).rejects.toThrow('Square API error');
+      expect(mocks.squareRepository.getCatalog).toHaveBeenCalled();
+      expect(result).toEqual([]);
     });
 
-    it('should handle repository errors gracefully in getCatalog', async () => {
-      // Arrange
-      vi.mocked(mockSquareRepo.getCatalog).mockRejectedValue(new Error('Catalog not available'));
+    it('should handle repository errors gracefully', async () => {
+      mocks.squareRepository.getCatalog.mockRejectedValue(new Error('Catalog not available'));
 
-      // Act & Assert
-      await expect(squareService.getCatalog()).rejects.toThrow('Catalog not available');
+      await expect(sut.getCatalog()).rejects.toThrow('Catalog not available');
     });
   });
 
   describe('processWebhook', () => {
+    beforeEach(() => {
+      mocks.squareRepository.logWebhook.mockResolvedValue(webhookLog());
+      mocks.paymentRepository.updateInvoiceStatus.mockResolvedValue();
+    });
+
     it('should process invoice.payment_made webhook event', async () => {
-      // Arrange
-      const webhookData = {
-        type: 'invoice.payment_made',
-        data: {
-          id: 'inv-paid-123',
-        },
-      };
+      const webhookData = invoiceWebhook('invoice.payment_made', 'inv-paid-123');
 
-      const mockLog = { id: 'log-1', eventId: 'evt-1' };
+      const result = await sut.processWebhook(webhookData);
 
-      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue(mockLog);
-      vi.mocked(mockPaymentRepo.updateInvoiceStatus).mockResolvedValue(undefined);
-
-      // Act
-      const result = await squareService.processWebhook(webhookData);
-
-      // Assert
-      expect(mockSquareRepo.logWebhook).toHaveBeenCalledWith(webhookData);
-      expect(mockPaymentRepo.updateInvoiceStatus).toHaveBeenCalledWith('inv-paid-123', 'paid');
+      expect(mocks.squareRepository.logWebhook).toHaveBeenCalledWith(webhookData);
+      expect(mocks.paymentRepository.updateInvoiceStatus).toHaveBeenCalledWith(
+        'inv-paid-123',
+        'paid',
+      );
       expect(result).toEqual({ success: true });
     });
 
     it('should process invoice.canceled webhook event', async () => {
-      // Arrange
-      const webhookData = {
-        type: 'invoice.canceled',
-        data: {
-          id: 'inv-canceled-456',
-        },
-      };
+      const webhookData = invoiceWebhook('invoice.canceled', 'inv-canceled-456');
 
-      const mockLog = { id: 'log-2', eventId: 'evt-2' };
+      const result = await sut.processWebhook(webhookData);
 
-      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue(mockLog);
-      vi.mocked(mockPaymentRepo.updateInvoiceStatus).mockResolvedValue(undefined);
-
-      // Act
-      const result = await squareService.processWebhook(webhookData);
-
-      // Assert
-      expect(mockSquareRepo.logWebhook).toHaveBeenCalledWith(webhookData);
-      expect(mockPaymentRepo.updateInvoiceStatus).toHaveBeenCalledWith(
+      expect(mocks.squareRepository.logWebhook).toHaveBeenCalledWith(webhookData);
+      expect(mocks.paymentRepository.updateInvoiceStatus).toHaveBeenCalledWith(
         'inv-canceled-456',
         'canceled',
       );
@@ -253,22 +147,13 @@ describe('SquareService', () => {
     });
 
     it('should handle duplicate webhook events', async () => {
-      // Arrange
-      const webhookData = {
-        type: 'invoice.payment_made',
-        data: {
-          id: 'inv-duplicate-789',
-        },
-      };
+      const webhookData = invoiceWebhook('invoice.payment_made', 'inv-duplicate-789');
+      mocks.squareRepository.logWebhook.mockResolvedValue(undefined);
 
-      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue(null);
+      const result = await sut.processWebhook(webhookData);
 
-      // Act
-      const result = await squareService.processWebhook(webhookData);
-
-      // Assert
-      expect(mockSquareRepo.logWebhook).toHaveBeenCalledWith(webhookData);
-      expect(mockPaymentRepo.updateInvoiceStatus).not.toHaveBeenCalled();
+      expect(mocks.squareRepository.logWebhook).toHaveBeenCalledWith(webhookData);
+      expect(mocks.paymentRepository.updateInvoiceStatus).not.toHaveBeenCalled();
       expect(result).toEqual({
         success: true,
         message: 'Already received and processed webhook event',
@@ -276,412 +161,384 @@ describe('SquareService', () => {
     });
 
     it('should ignore unknown webhook event types', async () => {
-      // Arrange
-      const webhookData = {
-        type: 'unknown.event.type',
-        data: {
-          id: 'some-id',
-        },
-      };
+      const webhookData = invoiceWebhook('unknown.event.type', 'some-id');
 
-      const mockLog = { id: 'log-3', eventId: 'evt-3' };
+      const result = await sut.processWebhook(webhookData);
 
-      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue(mockLog);
-
-      // Act
-      const result = await squareService.processWebhook(webhookData);
-
-      // Assert
-      expect(mockSquareRepo.logWebhook).toHaveBeenCalledWith(webhookData);
-      expect(mockPaymentRepo.updateInvoiceStatus).not.toHaveBeenCalled();
+      expect(mocks.squareRepository.logWebhook).toHaveBeenCalledWith(webhookData);
+      expect(mocks.paymentRepository.updateInvoiceStatus).not.toHaveBeenCalled();
       expect(result).toEqual({ success: true });
     });
 
     it('should handle webhook with missing data', async () => {
-      // Arrange
-      const webhookData = {
-        type: 'invoice.payment_made',
-        data: {},
-      };
+      const webhookData = { type: 'invoice.payment_made', data: {} };
 
-      const mockLog = { id: 'log-4', eventId: 'evt-4' };
+      const result = await sut.processWebhook(webhookData);
 
-      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue(mockLog);
-      vi.mocked(mockPaymentRepo.updateInvoiceStatus).mockResolvedValue(undefined);
-
-      // Act
-      const result = await squareService.processWebhook(webhookData);
-
-      // Assert
-      expect(mockSquareRepo.logWebhook).toHaveBeenCalledWith(webhookData);
-      expect(mockPaymentRepo.updateInvoiceStatus).toHaveBeenCalledWith(undefined, 'paid');
+      expect(mocks.squareRepository.logWebhook).toHaveBeenCalledWith(webhookData);
+      expect(mocks.paymentRepository.updateInvoiceStatus).toHaveBeenCalledWith(undefined, 'paid');
       expect(result).toEqual({ success: true });
     });
 
     it('should handle multiple webhook events in sequence', async () => {
-      // Arrange
-      const webhook1 = {
-        type: 'invoice.payment_made',
-        data: { id: 'inv-1' },
-      };
-      const webhook2 = {
-        type: 'invoice.canceled',
-        data: { id: 'inv-2' },
-      };
+      await sut.processWebhook(invoiceWebhook('invoice.payment_made', 'inv-1'));
+      await sut.processWebhook(invoiceWebhook('invoice.canceled', 'inv-2'));
 
-      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue({ id: 'log' });
-      vi.mocked(mockPaymentRepo.updateInvoiceStatus).mockResolvedValue(undefined);
-
-      // Act
-      await squareService.processWebhook(webhook1);
-      await squareService.processWebhook(webhook2);
-
-      // Assert
-      expect(mockSquareRepo.logWebhook).toHaveBeenCalledTimes(2);
-      expect(mockPaymentRepo.updateInvoiceStatus).toHaveBeenNthCalledWith(1, 'inv-1', 'paid');
-      expect(mockPaymentRepo.updateInvoiceStatus).toHaveBeenNthCalledWith(2, 'inv-2', 'canceled');
+      expect(mocks.squareRepository.logWebhook).toHaveBeenCalledTimes(2);
+      expect(mocks.paymentRepository.updateInvoiceStatus).toHaveBeenNthCalledWith(
+        1,
+        'inv-1',
+        'paid',
+      );
+      expect(mocks.paymentRepository.updateInvoiceStatus).toHaveBeenNthCalledWith(
+        2,
+        'inv-2',
+        'canceled',
+      );
     });
 
     it('should handle errors in webhook processing', async () => {
-      // Arrange
-      const webhookData = {
-        type: 'invoice.payment_made',
-        data: { id: 'inv-error' },
-      };
+      mocks.paymentRepository.updateInvoiceStatus.mockRejectedValue(new Error('Update failed'));
 
-      vi.mocked(mockSquareRepo.logWebhook).mockResolvedValue({ id: 'log' });
-      vi.mocked(mockPaymentRepo.updateInvoiceStatus).mockRejectedValue(new Error('Update failed'));
-
-      // Act & Assert
-      await expect(squareService.processWebhook(webhookData)).rejects.toThrow('Update failed');
-    });
-  });
-});
-
-describe('SquareService member sync', () => {
-  const MEMBER = { id: 'member-1', email: 'ada@example.com', squareCustomerId: null };
-  const CUSTOMER = {
-    id: 'cust-1',
-    givenName: 'Ada',
-    familyName: 'Lovelace',
-    emailAddress: 'ada@example.com',
-  };
-  const SUBSCRIPTION: Subscription = {
-    id: 'sub-1',
-    customerId: 'cust-1',
-    planVariationId: 'plan-var-1',
-    status: 'ACTIVE',
-    startDate: '2026-10-01',
-    chargedThroughDate: '2026-11-01',
-  };
-  const DAY_PASS_VARIATION = 'day-pass-var';
-
-  let service: any;
-  let squareRepo: any;
-  let settingsRepo: any;
-  let memberRepo: any;
-  let memberSubscriptionRepo: any;
-  let dayPassRepo: any;
-  let notificationRepo: any;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-
-    const { SquareRepository } = await import('$lib/server/repositories/square.repository');
-    squareRepo = SquareRepository.prototype;
-    const { SettingsRepository } = await import('$lib/server/repositories/settings.repository');
-    settingsRepo = SettingsRepository.prototype;
-
-    memberRepo = {
-      upsertByEmail: vi.fn().mockResolvedValue(MEMBER),
-      getByEmail: vi.fn().mockResolvedValue(undefined),
-      setSquareCustomerId: vi.fn(),
-    };
-    memberSubscriptionRepo = {
-      upsert: vi.fn().mockResolvedValue({ created: true }),
-      listIds: vi.fn().mockResolvedValue([]),
-    };
-    dayPassRepo = {
-      existsForOrder: vi.fn().mockResolvedValue(false),
-      createForOrder: vi.fn().mockResolvedValue([]),
-    };
-    notificationRepo = { sendOnboarding: vi.fn().mockResolvedValue(undefined) };
-
-    squareRepo.logWebhook.mockResolvedValue({ id: 'log' });
-    squareRepo.getSubscription.mockResolvedValue(SUBSCRIPTION);
-    squareRepo.getCustomer.mockResolvedValue(CUSTOMER);
-    squareRepo.getPlanVariationName.mockResolvedValue('Monthly Membership');
-    settingsRepo.getSetting.mockResolvedValue({ dayPassItemVariationIds: [DAY_PASS_VARIATION] });
-
-    const { SquareService } = await import('./square.service');
-    service = new SquareService(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      {
-        memberRepository: memberRepo,
-        memberSubscriptionRepository: memberSubscriptionRepo,
-        dayPassRepository: dayPassRepo,
-        memberNotificationRepository: notificationRepo,
-      },
-    );
-  });
-
-  const subscriptionWebhook = (type = 'subscription.created') => ({
-    type,
-    event_id: 'evt-sub',
-    data: { id: 'sub-1' },
-  });
-
-  describe('subscription webhooks', () => {
-    it('upserts the member and subscription, then sends onboarding', async () => {
-      await service.processWebhook(subscriptionWebhook());
-
-      expect(memberRepo.upsertByEmail).toHaveBeenCalledWith('Ada Lovelace', 'ada@example.com');
-      expect(memberRepo.setSquareCustomerId).toHaveBeenCalledWith('member-1', 'cust-1');
-      expect(memberSubscriptionRepo.upsert).toHaveBeenCalledWith({
-        id: 'sub-1',
-        memberId: 'member-1',
-        planVariationId: 'plan-var-1',
-        planName: 'Monthly Membership',
-        status: 'active',
-        startDate: '2026-10-01',
-        chargedThroughDate: '2026-11-01',
-        canceledDate: null,
-      });
-      expect(notificationRepo.sendOnboarding).toHaveBeenCalledWith(MEMBER, 'subscription');
-    });
-
-    it('handles subscription.updated the same way', async () => {
-      memberSubscriptionRepo.upsert.mockResolvedValue({ created: false });
-      squareRepo.getSubscription.mockResolvedValue({
-        ...SUBSCRIPTION,
-        status: 'CANCELED',
-        canceledDate: '2026-10-20',
-      });
-
-      await service.processWebhook(subscriptionWebhook('subscription.updated'));
-
-      expect(memberSubscriptionRepo.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'canceled', canceledDate: '2026-10-20' }),
-      );
-      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
-    });
-
-    it('does not onboard a newly seen canceled subscription', async () => {
-      squareRepo.getSubscription.mockResolvedValue({ ...SUBSCRIPTION, status: 'CANCELED' });
-
-      await service.processWebhook(subscriptionWebhook());
-
-      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
-    });
-
-    it('skips customers without an email', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      squareRepo.getCustomer.mockResolvedValue({ ...CUSTOMER, emailAddress: undefined });
-
-      await service.processWebhook(subscriptionWebhook());
-
-      expect(warn).toHaveBeenCalled();
-      expect(memberRepo.upsertByEmail).not.toHaveBeenCalled();
-      expect(memberSubscriptionRepo.upsert).not.toHaveBeenCalled();
-      warn.mockRestore();
-    });
-
-    it('falls back to the email when the customer has no name', async () => {
-      squareRepo.getCustomer.mockResolvedValue({ id: 'cust-1', emailAddress: 'ada@example.com' });
-
-      await service.processWebhook(subscriptionWebhook());
-
-      expect(memberRepo.upsertByEmail).toHaveBeenCalledWith('ada@example.com', 'ada@example.com');
-    });
-
-    it('does not fail the webhook when onboarding fails', async () => {
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-      notificationRepo.sendOnboarding.mockRejectedValue(new Error('Mailgun down'));
-
-      await expect(service.processWebhook(subscriptionWebhook())).resolves.toEqual({
-        success: true,
-      });
-      error.mockRestore();
+      await expect(
+        sut.processWebhook(invoiceWebhook('invoice.payment_made', 'inv-error')),
+      ).rejects.toThrow('Update failed');
     });
   });
 
-  describe('syncSubscriptions', () => {
-    it('upserts every active subscription without onboarding and returns counts', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      squareRepo.listSubscriptions.mockResolvedValue([
-        SUBSCRIPTION,
-        { ...SUBSCRIPTION, id: 'sub-2' },
-        { ...SUBSCRIPTION, id: 'sub-3', customerId: undefined },
-      ]);
-      memberSubscriptionRepo.upsert
-        .mockResolvedValueOnce({ created: true })
-        .mockResolvedValueOnce({ created: false });
-
-      const result = await service.syncSubscriptions({ onboardNewMembers: false });
-
-      expect(result).toEqual({ total: 3, created: 1, updated: 1, skipped: 1 });
-      expect(memberSubscriptionRepo.upsert).toHaveBeenCalledTimes(2);
-      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
-      warn.mockRestore();
+  describe('member sync', () => {
+    const DAY_PASS_VARIATION = 'day-pass-var';
+    const member = factory.member({ email: 'ada@example.com', squareCustomerId: null });
+    const customer = squareCustomer({
+      id: 'cust-1',
+      givenName: 'Ada',
+      familyName: 'Lovelace',
+      emailAddress: 'ada@example.com',
     });
-
-    it('refreshes known subscriptions that are no longer active and ignores unknown ones', async () => {
-      squareRepo.listSubscriptions.mockResolvedValue([
-        { ...SUBSCRIPTION, id: 'known-canceled', status: 'CANCELED' },
-        { ...SUBSCRIPTION, id: 'unknown-canceled', status: 'CANCELED' },
-      ]);
-      memberSubscriptionRepo.listIds.mockResolvedValue(['known-canceled']);
-      memberSubscriptionRepo.upsert.mockResolvedValue({ created: false });
-
-      const result = await service.syncSubscriptions({ onboardNewMembers: false });
-
-      expect(result).toEqual({ total: 1, created: 0, updated: 1, skipped: 0 });
-      expect(memberSubscriptionRepo.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'known-canceled', status: 'canceled' }),
-      );
-    });
-
-    it('onboards subscribers whose webhook was missed when asked to', async () => {
-      squareRepo.listSubscriptions.mockResolvedValue([SUBSCRIPTION]);
-      memberSubscriptionRepo.upsert.mockResolvedValue({ created: true });
-
-      await service.syncSubscriptions({ onboardNewMembers: true });
-
-      expect(notificationRepo.sendOnboarding).toHaveBeenCalledWith(MEMBER, 'subscription');
-    });
-  });
-
-  describe('day pass webhooks', () => {
-    const paymentWebhook = { type: 'payment.updated', event_id: 'evt-pay', data: { id: 'pay-1' } };
-    const PAYMENT = {
-      id: 'pay-1',
-      status: 'COMPLETED',
-      orderId: 'order-1',
-      createdAt: '2026-10-16T15:00:00Z',
-    };
-    const ORDER = {
-      id: 'order-1',
+    const subscription: Subscription = {
+      id: 'sub-1',
       customerId: 'cust-1',
-      closedAt: '2026-10-16T15:01:00Z',
-      lineItems: [
-        { catalogObjectId: DAY_PASS_VARIATION, quantity: '2' },
-        { catalogObjectId: 'other-item', quantity: '5' },
-      ],
+      planVariationId: 'plan-var-1',
+      status: 'ACTIVE',
+      startDate: '2026-10-01',
+      chargedThroughDate: '2026-11-01',
     };
 
     beforeEach(() => {
-      squareRepo.getPayment.mockResolvedValue(PAYMENT);
-      squareRepo.getOrderById.mockResolvedValue(ORDER);
-      dayPassRepo.createForOrder.mockResolvedValue([{ id: 'order-1:0' }, { id: 'order-1:1' }]);
+      mocks.memberRepository.upsertByEmail.mockResolvedValue(member);
+      mocks.memberRepository.getByEmail.mockResolvedValue(undefined as never);
+      mocks.memberRepository.setSquareCustomerId.mockResolvedValue();
+      mocks.memberSubscriptionRepository.upsert.mockResolvedValue({ created: true });
+      mocks.memberSubscriptionRepository.listIds.mockResolvedValue([]);
+      mocks.dayPassRepository.existsForOrder.mockResolvedValue(false);
+      mocks.dayPassRepository.createForOrder.mockResolvedValue([]);
+      mocks.memberNotificationRepository.sendOnboarding.mockResolvedValue();
+      mocks.squareRepository.logWebhook.mockResolvedValue(webhookLog());
+      mocks.squareRepository.getSubscription.mockResolvedValue(subscription);
+      mocks.squareRepository.getCustomer.mockResolvedValue(customer);
+      mocks.squareRepository.getPlanVariationName.mockResolvedValue('Monthly Membership');
+      stubSettings(mocks.settingsRepository, {
+        memberSquare: { dayPassItemVariationIds: [DAY_PASS_VARIATION] },
+      });
     });
 
-    it('creates one pass per day pass item and sends onboarding', async () => {
-      await service.processWebhook(paymentWebhook);
-
-      expect(dayPassRepo.createForOrder).toHaveBeenCalledWith(
-        'member-1',
-        'order-1',
-        expect.anything(),
-        2,
-      );
-      expect(dayPassRepo.createForOrder.mock.calls[0][2].toUTC().toISO()).toContain(
-        '2026-10-16T15:01',
-      );
-      expect(memberRepo.setSquareCustomerId).toHaveBeenCalledWith('member-1', 'cust-1');
-      expect(notificationRepo.sendOnboarding).toHaveBeenCalledWith(MEMBER, 'day_pass');
+    const subscriptionWebhook = (type = 'subscription.created') => ({
+      type,
+      event_id: 'evt-sub',
+      data: { id: 'sub-1' },
     });
 
-    it('keeps an existing member name', async () => {
-      memberRepo.getByEmail.mockResolvedValue({ ...MEMBER, squareCustomerId: 'cust-1' });
+    describe('subscription webhooks', () => {
+      it('upserts the member and subscription, then sends onboarding', async () => {
+        await sut.processWebhook(subscriptionWebhook());
 
-      await service.processWebhook(paymentWebhook);
+        expect(mocks.memberRepository.upsertByEmail).toHaveBeenCalledWith(
+          'Ada Lovelace',
+          'ada@example.com',
+        );
+        expect(mocks.memberRepository.setSquareCustomerId).toHaveBeenCalledWith(
+          member.id,
+          'cust-1',
+        );
+        expect(mocks.memberSubscriptionRepository.upsert).toHaveBeenCalledWith({
+          id: 'sub-1',
+          memberId: member.id,
+          planVariationId: 'plan-var-1',
+          planName: 'Monthly Membership',
+          status: 'active',
+          startDate: '2026-10-01',
+          chargedThroughDate: '2026-11-01',
+          canceledDate: null,
+        });
+        expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+          member,
+          'subscription',
+        );
+      });
 
-      expect(memberRepo.upsertByEmail).not.toHaveBeenCalled();
-      expect(memberRepo.setSquareCustomerId).not.toHaveBeenCalled();
+      it('handles subscription.updated the same way', async () => {
+        mocks.memberSubscriptionRepository.upsert.mockResolvedValue({ created: false });
+        mocks.squareRepository.getSubscription.mockResolvedValue({
+          ...subscription,
+          status: 'CANCELED',
+          canceledDate: '2026-10-20',
+        });
+
+        await sut.processWebhook(subscriptionWebhook('subscription.updated'));
+
+        expect(mocks.memberSubscriptionRepository.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({ status: 'canceled', canceledDate: '2026-10-20' }),
+        );
+        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      });
+
+      it('does not onboard a newly seen canceled subscription', async () => {
+        mocks.squareRepository.getSubscription.mockResolvedValue({
+          ...subscription,
+          status: 'CANCELED',
+        });
+
+        await sut.processWebhook(subscriptionWebhook());
+
+        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      });
+
+      it('skips customers without an email', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        mocks.squareRepository.getCustomer.mockResolvedValue({
+          ...customer,
+          emailAddress: undefined,
+        });
+
+        await sut.processWebhook(subscriptionWebhook());
+
+        expect(warn).toHaveBeenCalled();
+        expect(mocks.memberRepository.upsertByEmail).not.toHaveBeenCalled();
+        expect(mocks.memberSubscriptionRepository.upsert).not.toHaveBeenCalled();
+      });
+
+      it('falls back to the email when the customer has no name', async () => {
+        mocks.squareRepository.getCustomer.mockResolvedValue(
+          squareCustomer({
+            id: 'cust-1',
+            emailAddress: 'ada@example.com',
+            givenName: undefined,
+            familyName: undefined,
+          }),
+        );
+
+        await sut.processWebhook(subscriptionWebhook());
+
+        expect(mocks.memberRepository.upsertByEmail).toHaveBeenCalledWith(
+          'ada@example.com',
+          'ada@example.com',
+        );
+      });
+
+      it('does not fail the webhook when onboarding fails', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        mocks.memberNotificationRepository.sendOnboarding.mockRejectedValue(
+          new Error('Mailgun down'),
+        );
+
+        await expect(sut.processWebhook(subscriptionWebhook())).resolves.toEqual({
+          success: true,
+        });
+      });
     });
 
-    it('is idempotent per order', async () => {
-      dayPassRepo.existsForOrder.mockResolvedValue(true);
+    describe('syncSubscriptions', () => {
+      it('upserts every active subscription without onboarding and returns counts', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        mocks.squareRepository.listSubscriptions.mockResolvedValue([
+          subscription,
+          { ...subscription, id: 'sub-2' },
+          { ...subscription, id: 'sub-3', customerId: undefined },
+        ]);
+        mocks.memberSubscriptionRepository.upsert
+          .mockResolvedValueOnce({ created: true })
+          .mockResolvedValueOnce({ created: false });
 
-      await service.processWebhook(paymentWebhook);
+        const result = await sut.syncSubscriptions({ onboardNewMembers: false });
 
-      expect(dayPassRepo.createForOrder).not.toHaveBeenCalled();
+        expect(result).toEqual({ total: 3, created: 1, updated: 1, skipped: 1 });
+        expect(mocks.memberSubscriptionRepository.upsert).toHaveBeenCalledTimes(2);
+        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      });
+
+      it('refreshes known subscriptions that are no longer active and ignores unknown ones', async () => {
+        mocks.squareRepository.listSubscriptions.mockResolvedValue([
+          { ...subscription, id: 'known-canceled', status: 'CANCELED' },
+          { ...subscription, id: 'unknown-canceled', status: 'CANCELED' },
+        ]);
+        mocks.memberSubscriptionRepository.listIds.mockResolvedValue(['known-canceled']);
+        mocks.memberSubscriptionRepository.upsert.mockResolvedValue({ created: false });
+
+        const result = await sut.syncSubscriptions({ onboardNewMembers: false });
+
+        expect(result).toEqual({ total: 1, created: 0, updated: 1, skipped: 0 });
+        expect(mocks.memberSubscriptionRepository.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'known-canceled', status: 'canceled' }),
+        );
+      });
+
+      it('onboards subscribers whose webhook was missed when asked to', async () => {
+        mocks.squareRepository.listSubscriptions.mockResolvedValue([subscription]);
+
+        await sut.syncSubscriptions({ onboardNewMembers: true });
+
+        expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+          member,
+          'subscription',
+        );
+      });
     });
 
-    it('does not resend onboarding when a concurrent webhook already created the passes', async () => {
-      dayPassRepo.createForOrder.mockResolvedValue([]);
+    describe('day pass webhooks', () => {
+      const paymentWebhook = {
+        type: 'payment.updated',
+        event_id: 'evt-pay',
+        data: { id: 'pay-1' },
+      };
+      const payment: Payment = {
+        id: 'pay-1',
+        status: 'COMPLETED',
+        orderId: 'order-1',
+        createdAt: '2026-10-16T15:00:00Z',
+      };
+      const order = squareOrder({
+        id: 'order-1',
+        customerId: 'cust-1',
+        closedAt: '2026-10-16T15:01:00Z',
+        lineItems: [
+          { catalogObjectId: DAY_PASS_VARIATION, quantity: '2' },
+          { catalogObjectId: 'other-item', quantity: '5' },
+        ],
+      });
 
-      await service.processWebhook(paymentWebhook);
+      beforeEach(() => {
+        mocks.squareRepository.getPayment.mockResolvedValue(payment);
+        mocks.squareRepository.getOrderById.mockResolvedValue(order);
+        mocks.dayPassRepository.createForOrder.mockResolvedValue([
+          factory.dayPass({ id: 'order-1:0', memberId: member.id, squareOrderId: 'order-1' }),
+          factory.dayPass({ id: 'order-1:1', memberId: member.id, squareOrderId: 'order-1' }),
+        ]);
+      });
 
-      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
-    });
+      it('creates one pass per day pass item and sends onboarding', async () => {
+        await sut.processWebhook(paymentWebhook);
 
-    it('ignores payments that are not completed', async () => {
-      squareRepo.getPayment.mockResolvedValue({ ...PAYMENT, status: 'APPROVED' });
+        expect(mocks.dayPassRepository.createForOrder).toHaveBeenCalledWith(
+          member.id,
+          'order-1',
+          expect.anything(),
+          2,
+        );
+        expect(mocks.dayPassRepository.createForOrder.mock.calls[0][2].toUTC().toISO()).toContain(
+          '2026-10-16T15:01',
+        );
+        expect(mocks.memberRepository.setSquareCustomerId).toHaveBeenCalledWith(
+          member.id,
+          'cust-1',
+        );
+        expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+          member,
+          'day_pass',
+        );
+      });
 
-      await service.processWebhook(paymentWebhook);
+      it('keeps an existing member name', async () => {
+        mocks.memberRepository.getByEmail.mockResolvedValue({
+          ...member,
+          squareCustomerId: 'cust-1',
+        });
 
-      expect(squareRepo.getOrderById).not.toHaveBeenCalled();
-    });
+        await sut.processWebhook(paymentWebhook);
 
-    it('ignores orders without day pass items', async () => {
-      squareRepo.getOrderById.mockResolvedValue({ ...ORDER, lineItems: ORDER.lineItems.slice(1) });
+        expect(mocks.memberRepository.upsertByEmail).not.toHaveBeenCalled();
+        expect(mocks.memberRepository.setSquareCustomerId).not.toHaveBeenCalled();
+      });
 
-      await service.processWebhook(paymentWebhook);
+      it('is idempotent per order', async () => {
+        mocks.dayPassRepository.existsForOrder.mockResolvedValue(true);
 
-      expect(dayPassRepo.createForOrder).not.toHaveBeenCalled();
-    });
+        await sut.processWebhook(paymentWebhook);
 
-    it('does nothing when no day pass items are configured', async () => {
-      settingsRepo.getSetting.mockResolvedValue({ dayPassItemVariationIds: [] });
+        expect(mocks.dayPassRepository.createForOrder).not.toHaveBeenCalled();
+      });
 
-      await service.processWebhook(paymentWebhook);
+      it('does not resend onboarding when a concurrent webhook already created the passes', async () => {
+        mocks.dayPassRepository.createForOrder.mockResolvedValue([]);
 
-      expect(squareRepo.getPayment).not.toHaveBeenCalled();
-    });
+        await sut.processWebhook(paymentWebhook);
 
-    it('uses the payment buyer email when the order has no customer', async () => {
-      squareRepo.getOrderById.mockResolvedValue({ ...ORDER, customerId: undefined });
-      squareRepo.getPayment.mockResolvedValue({ ...PAYMENT, buyerEmailAddress: 'bob@example.com' });
+        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      });
 
-      await service.processWebhook(paymentWebhook);
+      it('ignores payments that are not completed', async () => {
+        mocks.squareRepository.getPayment.mockResolvedValue({ ...payment, status: 'APPROVED' });
 
-      expect(memberRepo.upsertByEmail).toHaveBeenCalledWith('bob@example.com', 'bob@example.com');
-    });
+        await sut.processWebhook(paymentWebhook);
 
-    it('falls back to the payment customer record', async () => {
-      squareRepo.getOrderById.mockResolvedValue({ ...ORDER, customerId: undefined });
-      squareRepo.getPayment.mockResolvedValue({ ...PAYMENT, customerId: 'cust-1' });
+        expect(mocks.squareRepository.getOrderById).not.toHaveBeenCalled();
+      });
 
-      await service.processWebhook(paymentWebhook);
+      it('ignores orders without day pass items', async () => {
+        mocks.squareRepository.getOrderById.mockResolvedValue({
+          ...order,
+          lineItems: order.lineItems?.slice(1),
+        });
 
-      expect(squareRepo.getCustomer).toHaveBeenCalledWith('cust-1');
-      expect(memberRepo.upsertByEmail).toHaveBeenCalledWith('Ada Lovelace', 'ada@example.com');
-    });
+        await sut.processWebhook(paymentWebhook);
 
-    it('skips walk-in orders without any email', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      squareRepo.getOrderById.mockResolvedValue({ ...ORDER, customerId: undefined });
+        expect(mocks.dayPassRepository.createForOrder).not.toHaveBeenCalled();
+      });
 
-      await service.processWebhook(paymentWebhook);
+      it('does nothing when no day pass items are configured', async () => {
+        stubSettings(mocks.settingsRepository, { memberSquare: { dayPassItemVariationIds: [] } });
 
-      expect(dayPassRepo.createForOrder).not.toHaveBeenCalled();
-      expect(notificationRepo.sendOnboarding).not.toHaveBeenCalled();
-      warn.mockRestore();
+        await sut.processWebhook(paymentWebhook);
+
+        expect(mocks.squareRepository.getPayment).not.toHaveBeenCalled();
+      });
+
+      it('uses the payment buyer email when the order has no customer', async () => {
+        mocks.squareRepository.getOrderById.mockResolvedValue({ ...order, customerId: undefined });
+        mocks.squareRepository.getPayment.mockResolvedValue({
+          ...payment,
+          buyerEmailAddress: 'bob@example.com',
+        });
+
+        await sut.processWebhook(paymentWebhook);
+
+        expect(mocks.memberRepository.upsertByEmail).toHaveBeenCalledWith(
+          'bob@example.com',
+          'bob@example.com',
+        );
+      });
+
+      it('falls back to the payment customer record', async () => {
+        mocks.squareRepository.getOrderById.mockResolvedValue({ ...order, customerId: undefined });
+        mocks.squareRepository.getPayment.mockResolvedValue({ ...payment, customerId: 'cust-1' });
+
+        await sut.processWebhook(paymentWebhook);
+
+        expect(mocks.squareRepository.getCustomer).toHaveBeenCalledWith('cust-1');
+        expect(mocks.memberRepository.upsertByEmail).toHaveBeenCalledWith(
+          'Ada Lovelace',
+          'ada@example.com',
+        );
+      });
+
+      it('skips walk-in orders without any email', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        mocks.squareRepository.getOrderById.mockResolvedValue({ ...order, customerId: undefined });
+
+        await sut.processWebhook(paymentWebhook);
+
+        expect(mocks.dayPassRepository.createForOrder).not.toHaveBeenCalled();
+        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      });
     });
   });
 });

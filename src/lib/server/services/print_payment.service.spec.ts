@@ -1,127 +1,107 @@
-import type { PrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
+import type { Payment } from '$lib/server/db/schema';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
+import { factory } from '$test/factory';
+import type { PrintRequestDetail } from '$test/factory/print_request';
+import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrintPaymentError, PrintPaymentService } from './print_payment.service';
 
-vi.mock('$env/dynamic/private', () => ({ env: { FRONTEND_URL: 'https://orion.test' } }));
-vi.mock('$env/dynamic/public', () => ({
-  env: { PUBLIC_PRINT_REQUEST_EMAIL: '3dprint@example.com' },
-}));
-
-const STATUS_URL = 'https://orion.test/print_request/status/request-1';
+const REQUEST_ID = 'request-1';
+const PAYMENT_ID = 'payment-1';
+const STATUS_URL = `https://orion.example.com/print_request/status/${REQUEST_ID}`;
+const PRINT_EMAIL = 'prints@example.com';
 const WEBHOOK_URL = 'https://discord.test/webhook';
 const PRICING = { additionalBuildPlatePrice: 250, memberDiscountPercent: 10 };
-const MEMBER_CONTEXT = {
-  subscriptions: [{ status: 'active', accessEndedDate: null }],
-  organizations: [],
-  dayPasses: [],
-};
-const ORGANIZATION = { id: 'org-1', name: 'Acme Robotics' };
+const ORGANIZATION = factory.organization({ name: 'Acme Robotics' });
 
-function payment(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'payment-1',
-    status: PAYMENT_STATUS.PENDING,
+function payment(overrides: Partial<Payment> = {}) {
+  return factory.payment({
+    id: PAYMENT_ID,
     total: 1000,
     lineItems: [{ name: '3D Print Material', description: 'PLA', quantity: 1, unitAmount: 1000 }],
-    discounts: [],
-    organizationId: null,
-    squareInvoiceId: null,
     paymentUrl: STATUS_URL,
     ...overrides,
-  };
+  });
 }
 
-function printRequest(overrides: Partial<PrintRequestDto> = {}): PrintRequestDto {
-  return {
-    id: 'request-1',
+function printRequest(overrides: Partial<PrintRequestDetail> = {}) {
+  return factory.printRequestDetail({
+    id: REQUEST_ID,
     email: 'jane@example.com',
     customerName: 'Jane Doe',
     projectName: 'Robot Arm',
-    status: 'in_queue',
-    isQuote: false,
-    billingCode: null,
-    paymentId: null,
-    payment: null,
-    material: { id: 'material-1', name: 'PLA Basic - Black', materialType: 'PLA' },
-    files: [],
-    materialCost: 0,
-    buildplateCount: 1,
-    submissionDate: DateTime.now(),
-    completionDate: null,
-    specialRequests: '',
+    material: factory.printMaterial({ name: 'PLA Basic - Black', materialType: 'PLA' }),
     ...overrides,
-  } as unknown as PrintRequestDto;
+  });
 }
 
-describe('PrintPaymentService', () => {
-  let service: PrintPaymentService;
-  let paymentRepo: any;
-  let requestRepo: any;
-  let squareRepo: any;
-  let mailgunRepo: any;
-  let discordRepo: any;
-  let billingCodeRepo: any;
-  let memberRepo: any;
+function organizationCode() {
+  return {
+    billingCode: factory.billingCode({ code: 'ACME', organizationId: ORGANIZATION.id }),
+    organization: ORGANIZATION,
+  };
+}
+
+describe(PrintPaymentService.name, () => {
+  let sut: PrintPaymentService;
+  let mocks: ServiceMocks;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-
-    paymentRepo = {
-      getById: vi.fn(),
-      save: vi.fn(async (data, id) => ({
-        id: id ?? 'payment-1',
+    ({ sut, mocks } = newTestService(PrintPaymentService));
+    stubSettings(mocks.settingsRepository, {
+      printPricing: PRICING,
+      printRequest: {
+        isOpen: true,
+        announcement: '',
+        announcementUntil: '',
+        maxUploadMB: 1000,
+        allowedFileTypes: '.stl',
+        discordWebhookUrl: WEBHOOK_URL,
+      },
+    });
+    mocks.printRequestRepository.getById.mockResolvedValue(printRequest());
+    mocks.printRequestRepository.update.mockResolvedValue([]);
+    mocks.billingCodeRepository.getByCode.mockResolvedValue(undefined as never);
+    mocks.memberRepository.getAccessContextByEmail.mockResolvedValue(undefined);
+    mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
+    mocks.squareRepository.cancelInvoice.mockResolvedValue(undefined as never);
+    mocks.paymentRepository.save.mockImplementation(async (data, id) =>
+      factory.payment({
+        id: id ?? PAYMENT_ID,
         status:
-          data.status === PAYMENT_STATUS.PENDING && data.bill.total === 0 ? 'paid' : data.status,
+          data.status === PAYMENT_STATUS.PENDING && data.bill.total === 0
+            ? PAYMENT_STATUS.PAID
+            : data.status,
         total: data.bill.total,
         organizationId: data.organizationId ?? null,
-      })),
-      approveQuote: vi.fn(async (p) => ({ ...p, status: PAYMENT_STATUS.PENDING })),
-      pay: vi.fn(async (p) => ({ ...p, status: PAYMENT_STATUS.PAID })),
-      cancel: vi.fn(),
-    };
-    requestRepo = { getById: vi.fn(async () => printRequest()), update: vi.fn() };
-    squareRepo = { cancelInvoice: vi.fn() };
-    mailgunRepo = { sendTemplate: vi.fn() };
-    discordRepo = { sendWebhookNotification: vi.fn() };
-    billingCodeRepo = { getByCode: vi.fn(async () => undefined) };
-    memberRepo = { getAccessContextByEmail: vi.fn(async () => undefined) };
-    const settingsRepo = {
-      getSetting: vi.fn(async (key: string) =>
-        key === 'printRequest' ? { discordWebhookUrl: WEBHOOK_URL } : PRICING,
-      ),
-    };
-
-    service = new PrintPaymentService(
-      undefined,
-      undefined,
-      requestRepo,
-      paymentRepo,
-      settingsRepo as any,
-      squareRepo,
-      mailgunRepo,
-      discordRepo,
-      undefined,
-      billingCodeRepo,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { memberRepository: memberRepo },
+      }),
     );
+    mocks.paymentRepository.approveQuote.mockImplementation(async (quote) => ({
+      ...quote,
+      status: PAYMENT_STATUS.PENDING,
+    }));
+    mocks.paymentRepository.pay.mockImplementation(async (pending) => ({
+      ...pending,
+      status: PAYMENT_STATUS.PAID,
+    }));
   });
 
+  function mockMember() {
+    mocks.memberRepository.getAccessContextByEmail.mockResolvedValue(
+      factory.memberAccessContext({ subscriptions: [factory.memberSubscription()] }),
+    );
+  }
+
   function savedPayment() {
-    return paymentRepo.save.mock.calls[0][0];
+    return mocks.paymentRepository.save.mock.calls[0][0];
   }
 
   describe('upsertPayment', () => {
-    const dto = { requestId: 'request-1', materialCost: 700, buildPlates: 3 };
+    const dto = { requestId: REQUEST_ID, materialCost: 700, buildPlates: 3 };
 
     it('bills material and extra build plates as Orion line items', async () => {
-      await service.upsertPayment(dto);
+      await sut.upsertPayment(dto);
 
       expect(savedPayment()).toMatchObject({
         type: PAYMENT_TYPE.PRINT_REQUEST,
@@ -137,20 +117,20 @@ describe('PrintPaymentService', () => {
           total: 1200,
         },
       });
-      expect(requestRepo.update).toHaveBeenCalledWith('request-1', {
-        paymentId: 'payment-1',
+      expect(mocks.printRequestRepository.update).toHaveBeenCalledWith(REQUEST_ID, {
+        paymentId: PAYMENT_ID,
         materialCost: 700,
         buildplateCount: 3,
       });
     });
 
     it('emails the customer a link to pay', async () => {
-      await service.upsertPayment(dto);
+      await sut.upsertPayment(dto);
 
-      expect(mailgunRepo.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         expect.any(String),
-        '3dprint@example.com',
+        PRINT_EMAIL,
         'Print Request Payment - Robot Arm',
         'print_payment',
         {
@@ -163,9 +143,9 @@ describe('PrintPaymentService', () => {
     });
 
     it('takes the member discount off for members', async () => {
-      memberRepo.getAccessContextByEmail.mockResolvedValue(MEMBER_CONTEXT);
+      mockMember();
 
-      await service.upsertPayment(dto);
+      await sut.upsertPayment(dto);
 
       expect(savedPayment().bill.discounts).toEqual([
         { name: 'Member Discount (10%)', amount: 120 },
@@ -174,12 +154,12 @@ describe('PrintPaymentService', () => {
     });
 
     it('sends a quote instead of a bill when the customer asked for one', async () => {
-      requestRepo.getById.mockResolvedValue(printRequest({ isQuote: true }));
+      mocks.printRequestRepository.getById.mockResolvedValue(printRequest({ isQuote: true }));
 
-      await service.upsertPayment(dto);
+      await sut.upsertPayment(dto);
 
       expect(savedPayment().status).toBe(PAYMENT_STATUS.QUOTE);
-      expect(mailgunRepo.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         expect.any(String),
         expect.any(String),
@@ -190,113 +170,117 @@ describe('PrintPaymentService', () => {
     });
 
     it('keeps an approved quote as a bill when it is edited', async () => {
-      requestRepo.getById.mockResolvedValue(
-        printRequest({ isQuote: true, payment: payment() as any }),
+      mocks.printRequestRepository.getById.mockResolvedValue(
+        printRequest({ isQuote: true, payment: payment() }),
       );
 
-      await service.upsertPayment(dto);
+      await sut.upsertPayment(dto);
 
       expect(savedPayment().status).toBe(PAYMENT_STATUS.PENDING);
-      expect(paymentRepo.save.mock.calls[0][1]).toBe('payment-1');
+      expect(mocks.paymentRepository.save.mock.calls[0][1]).toBe(PAYMENT_ID);
     });
 
     it('bills an organization without the member discount or an email', async () => {
-      memberRepo.getAccessContextByEmail.mockResolvedValue(MEMBER_CONTEXT);
-      billingCodeRepo.getByCode.mockResolvedValue({ organization: ORGANIZATION });
-      requestRepo.getById.mockResolvedValue(printRequest({ billingCode: 'ACME' }));
+      mockMember();
+      mocks.billingCodeRepository.getByCode.mockResolvedValue(organizationCode());
+      mocks.printRequestRepository.getById.mockResolvedValue(printRequest({ billingCode: 'ACME' }));
 
-      await service.upsertPayment(dto);
+      await sut.upsertPayment(dto);
 
       expect(savedPayment()).toMatchObject({
-        organizationId: 'org-1',
+        organizationId: ORGANIZATION.id,
         paymentUrl: null,
         bill: { discounts: [], total: 1200 },
       });
-      expect(mailgunRepo.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
     });
 
     it('does not ask for a card when nothing is owed', async () => {
-      await service.upsertPayment({ ...dto, materialCost: 0, buildPlates: 1 });
+      await sut.upsertPayment({ ...dto, materialCost: 0, buildPlates: 1 });
 
-      expect(mailgunRepo.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
     });
 
     it('cancels the Square invoice of a payment made before Orion billing', async () => {
-      requestRepo.getById.mockResolvedValue(
-        printRequest({ payment: payment({ squareInvoiceId: 'inv-1' }) as any }),
+      mocks.printRequestRepository.getById.mockResolvedValue(
+        printRequest({ payment: payment({ squareInvoiceId: 'inv-1' }) }),
       );
 
-      await service.upsertPayment(dto);
+      await sut.upsertPayment(dto);
 
-      expect(squareRepo.cancelInvoice).toHaveBeenCalledWith('inv-1');
+      expect(mocks.squareRepository.cancelInvoice).toHaveBeenCalledWith('inv-1');
     });
 
     it('refuses to change a paid bill', async () => {
-      requestRepo.getById.mockResolvedValue(
-        printRequest({ payment: payment({ status: PAYMENT_STATUS.PAID }) as any }),
+      mocks.printRequestRepository.getById.mockResolvedValue(
+        printRequest({ payment: payment({ status: PAYMENT_STATUS.PAID }) }),
       );
 
-      await expect(service.upsertPayment(dto)).rejects.toThrow('already been paid');
-      expect(paymentRepo.save).not.toHaveBeenCalled();
+      await expect(sut.upsertPayment(dto)).rejects.toThrow('already been paid');
+      expect(mocks.paymentRepository.save).not.toHaveBeenCalled();
     });
 
     it.each([PAYMENT_STATUS.PROCESSING, PAYMENT_STATUS.CANCELED, PAYMENT_STATUS.REFUNDED])(
       'refuses to re-price a %s bill',
       async (status) => {
-        requestRepo.getById.mockResolvedValue(
-          printRequest({ payment: payment({ status }) as any }),
+        mocks.printRequestRepository.getById.mockResolvedValue(
+          printRequest({ payment: payment({ status }) }),
         );
 
-        await expect(service.upsertPayment(dto)).rejects.toThrow('can no longer be changed');
-        expect(paymentRepo.save).not.toHaveBeenCalled();
+        await expect(sut.upsertPayment(dto)).rejects.toThrow('can no longer be changed');
+        expect(mocks.paymentRepository.save).not.toHaveBeenCalled();
       },
     );
   });
 
   describe('updatePrintRequestDiscount', () => {
     it('rebuilds an unpaid bill for the new group code', async () => {
-      requestRepo.getById.mockResolvedValue(
-        printRequest({ payment: payment() as any, materialCost: 500, buildplateCount: 1 }),
+      mocks.printRequestRepository.getById.mockResolvedValue(
+        printRequest({ payment: payment(), materialCost: 500, buildplateCount: 1 }),
       );
-      billingCodeRepo.getByCode.mockResolvedValue({ organization: ORGANIZATION });
+      mocks.billingCodeRepository.getByCode.mockResolvedValue(organizationCode());
 
-      await service.updatePrintRequestDiscount('request-1', { billingCode: 'ACME' });
+      await sut.updatePrintRequestDiscount(REQUEST_ID, { billingCode: 'ACME' });
 
-      expect(requestRepo.update).toHaveBeenCalledWith('request-1', { billingCode: 'ACME' });
-      expect(paymentRepo.save).toHaveBeenCalledOnce();
+      expect(mocks.printRequestRepository.update).toHaveBeenCalledWith(REQUEST_ID, {
+        billingCode: 'ACME',
+      });
+      expect(mocks.paymentRepository.save).toHaveBeenCalledOnce();
     });
 
     it('only stores the code when there is no unpaid bill', async () => {
-      billingCodeRepo.getByCode.mockResolvedValue({ organization: ORGANIZATION });
+      mocks.billingCodeRepository.getByCode.mockResolvedValue(organizationCode());
 
-      await service.updatePrintRequestDiscount('request-1', { billingCode: 'ACME' });
+      await sut.updatePrintRequestDiscount(REQUEST_ID, { billingCode: 'ACME' });
 
-      expect(paymentRepo.save).not.toHaveBeenCalled();
+      expect(mocks.paymentRepository.save).not.toHaveBeenCalled();
     });
 
     it('rejects a code that does not exist', async () => {
       await expect(
-        service.updatePrintRequestDiscount('request-1', { billingCode: 'NOPE' }),
+        sut.updatePrintRequestDiscount(REQUEST_ID, { billingCode: 'NOPE' }),
       ).rejects.toThrow('Group code not found');
     });
   });
 
   describe('respondToQuote', () => {
     beforeEach(() => {
-      requestRepo.getById.mockResolvedValue(
-        printRequest({ isQuote: true, payment: payment({ status: PAYMENT_STATUS.QUOTE }) as any }),
+      mocks.printRequestRepository.getById.mockResolvedValue(
+        printRequest({ isQuote: true, payment: payment({ status: PAYMENT_STATUS.QUOTE }) }),
       );
+      mocks.paymentRepository.cancel.mockResolvedValue(undefined as never);
+      mocks.discordRepository.sendWebhookNotification.mockResolvedValue(undefined as never);
     });
 
     it('approves the quote so the customer can pay', async () => {
-      const approved = await service.respondToQuote({ id: 'request-1', approve: true });
+      const approved = await sut.respondToQuote({ id: REQUEST_ID, approve: true });
 
       expect(approved?.status).toBe(PAYMENT_STATUS.PENDING);
       await vi.waitFor(() =>
-        expect(discordRepo.sendWebhookNotification).toHaveBeenCalledWith(
+        expect(mocks.discordRepository.sendWebhookNotification).toHaveBeenCalledWith(
           WEBHOOK_URL,
           expect.objectContaining({
-            content: expect.stringContaining('/staff/print_requests/queue?id=request-1'),
+            content: expect.stringContaining(`/staff/print_requests/queue?id=${REQUEST_ID}`),
             embeds: [
               expect.objectContaining({
                 fields: expect.arrayContaining([{ name: 'Total', value: '$10.00', inline: false }]),
@@ -308,22 +292,24 @@ describe('PrintPaymentService', () => {
     });
 
     it('cancels the request and its quote when the customer declines', async () => {
-      await service.respondToQuote({ id: 'request-1', approve: false });
+      await sut.respondToQuote({ id: REQUEST_ID, approve: false });
 
-      expect(paymentRepo.cancel).toHaveBeenCalledWith(expect.objectContaining({ id: 'payment-1' }));
-      expect(requestRepo.update).toHaveBeenCalledWith('request-1', {
+      expect(mocks.paymentRepository.cancel).toHaveBeenCalledWith(
+        expect.objectContaining({ id: PAYMENT_ID }),
+      );
+      expect(mocks.printRequestRepository.update).toHaveBeenCalledWith(REQUEST_ID, {
         status: 'canceled',
         completionDate: expect.any(DateTime),
       });
-      expect(paymentRepo.approveQuote).not.toHaveBeenCalled();
+      expect(mocks.paymentRepository.approveQuote).not.toHaveBeenCalled();
     });
 
     it('rejects a quote that was already answered', async () => {
-      requestRepo.getById.mockResolvedValue(
-        printRequest({ isQuote: true, payment: payment() as any }),
+      mocks.printRequestRepository.getById.mockResolvedValue(
+        printRequest({ isQuote: true, payment: payment() }),
       );
 
-      await expect(service.respondToQuote({ id: 'request-1', approve: true })).rejects.toThrow(
+      await expect(sut.respondToQuote({ id: REQUEST_ID, approve: true })).rejects.toThrow(
         PrintPaymentError,
       );
     });
@@ -331,12 +317,12 @@ describe('PrintPaymentService', () => {
 
   describe('payPrintRequest', () => {
     it('charges the card for an unpaid bill', async () => {
-      requestRepo.getById.mockResolvedValue(printRequest({ payment: payment() as any }));
+      mocks.printRequestRepository.getById.mockResolvedValue(printRequest({ payment: payment() }));
 
-      await service.payPrintRequest({ id: 'request-1', sourceId: 'cnon:ok' });
+      await sut.payPrintRequest({ id: REQUEST_ID, sourceId: 'cnon:ok' });
 
-      expect(paymentRepo.pay).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'payment-1' }),
+      expect(mocks.paymentRepository.pay).toHaveBeenCalledWith(
+        expect.objectContaining({ id: PAYMENT_ID }),
         'cnon:ok',
       );
     });
@@ -344,15 +330,15 @@ describe('PrintPaymentService', () => {
     it.each([
       ['a quote', payment({ status: PAYMENT_STATUS.QUOTE })],
       ['a paid bill', payment({ status: PAYMENT_STATUS.PAID })],
-      ['an organization bill', payment({ organizationId: 'org-1' })],
+      ['an organization bill', payment({ organizationId: ORGANIZATION.id })],
       ['a Square invoice', payment({ squareInvoiceId: 'inv-1' })],
     ])('refuses to charge %s', async (_, existing) => {
-      requestRepo.getById.mockResolvedValue(printRequest({ payment: existing as any }));
+      mocks.printRequestRepository.getById.mockResolvedValue(printRequest({ payment: existing }));
 
-      await expect(
-        service.payPrintRequest({ id: 'request-1', sourceId: 'cnon:ok' }),
-      ).rejects.toThrow(PrintPaymentError);
-      expect(paymentRepo.pay).not.toHaveBeenCalled();
+      await expect(sut.payPrintRequest({ id: REQUEST_ID, sourceId: 'cnon:ok' })).rejects.toThrow(
+        PrintPaymentError,
+      );
+      expect(mocks.paymentRepository.pay).not.toHaveBeenCalled();
     });
   });
 });

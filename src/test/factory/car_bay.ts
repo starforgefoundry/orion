@@ -1,4 +1,4 @@
-import type { CarBayBooking, CarBayClosure } from '$lib/server/db/schema';
+import type { CarBayBooking, CarBayClosure, CarBayOverrun } from '$lib/server/db/schema';
 import { DateTime } from 'luxon';
 import { newId } from './id';
 
@@ -16,9 +16,7 @@ export function carBayBooking(overrides: Partial<CarBayBooking> = {}): CarBayBoo
     customerName: 'Test Customer',
     customerEmail: 'customer@example.com',
     customerPhone: '555-0100',
-    amountPaid: 0,
-    squarePaymentId: null,
-    squareOrderId: null,
+    paymentId: null,
     createdByEmail: null,
     bookingToken: newId(),
     reminderSentDate: null,
@@ -35,6 +33,16 @@ export function carBayClosure(overrides: Partial<CarBayClosure> = {}): CarBayClo
     endAt: startAt.endOf('day'),
     reason: null,
     createdByEmail: null,
+    createdDate: DateTime.now(),
+    ...overrides,
+  };
+}
+
+export function carBayOverrun(overrides: Partial<CarBayOverrun> = {}): CarBayOverrun {
+  return {
+    id: newId(),
+    bookingId: newId(),
+    paymentId: newId(),
     createdDate: DateTime.now(),
     ...overrides,
   };
