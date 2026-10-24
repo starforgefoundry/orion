@@ -14,7 +14,7 @@ import { VisitRepository } from '$lib/server/repositories/visit.repository';
 import { OrganizationRepository } from '$lib/server/repositories/organization.repository';
 import { PrintFilesRepository } from '$lib/server/repositories/print_files.repository';
 import { PrintMaterialsRepository } from '$lib/server/repositories/print_materials.repository';
-import { PaymentRepository } from '$lib/server/repositories/print_payment.repository';
+import { PaymentRepository } from '$lib/server/repositories/payment.repository';
 import { PrintRequestRepository } from '$lib/server/repositories/print_request.repository';
 import { PrintRequestCommentRepository } from '$lib/server/repositories/print_request_comment.repository';
 import { SettingsRepository } from '$lib/server/repositories/settings.repository';

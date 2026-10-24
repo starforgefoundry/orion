@@ -9,12 +9,17 @@ import {
   updatePrintRequestDiscountDto,
   updatePrintRequestStatusDto,
 } from '$lib/remotes/dtos/print_request.dto';
+import { payPaymentDto } from '$lib/remotes/dtos/payment.dto';
 import { verifyAuth } from '$lib/remotes/utils';
 import { printFilesService } from '$lib/server/services/print_files.service';
-import { printPaymentService } from '$lib/server/services/print_payment.service';
+import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
+import { PrintPaymentError, printPaymentService } from '$lib/server/services/print_payment.service';
 import { printRequestService } from '$lib/server/services/print_request.service';
 import { printRequestCommentService } from '$lib/server/services/print_request_comment.service';
+import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
+
+const BAD_REQUEST = 400;
 
 export const submitPrintRequestForm = form(submitPrintRequestDto, async (dto) => {
   await printRequestService.submitPrintRequest(dto);
@@ -35,17 +40,32 @@ export const getPrintRequestById = query(v.string(), async (id: string) => {
   return await printRequestService.getPrintRequestById(id);
 });
 
-export const getPrintRequestQuote = query(v.string(), async (id: string) => {
-  return await printPaymentService.getPrintRequestQuote(id);
+/** Unexpected errors reach the browser as a generic message, so customer-facing ones are 400s. */
+async function asCustomerError<T>(action: () => Promise<T>) {
+  try {
+    return await action();
+  } catch (cause) {
+    if (cause instanceof PrintPaymentError || cause instanceof PaymentDeclinedError) {
+      error(BAD_REQUEST, cause.message);
+    }
+    throw cause;
+  }
+}
+
+export const getPrintRequestStatus = query(v.string(), async (id: string) => {
+  return await printRequestService.getStatus(id);
 });
 
 export const respondToPrintRequestQuote = command(respondToQuoteDto, async (dto) => {
-  try {
-    return await printPaymentService.respondToQuote(dto);
-  } catch (error) {
-    console.error('Error responding to print request quote:', error);
-    throw error;
-  }
+  const response = await asCustomerError(() => printPaymentService.respondToQuote(dto));
+  await getPrintRequestStatus(dto.id).refresh();
+  return response;
+});
+
+export const payPrintRequest = command(payPaymentDto, async (dto) => {
+  const response = await asCustomerError(() => printPaymentService.payPrintRequest(dto));
+  await getPrintRequestStatus(dto.id).refresh();
+  return response;
 });
 
 export const updatePrintRequest = command(

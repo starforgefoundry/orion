@@ -68,6 +68,14 @@ export class SettingsService extends BaseService {
     }
   }
 
+  async getPrintPricing() {
+    return await this.settingsRepository.getSetting('printPricing');
+  }
+
+  async setPrintPricing(value: SettingsMap['printPricing']) {
+    return await this.settingsRepository.setSetting('printPricing', value);
+  }
+
   async getPrintRequestSquareSettings() {
     return await this.settingsRepository.getSetting('printRequestSquare');
   }

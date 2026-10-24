@@ -15,6 +15,7 @@
     pending: { label: 'Sent', tone: 'info' },
     paid: { label: 'Paid', tone: 'success' },
     canceled: { label: 'Canceled', tone: 'danger' },
+    refunded: { label: 'Refunded', tone: 'neutral' },
   };
 </script>
 

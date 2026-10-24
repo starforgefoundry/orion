@@ -1,3 +1,4 @@
+import { CENTS_PER_DOLLAR, type BillingLineItem } from '$lib/utils/billing';
 import { DateTime } from 'luxon';
 
 export const CAR_BAY_ZONE = 'America/Chicago';
@@ -24,8 +25,6 @@ export const CAR_BAY_STATUS = {
   CANCELED: 'canceled',
   NO_SHOW: 'no_show',
 } as const;
-
-export const CENTS_PER_DOLLAR = 100;
 
 export const CAR_BAY_OVERRUN = {
   HOURLY: 'hourly',
@@ -99,8 +98,6 @@ export type CarBayPeriod = { startAt: DateTime; endAt: DateTime };
 export type CarBayBlock = { startAt: DateTime; blockedUntil: DateTime };
 
 export type CarBayClosureRequest = { date: string; startHour: number; endHour: number };
-
-export type CarBayLineItem = { name: string; quantity: number; unitAmount: number };
 
 export class CarBayRuleError extends Error {}
 
@@ -342,7 +339,7 @@ function fullDayRate(date: string, rates: CarBayRates) {
   return isWeekend(date) ? rates.fullDayWeekend : rates.fullDayWeekday;
 }
 
-function fullDayLineItem(date: string, rates: CarBayRates, isMember: boolean): CarBayLineItem {
+function fullDayLineItem(date: string, rates: CarBayRates, isMember: boolean): BillingLineItem {
   const kind = isWeekend(date) ? 'Weekend' : 'Weekday';
   return {
     name: `Car Bay - Full Day ${kind}, ${day(date).toFormat('MMM d')} (${memberLabel(isMember)})`,
@@ -351,7 +348,7 @@ function fullDayLineItem(date: string, rates: CarBayRates, isMember: boolean): C
   };
 }
 
-function overnightLineItem(nights: number, rates: CarBayRates, isMember: boolean): CarBayLineItem {
+function overnightLineItem(nights: number, rates: CarBayRates, isMember: boolean): BillingLineItem {
   return {
     name: `Car Bay - Overnight Fee (${memberLabel(isMember)})`,
     quantity: nights,
@@ -363,7 +360,7 @@ export function bookingLineItems(
   request: CarBayRequest,
   rates: CarBayRates,
   isMember: boolean,
-): CarBayLineItem[] {
+): BillingLineItem[] {
   const label = memberLabel(isMember);
 
   if (request.tier === CAR_BAY_TIER.QUICK_JOB) {
@@ -398,7 +395,7 @@ export function overrunLineItems(
   bookingEndDate: string,
   rates: CarBayRates,
   isMember: boolean,
-): CarBayLineItem[] {
+): BillingLineItem[] {
   if (overrun.kind === CAR_BAY_OVERRUN.HOURLY) {
     if (!Number.isInteger(overrun.hours) || overrun.hours < 1) {
       throw new CarBayRuleError('Overrun is billed in whole hours');
@@ -445,8 +442,4 @@ export function formatDollars(cents: number) {
 
 export function formatHour(hour: number) {
   return DateTime.fromObject({ hour }).toFormat('h a');
-}
-
-export function lineItemsTotal(items: CarBayLineItem[]) {
-  return items.reduce((total, item) => total + item.quantity * item.unitAmount, 0);
 }

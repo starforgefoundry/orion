@@ -25,10 +25,11 @@ vi.mock('$lib/server/repositories/print_request.repository', () => {
   return { PrintRequestRepository: MockPrintRequestRepository };
 });
 
-vi.mock('$lib/server/repositories/print_payment.repository', () => {
+vi.mock('$lib/server/repositories/payment.repository', () => {
   const MockPaymentRepository = vi.fn();
   MockPaymentRepository.prototype.getById = vi.fn();
-  MockPaymentRepository.prototype.updatePayment = vi.fn();
+  MockPaymentRepository.prototype.markPaid = vi.fn();
+  MockPaymentRepository.prototype.cancel = vi.fn();
   return { PaymentRepository: MockPaymentRepository };
 });
 
@@ -116,7 +117,7 @@ describe('PrintRequestService', () => {
       await import('$lib/server/repositories/print_files.repository');
     const { PrintRequestRepository } =
       await import('$lib/server/repositories/print_request.repository');
-    const { PaymentRepository } = await import('$lib/server/repositories/print_payment.repository');
+    const { PaymentRepository } = await import('$lib/server/repositories/payment.repository');
     const { SquareRepository } = await import('$lib/server/repositories/square.repository');
     const { DiscordRepository } = await import('$lib/server/repositories/discord.repository');
     const { SettingsRepository } = await import('$lib/server/repositories/settings.repository');
@@ -873,10 +874,7 @@ describe('PrintRequestService', () => {
 
       // Assert
       expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-org-123');
-      expect(mockPaymentRepo.updatePayment).toHaveBeenCalledWith('payment-org-123', {
-        status: 'paid',
-        paymentDate: expect.anything(),
-      });
+      expect(mockPaymentRepo.markPaid).toHaveBeenCalledWith('payment-org-123');
       expect(mockRequestRepo.update).toHaveBeenCalledWith(
         requestId,
         expect.objectContaining({
@@ -912,36 +910,7 @@ describe('PrintRequestService', () => {
 
       // Assert
       expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-regular-123');
-      expect(mockPaymentRepo.updatePayment).not.toHaveBeenCalled();
-      expect(result).toEqual(mockUpdated);
-    });
-
-    it('should not mark payment as paid when status is done but payment is already paid', async () => {
-      // Arrange
-      const requestId = 'request-already-paid';
-      const dto = { status: 'done' as const };
-      const mockRequest = {
-        id: requestId,
-        status: 'printing' as const,
-        paymentId: 'payment-already-paid',
-      };
-      const mockPayment = {
-        id: 'payment-already-paid',
-        organizationId: 'org-456',
-        status: 'paid', // Already paid
-      };
-      const mockUpdated = [{ id: requestId, status: 'done' as const }];
-
-      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
-      vi.mocked(mockPaymentRepo.getById).mockResolvedValue(mockPayment);
-      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
-
-      // Act
-      const result = await printRequestService.updatePrintRequestStatus(requestId, dto);
-
-      // Assert
-      expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-already-paid');
-      expect(mockPaymentRepo.updatePayment).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.markPaid).not.toHaveBeenCalled();
       expect(result).toEqual(mockUpdated);
     });
 
@@ -973,7 +942,7 @@ describe('PrintRequestService', () => {
       expect(result).toEqual(mockUpdated);
     });
 
-    it('should cancel invoice when status is canceled and payment exists', async () => {
+    it('should cancel the payment when status is canceled and payment exists', async () => {
       // Arrange
       const requestId = 'request-cancel-payment';
       const dto = { status: 'canceled' as const };
@@ -990,8 +959,6 @@ describe('PrintRequestService', () => {
 
       vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
       vi.mocked(mockPaymentRepo.getById).mockResolvedValue(mockPayment);
-      vi.mocked(mockSquareRepo.cancelInvoice).mockResolvedValue(undefined);
-      vi.mocked(mockPaymentRepo.updatePayment).mockResolvedValue(undefined);
       vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
 
       // Act
@@ -999,14 +966,11 @@ describe('PrintRequestService', () => {
 
       // Assert
       expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-123');
-      expect(mockPaymentRepo.updatePayment).toHaveBeenCalledWith('payment-123', {
-        status: 'canceled',
-      });
-      expect(mockSquareRepo.cancelInvoice).toHaveBeenCalledWith('inv-456');
+      expect(mockPaymentRepo.cancel).toHaveBeenCalledWith(mockPayment);
       expect(result).toEqual(mockUpdated);
     });
 
-    it('should not cancel invoice when status is canceled but no payment exists', async () => {
+    it('should not cancel a payment when status is canceled but no payment exists', async () => {
       // Arrange
       const requestId = 'request-cancel-no-payment';
       const dto = { status: 'canceled' as const };
@@ -1025,34 +989,7 @@ describe('PrintRequestService', () => {
 
       // Assert
       expect(mockPaymentRepo.getById).not.toHaveBeenCalled();
-      expect(mockSquareRepo.cancelInvoice).not.toHaveBeenCalled();
-    });
-
-    it('should not cancel invoice when status is canceled but payment has no invoice', async () => {
-      // Arrange
-      const requestId = 'request-cancel-no-invoice';
-      const dto = { status: 'canceled' as const };
-      const mockRequest = {
-        id: requestId,
-        status: 'in_queue' as const,
-        paymentId: 'payment-789',
-      };
-      const mockPayment = {
-        id: 'payment-789',
-        squareInvoiceId: null,
-      };
-      const mockUpdated = [{ id: requestId, status: 'canceled' as const }];
-
-      vi.mocked(mockRequestRepo.getById).mockResolvedValue(mockRequest);
-      vi.mocked(mockPaymentRepo.getById).mockResolvedValue(mockPayment);
-      vi.mocked(mockRequestRepo.update).mockResolvedValue(mockUpdated);
-
-      // Act
-      await printRequestService.updatePrintRequestStatus(requestId, dto);
-
-      // Assert
-      expect(mockPaymentRepo.getById).toHaveBeenCalledWith('payment-789');
-      expect(mockSquareRepo.cancelInvoice).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.cancel).not.toHaveBeenCalled();
     });
 
     it('should update status without setting completion date for other statuses', async () => {

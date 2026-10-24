@@ -2,9 +2,13 @@ import * as v from 'valibot';
 
 export const printRequestSquareSettings = v.object({
   locationId: v.string(),
-  memberPrintDiscountId: v.string(),
-  printRequestItemId: v.string(),
-  additionalBuildPlateItemId: v.string(),
+});
+
+const MAX_PERCENT = 100;
+
+export const printPricingSettingsDto = v.object({
+  additionalBuildPlatePrice: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  memberDiscountPercent: v.pipe(v.number(), v.minValue(0), v.maxValue(MAX_PERCENT)),
 });
 
 export const printRequestSettings = v.object({

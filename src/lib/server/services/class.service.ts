@@ -12,7 +12,7 @@ import type {
   UpdateInstanceDto,
   UpsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
-import type { User } from '$lib/server/db/schema';
+import type { Payment, User } from '$lib/server/db/schema';
 import { ClassRepository } from '$lib/server/repositories/class.repository';
 import { DiscordRepository } from '$lib/server/repositories/discord.repository';
 import {
@@ -20,8 +20,27 @@ import {
   type GoogleCalendarEventInput,
 } from '$lib/server/repositories/google_calendar.repository';
 import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
+import {
+  PaymentDeclinedError,
+  PaymentRepository,
+} from '$lib/server/repositories/payment.repository';
 import { SettingsRepository } from '$lib/server/repositories/settings.repository';
+import {
+  buildBill,
+  CENTS_PER_DOLLAR,
+  formatCents,
+  PAYMENT_STATUS,
+  PAYMENT_TYPE,
+} from '$lib/utils/billing';
 import { DateTime } from 'luxon';
+
+const PAYMENT_FAILED_MESSAGE = 'Payment failed';
+
+type PaidBooking = { payment: Payment | null };
+
+function amountPaid(booking: PaidBooking) {
+  return booking.payment?.total ?? 0;
+}
 
 export class ClassService {
   private classRepository: ClassRepository;
@@ -29,6 +48,7 @@ export class ClassService {
   private googleCalendarRepository: GoogleCalendarRepository;
   private mailgunRepository: MailgunRepository;
   private settingsRepository: SettingsRepository;
+  private paymentRepository: PaymentRepository;
 
   constructor(
     classRepository?: ClassRepository,
@@ -36,12 +56,19 @@ export class ClassService {
     settingsRepository?: SettingsRepository,
     discordRepository?: DiscordRepository,
     googleCalendarRepository?: GoogleCalendarRepository,
+    paymentRepository?: PaymentRepository,
   ) {
     this.classRepository = classRepository ?? new ClassRepository();
     this.discordRepository = discordRepository ?? new DiscordRepository();
     this.googleCalendarRepository = googleCalendarRepository ?? new GoogleCalendarRepository();
     this.mailgunRepository = mailgunRepository ?? new MailgunRepository();
     this.settingsRepository = settingsRepository ?? new SettingsRepository();
+    this.paymentRepository = paymentRepository ?? new PaymentRepository();
+  }
+
+  private async refund(booking: PaidBooking) {
+    if (!booking.payment) return;
+    await this.paymentRepository.refund(booking.payment);
   }
 
   // ── Catalog ──
@@ -202,9 +229,9 @@ export class ClassService {
     const bookings = await this.classRepository.getConfirmedBookingsForInstance(instanceId);
 
     for (const booking of bookings) {
-      if (booking.squarePaymentId && booking.amountPaid > 0) {
+      if (booking.payment) {
         try {
-          await this.classRepository.refundPayment(booking.squarePaymentId, booking.amountPaid);
+          await this.refund(booking);
         } catch (err) {
           console.error(`Failed to refund booking ${booking.id}:`, err);
         }
@@ -290,45 +317,61 @@ export class ClassService {
       );
     }
 
-    // Process payment via Square
-    const totalPrice = catalog.price * dto.quantity;
-    const squareSettings = await this.settingsRepository.getSetting('printRequestSquare');
-    const dateDt = DateTime.fromISO(instance.date, { zone: 'America/Chicago' });
-    const formattedDate = dateDt.toFormat('EEEE, MMMM d, yyyy');
-    const payment = await this.classRepository.processSquarePayment(
-      dto.sourceId,
-      totalPrice,
-      squareSettings.locationId,
-      dto.customerEmail,
-      dto.customerName,
-      catalog.name,
-      `Class booking (x${dto.quantity}) for ${formattedDate}`,
+    const formattedDate = DateTime.fromISO(instance.date, { zone: 'America/Chicago' }).toFormat(
+      'MMM d, yyyy',
     );
+    const authorized = await this.paymentRepository
+      .authorize(
+        {
+          type: PAYMENT_TYPE.CLASS_BOOKING,
+          status: PAYMENT_STATUS.PENDING,
+          customer: { name: dto.customerName, email: dto.customerEmail },
+          bill: buildBill([
+            {
+              name: `${catalog.name} - ${formattedDate}`,
+              quantity: dto.quantity,
+              unitAmount: catalog.price,
+            },
+          ]),
+        },
+        dto.sourceId,
+      )
+      .catch((error) => {
+        if (error instanceof PaymentDeclinedError) {
+          throw new Error(PAYMENT_FAILED_MESSAGE, { cause: error });
+        }
+        throw error;
+      });
 
-    if (!payment || payment.status !== 'COMPLETED') {
-      throw new Error('Payment failed');
+    let booking;
+    try {
+      booking = await this.classRepository.createBooking({
+        instanceId: dto.instanceId,
+        customerName: dto.customerName,
+        customerEmail: dto.customerEmail,
+        customerPhone: dto.customerPhone,
+        paymentId: authorized.id,
+        status: 'confirmed',
+        quantity: dto.quantity,
+      });
+    } catch (error) {
+      await this.paymentRepository.void(authorized);
+      throw error;
     }
-
-    // Create booking
-    const booking = await this.classRepository.createBooking({
-      instanceId: dto.instanceId,
-      customerName: dto.customerName,
-      customerEmail: dto.customerEmail,
-      customerPhone: dto.customerPhone,
-      squarePaymentId: payment.id,
-      status: 'confirmed',
-      quantity: dto.quantity,
-      amountPaid: totalPrice,
-    });
 
     // Re-check booking count after insert (overbooking prevention)
     const newCount = await this.classRepository.getConfirmedBookingCount(dto.instanceId);
     if (newCount > instance.seats) {
       await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
-      if (payment.id) {
-        await this.classRepository.refundPayment(payment.id, totalPrice);
-      }
+      await this.paymentRepository.void(authorized);
       throw new Error('This class is fully booked');
+    }
+
+    try {
+      await this.paymentRepository.capture(authorized);
+    } catch (error) {
+      await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
+      throw new Error(PAYMENT_FAILED_MESSAGE, { cause: error });
     }
 
     // Send confirmation email and discord notification asynchronously
@@ -344,7 +387,11 @@ export class ClassService {
   }
 
   async getBookingByToken(token: string) {
-    return await this.classRepository.getBookingByToken(token);
+    const booking = await this.classRepository.getBookingByToken(token);
+    if (!booking) return null;
+
+    const { payment, ...rest } = booking;
+    return { ...rest, amountPaid: amountPaid(booking) };
   }
 
   async cancelBooking(dto: CancelBookingDto) {
@@ -352,9 +399,7 @@ export class ClassService {
     if (!booking) throw new Error('Booking not found');
     if (booking.status === 'canceled') throw new Error('Booking is already canceled');
 
-    if (booking.squarePaymentId && booking.amountPaid > 0) {
-      await this.classRepository.refundPayment(booking.squarePaymentId, booking.amountPaid);
-    }
+    await this.refund(booking);
 
     await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
 
@@ -371,9 +416,7 @@ export class ClassService {
     if (!booking) throw new Error('Booking not found');
     if (booking.status === 'canceled') throw new Error('Booking is already canceled');
 
-    if (booking.squarePaymentId && booking.amountPaid > 0) {
-      await this.classRepository.refundPayment(booking.squarePaymentId, booking.amountPaid);
-    }
+    await this.refund(booking);
 
     await this.classRepository.updateBooking(booking.id, { status: 'canceled' });
 
@@ -406,10 +449,8 @@ export class ClassService {
       customerName: dto.customerName,
       customerEmail: dto.customerEmail,
       customerPhone: dto.customerPhone,
-      squarePaymentId: null,
       status: 'confirmed',
       quantity: dto.quantity,
-      amountPaid: 0,
     });
 
     // Re-check booking count after insert (overbooking prevention)
@@ -446,7 +487,7 @@ export class ClassService {
         classTime: formatTime(booking.instance.startTime),
         classDuration: booking.instance.durationMinutes.toString(),
         quantity: booking.quantity.toString(),
-        amountPaid: (booking.amountPaid / 100).toFixed(2),
+        amountPaid: (amountPaid(booking) / CENTS_PER_DOLLAR).toFixed(2),
         bookingUrl,
       },
     );
@@ -499,7 +540,7 @@ export class ClassService {
         },
         {
           name: 'Amount Paid',
-          value: `$${(booking.amountPaid / 100).toFixed(2)}`,
+          value: formatCents(amountPaid(booking)),
           inline: true,
         },
       ],

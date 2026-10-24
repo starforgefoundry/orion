@@ -6,6 +6,7 @@ import {
   type CarBayPolicy,
   type CarBayRates,
 } from '$lib/utils/car_bay';
+import { DEFAULT_PRINT_PRICING, type PrintPricing } from '$lib/utils/print_pricing';
 import { eq } from 'drizzle-orm';
 
 export type SettingsMap = {
@@ -19,10 +20,8 @@ export type SettingsMap = {
   };
   printRequestSquare: {
     locationId: string;
-    memberPrintDiscountId: string;
-    printRequestItemId: string;
-    additionalBuildPlateItemId: string;
   };
+  printPricing: PrintPricing;
   classSettings: {
     discordWebhookUrl: string;
   };
@@ -51,10 +50,8 @@ const defaults: SettingsMap = {
   },
   printRequestSquare: {
     locationId: '',
-    memberPrintDiscountId: '',
-    printRequestItemId: '',
-    additionalBuildPlateItemId: '',
   },
+  printPricing: DEFAULT_PRINT_PRICING,
   classSettings: {
     discordWebhookUrl: '',
   },

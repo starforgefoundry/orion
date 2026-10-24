@@ -10,6 +10,7 @@ import ListTodoIcon from '@lucide/svelte/icons/list-todo';
 import PackageCheckIcon from '@lucide/svelte/icons/package-check';
 import PackageOpenIcon from '@lucide/svelte/icons/package-open';
 import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
+import Undo2Icon from '@lucide/svelte/icons/undo-2';
 
 export const REQUEST_STATUS_DISPLAY: Record<PrintRequestStatus, StatusDisplay> = {
   in_queue: {
@@ -59,6 +60,11 @@ export const PAYMENT_STATUS_DISPLAY: Record<Payment['status'], StatusDisplay> = 
     label: 'Void',
     tone: 'danger',
     icon: BanIcon,
+  },
+  refunded: {
+    label: 'Refunded',
+    tone: 'neutral',
+    icon: Undo2Icon,
   },
 };
 

@@ -2,6 +2,7 @@ import type { CreateOrganizationDto } from '$lib/remotes/dtos/organization.dto';
 import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
 import { schema, type Organization } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
+import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { and, eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 
@@ -78,7 +79,10 @@ export class OrganizationRepository extends BaseRepository {
       .select()
       .from(schema.payment)
       .where(
-        and(eq(schema.payment.organizationId, organizationId), eq(schema.payment.type, 'balance')),
+        and(
+          eq(schema.payment.organizationId, organizationId),
+          eq(schema.payment.type, PAYMENT_TYPE.BALANCE),
+        ),
       );
 
     return balancePayments;
@@ -97,14 +101,17 @@ export class OrganizationRepository extends BaseRepository {
     }));
   }
 
-  async createCharge(dto: CreateOrgChargeDto) {
+  async createCharge(dto: CreateOrgChargeDto, organization: Organization) {
     const [payment] = await this.db
       .insert(schema.payment)
       .values({
-        type: 'org_charge',
+        type: PAYMENT_TYPE.ORG_CHARGE,
         total: dto.amount,
-        status: 'paid',
+        status: PAYMENT_STATUS.PAID,
         organizationId: dto.organizationId,
+        customerName: organization.name,
+        customerEmail: organization.email,
+        lineItems: [{ name: dto.description, quantity: 1, unitAmount: dto.amount }],
         issuedDate: DateTime.now(),
         paymentDate: DateTime.now(),
       })

@@ -1,13 +1,13 @@
 import {
   CAR_BAY_TIER,
   bookingLineItems,
-  lineItemsTotal,
   type CarBayBlock,
   type CarBayRules,
   type CarBayRates,
   type CarBayRequest,
   type CarBayTier,
 } from '$lib/utils/car_bay';
+import { lineItemsTotal } from '$lib/utils/billing';
 import { DateTime } from 'luxon';
 
 type BookingFormContext = {

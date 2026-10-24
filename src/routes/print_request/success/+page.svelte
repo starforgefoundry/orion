@@ -14,8 +14,8 @@
   <h1 class="text-xl font-semibold">3D Print Request Submitted</h1>
 
   <p class="text-muted-foreground">
-    We will review your request and get back to you shortly. Keep an eye on your email for further
-    updates!
+    We emailed you a link to your print request. Use it to check its status, review the price, and
+    pay at any time.
   </p>
 
   <p class="text-muted-foreground">

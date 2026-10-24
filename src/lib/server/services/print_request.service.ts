@@ -10,6 +10,7 @@ import type {
 import type { PrintRequest } from '$lib/server/db/schema';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
+import { printRequestStatusUrl } from '$lib/server/utils/payment_links';
 import { DateTime } from 'luxon';
 
 export class PrintRequestService extends BaseService {
@@ -18,6 +19,7 @@ export class PrintRequestService extends BaseService {
     await this.printFilesRepository.uploadFiles(printRequest.id, dto.files);
 
     runInBackground(this.sendDiscordNotification(printRequest.id), 'send print request discord');
+    runInBackground(this.sendSubmittedEmail(printRequest.id), 'send print request submitted email');
 
     return {
       status: 'success',
@@ -55,11 +57,8 @@ export class PrintRequestService extends BaseService {
       updates.completionDate = DateTime.now();
 
       // Mark organization payment as paid when print request is done
-      if (payment && payment.organizationId && payment.status === 'pending') {
-        await this.paymentRepository.updatePayment(payment.id, {
-          status: 'paid',
-          paymentDate: DateTime.now(),
-        });
+      if (payment?.organizationId) {
+        await this.paymentRepository.markPaid(payment.id);
       }
 
       // Send pickup notification email to customer
@@ -69,14 +68,8 @@ export class PrintRequestService extends BaseService {
     if (dto.status === 'canceled') {
       updates.completionDate = DateTime.now();
 
-      // cancel any outstanding invoices
-      if (payment?.squareInvoiceId && payment.status !== 'canceled') {
-        await this.squareRepository.cancelInvoice(payment.squareInvoiceId);
-      }
-
-      // cancel payment
       if (payment) {
-        await this.paymentRepository.updatePayment(payment.id, { status: 'canceled' });
+        await this.paymentRepository.cancel(payment);
       }
     }
 
@@ -107,8 +100,56 @@ export class PrintRequestService extends BaseService {
       'print_pickup',
       {
         projectName: request.projectName,
+        statusURL: printRequestStatusUrl(request.id),
       },
     );
+  }
+
+  async sendSubmittedEmail(printRequestId: string) {
+    const request = await this.printRequestRepository.getById(printRequestId);
+    if (!request) {
+      throw new Error('Print request not found');
+    }
+
+    await this.mailgunRepository.sendTemplate(
+      request.email,
+      `Starforge 3D Prints <${publicEnv.PUBLIC_PRINT_REQUEST_EMAIL}>`,
+      publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
+      `We Received Your Print Request - ${request.projectName}`,
+      'print_submitted',
+      {
+        customerName: request.customerName,
+        projectName: request.projectName,
+        statusURL: printRequestStatusUrl(request.id),
+      },
+    );
+  }
+
+  async getStatus(id: string) {
+    const request = await this.printRequestRepository.getById(id);
+    if (!request) return null;
+
+    const payment = request.payment;
+    return {
+      id: request.id,
+      projectName: request.projectName,
+      customerName: request.customerName,
+      status: request.status,
+      isQuote: request.isQuote,
+      submissionDate: request.submissionDate.toISO()!,
+      completionDate: request.completionDate?.toISO() ?? null,
+      materialName: request.material.name,
+      files: request.files.map((file) => ({ fileName: file.fileName, quantity: file.quantity })),
+      payment: payment && {
+        status: payment.status,
+        lineItems: payment.lineItems,
+        discounts: payment.discounts,
+        total: payment.total,
+        paymentDate: payment.paymentDate?.toISO() ?? null,
+        billedToOrganization: payment.organizationId !== null,
+        invoiceUrl: payment.squareInvoiceId ? payment.paymentUrl : null,
+      },
+    };
   }
 
   async sendDiscordNotification(printRequestId: string) {

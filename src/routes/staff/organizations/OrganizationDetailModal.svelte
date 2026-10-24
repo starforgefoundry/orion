@@ -22,17 +22,22 @@
     updateOrganization,
   } from '$lib/remotes/endpoints/organization.remote';
   import CheckIcon from '@lucide/svelte/icons/check';
+  import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
   import HandCoinsIcon from '@lucide/svelte/icons/hand-coins';
+  import TicketIcon from '@lucide/svelte/icons/ticket';
   import PencilIcon from '@lucide/svelte/icons/pencil';
   import TrashIcon from '@lucide/svelte/icons/trash';
   import UsersIcon from '@lucide/svelte/icons/users';
   import XIcon from '@lucide/svelte/icons/x';
   import { SPACE_ZONE } from '$lib/space';
+  import { PAYMENT_STATUS } from '$lib/utils/billing';
   import { DateTime } from 'luxon';
   import { getPaymentStatusColor } from '../print_requests/queue/utils';
   import UserMinusIcon from '@lucide/svelte/icons/user-minus';
   import UserPlusIcon from '@lucide/svelte/icons/user-plus';
+  import CreateBillingCodeModal from './CreateBillingCodeModal.svelte';
   import CreateChargeModal from './CreateChargeModal.svelte';
+  import OrganizationBillingCodes from './OrganizationBillingCodes.svelte';
   import OrganizationMembers from './OrganizationMembers.svelte';
   import { OrganizationMembersManager } from './organization-members.svelte';
 
@@ -40,6 +45,7 @@
     CHARGES: 'charges',
     BALANCE_PAYMENTS: 'balance_payments',
     MEMBERS: 'members',
+    GROUP_CODES: 'group_codes',
   } as const;
   type Tab = (typeof TABS)[keyof typeof TABS];
 
@@ -80,7 +86,7 @@
   async function handleChargeBalance() {
     const confirm = await modalManager.confirm({
       title: 'Charge Outstanding Balance',
-      prompt: `Are you sure you want to send an invoice for the outstanding balance of ${formatCurrency(
+      prompt: `Are you sure you want to email a payment link for the outstanding balance of ${formatCurrency(
         organizationDetail.current?.outstandingBalance || 0,
       )} to the organization's email?`,
       confirmText: 'Charge Balance',
@@ -124,6 +130,10 @@
     modalManager.show(CreateChargeModal, {
       orgId: organizationId,
     });
+  }
+
+  function createGroupCode() {
+    modalManager.show(CreateBillingCodeModal, { organizationId });
   }
 
   async function saveEdits() {
@@ -254,6 +264,7 @@
             <Tabs.Trigger value={TABS.CHARGES}>Charges</Tabs.Trigger>
             <Tabs.Trigger value={TABS.BALANCE_PAYMENTS}>Balance Payments</Tabs.Trigger>
             <Tabs.Trigger value={TABS.MEMBERS}>Members</Tabs.Trigger>
+            <Tabs.Trigger value={TABS.GROUP_CODES}>Group Codes</Tabs.Trigger>
           </Tabs.List>
           {#if activeTab === TABS.CHARGES}
             <Button size="sm" variant="outline" onclick={createOrganizationCharge}>
@@ -277,11 +288,20 @@
                 Add Members
               </Button>
             </div>
+          {:else if activeTab === TABS.GROUP_CODES}
+            <Button size="sm" variant="outline" onclick={createGroupCode}>
+              <TicketIcon />
+              Add Group Code
+            </Button>
           {/if}
         </div>
 
         <Tabs.Content value={TABS.MEMBERS}>
           <OrganizationMembers manager={membersManager} />
+        </Tabs.Content>
+
+        <Tabs.Content value={TABS.GROUP_CODES}>
+          <OrganizationBillingCodes {organizationId} />
         </Tabs.Content>
 
         <Tabs.Content value={TABS.CHARGES}>
@@ -337,6 +357,7 @@
                   <Table.Head class="hidden sm:table-cell">Paid</Table.Head>
                   <Table.Head>Status</Table.Head>
                   <Table.Head class="text-right">Amount</Table.Head>
+                  <Table.Head class="w-12"><span class="sr-only">Pay link</span></Table.Head>
                 </Table.Row>
               </Table.Header>
               <Table.Body>
@@ -358,10 +379,20 @@
                     <Table.Cell class="text-right tabular-nums">
                       {formatCurrency(payment.total)}
                     </Table.Cell>
+                    <Table.Cell class="text-right">
+                      {#if payment.paymentUrl && payment.status === PAYMENT_STATUS.PENDING}
+                        <IconButton
+                          icon={ExternalLinkIcon}
+                          aria-label="Open payment link"
+                          href={payment.paymentUrl}
+                          target="_blank"
+                        />
+                      {/if}
+                    </Table.Cell>
                   </Table.Row>
                 {:else}
                   <Table.Row>
-                    <Table.Cell colspan={4} class="h-20 text-center text-muted-foreground">
+                    <Table.Cell colspan={5} class="h-20 text-center text-muted-foreground">
                       No balance payments found.
                     </Table.Cell>
                   </Table.Row>

@@ -9,20 +9,27 @@ export const getBillingCodes = query(async () => {
   return await billingCodeService.getBillingCodes();
 });
 
+export const getBillingCodesForOrganization = query(v.string(), async (organizationId) => {
+  verifyAuth();
+  return await billingCodeService.getBillingCodesForOrganization(organizationId);
+});
+
 export const getBillingCodeById = query(v.object({ id: v.string() }), async (dto) => {
   verifyAuth();
   return await billingCodeService.getBillingCodeById(dto.id);
 });
 
-// export const getBillingCodeByCode = query(v.object({ code: v.string() }), async (dto) => {
-//   // This can be used publicly to validate codes on the print request form
-//   return await billingCodeService.getBillingCodeByCode(dto.code);
-// });
+async function refreshCodes(organizationId: string | null) {
+  await Promise.all([
+    getBillingCodes().refresh(),
+    organizationId && getBillingCodesForOrganization(organizationId).refresh(),
+  ]);
+}
 
 export const createBillingCode = form(createBillingCodeDto, async (data) => {
   verifyAuth();
   const code = await billingCodeService.createBillingCode(data);
-  await getBillingCodes().refresh();
+  await refreshCodes(code.organizationId);
   return code;
 });
 
@@ -30,12 +37,13 @@ export const updateBillingCode = command(updateBillingCodeDto, async (dto) => {
   verifyAuth();
   const { id, ...updates } = dto;
   const code = await billingCodeService.updateBillingCode(id, updates);
-  await getBillingCodes().refresh();
+  await refreshCodes(code.organizationId);
   return code;
 });
 
 export const deleteBillingCode = command(v.object({ id: v.string() }), async (dto) => {
   verifyAuth();
+  const code = await billingCodeService.getBillingCodeById(dto.id);
   await billingCodeService.deleteBillingCode(dto.id);
-  await getBillingCodes().refresh();
+  await refreshCodes(code.organizationId);
 });

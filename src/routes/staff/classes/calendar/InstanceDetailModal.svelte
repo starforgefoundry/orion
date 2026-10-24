@@ -8,6 +8,7 @@
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { formatTime } from '$lib/frontend/utils';
+  import { formatCents, PAYMENT_STATUS } from '$lib/utils/billing';
   import {
     cancelBookingStaff,
     cancelInstance,
@@ -29,6 +30,10 @@
 
   let { onClose, instanceId }: Props = $props();
 
+  function isPaid(booking: any) {
+    return booking.payment?.status === PAYMENT_STATUS.PAID && booking.payment.total > 0;
+  }
+
   const detailRemote = $derived(getInstanceDetail(instanceId));
   const detail = $derived(detailRemote.current);
   const confirmedBookings = $derived(
@@ -44,7 +49,7 @@
   let cancelingBookingId = $state('');
 
   async function handleCancelBooking(booking: any) {
-    const hasPaid = booking.squarePaymentId && booking.amountPaid > 0;
+    const hasPaid = isPaid(booking);
     const confirmed = await modalManager.confirm({
       title: 'Cancel Booking',
       prompt: hasPaid
@@ -158,8 +163,8 @@
                       {booking.customerEmail} · {booking.customerPhone}
                     </div>
                     <div class="text-xs text-muted-foreground">
-                      {#if booking.amountPaid > 0}
-                        ${(booking.amountPaid / 100).toFixed(2)}
+                      {#if isPaid(booking)}
+                        {formatCents(booking.payment?.total ?? 0)}
                       {:else}
                         Manual (no payment)
                       {/if}
@@ -173,9 +178,7 @@
                     disabled={cancelingBookingId === booking.id}
                   >
                     {#if cancelingBookingId === booking.id}<Spinner />{:else}<TrashIcon />{/if}
-                    {booking.squarePaymentId && booking.amountPaid > 0
-                      ? 'Cancel & Refund'
-                      : 'Cancel'}
+                    {isPaid(booking) ? 'Cancel & Refund' : 'Cancel'}
                   </Button>
                 </li>
               {/each}
@@ -189,8 +192,8 @@
               {#each canceledBookings as booking (booking.id)}
                 <li>
                   {booking.customerName}{booking.quantity > 1 ? ` (x${booking.quantity})` : ''}
-                  {#if booking.amountPaid > 0}
-                    - ${(booking.amountPaid / 100).toFixed(2)} (refunded)
+                  {#if booking.payment?.status === PAYMENT_STATUS.REFUNDED}
+                    - {formatCents(booking.payment?.total ?? 0)} (refunded)
                   {:else}
                     (canceled)
                   {/if}

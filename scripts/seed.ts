@@ -37,6 +37,90 @@ async function writeStorageFile(key: string, contents: string) {
   return key;
 }
 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const SQUARE_SANDBOX_HOST = 'squareupsandbox.com';
+const BUILD_PLATE_PRICE = 300;
+const MEMBER_DISCOUNT_PERCENT = 10;
+const PERCENT = 100;
+
+type Transaction = postgres.TransactionSql;
+type LineItem = { name: string; description?: string; quantity: number; unitAmount: number };
+type Discount = { name: string; amount: number };
+
+type SeedPayment = {
+  id?: string;
+  type: string;
+  status: string;
+  customerName: string;
+  customerEmail: string;
+  lineItems: LineItem[];
+  discounts?: Discount[];
+  issuedDaysAgo: number;
+  organizationId?: string | null;
+  paymentUrl?: string | null;
+  squareInvoiceId?: string | null;
+};
+
+async function insertPayment(tx: Transaction, payment: SeedPayment) {
+  const id = payment.id ?? randomUUID();
+  const discounts = payment.discounts ?? [];
+  const subtotal = payment.lineItems.reduce((sum, i) => sum + i.quantity * i.unitAmount, 0);
+  const total = subtotal - discounts.reduce((sum, d) => sum + d.amount, 0);
+  const paid = payment.status === 'paid' || payment.status === 'refunded';
+
+  await tx`
+    INSERT INTO payment (id, type, status, issued_date, payment_date, refunded_date, customer_name,
+      customer_email, line_items, discounts, total, organization_id, payment_url, square_invoice_id)
+    VALUES (${id}, ${payment.type}, ${payment.status}, ${daysAgo(payment.issuedDaysAgo)},
+      ${paid ? daysAgo(payment.issuedDaysAgo - 0.5) : null},
+      ${payment.status === 'refunded' ? daysAgo(0) : null}, ${payment.customerName},
+      ${payment.customerEmail}, ${tx.json(payment.lineItems)}, ${tx.json(discounts)}, ${total},
+      ${payment.organizationId ?? null}, ${payment.paymentUrl ?? null},
+      ${payment.squareInvoiceId ?? null})`;
+  return id;
+}
+
+function printLineItems(materialType: string, materialCost: number, buildPlates: number) {
+  const items: LineItem[] = [
+    { name: '3D Print Material', description: materialType, quantity: 1, unitAmount: materialCost },
+  ];
+  if (buildPlates > 1) {
+    items.push({
+      name: 'Additional Build Plate',
+      quantity: buildPlates - 1,
+      unitAmount: BUILD_PLATE_PRICE,
+    });
+  }
+  return items;
+}
+
+function memberDiscount(items: LineItem[]): Discount[] {
+  const subtotal = items.reduce((sum, i) => sum + i.quantity * i.unitAmount, 0);
+  return [
+    {
+      name: `Member Discount (${MEMBER_DISCOUNT_PERCENT}%)`,
+      amount: Math.round((subtotal * MEMBER_DISCOUNT_PERCENT) / PERCENT),
+    },
+  ];
+}
+
+function printStatusUrl(id: string) {
+  return `${FRONTEND_URL}/print_request/status/${id}`;
+}
+
+/** Card payments need a real sandbox location, so the first one on the dev account is used. */
+async function sandboxLocationId() {
+  const squareUrl = process.env.SQUARE_URL ?? '';
+  if (!squareUrl.includes(SQUARE_SANDBOX_HOST) || !process.env.SQUARE_TOKEN) return '';
+
+  const response = await fetch(`${squareUrl}/v2/locations`, {
+    headers: { Authorization: `Bearer ${process.env.SQUARE_TOKEN}` },
+  });
+  if (!response.ok) return '';
+  const { locations } = (await response.json()) as { locations?: { id: string }[] };
+  return locations?.[0]?.id ?? '';
+}
+
 const SIGNATURE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120"><path d="M20 80 C60 20 90 110 130 60 S200 30 230 70 S300 100 380 40" stroke="black" stroke-width="3" fill="none"/></svg>`;
 
 const users = [
@@ -184,7 +268,7 @@ const projects = [
 ];
 
 const STATUSES = ['in_queue', 'in_queue', 'printing', 'done', 'picked_up', 'canceled'] as const;
-const PAYMENT_STATUSES = ['quote', 'pending', 'paid', 'canceled'] as const;
+const PAYMENT_STATUSES = ['pending', 'paid'] as const;
 
 const SPECIAL_REQUESTS = [
   '',
@@ -322,6 +406,187 @@ const carBayClosures = [
   { startAt: bayTime(9, 16), endAt: bayTime(9, 19), reason: null },
 ];
 
+const CAR_BAY_TIER_NAMES: Record<string, string> = {
+  quick_job: 'Quick Job',
+  hourly: 'Hourly',
+  full_day: 'Full Day',
+};
+
+/** Fixed ids so the customer pages for each billing state have stable links. */
+const DEMO = {
+  SUBMITTED: '00000000-0000-4000-8000-000000000001',
+  QUOTE: '00000000-0000-4000-8000-000000000002',
+  UNPAID: '00000000-0000-4000-8000-000000000003',
+  READY_UNPAID: '00000000-0000-4000-8000-000000000004',
+  PAID: '00000000-0000-4000-8000-000000000005',
+  ORGANIZATION: '00000000-0000-4000-8000-000000000006',
+  LEGACY_INVOICE: '00000000-0000-4000-8000-000000000007',
+  CANCELED: '00000000-0000-4000-8000-000000000008',
+  OVERRUN_BOOKING: '00000000-0000-4000-8000-000000000009',
+  OVERRUN_PAYMENT: '00000000-0000-4000-8000-000000000010',
+  OVERRUN_PAID: '00000000-0000-4000-8000-000000000011',
+  BALANCE: '00000000-0000-4000-8000-000000000012',
+  CAR_BAY_TOKEN: '00000000-0000-4000-8000-000000000013',
+};
+
+const MEMBER_CUSTOMER = customers[0];
+const GUEST_CUSTOMER = customers[1];
+
+type DemoPrint = {
+  id: string;
+  project: string;
+  status: string;
+  isQuote?: boolean;
+  customer?: string[];
+  billingCode?: string | null;
+  payment?: Partial<SeedPayment> & { status: string; member?: boolean };
+};
+
+async function seedCustomerViews(
+  tx: Transaction,
+  organization: { id: string; name: string; email: string },
+  organizationCode: string,
+) {
+  const material = materials[0];
+  const prints: DemoPrint[] = [
+    { id: DEMO.SUBMITTED, project: 'Demo - Just Submitted', status: 'in_queue' },
+    {
+      id: DEMO.QUOTE,
+      project: 'Demo - Quote Awaiting Approval',
+      status: 'in_queue',
+      isQuote: true,
+      customer: MEMBER_CUSTOMER,
+      payment: { status: 'quote', member: true },
+    },
+    {
+      id: DEMO.UNPAID,
+      project: 'Demo - Printing, Unpaid',
+      status: 'printing',
+      payment: { status: 'pending' },
+    },
+    {
+      id: DEMO.READY_UNPAID,
+      project: 'Demo - Ready for Pickup, Unpaid',
+      status: 'done',
+      customer: MEMBER_CUSTOMER,
+      payment: { status: 'pending', member: true },
+    },
+    { id: DEMO.PAID, project: 'Demo - Paid', status: 'done', payment: { status: 'paid' } },
+    {
+      id: DEMO.ORGANIZATION,
+      project: 'Demo - Billed to Organization',
+      status: 'printing',
+      billingCode: organizationCode,
+      payment: { status: 'pending', organizationId: organization.id },
+    },
+    {
+      id: DEMO.LEGACY_INVOICE,
+      project: 'Demo - Old Square Invoice',
+      status: 'printing',
+      payment: {
+        status: 'pending',
+        squareInvoiceId: 'legacy-invoice',
+        paymentUrl: 'https://squareupsandbox.com/pay-invoice/legacy-invoice',
+      },
+    },
+    {
+      id: DEMO.CANCELED,
+      project: 'Demo - Canceled',
+      status: 'canceled',
+      payment: { status: 'canceled' },
+    },
+  ];
+
+  for (const print of prints) {
+    const [customerName, email] = print.customer ?? GUEST_CUSTOMER;
+    const lineItems = printLineItems(material.type, 1250, 3);
+    const paymentId = print.payment
+      ? await insertPayment(tx, {
+          type: 'print_request',
+          customerName,
+          customerEmail: email,
+          lineItems,
+          discounts: print.payment.member ? memberDiscount(lineItems) : [],
+          issuedDaysAgo: 1,
+          paymentUrl: printStatusUrl(print.id),
+          ...print.payment,
+        })
+      : null;
+
+    await tx`
+      INSERT INTO print_request (id, "submissionDate", email, customer_name, project_name, status,
+        is_quote, material, special_requests, billing_code, payment_id, buildplate_count, material_cost)
+      VALUES (${print.id}, ${daysAgo(2)}, ${email}, ${customerName}, ${print.project}, ${print.status},
+        ${print.isQuote ?? false}, ${material.id}, '', ${print.billingCode ?? null}, ${paymentId},
+        ${paymentId ? 3 : 1}, ${paymentId ? 1250 : 0})`;
+    await tx`
+      INSERT INTO print_request_file (id, print_request_id, file_name, file_url, quantity)
+      VALUES (${randomUUID()}, ${print.id}, 'bracket.3mf', ${`print_requests/${print.id}/bracket`}, 2)`;
+  }
+
+  const [customerName, customerEmail] = GUEST_CUSTOMER;
+  await tx`
+    INSERT INTO car_bay_booking (id, tier, status, start_at, end_at, blocked_until, is_member,
+      customer_name, customer_email, customer_phone, created_by_email, booking_token, created_date)
+    VALUES (${DEMO.OVERRUN_BOOKING}, 'hourly', 'confirmed', ${bayTime(-4, 17).toISO()},
+      ${bayTime(-4, 19).toISO()}, ${bayTime(-4, 19, CAR_BAY_BUFFER_MINUTES).toISO()}, false,
+      ${customerName}, ${customerEmail}, '555-0100', ${DEV_USER_EMAIL}, ${DEMO.CAR_BAY_TOKEN}, ${daysAgo(5)})`;
+
+  const overruns = [
+    { id: DEMO.OVERRUN_PAYMENT, status: 'pending', quantity: 2 },
+    { id: DEMO.OVERRUN_PAID, status: 'paid', quantity: 1 },
+  ];
+  for (const overrun of overruns) {
+    await insertPayment(tx, {
+      id: overrun.id,
+      type: 'car_bay_overrun',
+      status: overrun.status,
+      customerName,
+      customerEmail,
+      lineItems: [
+        { name: 'Car Bay - Overrun (Non-member)', quantity: overrun.quantity, unitAmount: 2000 },
+      ],
+      issuedDaysAgo: 3,
+      paymentUrl: `${FRONTEND_URL}/pay/${overrun.id}`,
+    });
+    await tx`
+      INSERT INTO car_bay_overrun (id, booking_id, payment_id, created_date)
+      VALUES (${randomUUID()}, ${DEMO.OVERRUN_BOOKING}, ${overrun.id}, ${daysAgo(3)})`;
+  }
+
+  await insertPayment(tx, {
+    id: DEMO.BALANCE,
+    type: 'balance',
+    status: 'pending',
+    customerName: organization.name,
+    customerEmail: organization.email,
+    lineItems: [{ name: 'Organization Balance Payment', quantity: 1, unitAmount: 6000 }],
+    issuedDaysAgo: 1,
+    organizationId: organization.id,
+    paymentUrl: `${FRONTEND_URL}/pay/${DEMO.BALANCE}`,
+  });
+}
+
+function printCustomerViews() {
+  const views = [
+    ['Print: just submitted, no price yet', `/print_request/status/${DEMO.SUBMITTED}`],
+    ['Print: quote awaiting approval (member)', `/print_request/status/${DEMO.QUOTE}`],
+    ['Print: printing, unpaid', `/print_request/status/${DEMO.UNPAID}`],
+    ['Print: ready for pickup, unpaid (member)', `/print_request/status/${DEMO.READY_UNPAID}`],
+    ['Print: paid', `/print_request/status/${DEMO.PAID}`],
+    ['Print: billed to organization', `/print_request/status/${DEMO.ORGANIZATION}`],
+    ['Print: old Square invoice', `/print_request/status/${DEMO.LEGACY_INVOICE}`],
+    ['Print: canceled', `/print_request/status/${DEMO.CANCELED}`],
+    ['Print: old quote email link', `/print_request/quote?id=${DEMO.QUOTE}`],
+    ['Car bay overrun: unpaid', `/pay/${DEMO.OVERRUN_PAYMENT}`],
+    ['Car bay overrun: paid', `/pay/${DEMO.OVERRUN_PAID}`],
+    ['Organization balance: unpaid', `/pay/${DEMO.BALANCE}`],
+    ['Car bay booking with overruns', `/car_bay/booking/${DEMO.CAR_BAY_TOKEN}`],
+  ];
+  console.log('Customer billing views:');
+  for (const [label, path] of views) console.log(`  ${label}: ${FRONTEND_URL}${path}`);
+}
+
 async function seed() {
   await sql.begin(async (tx) => {
     await tx`
@@ -329,7 +594,7 @@ async function seed() {
         print_request_comment_file, payment, print_material, settings, billing_code,
         organization, organization_charge, inventory_item, purchase_list, member, waiver,
         member_subscription, day_pass, organization_member, visit, member_email,
-        class_catalog, class_instance, class_booking, car_bay_booking, car_bay_closure
+        class_catalog, class_instance, class_booking, car_bay_booking, car_bay_overrun, car_bay_closure
       CASCADE`;
 
     for (const user of users) {
@@ -354,6 +619,11 @@ async function seed() {
           maxUploadMB: 200,
           allowedFileTypes: '.stl, .3mf, .step, .stp',
           discordWebhookUrl: '',
+        })}),
+        ('printRequestSquare', ${tx.json({ locationId: await sandboxLocationId() })}),
+        ('printPricing', ${tx.json({
+          additionalBuildPlatePrice: BUILD_PLATE_PRICE,
+          memberDiscountPercent: MEMBER_DISCOUNT_PERCENT,
         })})`;
 
     for (const org of organizations) {
@@ -368,12 +638,11 @@ async function seed() {
         org: organizations[0].id,
       },
       { code: 'ENGDEPT', description: 'Engineering coursework', org: organizations[1].id },
-      { code: 'MEMBER10', description: 'Member discount', org: null },
     ];
     for (const code of billingCodes) {
       await tx`
-        INSERT INTO billing_code (id, code, description, organization_id, discount_id)
-        VALUES (${randomUUID()}, ${code.code}, ${code.description}, ${code.org}, ${code.org ? null : 'SQUARE_DISCOUNT_ID'})`;
+        INSERT INTO billing_code (id, code, description, organization_id)
+        VALUES (${randomUUID()}, ${code.code}, ${code.description}, ${code.org})`;
     }
 
     for (const [index, project] of projects.entries()) {
@@ -386,20 +655,32 @@ async function seed() {
       );
       const isQuote = index % 4 === 1;
       const billingCode = index % 5 === 2 ? billingCodes[index % billingCodes.length].code : null;
+      const organizationId = billingCode
+        ? billingCodes.find((code) => code.code === billingCode)!.org
+        : null;
+      const buildPlates = 1 + (index % 3);
+      const materialCost = 500 + index * 120;
 
       let paymentId: string | null = null;
       if (status !== 'in_queue' || index % 3 === 0) {
-        paymentId = randomUUID();
         const paymentStatus =
           status === 'picked_up'
             ? 'paid'
             : status === 'canceled'
               ? 'canceled'
-              : pick([...PAYMENT_STATUSES], index);
-        await tx`
-          INSERT INTO payment (id, issued_date, payment_date, status, type, total, square_invoice_id)
-          VALUES (${paymentId}, ${daysAgo(index)}, ${paymentStatus === 'paid' ? daysAgo(index - 1) : null},
-            ${paymentStatus}, 'print_request', ${800 + index * 375}, ${`inv_${index}`})`;
+              : isQuote
+                ? 'quote'
+                : pick([...PAYMENT_STATUSES], index);
+        paymentId = await insertPayment(tx, {
+          type: 'print_request',
+          status: paymentStatus,
+          customerName,
+          customerEmail: email,
+          lineItems: printLineItems(material.type, materialCost, buildPlates),
+          issuedDaysAgo: index,
+          organizationId,
+          paymentUrl: organizationId ? null : printStatusUrl(id),
+        });
       }
 
       await tx`
@@ -407,7 +688,7 @@ async function seed() {
           is_quote, material, special_requests, billing_code, payment_id, buildplate_count, material_cost)
         VALUES (${id}, ${daysAgo(index * 2 + 1)}, ${status === 'picked_up' ? daysAgo(index) : null}, ${email},
           ${customerName}, ${project}, ${status}, ${isQuote}, ${material.id}, ${pick(SPECIAL_REQUESTS, index)},
-          ${billingCode}, ${paymentId}, ${1 + (index % 3)}, ${paymentId ? 500 + index * 120 : 0})`;
+          ${billingCode}, ${paymentId}, ${buildPlates}, ${paymentId ? materialCost : 0})`;
 
       const fileCount = 1 + (index % 4);
       for (let part = 0; part < fileCount; part++) {
@@ -443,16 +724,23 @@ async function seed() {
 
     for (const [index, org] of organizations.entries()) {
       for (let charge = 0; charge < 2 + index; charge++) {
-        const paymentId = randomUUID();
-        await tx`
-          INSERT INTO payment (id, issued_date, status, type, total, organization_id)
-          VALUES (${paymentId}, ${daysAgo(charge * 7)}, ${charge === 0 ? 'paid' : 'pending'}, 'org_charge',
-            ${2500 + charge * 1000}, ${org.id})`;
+        const description = `Workshop materials #${charge + 1}`;
+        const paymentId = await insertPayment(tx, {
+          type: 'org_charge',
+          status: charge === 0 ? 'paid' : 'pending',
+          customerName: org.name,
+          customerEmail: org.email,
+          lineItems: [{ name: description, quantity: 1, unitAmount: 2500 + charge * 1000 }],
+          issuedDaysAgo: charge * 7,
+          organizationId: org.id,
+        });
         await tx`
           INSERT INTO organization_charge (id, organization_id, creation_date, description, payment_id)
-          VALUES (${randomUUID()}, ${org.id}, ${daysAgo(charge * 7)}, ${`Workshop materials #${charge + 1}`}, ${paymentId})`;
+          VALUES (${randomUUID()}, ${org.id}, ${daysAgo(charge * 7)}, ${description}, ${paymentId})`;
       }
     }
+
+    await seedCustomerViews(tx, organizations[0], billingCodes[0].code);
 
     const inventory = [
       ['Bambu PLA Basic 1kg', 'Bambu Lab', 'Standard filament spool'],
@@ -569,24 +857,56 @@ async function seed() {
 
       for (let booking = 0; booking < index % 4; booking++) {
         const [customerName, customerEmail] = pick(customers, index + booking);
+        const canceled = booking === 2;
+        const quantity = 1 + (booking % 2);
+        const paymentId =
+          Number(entry.price) > 0
+            ? await insertPayment(tx, {
+                type: 'class_booking',
+                status: canceled ? 'refunded' : 'paid',
+                customerName,
+                customerEmail,
+                lineItems: [
+                  { name: String(entry.name), quantity, unitAmount: Number(entry.price) },
+                ],
+                issuedDaysAgo: 2,
+              })
+            : null;
         await tx`
           INSERT INTO class_booking (id, instance_id, customer_name, customer_email, customer_phone, status,
-            booking_token, quantity, amount_paid, created_date)
+            booking_token, quantity, payment_id, created_date)
           VALUES (${randomUUID()}, ${instanceId}, ${customerName}, ${customerEmail}, '555-0100',
-            ${booking === 2 ? 'canceled' : 'confirmed'}, ${randomUUID()}, ${1 + (booking % 2)},
-            ${Number(entry.price) * (1 + (booking % 2))}, now())`;
+            ${canceled ? 'canceled' : 'confirmed'}, ${randomUUID()}, ${quantity}, ${paymentId}, now())`;
       }
     }
 
     for (const booking of carBayBookings) {
       const [customerName, customerEmail] = pick(customers, booking.customer);
+      const isMember = booking.customer % 2 === 0;
+      const paymentId =
+        booking.amountPaid > 0
+          ? await insertPayment(tx, {
+              type: 'car_bay_booking',
+              status: 'paid',
+              customerName,
+              customerEmail,
+              lineItems: [
+                {
+                  name: `Car Bay - ${CAR_BAY_TIER_NAMES[booking.tier]} (${isMember ? 'Member' : 'Non-member'})`,
+                  quantity: 1,
+                  unitAmount: booking.amountPaid,
+                },
+              ],
+              issuedDaysAgo: 3,
+            })
+          : null;
       await tx`
         INSERT INTO car_bay_booking (id, tier, status, start_at, end_at, blocked_until, is_member,
-          customer_name, customer_email, customer_phone, amount_paid, created_by_email, booking_token, created_date)
+          customer_name, customer_email, customer_phone, payment_id, created_by_email, booking_token, created_date)
         VALUES (${randomUUID()}, ${booking.tier}, ${booking.status}, ${booking.startAt.toISO()},
           ${booking.endAt.toISO()}, ${booking.endAt.plus({ minutes: CAR_BAY_BUFFER_MINUTES }).toISO()},
-          ${booking.customer % 2 === 0}, ${customerName}, ${customerEmail}, '555-0100',
-          ${booking.amountPaid}, ${booking.amountPaid === 0 ? DEV_USER_EMAIL : null}, ${randomUUID()},
+          ${isMember}, ${customerName}, ${customerEmail}, '555-0100',
+          ${paymentId}, ${paymentId ? null : DEV_USER_EMAIL}, ${randomUUID()},
           ${daysAgo(3)})`;
     }
 
@@ -602,6 +922,7 @@ async function seed() {
 try {
   await seed();
   console.log(`Seeded database. Dev login: ${DEV_USER_EMAIL}`);
+  printCustomerViews();
 } finally {
   await sql.end();
 }

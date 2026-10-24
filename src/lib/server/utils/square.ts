@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
 import type { MemberSubscription } from '$lib/server/db/schema';
+import type { BillingDiscount, BillingLineItem } from '$lib/utils/billing';
 import type { Customer, Order, SubscriptionStatus } from 'square';
 
 const SQUARE_PRODUCTION_API_URL = 'https://connect.squareup.com';
@@ -64,8 +65,25 @@ export function dayPassQuantity(order: Order, dayPassItemVariationIds: string[])
     .reduce((total, item) => total + Math.floor(Number(item.quantity)), 0);
 }
 
-export function stringifySquareObject(obj: any): string {
-  return JSON.stringify(obj, (_key, value) =>
-    typeof value === 'bigint' ? value.toString() : value,
-  );
+/** Discounts go in as fixed amounts so Square's total always matches the one Orion showed. */
+export function squareOrderLines(
+  lineItems: BillingLineItem[],
+  discounts: BillingDiscount[],
+): Pick<Order, 'lineItems' | 'discounts'> {
+  return {
+    lineItems: lineItems.map((item) => ({
+      name: item.name,
+      note: item.description,
+      quantity: item.quantity.toString(),
+      basePriceMoney: { amount: BigInt(item.unitAmount), currency: SQUARE_CURRENCY },
+    })),
+    discounts: discounts
+      .filter((discount) => discount.amount > 0)
+      .map((discount) => ({
+        name: discount.name,
+        type: 'FIXED_AMOUNT',
+        amountMoney: { amount: BigInt(discount.amount), currency: SQUARE_CURRENCY },
+        scope: 'ORDER',
+      })),
+  };
 }

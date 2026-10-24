@@ -37,6 +37,7 @@
   import SpoolIcon from '@lucide/svelte/icons/spool';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import FileBoxIcon from '@lucide/svelte/icons/file-box';
+  import LinkIcon from '@lucide/svelte/icons/link';
   import { DateTime } from 'luxon';
   import { toast } from 'svelte-sonner';
   import { MediaQuery } from 'svelte/reactivity';
@@ -268,10 +269,16 @@
               {#if canEditPayment}
                 <IconButton
                   icon={TagIcon}
-                  aria-label="Edit discount code"
+                  aria-label="Edit group code"
                   onclick={editDiscountCode}
                 />
               {/if}
+              <IconButton
+                icon={LinkIcon}
+                aria-label="Open customer status page"
+                href={`/print_request/status/${request.id}`}
+                target="_blank"
+              />
               {#if request.payment?.squareInvoiceId}
                 <IconButton
                   icon={ExternalLinkIcon}

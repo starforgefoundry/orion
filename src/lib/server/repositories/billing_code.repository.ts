@@ -4,81 +4,58 @@ import type {
 } from '$lib/remotes/dtos/billing_code.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
 
 export class BillingCodeRepository extends BaseRepository {
   async create(dto: CreateBillingCodeDto) {
-    try {
-      // Convert empty strings to null for foreign key fields
-      const values = {
-        ...dto,
-        organizationId: dto.organizationId || null,
-        discountId: dto.discountId || null,
-      };
-      const [billingCode] = await this.db.insert(schema.billingCode).values(values).returning();
-      return billingCode;
-    } catch (error) {
-      console.error('Error creating billing code:', error);
-      throw error;
-    }
+    const [billingCode] = await this.db.insert(schema.billingCode).values(dto).returning();
+    return billingCode;
+  }
+
+  private selectWithOrganization(where: SQL | undefined) {
+    return this.db
+      .select({
+        billingCode: schema.billingCode,
+        organization: schema.organization,
+      })
+      .from(schema.billingCode)
+      .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
+      .where(where)
+      .orderBy(asc(schema.billingCode.code));
   }
 
   async getAll() {
-    const codes = await this.db
-      .select({
-        billingCode: schema.billingCode,
-        organization: schema.organization,
-      })
-      .from(schema.billingCode)
-      .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
-      .where(eq(schema.billingCode.archived, false));
+    return await this.selectWithOrganization(eq(schema.billingCode.archived, false));
+  }
 
-    return codes;
+  async getByOrganization(organizationId: string) {
+    return await this.selectWithOrganization(
+      and(
+        eq(schema.billingCode.organizationId, organizationId),
+        eq(schema.billingCode.archived, false),
+      ),
+    );
   }
 
   async getById(id: string) {
-    const [code] = await this.db
-      .select({
-        billingCode: schema.billingCode,
-        organization: schema.organization,
-      })
-      .from(schema.billingCode)
-      .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
-      .where(eq(schema.billingCode.id, id));
-
+    const [code] = await this.selectWithOrganization(eq(schema.billingCode.id, id));
     return code;
   }
 
   async getByCode(code: string) {
-    const [billingCode] = await this.db
-      .select({
-        billingCode: schema.billingCode,
-        organization: schema.organization,
-      })
-      .from(schema.billingCode)
-      .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
-      .where(
-        and(
-          eq(sql`upper(${schema.billingCode.code})`, code.toUpperCase()),
-          eq(schema.billingCode.archived, false),
-        ),
-      );
-
+    const [billingCode] = await this.selectWithOrganization(
+      and(
+        eq(sql`upper(${schema.billingCode.code})`, code.toUpperCase()),
+        eq(schema.billingCode.archived, false),
+      ),
+    );
     return billingCode;
   }
 
   async update(id: string, updates: Omit<UpdateBillingCodeDto, 'id'>) {
-    // Convert empty strings to null for foreign key fields
-    const values = {
-      ...updates,
-      ...(updates.organizationId !== undefined && {
-        organizationId: updates.organizationId || null,
-      }),
-      ...(updates.discountId !== undefined && { discountId: updates.discountId || null }),
-    };
     const [billingCode] = await this.db
       .update(schema.billingCode)
-      .set(values)
+      .set(updates)
       .where(eq(schema.billingCode.id, id))
       .returning();
 

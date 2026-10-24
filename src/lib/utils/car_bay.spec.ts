@@ -1,3 +1,4 @@
+import { lineItemsTotal } from '$lib/utils/billing';
 import { DateTime } from 'luxon';
 import { describe, expect, it } from 'vitest';
 import {
@@ -7,7 +8,6 @@ import {
   DEFAULT_CAR_BAY_POLICY,
   DEFAULT_CAR_BAY_RATES,
   bookingLineItems,
-  lineItemsTotal,
   overrunLineItems,
 } from './car_bay';
 
