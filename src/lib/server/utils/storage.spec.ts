@@ -1,21 +1,16 @@
-import { readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
-import { afterAll, describe, expect, it, vi } from 'vitest';
-
-const { STORAGE_DIR } = await vi.hoisted(async () => {
-  const { mkdtempSync } = await import('node:fs');
-  const { tmpdir } = await import('node:os');
-  const { join } = await import('node:path');
-  return { STORAGE_DIR: mkdtempSync(join(tmpdir(), 'orion-storage-')) };
-});
-
-vi.mock('$env/dynamic/private', () => ({
-  env: { STORAGE_DIR, FILE_SIGNING_SECRET: 'test-secret' },
-}));
-
-import { InvalidStorageKeyError, fileUrl, openFile, saveFile, storagePath } from './storage';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { verifySignedUrl } from './signed_url';
+import { InvalidStorageKeyError, fileUrl, openFile, saveFile, storagePath } from './storage';
+
+const STORAGE_DIR = mkdtempSync(join(tmpdir(), 'orion-storage-'));
+
+beforeEach(() => {
+  vi.stubEnv('STORAGE_DIR', STORAGE_DIR);
+});
 
 afterAll(() => rmSync(STORAGE_DIR, { recursive: true, force: true }));
 

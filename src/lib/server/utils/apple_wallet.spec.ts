@@ -3,10 +3,6 @@ import { PKPass } from 'passkit-generator';
 import { describe, expect, it, vi } from 'vitest';
 import { applePassJson, buildApplePass, type AppleWalletConfig } from './apple_wallet';
 
-vi.mock('$env/dynamic/private', () => ({
-  env: { FRONTEND_URL: 'https://orion.example.com' },
-}));
-
 vi.mock('passkit-generator', () => ({
   PKPass: vi.fn(
     class {

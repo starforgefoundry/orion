@@ -1,88 +1,36 @@
 import type { UpsertInventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
+import { factory } from '$test/factory';
+import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { InventoryService } from './inventory.service';
 
-describe('InventoryService', () => {
-  let inventoryService: InventoryService;
-  let mockInventoryRepo: any;
+describe(InventoryService.name, () => {
+  let sut: InventoryService;
+  let mocks: ServiceMocks;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-
-    mockInventoryRepo = {
-      getAll: vi.fn(),
-      getById: vi.fn(),
-      upsert: vi.fn(),
-      delete: vi.fn(),
-      getAllPurchaseList: vi.fn(),
-      addToPurchaseList: vi.fn(),
-      removeFromPurchaseList: vi.fn(),
-      uploadImage: vi.fn(),
-      deleteImage: vi.fn(),
-    };
-
-    inventoryService = new InventoryService(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      mockInventoryRepo,
-    );
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
+    ({ sut, mocks } = newTestService(InventoryService));
   });
 
   describe('getItems', () => {
     it('should return all inventory items', async () => {
-      // Arrange
-      const mockItems = [
-        {
-          id: 'item-1',
-          name: 'Test Item 1',
-          vendor: 'Vendor A',
-          url: 'https://example.com/item1',
-          imageUrl: 'https://example.com/image1.jpg',
-          description: 'Description 1',
-        },
-        {
-          id: 'item-2',
-          name: 'Test Item 2',
-          vendor: 'Vendor B',
-          url: 'https://example.com/item2',
-          imageUrl: null,
-          description: 'Description 2',
-        },
-      ];
+      const items = [factory.inventoryItem(), factory.inventoryItem({ imageUrl: null })];
+      mocks.inventoryRepository.getAll.mockResolvedValue(items);
 
-      vi.mocked(mockInventoryRepo.getAll).mockResolvedValue(mockItems);
+      const result = await sut.getItems();
 
-      // Act
-      const result = await inventoryService.getItems();
-
-      // Assert
-      expect(mockInventoryRepo.getAll).toHaveBeenCalled();
-      expect(result).toEqual(mockItems);
+      expect(mocks.inventoryRepository.getAll).toHaveBeenCalled();
+      expect(result).toEqual(items);
       expect(result).toHaveLength(2);
     });
 
     it('should return empty array when no items exist', async () => {
-      // Arrange
-      vi.mocked(mockInventoryRepo.getAll).mockResolvedValue([]);
+      mocks.inventoryRepository.getAll.mockResolvedValue([]);
 
-      // Act
-      const result = await inventoryService.getItems();
+      const result = await sut.getItems();
 
-      // Assert
-      expect(mockInventoryRepo.getAll).toHaveBeenCalled();
+      expect(mocks.inventoryRepository.getAll).toHaveBeenCalled();
       expect(result).toEqual([]);
       expect(result).toHaveLength(0);
     });
@@ -90,41 +38,25 @@ describe('InventoryService', () => {
 
   describe('getItemById', () => {
     it('should return an inventory item by id', async () => {
-      // Arrange
-      const mockItem = {
-        id: 'item-1',
-        name: 'Test Item',
-        vendor: 'Test Vendor',
-        url: 'https://example.com/item',
-        imageUrl: 'https://example.com/image.jpg',
-        description: 'Test Description',
-      };
+      const item = factory.inventoryItem();
+      mocks.inventoryRepository.getById.mockResolvedValue(item);
 
-      vi.mocked(mockInventoryRepo.getById).mockResolvedValue(mockItem);
+      const result = await sut.getItemById(item.id);
 
-      // Act
-      const result = await inventoryService.getItemById('item-1');
-
-      // Assert
-      expect(mockInventoryRepo.getById).toHaveBeenCalledWith('item-1');
-      expect(result).toEqual(mockItem);
+      expect(mocks.inventoryRepository.getById).toHaveBeenCalledWith(item.id);
+      expect(result).toEqual(item);
     });
 
     it('should throw error when item not found', async () => {
-      // Arrange
-      vi.mocked(mockInventoryRepo.getById).mockResolvedValue(null);
+      mocks.inventoryRepository.getById.mockResolvedValue(undefined as never);
 
-      // Act & Assert
-      await expect(inventoryService.getItemById('non-existent')).rejects.toThrow(
-        'Inventory item not found',
-      );
-      expect(mockInventoryRepo.getById).toHaveBeenCalledWith('non-existent');
+      await expect(sut.getItemById('non-existent')).rejects.toThrow('Inventory item not found');
+      expect(mocks.inventoryRepository.getById).toHaveBeenCalledWith('non-existent');
     });
   });
 
   describe('upsertItem', () => {
     it('should create a new inventory item', async () => {
-      // Arrange
       const dto: UpsertInventoryItemDto = {
         name: 'New Item',
         vendor: 'New Vendor',
@@ -132,24 +64,16 @@ describe('InventoryService', () => {
         imageUrl: 'https://example.com/new-image.jpg',
         description: 'New Description',
       };
+      const created = factory.inventoryItem(dto);
+      mocks.inventoryRepository.upsert.mockResolvedValue(created);
 
-      const mockCreatedItem = {
-        id: 'new-item-id',
-        ...dto,
-      };
+      const result = await sut.upsertItem(dto);
 
-      vi.mocked(mockInventoryRepo.upsert).mockResolvedValue(mockCreatedItem);
-
-      // Act
-      const result = await inventoryService.upsertItem(dto);
-
-      // Assert
-      expect(mockInventoryRepo.upsert).toHaveBeenCalledWith(dto);
-      expect(result).toEqual(mockCreatedItem);
+      expect(mocks.inventoryRepository.upsert).toHaveBeenCalledWith(dto);
+      expect(result).toEqual(created);
     });
 
     it('should update an existing inventory item', async () => {
-      // Arrange
       const dto: UpsertInventoryItemDto = {
         id: 'existing-item-id',
         name: 'Updated Item',
@@ -158,23 +82,16 @@ describe('InventoryService', () => {
         imageUrl: 'https://example.com/updated-image.jpg',
         description: 'Updated Description',
       };
+      const updated = factory.inventoryItem({ ...dto, id: 'existing-item-id' });
+      mocks.inventoryRepository.upsert.mockResolvedValue(updated);
 
-      const mockUpdatedItem = {
-        ...dto,
-      };
+      const result = await sut.upsertItem(dto);
 
-      vi.mocked(mockInventoryRepo.upsert).mockResolvedValue(mockUpdatedItem);
-
-      // Act
-      const result = await inventoryService.upsertItem(dto);
-
-      // Assert
-      expect(mockInventoryRepo.upsert).toHaveBeenCalledWith(dto);
-      expect(result).toEqual(mockUpdatedItem);
+      expect(mocks.inventoryRepository.upsert).toHaveBeenCalledWith(dto);
+      expect(result).toEqual(updated);
     });
 
     it('should handle item without image URL', async () => {
-      // Arrange
       const dto: UpsertInventoryItemDto = {
         name: 'Item Without Image',
         vendor: 'Vendor',
@@ -182,137 +99,90 @@ describe('InventoryService', () => {
         imageUrl: '',
         description: 'Description',
       };
+      const created = factory.inventoryItem({ ...dto, imageUrl: null });
+      mocks.inventoryRepository.upsert.mockResolvedValue(created);
 
-      const mockCreatedItem = {
-        id: 'item-id',
-        name: dto.name,
-        vendor: dto.vendor,
-        url: dto.url,
-        imageUrl: null,
-        description: dto.description,
-      };
+      const result = await sut.upsertItem(dto);
 
-      vi.mocked(mockInventoryRepo.upsert).mockResolvedValue(mockCreatedItem);
-
-      // Act
-      const result = await inventoryService.upsertItem(dto);
-
-      // Assert
-      expect(mockInventoryRepo.upsert).toHaveBeenCalledWith(dto);
-      expect(result).toEqual(mockCreatedItem);
+      expect(mocks.inventoryRepository.upsert).toHaveBeenCalledWith(dto);
+      expect(result).toEqual(created);
     });
   });
 
   describe('deleteItem', () => {
     it('should delete an inventory item', async () => {
-      // Arrange
-      vi.mocked(mockInventoryRepo.delete).mockResolvedValue(undefined);
+      mocks.inventoryRepository.delete.mockResolvedValue();
 
-      // Act
-      await inventoryService.deleteItem('item-to-delete');
+      await sut.deleteItem('item-to-delete');
 
-      // Assert
-      expect(mockInventoryRepo.delete).toHaveBeenCalledWith('item-to-delete');
+      expect(mocks.inventoryRepository.delete).toHaveBeenCalledWith('item-to-delete');
     });
   });
 
   describe('getPurchaseList', () => {
     it('should return all purchase list items with formatted dates', async () => {
-      // Arrange
-      const addedDate1 = DateTime.fromISO('2024-01-15T10:00:00.000Z');
-      const addedDate2 = DateTime.fromISO('2024-01-16T12:30:00.000Z');
-
-      const mockPurchaseItems = [
+      const first = factory.inventoryItem();
+      const second = factory.inventoryItem({ imageUrl: null });
+      const entries = [
         {
-          id: 'purchase-1',
-          inventoryItemId: 'item-1',
-          addedDate: addedDate1,
-          inventoryItem: {
-            id: 'item-1',
-            name: 'Item 1',
-            vendor: 'Vendor 1',
-            url: 'https://example.com/item1',
-            imageUrl: 'https://example.com/image1.jpg',
-            description: 'Description 1',
-          },
+          ...factory.purchaseList({
+            inventoryItemId: first.id,
+            addedDate: DateTime.fromISO('2024-01-15T10:00:00.000Z'),
+          }),
+          inventoryItem: first,
         },
         {
-          id: 'purchase-2',
-          inventoryItemId: 'item-2',
-          addedDate: addedDate2,
-          inventoryItem: {
-            id: 'item-2',
-            name: 'Item 2',
-            vendor: 'Vendor 2',
-            url: 'https://example.com/item2',
-            imageUrl: null,
-            description: 'Description 2',
-          },
+          ...factory.purchaseList({
+            inventoryItemId: second.id,
+            addedDate: DateTime.fromISO('2024-01-16T12:30:00.000Z'),
+          }),
+          inventoryItem: second,
         },
       ];
+      mocks.inventoryRepository.getAllPurchaseList.mockResolvedValue(entries);
 
-      vi.mocked(mockInventoryRepo.getAllPurchaseList).mockResolvedValue(mockPurchaseItems);
+      const result = await sut.getPurchaseList();
 
-      // Act
-      const result = await inventoryService.getPurchaseList();
-
-      // Assert
-      expect(mockInventoryRepo.getAllPurchaseList).toHaveBeenCalled();
-      expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
-        id: 'purchase-1',
-        inventoryItemId: 'item-1',
-        addedDate: addedDate1.toISO(),
-        inventoryItem: mockPurchaseItems[0].inventoryItem,
-      });
-      expect(result[1]).toEqual({
-        id: 'purchase-2',
-        inventoryItemId: 'item-2',
-        addedDate: addedDate2.toISO(),
-        inventoryItem: mockPurchaseItems[1].inventoryItem,
-      });
+      expect(mocks.inventoryRepository.getAllPurchaseList).toHaveBeenCalled();
+      expect(result).toEqual(
+        entries.map((entry) => ({
+          id: entry.id,
+          inventoryItemId: entry.inventoryItemId,
+          addedDate: entry.addedDate.toISO(),
+          inventoryItem: entry.inventoryItem,
+        })),
+      );
     });
 
     it('should return empty array when purchase list is empty', async () => {
-      // Arrange
-      vi.mocked(mockInventoryRepo.getAllPurchaseList).mockResolvedValue([]);
+      mocks.inventoryRepository.getAllPurchaseList.mockResolvedValue([]);
 
-      // Act
-      const result = await inventoryService.getPurchaseList();
+      const result = await sut.getPurchaseList();
 
-      // Assert
-      expect(mockInventoryRepo.getAllPurchaseList).toHaveBeenCalled();
+      expect(mocks.inventoryRepository.getAllPurchaseList).toHaveBeenCalled();
       expect(result).toEqual([]);
     });
   });
 
   describe('addToPurchaseList', () => {
     it('should add an item to the purchase list', async () => {
-      // Arrange
-      const mockPurchaseItem = {
-        id: 'purchase-new',
-        inventoryItemId: 'item-1',
-        addedDate: DateTime.now(),
-      };
+      const entry = factory.purchaseList();
+      mocks.inventoryRepository.addToPurchaseList.mockResolvedValue(entry);
 
-      vi.mocked(mockInventoryRepo.addToPurchaseList).mockResolvedValue(mockPurchaseItem);
+      const result = await sut.addToPurchaseList(entry.inventoryItemId);
 
-      // Act
-      const result = await inventoryService.addToPurchaseList('item-1');
-
-      // Assert
-      expect(mockInventoryRepo.addToPurchaseList).toHaveBeenCalledWith('item-1');
-      expect(result).toEqual(mockPurchaseItem);
+      expect(mocks.inventoryRepository.addToPurchaseList).toHaveBeenCalledWith(
+        entry.inventoryItemId,
+      );
+      expect(result).toEqual(entry);
     });
 
     it('should throw error when inventory item not found', async () => {
-      // Arrange
-      vi.mocked(mockInventoryRepo.addToPurchaseList).mockRejectedValue(
+      mocks.inventoryRepository.addToPurchaseList.mockRejectedValue(
         new Error('Inventory item not found'),
       );
 
-      // Act & Assert
-      await expect(inventoryService.addToPurchaseList('non-existent')).rejects.toThrow(
+      await expect(sut.addToPurchaseList('non-existent')).rejects.toThrow(
         'Inventory item not found',
       );
     });
@@ -320,44 +190,34 @@ describe('InventoryService', () => {
 
   describe('removeFromPurchaseList', () => {
     it('should remove an item from the purchase list', async () => {
-      // Arrange
-      vi.mocked(mockInventoryRepo.removeFromPurchaseList).mockResolvedValue(undefined);
+      mocks.inventoryRepository.removeFromPurchaseList.mockResolvedValue();
 
-      // Act
-      await inventoryService.removeFromPurchaseList('item-1');
+      await sut.removeFromPurchaseList('item-1');
 
-      // Assert
-      expect(mockInventoryRepo.removeFromPurchaseList).toHaveBeenCalledWith('item-1');
+      expect(mocks.inventoryRepository.removeFromPurchaseList).toHaveBeenCalledWith('item-1');
     });
   });
 
   describe('uploadInventoryImage', () => {
     it('should upload an image and return the URL', async () => {
-      // Arrange
-      const mockImageUrl = 'https://s3.example.com/inventory/item-1/uuid-123.jpg';
-      const mockFile = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+      const imageUrl = 'https://s3.example.com/inventory/item-1/uuid-123.jpg';
+      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+      mocks.inventoryRepository.uploadImage.mockResolvedValue(imageUrl);
 
-      vi.mocked(mockInventoryRepo.uploadImage).mockResolvedValue(mockImageUrl);
+      const result = await sut.uploadInventoryImage('item-1', file);
 
-      // Act
-      const result = await inventoryService.uploadInventoryImage('item-1', mockFile);
-
-      // Assert
-      expect(mockInventoryRepo.uploadImage).toHaveBeenCalledWith('item-1', mockFile);
-      expect(result).toEqual({ imageUrl: mockImageUrl });
+      expect(mocks.inventoryRepository.uploadImage).toHaveBeenCalledWith('item-1', file);
+      expect(result).toEqual({ imageUrl });
     });
   });
 
   describe('deleteInventoryImage', () => {
     it('should delete an inventory image', async () => {
-      // Arrange
-      vi.mocked(mockInventoryRepo.deleteImage).mockResolvedValue(undefined);
+      mocks.inventoryRepository.deleteImage.mockResolvedValue();
 
-      // Act
-      await inventoryService.deleteInventoryImage('item-1');
+      await sut.deleteInventoryImage('item-1');
 
-      // Assert
-      expect(mockInventoryRepo.deleteImage).toHaveBeenCalledWith('item-1');
+      expect(mocks.inventoryRepository.deleteImage).toHaveBeenCalledWith('item-1');
     });
   });
 });

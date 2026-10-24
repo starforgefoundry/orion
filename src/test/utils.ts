@@ -19,7 +19,7 @@ import { PrintFilesRepository } from '$lib/server/repositories/print_files.repos
 import { PrintMaterialsRepository } from '$lib/server/repositories/print_materials.repository';
 import { PrintRequestRepository } from '$lib/server/repositories/print_request.repository';
 import { PrintRequestCommentRepository } from '$lib/server/repositories/print_request_comment.repository';
-import { SettingsRepository } from '$lib/server/repositories/settings.repository';
+import { SettingsRepository, type SettingsMap } from '$lib/server/repositories/settings.repository';
 import { SquareRepository } from '$lib/server/repositories/square.repository';
 import { VisitRepository } from '$lib/server/repositories/visit.repository';
 import { WaiverRepository } from '$lib/server/repositories/waiver.repository';
@@ -106,4 +106,17 @@ export function newTestService<T extends BaseService>(
   const mocks = newServiceMocks();
   const sut = new Service(mocks as unknown as ServiceRepositories);
   return { sut, mocks };
+}
+
+export function stubSettings(
+  settingsRepository: Mocked<SettingsRepository>,
+  settings: Partial<SettingsMap>,
+) {
+  settingsRepository.getSetting.mockImplementation(async <K extends keyof SettingsMap>(key: K) => {
+    const setting = settings[key];
+    if (!setting) {
+      throw new Error(`Setting "${key}" was read without a stub`);
+    }
+    return setting as SettingsMap[K];
+  });
 }

@@ -1,16 +1,12 @@
 import { DateTime } from 'luxon';
 import { generateKeyPairSync, verify } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   GOOGLE_WALLET_SAVE_URL,
   googleWalletClaims,
   googleWalletSaveUrl,
   type GoogleWalletConfig,
 } from './google_wallet';
-
-vi.mock('$env/dynamic/private', () => ({
-  env: { FRONTEND_URL: 'https://orion.example.com' },
-}));
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 
