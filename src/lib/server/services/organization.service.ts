@@ -12,10 +12,27 @@ import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { SPACE_ZONE } from '$lib/server/utils/member_access';
 import { parseMemberLines, type ParsedMemberLine } from '$lib/server/utils/member_lines';
+import { foundrySender } from '$lib/server/utils/email_templates/senders';
+import { payUrl } from '$lib/server/utils/payment_links';
+import {
+  buildBill,
+  centsToDollars,
+  PAYMENT_STATUS,
+  PAYMENT_TYPE,
+  type PaymentStatus,
+} from '$lib/utils/billing';
+import { env as publicEnv } from '$env/dynamic/public';
 import { DateTime } from 'luxon';
 
 export const ORGANIZATION_NOT_FOUND = 'Organization not found';
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
+const BALANCE_LINE_ITEM_NAME = 'Organization Balance Payment';
+const BALANCE_DESCRIPTION = "your organization's outstanding balance";
+const OWED_STATUSES = new Set<PaymentStatus>([
+  PAYMENT_STATUS.PENDING,
+  PAYMENT_STATUS.PROCESSING,
+  PAYMENT_STATUS.PAID,
+]);
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -166,14 +183,11 @@ export class OrganizationService extends BaseService {
 
     let totalOwed = 0;
 
-    // Add payment charges (print requests)
     for (const row of allPayments) {
-      if (row.status !== 'quote' && row.status !== 'canceled' && row.type !== 'balance') {
-        totalOwed += row.total;
-      }
-
-      if (row.type === 'balance') {
+      if (row.type === PAYMENT_TYPE.BALANCE) {
         totalOwed -= row.total;
+      } else if (OWED_STATUSES.has(row.status)) {
+        totalOwed += row.total;
       }
     }
 
@@ -192,62 +206,42 @@ export class OrganizationService extends BaseService {
       throw new Error('No outstanding balance to charge');
     }
 
-    // Get or create the customer in Square
-    const customer = await this.squareRepository.upsertCustomer(
-      organization.name,
-      organization.email,
+    const id = crypto.randomUUID();
+    const payment = await this.paymentRepository.save(
+      {
+        type: PAYMENT_TYPE.BALANCE,
+        status: PAYMENT_STATUS.PENDING,
+        customer: { name: organization.name, email: organization.email },
+        bill: buildBill([
+          { name: BALANCE_LINE_ITEM_NAME, quantity: 1, unitAmount: outstandingBalance },
+        ]),
+        organizationId: organization.id,
+        paymentUrl: payUrl({ id }),
+      },
+      id,
     );
 
-    // Get Square settings for location
-    const squareSettings = await this.settingsRepository.getSetting('printRequestSquare');
-
-    // Create a Square order for the balance
-    const order = await this.squareRepository.createOrder({
-      order: {
-        locationId: squareSettings.locationId,
-        customerId: customer.id!,
-        lineItems: [
-          {
-            name: 'Organization Balance Payment',
-            quantity: '1',
-            basePriceMoney: {
-              amount: BigInt(outstandingBalance),
-              currency: 'USD',
-            },
-          },
-        ],
+    await this.mailgunRepository.sendTemplate(
+      organization.email,
+      foundrySender(),
+      publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
+      'Starforge Organization Balance Due',
+      'payment_request',
+      {
+        customerName: organization.name,
+        description: BALANCE_DESCRIPTION,
+        total: centsToDollars(payment.total),
+        paymentUrl: payUrl(payment),
       },
-    });
-
-    if (!order) {
-      throw new Error('Failed to create order in Square');
-    }
-
-    // Create an invoice for this order
-    const invoice = await this.paymentRepository.createInvoice(order);
-    if (!invoice) {
-      throw new Error('Failed to create invoice in Square');
-    }
-
-    // Send the invoice
-    await this.squareRepository.sendInvoice(invoice.id!, invoice.version!);
-
-    // Create a payment record for this balance payment
-    const payment = await this.paymentRepository.createStandalonePayment({
-      organizationId: dto.organizationId,
-      status: 'pending',
-      issuedDate: DateTime.now(),
-      total: outstandingBalance,
-      squareInvoiceId: invoice.id!,
-      squareOrderId: order.id!,
-      type: 'balance',
-    });
+    );
 
     return payment;
   }
 
   async createCharge(dto: CreateOrgChargeDto) {
-    return await this.organizationRepository.createCharge(dto);
+    const organization = await this.organizationRepository.getById(dto.organizationId);
+    if (!organization) throw new Error(ORGANIZATION_NOT_FOUND);
+    return await this.organizationRepository.createCharge(dto, organization);
   }
 }
 

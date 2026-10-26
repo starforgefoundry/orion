@@ -11,6 +11,7 @@
     getCarBayRates,
     getClassSettings,
     getPrintRequestSettings,
+    getPrintPricing,
     getPrintRequestSquareSettings,
   } from '$lib/remotes/endpoints/settings.remote';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
@@ -29,6 +30,7 @@
   import MemberSquareSettings from './MemberSquareSettings.svelte';
   import SettingsSection from './SettingsSection.svelte';
   import SquareInfoModal from './SquareInfoModal.svelte';
+  import PrintPricingSettings from './PrintPricingSettings.svelte';
   import SquareSettings from './SquareSettings.svelte';
   import SystemSettings from './SystemSettings.svelte';
 
@@ -92,6 +94,7 @@
 
   const printRequestSettings = getPrintRequestSettings();
   const squareSettings = getPrintRequestSquareSettings();
+  const printPricing = getPrintPricing();
   const classSettings = getClassSettings();
   const carBayRates = getCarBayRates();
   const carBayPolicy = getCarBayPolicy();
@@ -143,6 +146,16 @@
           {@render loadState(printRequestSettings, 'print request')}
           {#if printRequestSettings.current}
             <SystemSettings printRequestSettings={printRequestSettings.current} />
+          {/if}
+        </SettingsSection>
+        <SettingsSection
+          title="Print Pricing"
+          description="Build plate price and member discount used when billing print requests."
+          formId="print-pricing-settings"
+        >
+          {@render loadState(printPricing, 'print pricing')}
+          {#if printPricing.current}
+            <PrintPricingSettings pricing={printPricing.current} />
           {/if}
         </SettingsSection>
         <SettingsSection

@@ -153,7 +153,10 @@
             />
           </FormField>
 
-          <FormField label="Group or Discount Code">
+          <FormField
+            label="Group Code"
+            description="Only if your organization is paying for this print."
+          >
             <TextInput
               {...submitPrintRequestForm.fields.billingCode.as('text')}
               placeholder="ORG2026"

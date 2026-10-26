@@ -18,14 +18,10 @@
   let billingCodes = getBillingCodes();
 
   let options = $derived(
-    billingCodes.current?.map((bc) => {
-      let label = bc.code;
-      const details: string[] = [];
-      if (bc.organizationName) details.push(bc.organizationName);
-      if (bc.discountName) details.push(bc.discountName);
-      if (details.length > 0) label += ` (${details.join(' - ')})`;
-      return { value: bc.code, label };
-    }) ?? [],
+    billingCodes.current?.map((bc) => ({
+      value: bc.code,
+      label: bc.organizationName ? `${bc.code} (${bc.organizationName})` : bc.code,
+    })) ?? [],
   );
 
   let selectedValue = $derived(currentCode);
@@ -36,18 +32,18 @@
   }
 </script>
 
-<Modal title="Edit Discount Code" icon={TagIcon} size="sm" {onClose}>
+<Modal title="Edit Group Code" icon={TagIcon} size="sm" {onClose}>
   {#if billingCodes.loading}
     <div class="flex justify-center py-6">
       <Spinner class="size-6" />
     </div>
   {:else}
-    <FormField label="Discount Code">
+    <FormField label="Group Code">
       <OptionSelect
         {options}
         bind:value={selectedValue}
-        noneLabel="No Discount Code"
-        placeholder="Select a billing code"
+        noneLabel="No Group Code"
+        placeholder="Select a group code"
       />
     </FormField>
   {/if}

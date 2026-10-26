@@ -4,12 +4,17 @@ import type {
   UpdateOrganizationDto,
 } from '$lib/remotes/dtos/organization.dto';
 import { DateTime } from 'luxon';
-import type { Customer, Invoice, Order } from 'square';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Member } from '$lib/server/db/schema';
 import { MailgunRateLimitError } from '$lib/server/repositories/mailgun.repository';
 import { SPACE_ZONE } from '$lib/server/utils/member_access';
 import { ORGANIZATION_NOT_FOUND, OrganizationService } from './organization.service';
+
+vi.mock('$env/dynamic/private', () => ({ env: { FRONTEND_URL: 'https://example.com' } }));
+vi.mock('$env/dynamic/public', () => ({
+  env: { PUBLIC_PRINT_REQUEST_EMAIL: '3dprint@example.com' },
+}));
 
 // Mock remote endpoints to avoid SvelteKit request store errors
 vi.mock('$lib/remotes/endpoints/organization.remote', () => ({
@@ -25,8 +30,7 @@ describe('OrganizationService', () => {
   let organizationService: OrganizationService;
   let mockOrganizationRepo: any;
   let mockPaymentRepo: any;
-  let mockSettingsRepo: any;
-  let mockSquareRepo: any;
+  let mockMailgunRepo: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -44,34 +48,28 @@ describe('OrganizationService', () => {
     };
 
     mockPaymentRepo = {
-      createInvoice: vi.fn(),
-      createStandalonePayment: vi.fn(),
+      save: vi.fn(async (payment, id) => ({
+        id,
+        total: payment.bill.total,
+        paymentUrl: payment.paymentUrl,
+      })),
     };
 
-    mockSettingsRepo = {
-      getSetting: vi.fn(),
-    };
-
-    mockSquareRepo = {
-      upsertCustomer: vi.fn(),
-      createOrder: vi.fn(),
-      sendInvoice: vi.fn(),
-    };
+    mockMailgunRepo = { sendTemplate: vi.fn() };
 
     organizationService = new OrganizationService(
       undefined,
       undefined,
       undefined,
       mockPaymentRepo,
-      mockSettingsRepo,
-      mockSquareRepo,
       undefined,
+      undefined,
+      mockMailgunRepo,
       undefined,
       mockOrganizationRepo,
       undefined,
     );
   });
-
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -511,334 +509,91 @@ describe('OrganizationService', () => {
   });
 
   describe('chargeOrganizationBalance', () => {
-    it('should create invoice and payment for organization balance', async () => {
-      // Arrange
-      const dto: ChargeOrganizationBalanceDto = {
-        organizationId: 'org-charge',
-      };
+    const organization = {
+      id: 'org-charge',
+      name: 'Charge Org',
+      email: 'charge@org.com',
+      archived: false,
+    };
 
-      const mockOrganization = {
-        id: 'org-charge',
-        name: 'Charge Org',
-        email: 'charge@org.com',
-        archived: false,
-      };
-
-      const mockCustomer: Customer = {
-        id: 'customer-charge',
-        emailAddress: 'charge@org.com',
-      };
-
-      const mockSquareSettings = {
-        locationId: 'loc-123',
-        printRequestItemId: 'item-123',
-        additionalBuildPlateItemId: 'plate-456',
-        memberPrintDiscountId: 'discount-789',
-      };
-
-      const mockOrder: Order = {
-        id: 'order-balance',
-        locationId: 'loc-123',
-        netAmountDueMoney: { amount: BigInt(8000), currency: 'USD' },
-      };
-
-      const mockInvoice: Invoice = {
-        id: 'inv-balance',
-        version: 1,
-        createdAt: DateTime.now().toISO(),
-      };
-
-      const mockPayment = {
-        id: 'payment-balance',
-        organizationId: 'org-charge',
-        status: 'pending',
-        total: 8000,
-        squareInvoiceId: 'inv-balance',
-        squareOrderId: 'order-balance',
-        type: 'balance',
-      };
-
-      const mockPayments = [
-        { id: 'p1', total: 5000, status: 'paid', type: 'print' },
-        { id: 'p2', total: 3000, status: 'paid', type: 'print' },
-      ];
-
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPayments);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
-      vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
-      vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
-      vi.mocked(mockSquareRepo.sendInvoice).mockResolvedValue(undefined);
-      vi.mocked(mockPaymentRepo.createStandalonePayment).mockResolvedValue(mockPayment);
-
-      // Act
-      const result = await organizationService.chargeBalance(dto);
-
-      // Assert
-      expect(mockOrganizationRepo.getById).toHaveBeenCalledWith('org-charge');
-      expect(mockOrganizationRepo.getPayments).toHaveBeenCalledWith('org-charge');
-      expect(mockSquareRepo.upsertCustomer).toHaveBeenCalledWith('Charge Org', 'charge@org.com');
-      expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequestSquare');
-      expect(mockSquareRepo.createOrder).toHaveBeenCalledWith({
-        order: {
-          locationId: 'loc-123',
-          customerId: 'customer-charge',
-          lineItems: [
-            {
-              name: 'Organization Balance Payment',
-              quantity: '1',
-              basePriceMoney: {
-                amount: BigInt(8000),
-                currency: 'USD',
-              },
-            },
-          ],
-        },
-      });
-      expect(mockPaymentRepo.createInvoice).toHaveBeenCalledWith(mockOrder);
-      expect(mockSquareRepo.sendInvoice).toHaveBeenCalledWith('inv-balance', 1);
-      expect(mockPaymentRepo.createStandalonePayment).toHaveBeenCalledWith({
-        organizationId: 'org-charge',
-        status: 'pending',
-        issuedDate: expect.any(DateTime),
-        total: 8000,
-        squareInvoiceId: 'inv-balance',
-        squareOrderId: 'order-balance',
-        type: 'balance',
-      });
-      expect(result).toEqual(mockPayment);
+    beforeEach(() => {
+      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(organization);
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue([
+        { id: 'p1', total: 5000, status: 'paid', type: 'print_request' },
+        { id: 'p2', total: 3000, status: 'pending', type: 'print_request' },
+      ]);
     });
 
-    it('should throw error when organization not found', async () => {
-      // Arrange
-      const dto: ChargeOrganizationBalanceDto = {
-        organizationId: 'nonexistent',
-      };
+    it('saves a pending balance payment and emails the organization a pay link', async () => {
+      const result = await organizationService.chargeBalance({ organizationId: 'org-charge' });
 
+      const [payment, id] = mockPaymentRepo.save.mock.calls[0];
+      expect(payment).toEqual({
+        type: 'balance',
+        status: 'pending',
+        customer: { name: 'Charge Org', email: 'charge@org.com' },
+        bill: expect.objectContaining({
+          lineItems: [{ name: 'Organization Balance Payment', quantity: 1, unitAmount: 8000 }],
+          total: 8000,
+        }),
+        organizationId: 'org-charge',
+        paymentUrl: `https://example.com/pay/${id}`,
+      });
+      expect(mockMailgunRepo.sendTemplate).toHaveBeenCalledWith(
+        'charge@org.com',
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        'payment_request',
+        expect.objectContaining({
+          customerName: 'Charge Org',
+          total: '80.00',
+          paymentUrl: `https://example.com/pay/${id}`,
+        }),
+      );
+      expect(result.id).toBe(id);
+    });
+
+    it('throws when the organization does not exist', async () => {
       vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(null);
 
-      // Act & Assert
-      await expect(organizationService.chargeBalance(dto)).rejects.toThrow(
-        'Organization not found',
-      );
+      await expect(
+        organizationService.chargeBalance({ organizationId: 'nonexistent' }),
+      ).rejects.toThrow('Organization not found');
     });
 
-    it('should throw error when no outstanding balance exists', async () => {
-      // Arrange
-      const dto: ChargeOrganizationBalanceDto = {
-        organizationId: 'org-no-balance',
-      };
-
-      const mockOrganization = {
-        id: 'org-no-balance',
-        name: 'No Balance Org',
-        email: 'nobalance@org.com',
-        archived: false,
-      };
-
-      const mockPaymentsNegative = [
-        { id: 'p1', total: 1000, status: 'paid', type: 'print' },
+    it('throws when nothing is owed', async () => {
+      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue([
+        { id: 'p1', total: 1000, status: 'paid', type: 'print_request' },
         { id: 'p2', total: 2000, status: 'paid', type: 'balance' },
-      ];
+      ]);
 
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPaymentsNegative);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
+      await expect(
+        organizationService.chargeBalance({ organizationId: 'org-charge' }),
+      ).rejects.toThrow('No outstanding balance to charge');
+      expect(mockPaymentRepo.save).not.toHaveBeenCalled();
+      expect(mockMailgunRepo.sendTemplate).not.toHaveBeenCalled();
+    });
+  });
 
-      // Act & Assert
-      await expect(organizationService.chargeBalance(dto)).rejects.toThrow(
-        'No outstanding balance to charge',
-      );
+  describe('createCharge', () => {
+    it('records the charge against the organization', async () => {
+      const organization = { id: 'org-1', name: 'Org', email: 'org@x.com', archived: false };
+      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(organization);
+      mockOrganizationRepo.createCharge = vi.fn(async () => ({ id: 'charge-1' }));
+      const dto = { organizationId: 'org-1', description: 'Laser time', amount: 2500 };
+
+      await organizationService.createCharge(dto);
+
+      expect(mockOrganizationRepo.createCharge).toHaveBeenCalledWith(dto, organization);
     });
 
-    it('should throw error when outstanding balance is negative', async () => {
-      // Arrange
-      const dto: ChargeOrganizationBalanceDto = {
-        organizationId: 'org-negative',
-      };
+    it('throws when the organization does not exist', async () => {
+      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(undefined);
 
-      const mockOrganization = {
-        id: 'org-negative',
-        name: 'Negative Balance Org',
-        email: 'negative@org.com',
-        archived: false,
-      };
-
-      const mockPaymentsNegative = [
-        { id: 'p1', total: 1000, status: 'paid', type: 'print' },
-        { id: 'p2', total: 2000, status: 'paid', type: 'balance' },
-      ];
-
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPaymentsNegative);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
-
-      // Act & Assert
-      await expect(organizationService.chargeBalance(dto)).rejects.toThrow(
-        'No outstanding balance to charge',
-      );
-    });
-
-    it('should throw error when order creation fails', async () => {
-      // Arrange
-      const dto: ChargeOrganizationBalanceDto = {
-        organizationId: 'org-fail-order',
-      };
-
-      const mockOrganization = {
-        id: 'org-fail-order',
-        name: 'Fail Order Org',
-        email: 'failorder@org.com',
-        archived: false,
-      };
-
-      const mockCustomer: Customer = {
-        id: 'customer-fail',
-        emailAddress: 'failorder@org.com',
-      };
-
-      const mockSquareSettings = {
-        locationId: 'loc-123',
-        printRequestItemId: 'item-123',
-        additionalBuildPlateItemId: 'plate-456',
-        memberPrintDiscountId: 'discount-789',
-      };
-
-      const mockPaymentsOrder = [{ id: 'p1', total: 5000, status: 'paid', type: 'print' }];
-
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPaymentsOrder);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
-      vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(organizationService.chargeBalance(dto)).rejects.toThrow(
-        'Failed to create order in Square',
-      );
-    });
-
-    it('should throw error when invoice creation fails', async () => {
-      // Arrange
-      const dto: ChargeOrganizationBalanceDto = {
-        organizationId: 'org-fail-invoice',
-      };
-
-      const mockOrganization = {
-        id: 'org-fail-invoice',
-        name: 'Fail Invoice Org',
-        email: 'failinvoice@org.com',
-        archived: false,
-      };
-
-      const mockCustomer: Customer = {
-        id: 'customer-fail-inv',
-        emailAddress: 'failinvoice@org.com',
-      };
-
-      const mockSquareSettings = {
-        locationId: 'loc-123',
-        printRequestItemId: 'item-123',
-        additionalBuildPlateItemId: 'plate-456',
-        memberPrintDiscountId: 'discount-789',
-      };
-
-      const mockPaymentsInvoice = [{ id: 'p1', total: 5000, status: 'paid', type: 'print' }];
-
-      const mockOrder: Order = {
-        id: 'order-fail-inv',
-        locationId: 'loc-123',
-        netAmountDueMoney: { amount: BigInt(5000), currency: 'USD' },
-      };
-
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockPaymentsInvoice);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
-      vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
-      vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(organizationService.chargeBalance(dto)).rejects.toThrow(
-        'Failed to create invoice in Square',
-      );
-    });
-
-    it('should handle large outstanding balance', async () => {
-      // Arrange
-      const dto: ChargeOrganizationBalanceDto = {
-        organizationId: 'org-large',
-      };
-
-      const mockOrganization = {
-        id: 'org-large',
-        name: 'Large Balance Org',
-        email: 'large@org.com',
-        archived: false,
-      };
-
-      const mockCustomer: Customer = {
-        id: 'customer-large',
-        emailAddress: 'large@org.com',
-      };
-
-      const mockSquareSettings = {
-        locationId: 'loc-123',
-        printRequestItemId: 'item-123',
-        additionalBuildPlateItemId: 'plate-456',
-        memberPrintDiscountId: 'discount-789',
-      };
-
-      const largeBalance = 100000; // $1000.00
-
-      const mockOrder: Order = {
-        id: 'order-large',
-        locationId: 'loc-123',
-        netAmountDueMoney: { amount: BigInt(largeBalance), currency: 'USD' },
-      };
-
-      const mockInvoice: Invoice = {
-        id: 'inv-large',
-        version: 1,
-        createdAt: DateTime.now().toISO(),
-      };
-
-      const mockPayment = {
-        id: 'payment-large',
-        organizationId: 'org-large',
-        status: 'pending',
-        total: largeBalance,
-        squareInvoiceId: 'inv-large',
-        squareOrderId: 'order-large',
-        type: 'balance',
-      };
-
-      const mockLargePayments = [
-        { id: 'p1', total: 60000, status: 'paid', type: 'print' },
-        { id: 'p2', total: 40000, status: 'paid', type: 'print' },
-      ];
-
-      vi.mocked(mockOrganizationRepo.getById).mockResolvedValue(mockOrganization);
-      vi.mocked(mockOrganizationRepo.getPayments).mockResolvedValue(mockLargePayments);
-      vi.mocked(mockOrganizationRepo.getCharges).mockResolvedValue([]);
-      vi.mocked(mockSquareRepo.upsertCustomer).mockResolvedValue(mockCustomer);
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
-      vi.mocked(mockSquareRepo.createOrder).mockResolvedValue(mockOrder);
-      vi.mocked(mockPaymentRepo.createInvoice).mockResolvedValue(mockInvoice);
-      vi.mocked(mockSquareRepo.sendInvoice).mockResolvedValue(undefined);
-      vi.mocked(mockPaymentRepo.createStandalonePayment).mockResolvedValue(mockPayment);
-
-      // Act
-      const result = await organizationService.chargeBalance(dto);
-
-      // Assert
-      expect(result.total).toBe(largeBalance);
-      const orderCall = vi.mocked(mockSquareRepo.createOrder).mock.calls[0][0];
-      expect(orderCall.order.lineItems![0].basePriceMoney!.amount).toBe(BigInt(largeBalance));
+      await expect(
+        organizationService.createCharge({ organizationId: 'x', description: 'd', amount: 1 }),
+      ).rejects.toThrow(ORGANIZATION_NOT_FOUND);
     });
   });
 });

@@ -1,11 +1,13 @@
 import {
   CAR_BAY_ZONE,
+  CarBayRuleError,
   CarBaySlotTakenError,
   DEFAULT_CAR_BAY_POLICY,
   DEFAULT_CAR_BAY_RATES,
 } from '$lib/utils/car_bay';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
 import { CarBayService } from './car_bay.service';
 
 vi.mock('$env/dynamic/private', () => ({
@@ -29,6 +31,19 @@ function at(iso: string) {
   return DateTime.fromISO(iso, { zone: CAR_BAY_ZONE });
 }
 
+function storedPayment(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'payment-1',
+    type: 'car_bay_booking',
+    status: 'paid',
+    total: 1200,
+    squarePaymentId: 'pay-1',
+    lineItems: [],
+    discounts: [],
+    ...overrides,
+  };
+}
+
 function storedBooking(overrides: Record<string, unknown> = {}) {
   return {
     id: 'booking-1',
@@ -38,9 +53,8 @@ function storedBooking(overrides: Record<string, unknown> = {}) {
     endAt: at(`${MONDAY}T17:30`),
     blockedUntil: at(`${MONDAY}T18:00`),
     ...CUSTOMER,
-    amountPaid: 1200,
-    squarePaymentId: 'pay-1',
-    squareOrderId: 'order-1',
+    paymentId: 'payment-1',
+    payment: storedPayment(),
     createdByEmail: null,
     bookingToken: 'token-1',
     reminderSentDate: null,
@@ -69,26 +83,27 @@ describe('CarBayService', () => {
       hasConfirmedForCustomer: vi.fn(async () => false),
       getReminderCandidates: vi.fn(async () => []),
       getOverrunPayments: vi.fn(async () => []),
+      createOverrun: vi.fn(),
       getClosuresInRange: vi.fn(async () => []),
       createClosure: vi.fn(async (data) => ({ id: 'closure-1', reason: null, ...data })),
       deleteClosure: vi.fn(async () => null),
     };
-    squareRepo = {
-      upsertCustomer: vi.fn(async () => ({ id: 'cust-1' })),
-      createOrder: vi.fn(async () => ({
-        id: 'order-1',
-        locationId: 'loc-1',
-        customerId: 'cust-1',
-      })),
-      createPayment: vi.fn(async () => ({ id: 'pay-1', status: 'APPROVED' })),
-      completePayment: vi.fn(async () => ({ id: 'pay-1', status: 'COMPLETED' })),
-      cancelPayment: vi.fn(),
-      refundPayment: vi.fn(),
-      sendInvoice: vi.fn(async () => ({ publicUrl: 'https://square.link/inv' })),
-    };
+    squareRepo = {};
     paymentRepo = {
-      createInvoice: vi.fn(async () => ({ id: 'inv-1', version: 1 })),
-      createStandalonePayment: vi.fn(async (payment) => payment),
+      authorize: vi.fn(async (payment) =>
+        storedPayment({ status: 'pending', total: payment.bill.total }),
+      ),
+      capture: vi.fn(async (payment) => ({ ...payment, status: 'paid' })),
+      void: vi.fn(),
+      refund: vi.fn(async () => true),
+      save: vi.fn(async (payment, id) => ({
+        id,
+        type: payment.type,
+        status: payment.status,
+        total: payment.bill.total,
+        lineItems: payment.bill.lineItems,
+        paymentUrl: payment.paymentUrl,
+      })),
     };
     settingsRepo = {
       getSetting: vi.fn(
@@ -133,19 +148,22 @@ describe('CarBayService', () => {
     it('authorizes the card, holds the bay, then captures the payment', async () => {
       await service.book(dto, NOW);
 
-      expect(squareRepo.createPayment).toHaveBeenCalledWith(
+      expect(paymentRepo.authorize).toHaveBeenCalledWith(
         expect.objectContaining({
-          autocomplete: false,
-          orderId: 'order-1',
-          amountMoney: { amount: 1200n, currency: 'USD' },
+          type: 'car_bay_booking',
+          customer: { name: 'Jane Doe', email: 'jane@example.com' },
+          bill: expect.objectContaining({ total: 1200 }),
         }),
+        'cnon:card',
       );
       expect(carBayRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ amountPaid: 1200, squarePaymentId: 'pay-1' }),
+        expect.objectContaining({ paymentId: 'payment-1' }),
       );
-      expect(squareRepo.completePayment).toHaveBeenCalledWith('pay-1');
+      expect(paymentRepo.capture).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'payment-1' }),
+      );
       expect(carBayRepo.create.mock.invocationCallOrder[0]).toBeLessThan(
-        squareRepo.completePayment.mock.invocationCallOrder[0],
+        paymentRepo.capture.mock.invocationCallOrder[0],
       );
     });
 
@@ -153,41 +171,41 @@ describe('CarBayService', () => {
       memberRepo.getAccessContextByEmail.mockResolvedValue(undefined);
       await service.book(dto, NOW);
 
-      expect(squareRepo.createPayment).toHaveBeenCalledWith(
-        expect.objectContaining({ amountMoney: { amount: 1800n, currency: 'USD' } }),
+      expect(paymentRepo.authorize).toHaveBeenCalledWith(
+        expect.objectContaining({ bill: expect.objectContaining({ total: 1800 }) }),
+        'cnon:card',
       );
     });
 
     it('ignores a member claim the customer sends themselves', async () => {
       memberRepo.getAccessContextByEmail.mockResolvedValue(undefined);
-      await service.book({ ...dto, isMember: true } as typeof dto, NOW);
+      const booking = await service.book({ ...dto, isMember: true } as typeof dto, NOW);
 
       expect(memberRepo.getAccessContextByEmail).toHaveBeenCalledWith('jane@example.com');
-      expect(carBayRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ isMember: false, amountPaid: 1800 }),
-      );
+      expect(carBayRepo.create).toHaveBeenCalledWith(expect.objectContaining({ isMember: false }));
+      expect(booking.amountPaid).toBe(1800);
     });
 
     it('voids the authorization when another checkout took the slot first', async () => {
       carBayRepo.create.mockRejectedValue(new CarBaySlotTakenError());
 
       await expect(service.book(dto, NOW)).rejects.toThrow(CarBaySlotTakenError);
-      expect(squareRepo.cancelPayment).toHaveBeenCalledWith('pay-1');
-      expect(squareRepo.completePayment).not.toHaveBeenCalled();
+      expect(paymentRepo.void).toHaveBeenCalledWith(expect.objectContaining({ id: 'payment-1' }));
+      expect(paymentRepo.capture).not.toHaveBeenCalled();
     });
 
     it('releases the bay when the capture fails', async () => {
-      squareRepo.completePayment.mockRejectedValue(new Error('capture failed'));
+      paymentRepo.capture.mockRejectedValue(new PaymentDeclinedError());
 
-      await expect(service.book(dto, NOW)).rejects.toThrow('Payment failed');
+      await expect(service.book(dto, NOW)).rejects.toThrow(CarBayRuleError);
       expect(carBayRepo.update).toHaveBeenCalledWith('booking-1', { status: 'canceled' });
-      expect(squareRepo.cancelPayment).toHaveBeenCalledWith('pay-1');
     });
 
     it('turns a declined card into a readable error', async () => {
-      squareRepo.createPayment.mockRejectedValue(new Error('CARD_DECLINED'));
+      paymentRepo.authorize.mockRejectedValue(new PaymentDeclinedError());
 
       await expect(service.book(dto, NOW)).rejects.toThrow('Payment failed');
+      await expect(service.book(dto, NOW)).rejects.toThrow(CarBayRuleError);
       expect(carBayRepo.create).not.toHaveBeenCalled();
     });
 
@@ -195,7 +213,7 @@ describe('CarBayService', () => {
       carBayRepo.getConfirmedInRange.mockResolvedValue([storedBooking()]);
 
       await expect(service.book(dto, NOW)).rejects.toThrow(CarBaySlotTakenError);
-      expect(squareRepo.createPayment).not.toHaveBeenCalled();
+      expect(paymentRepo.authorize).not.toHaveBeenCalled();
     });
 
     it('checks the 30 minute buffer when looking for conflicts', async () => {
@@ -209,7 +227,7 @@ describe('CarBayService', () => {
       carBayRepo.hasConfirmedForCustomer.mockResolvedValue(true);
 
       await expect(service.book(dto, NOW)).rejects.toThrow('one Quick Job');
-      expect(squareRepo.createPayment).not.toHaveBeenCalled();
+      expect(paymentRepo.authorize).not.toHaveBeenCalled();
     });
 
     it('rejects public bookings more than 7 days out', async () => {
@@ -260,9 +278,9 @@ describe('CarBayService', () => {
         NOW,
       );
 
-      expect(squareRepo.createPayment).not.toHaveBeenCalled();
+      expect(paymentRepo.authorize).not.toHaveBeenCalled();
       expect(carBayRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ amountPaid: 0, createdByEmail: 'staff@starforgefoundry.com' }),
+        expect.objectContaining({ createdByEmail: 'staff@starforgefoundry.com' }),
       );
     });
 
@@ -311,7 +329,7 @@ describe('CarBayService', () => {
     it('refunds in full 12 or more hours before the start', async () => {
       const result = await service.cancelByToken('token-1', at(`${MONDAY}T04:00`));
 
-      expect(squareRepo.refundPayment).toHaveBeenCalledWith('pay-1', 1200);
+      expect(paymentRepo.refund).toHaveBeenCalledWith(expect.objectContaining({ id: 'payment-1' }));
       expect(carBayRepo.update).toHaveBeenCalledWith('booking-1', { status: 'canceled' });
       expect(result.refunded).toBe(true);
     });
@@ -319,7 +337,7 @@ describe('CarBayService', () => {
     it('cancels without a refund inside 12 hours', async () => {
       const result = await service.cancelByToken('token-1', at(`${MONDAY}T10:00`));
 
-      expect(squareRepo.refundPayment).not.toHaveBeenCalled();
+      expect(paymentRepo.refund).not.toHaveBeenCalled();
       expect(carBayRepo.update).toHaveBeenCalledWith('booking-1', { status: 'canceled' });
       expect(result.refunded).toBe(false);
     });
@@ -334,18 +352,18 @@ describe('CarBayService', () => {
   describe('staffCancel', () => {
     it('refunds only when staff ask for it', async () => {
       await service.staffCancel({ bookingId: 'booking-1', refund: false });
-      expect(squareRepo.refundPayment).not.toHaveBeenCalled();
+      expect(paymentRepo.refund).not.toHaveBeenCalled();
 
       await service.staffCancel({ bookingId: 'booking-1', refund: true });
-      expect(squareRepo.refundPayment).toHaveBeenCalledWith('pay-1', 1200);
+      expect(paymentRepo.refund).toHaveBeenCalledWith(expect.objectContaining({ id: 'payment-1' }));
     });
 
     it('has nothing to refund on a free staff booking', async () => {
-      carBayRepo.getById.mockResolvedValue(storedBooking({ amountPaid: 0, squarePaymentId: null }));
+      carBayRepo.getById.mockResolvedValue(storedBooking({ paymentId: null, payment: null }));
 
       const result = await service.staffCancel({ bookingId: 'booking-1', refund: true });
 
-      expect(squareRepo.refundPayment).not.toHaveBeenCalled();
+      expect(paymentRepo.refund).not.toHaveBeenCalled();
       expect(result.refunded).toBe(false);
     });
   });
@@ -355,12 +373,12 @@ describe('CarBayService', () => {
       await service.markNoShow('booking-1');
 
       expect(carBayRepo.update).toHaveBeenCalledWith('booking-1', { status: 'no_show' });
-      expect(squareRepo.refundPayment).not.toHaveBeenCalled();
+      expect(paymentRepo.refund).not.toHaveBeenCalled();
     });
   });
 
   describe('sendOverrunInvoice', () => {
-    it('sends a Square invoice at the booking membership rate', async () => {
+    it('asks the customer to pay at the booking membership rate', async () => {
       carBayRepo.getById.mockResolvedValue(storedBooking({ isMember: false }));
 
       const payment = await service.sendOverrunInvoice({
@@ -368,22 +386,25 @@ describe('CarBayService', () => {
         overrun: { kind: 'hourly', hours: 2 },
       });
 
-      expect(squareRepo.createOrder).toHaveBeenCalledWith(
-        expect.objectContaining({
-          order: expect.objectContaining({
-            lineItems: [expect.objectContaining({ quantity: '2' })],
-          }),
-        }),
-      );
-      expect(squareRepo.sendInvoice).toHaveBeenCalledWith('inv-1', 1);
       expect(payment).toEqual(
         expect.objectContaining({
           type: 'car_bay_overrun',
           status: 'pending',
           total: 4000,
-          squareInvoiceId: 'inv-1',
-          carBayBookingId: 'booking-1',
-          paymentUrl: 'https://square.link/inv',
+          lineItems: [expect.objectContaining({ quantity: 2 })],
+          paymentUrl: `https://example.com/pay/${payment.id}`,
+        }),
+      );
+      expect(carBayRepo.createOverrun).toHaveBeenCalledWith('booking-1', payment.id);
+      expect(mailgunRepo.sendTemplate).toHaveBeenCalledWith(
+        'jane@example.com',
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        'payment_request',
+        expect.objectContaining({
+          total: '40.00',
+          paymentUrl: `https://example.com/pay/${payment.id}`,
         }),
       );
     });

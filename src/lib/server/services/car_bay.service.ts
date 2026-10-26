@@ -12,11 +12,20 @@ import type {
   StaffCancelCarBayBookingDto,
   StaffCloseCarBayDto,
 } from '$lib/remotes/dtos/car_bay.dto';
-import type { CarBayBooking, CarBayClosure } from '$lib/server/db/schema';
+import type { CarBayBooking, CarBayClosure, Payment } from '$lib/server/db/schema';
+import type { CarBayBookingWithPayment } from '$lib/server/repositories/car_bay.repository';
+import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { hasMembership } from '$lib/server/utils/member_access';
-import { SQUARE_CURRENCY, stringifySquareObject } from '$lib/server/utils/square';
+import { payUrl } from '$lib/server/utils/payment_links';
+import {
+  amountPaid,
+  buildBill,
+  centsToDollars,
+  PAYMENT_STATUS,
+  PAYMENT_TYPE,
+} from '$lib/utils/billing';
 import {
   CAR_BAY_EMAIL,
   CAR_BAY_STATUS,
@@ -26,22 +35,15 @@ import {
   CarBayRuleError,
   CarBayRules,
   CarBaySlotTakenError,
-  CENTS_PER_DOLLAR,
   bookingLineItems,
   formatPeriod,
-  lineItemsTotal,
   overrunLineItems,
-  type CarBayLineItem,
   type CarBayPolicy,
   type CarBayRequest,
 } from '$lib/utils/car_bay';
 import { DateTime } from 'luxon';
-import type { OrderLineItem } from 'square';
 
 const CAR_BAY_SENDER = `Starforge Car Bay <${CAR_BAY_EMAIL}>`;
-const APPROVED_PAYMENT_STATUS = 'APPROVED';
-const OVERRUN_PAYMENT_TYPE = 'car_bay_overrun';
-const PAYMENT_FAILED_MESSAGE = 'Payment failed. Please check your card details and try again.';
 const CLOSED_MESSAGE = 'The bay is closed at that time. Please pick another time.';
 
 type CustomerDetails = Pick<
@@ -49,15 +51,7 @@ type CustomerDetails = Pick<
   'customerName' | 'customerEmail' | 'customerPhone' | 'isMember'
 >;
 
-function toSquareLineItem(item: CarBayLineItem): OrderLineItem {
-  return {
-    name: item.name,
-    quantity: item.quantity.toString(),
-    basePriceMoney: { amount: BigInt(item.unitAmount), currency: SQUARE_CURRENCY },
-  };
-}
-
-function toView(booking: CarBayBooking): CarBayBookingView {
+function toView(booking: CarBayBooking, payment: Payment | null): CarBayBookingView {
   const { startAt, endAt, blockedUntil, createdDate, reminderSentDate, ...rest } = booking;
   return {
     ...rest,
@@ -65,7 +59,15 @@ function toView(booking: CarBayBooking): CarBayBookingView {
     endAt: endAt.toISO()!,
     blockedUntil: blockedUntil.toISO()!,
     createdDate: createdDate.toISO()!,
+    amountPaid: amountPaid(payment),
   };
+}
+
+function toPaymentError(error: unknown): never {
+  if (error instanceof PaymentDeclinedError) {
+    throw new CarBayRuleError(error.message, { cause: error });
+  }
+  throw error;
 }
 
 function toClosureView(closure: CarBayClosure): CarBayClosureView {
@@ -75,10 +77,6 @@ function toClosureView(closure: CarBayClosure): CarBayClosureView {
     endAt: closure.endAt.toISO()!,
     reason: closure.reason,
   };
-}
-
-function formatCents(cents: number) {
-  return (cents / CENTS_PER_DOLLAR).toFixed(2);
 }
 
 export class CarBayService extends BaseService {
@@ -117,7 +115,10 @@ export class CarBayService extends BaseService {
       this.carBayRepository.getAllInRange(from, to),
       this.carBayRepository.getClosuresInRange(from, to),
     ]);
-    return { bookings: bookings.map(toView), closures: closures.map(toClosureView) };
+    return {
+      bookings: bookings.map((booking) => toView(booking, booking.payment)),
+      closures: closures.map(toClosureView),
+    };
   }
 
   async getBookingDetail(
@@ -130,7 +131,7 @@ export class CarBayService extends BaseService {
 
     const payments = await this.carBayRepository.getOverrunPayments(id);
     return {
-      ...toView(booking),
+      ...toView(booking, booking.payment),
       refundable: rules.isRefundable(booking.startAt, now),
       overrunInvoices: payments.map((payment) => ({
         id: payment.id,
@@ -158,7 +159,7 @@ export class CarBayService extends BaseService {
       endAt: booking.endAt.toISO()!,
       customerName: booking.customerName,
       customerEmail: booking.customerEmail,
-      amountPaid: booking.amountPaid,
+      amountPaid: amountPaid(booking.payment),
       refundable: rules.isRefundable(booking.startAt, now),
     };
   }
@@ -233,46 +234,22 @@ export class CarBayService extends BaseService {
       enforceHorizon: true,
     });
 
-    const [rates, squareSettings, isMember] = await Promise.all([
+    const [rates, isMember] = await Promise.all([
       this.settingsRepository.getSetting('carBayRates'),
-      this.settingsRepository.getSetting('printRequestSquare'),
       this.isMember(dto.customerEmail),
     ]);
-    const lineItems = bookingLineItems(dto.request, rates, isMember);
-    const total = lineItemsTotal(lineItems);
 
-    const customer = await this.squareRepository.upsertCustomer(
-      dto.customerName,
-      dto.customerEmail,
-    );
-    const order = await this.squareRepository.createOrder({
-      idempotencyKey: crypto.randomUUID(),
-      order: {
-        locationId: squareSettings.locationId,
-        customerId: customer.id,
-        lineItems: lineItems.map(toSquareLineItem),
-      },
-    });
-    if (!order?.id) throw new Error('Failed to create order in Square');
-
-    // Only authorize the card here so a losing checkout can be voided instead of refunded.
-    const payment = await this.squareRepository
-      .createPayment({
-        sourceId: dto.sourceId,
-        idempotencyKey: crypto.randomUUID(),
-        amountMoney: { amount: BigInt(total), currency: SQUARE_CURRENCY },
-        orderId: order.id,
-        locationId: squareSettings.locationId,
-        customerId: customer.id,
-        buyerEmailAddress: dto.customerEmail,
-        autocomplete: false,
-      })
-      .catch((error) => {
-        throw new CarBayRuleError(PAYMENT_FAILED_MESSAGE, { cause: error });
-      });
-    if (!payment?.id || payment.status !== APPROVED_PAYMENT_STATUS) {
-      throw new CarBayRuleError(PAYMENT_FAILED_MESSAGE);
-    }
+    const authorized = await this.paymentRepository
+      .authorize(
+        {
+          type: PAYMENT_TYPE.CAR_BAY_BOOKING,
+          status: PAYMENT_STATUS.PENDING,
+          customer: { name: dto.customerName, email: dto.customerEmail },
+          bill: buildBill(bookingLineItems(dto.request, rates, isMember)),
+        },
+        dto.sourceId,
+      )
+      .catch(toPaymentError);
 
     let booking: CarBayBooking;
     try {
@@ -283,28 +260,26 @@ export class CarBayService extends BaseService {
         endAt: period.endAt,
         blockedUntil: rules.blockedUntil(period.endAt),
         ...this.customerColumns({ ...dto, isMember }),
-        amountPaid: total,
-        squarePaymentId: payment.id,
-        squareOrderId: order.id,
+        paymentId: authorized.id,
       });
     } catch (error) {
-      await this.squareRepository.cancelPayment(payment.id);
+      await this.paymentRepository.void(authorized);
       throw error;
     }
 
+    let payment: Payment;
     try {
-      await this.squareRepository.completePayment(payment.id);
+      payment = await this.paymentRepository.capture(authorized);
     } catch (error) {
       await this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.CANCELED });
-      await this.squareRepository.cancelPayment(payment.id);
-      throw new CarBayRuleError(PAYMENT_FAILED_MESSAGE, { cause: error });
+      toPaymentError(error);
     }
 
     runInBackground(
-      this.sendConfirmationEmail(booking, rules.policy),
+      this.sendConfirmationEmail(booking, payment, rules.policy),
       'send car bay booking email',
     );
-    return toView(booking);
+    return toView(booking, payment);
   }
 
   async staffBook(dto: StaffBookCarBayDto, staffEmail: string, now: DateTime = DateTime.now()) {
@@ -320,15 +295,14 @@ export class CarBayService extends BaseService {
       endAt: period.endAt,
       blockedUntil: rules.blockedUntil(period.endAt),
       ...this.customerColumns(dto),
-      amountPaid: 0,
       createdByEmail: staffEmail,
     });
 
     runInBackground(
-      this.sendConfirmationEmail(booking, rules.policy),
+      this.sendConfirmationEmail(booking, null, rules.policy),
       'send car bay booking email',
     );
-    return toView(booking);
+    return toView(booking, null);
   }
 
   private customerColumns(dto: CustomerDetails) {
@@ -340,13 +314,12 @@ export class CarBayService extends BaseService {
     };
   }
 
-  private async refund(booking: CarBayBooking) {
-    if (!booking.squarePaymentId || booking.amountPaid <= 0) return false;
-    await this.squareRepository.refundPayment(booking.squarePaymentId, booking.amountPaid);
-    return true;
+  private async refund(booking: CarBayBookingWithPayment) {
+    if (!booking.payment) return false;
+    return await this.paymentRepository.refund(booking.payment);
   }
 
-  private requireConfirmed(booking: CarBayBooking | null): CarBayBooking {
+  private requireConfirmed(booking: CarBayBookingWithPayment | null): CarBayBookingWithPayment {
     if (!booking) throw new CarBayRuleError('Booking not found');
     if (booking.status !== CAR_BAY_STATUS.CONFIRMED)
       throw new CarBayRuleError('This booking is no longer active');
@@ -374,53 +347,43 @@ export class CarBayService extends BaseService {
     const booking = this.requireConfirmed(await this.carBayRepository.getById(bookingId));
     return toView(
       await this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.NO_SHOW }),
+      booking.payment,
     );
   }
 
   async sendOverrunInvoice(dto: SendCarBayOverrunInvoiceDto) {
     const booking = this.requireConfirmed(await this.carBayRepository.getById(dto.bookingId));
 
-    const [rates, squareSettings] = await Promise.all([
-      this.settingsRepository.getSetting('carBayRates'),
-      this.settingsRepository.getSetting('printRequestSquare'),
-    ]);
-    const lineItems = overrunLineItems(
-      dto.overrun,
-      booking.endAt.toISODate()!,
-      rates,
-      booking.isMember,
-    );
-
-    const customer = await this.squareRepository.upsertCustomer(
-      booking.customerName,
-      booking.customerEmail,
-    );
-    const order = await this.squareRepository.createOrder({
-      idempotencyKey: crypto.randomUUID(),
-      order: {
-        locationId: squareSettings.locationId,
-        customerId: customer.id,
-        lineItems: lineItems.map(toSquareLineItem),
+    const rates = await this.settingsRepository.getSetting('carBayRates');
+    const bookingEndDate = booking.endAt.toISODate()!;
+    const paymentId = crypto.randomUUID();
+    const payment = await this.paymentRepository.save(
+      {
+        type: PAYMENT_TYPE.CAR_BAY_OVERRUN,
+        status: PAYMENT_STATUS.PENDING,
+        customer: { name: booking.customerName, email: booking.customerEmail },
+        bill: buildBill(overrunLineItems(dto.overrun, bookingEndDate, rates, booking.isMember)),
+        paymentUrl: payUrl({ id: paymentId }),
       },
-    });
-    if (!order) throw new Error('Failed to create order in Square');
+      paymentId,
+    );
+    await this.carBayRepository.createOverrun(booking.id, payment.id);
 
-    const invoice = await this.paymentRepository.createInvoice(order);
-    if (!invoice) throw new Error('Failed to create invoice in Square');
+    await this.mailgunRepository.sendTemplate(
+      booking.customerEmail,
+      CAR_BAY_SENDER,
+      CAR_BAY_EMAIL,
+      'Car Bay Overrun Payment',
+      'payment_request',
+      {
+        customerName: booking.customerName,
+        description: `car bay overrun on ${booking.endAt.setZone(CAR_BAY_ZONE).toFormat('MMMM d')}`,
+        total: centsToDollars(payment.total),
+        paymentUrl: payUrl(payment),
+      },
+    );
 
-    const published = await this.squareRepository.sendInvoice(invoice.id!, invoice.version!);
-
-    return await this.paymentRepository.createStandalonePayment({
-      type: OVERRUN_PAYMENT_TYPE,
-      status: 'pending',
-      issuedDate: DateTime.now(),
-      total: lineItemsTotal(lineItems),
-      squareInvoiceId: invoice.id!,
-      squareOrderId: order.id!,
-      orderObject: stringifySquareObject(order),
-      paymentUrl: published?.publicUrl ?? null,
-      carBayBookingId: booking.id,
-    });
+    return payment;
   }
 
   async sendDueReminders(now: DateTime = DateTime.now()) {
@@ -456,7 +419,11 @@ export class CarBayService extends BaseService {
     return `${env.FRONTEND_URL}/car_bay/booking/${booking.bookingToken}`;
   }
 
-  async sendConfirmationEmail(booking: CarBayBooking, policy: CarBayPolicy) {
+  async sendConfirmationEmail(
+    booking: CarBayBooking,
+    payment: Payment | null,
+    policy: CarBayPolicy,
+  ) {
     await this.mailgunRepository.sendTemplate(
       booking.customerEmail,
       CAR_BAY_SENDER,
@@ -467,7 +434,7 @@ export class CarBayService extends BaseService {
         customerName: booking.customerName,
         tierName: CAR_BAY_TIER_NAMES[booking.tier],
         bookingWhen: formatPeriod(booking),
-        amountPaid: formatCents(booking.amountPaid),
+        amountPaid: centsToDollars(amountPaid(payment)),
         refundCutoffHours: policy.refundCutoffHours.toString(),
         storageDays: policy.storageDays.toString(),
         bookingUrl: this.bookingUrl(booking),

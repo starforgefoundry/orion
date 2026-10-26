@@ -23,8 +23,6 @@ vi.mock('$lib/server/repositories/class.repository', () => {
   MockClassRepository.prototype.getConfirmedBookingsForInstance = vi.fn();
   MockClassRepository.prototype.getConfirmedBookingCount = vi.fn();
   MockClassRepository.prototype.getStaffUsers = vi.fn();
-  MockClassRepository.prototype.processSquarePayment = vi.fn();
-  MockClassRepository.prototype.refundPayment = vi.fn();
   MockClassRepository.prototype.setGoogleCalendarId = vi.fn();
   MockClassRepository.prototype.setGoogleEventId = vi.fn();
   MockClassRepository.prototype.getScheduledInstanceIdsForTeacher = vi.fn();
@@ -55,6 +53,16 @@ vi.mock('$lib/server/repositories/settings.repository', () => {
   return { SettingsRepository: MockSettingsRepository };
 });
 
+vi.mock('$lib/server/repositories/payment.repository', () => {
+  const MockPaymentRepository = vi.fn();
+  MockPaymentRepository.prototype.authorize = vi.fn();
+  MockPaymentRepository.prototype.capture = vi.fn();
+  MockPaymentRepository.prototype.void = vi.fn();
+  MockPaymentRepository.prototype.refund = vi.fn();
+  class PaymentDeclinedError extends Error {}
+  return { PaymentRepository: MockPaymentRepository, PaymentDeclinedError };
+});
+
 vi.mock('$env/dynamic/private', () => ({
   env: { FRONTEND_URL: 'https://example.com' },
 }));
@@ -68,6 +76,9 @@ describe('ClassService', () => {
   let mockClassRepo: any;
   let mockMailgunRepo: any;
   let mockSettingsRepo: any;
+  let mockPaymentRepo: any;
+
+  const paidPayment = (total: number) => ({ id: 'payment-1', status: 'paid', total });
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -83,6 +94,9 @@ describe('ClassService', () => {
 
     const { SettingsRepository } = await import('$lib/server/repositories/settings.repository');
     mockSettingsRepo = SettingsRepository.prototype;
+
+    const { PaymentRepository } = await import('$lib/server/repositories/payment.repository');
+    mockPaymentRepo = PaymentRepository.prototype;
   });
 
   afterEach(() => {
@@ -285,13 +299,13 @@ describe('ClassService', () => {
         date: '2099-06-15',
       };
       const bookings = [
-        { id: 'book-1', squarePaymentId: 'pay-1', amountPaid: 5000 },
-        { id: 'book-2', squarePaymentId: null, amountPaid: 0 },
+        { id: 'book-1', payment: paidPayment(5000) },
+        { id: 'book-2', payment: null },
       ];
 
       vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue(instance);
       vi.mocked(mockClassRepo.getConfirmedBookingsForInstance).mockResolvedValue(bookings);
-      vi.mocked(mockClassRepo.refundPayment).mockResolvedValue({});
+      vi.mocked(mockPaymentRepo.refund).mockResolvedValue(true);
       vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
       vi.mocked(mockClassRepo.updateInstance).mockResolvedValue({});
 
@@ -301,8 +315,8 @@ describe('ClassService', () => {
       });
 
       expect(result.canceledCount).toBe(1);
-      expect(mockClassRepo.refundPayment).toHaveBeenCalledTimes(1);
-      expect(mockClassRepo.refundPayment).toHaveBeenCalledWith('pay-1', 5000);
+      expect(mockPaymentRepo.refund).toHaveBeenCalledTimes(1);
+      expect(mockPaymentRepo.refund).toHaveBeenCalledWith(paidPayment(5000));
       expect(mockClassRepo.updateBooking).toHaveBeenCalledTimes(2);
       expect(mockClassRepo.updateInstance).toHaveBeenCalledWith('inst-1', { status: 'canceled' });
     });
@@ -350,11 +364,11 @@ describe('ClassService', () => {
         recurrenceGroupId: null,
         date: '2099-06-15',
       };
-      const bookings = [{ id: 'book-1', squarePaymentId: 'pay-1', amountPaid: 5000 }];
+      const bookings = [{ id: 'book-1', payment: paidPayment(5000) }];
 
       vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue(instance);
       vi.mocked(mockClassRepo.getConfirmedBookingsForInstance).mockResolvedValue(bookings);
-      vi.mocked(mockClassRepo.refundPayment).mockRejectedValue(new Error('Square error'));
+      vi.mocked(mockPaymentRepo.refund).mockRejectedValue(new Error('Square error'));
       vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
       vi.mocked(mockClassRepo.updateInstance).mockResolvedValue({});
 
@@ -443,7 +457,7 @@ describe('ClassService', () => {
       catalog: { id: 'cat-1', name: 'Welding Class', price: 5000 },
     };
 
-    const payment = { id: 'pay-1', status: 'COMPLETED' };
+    const authorized = { id: 'payment-1', status: 'pending', total: 5000 };
 
     const booking = {
       id: 'book-1',
@@ -456,7 +470,8 @@ describe('ClassService', () => {
       vi.mocked(mockClassRepo.getInstanceById).mockResolvedValue(instance);
       vi.mocked(mockClassRepo.getConfirmedBookingCount).mockResolvedValue(0);
       vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({ locationId: 'loc-1' });
-      vi.mocked(mockClassRepo.processSquarePayment).mockResolvedValue(payment);
+      vi.mocked(mockPaymentRepo.authorize).mockResolvedValue(authorized);
+      vi.mocked(mockPaymentRepo.capture).mockResolvedValue(paidPayment(5000));
       vi.mocked(mockClassRepo.createBooking).mockResolvedValue(booking);
       vi.mocked(mockMailgunRepo.sendTemplate).mockResolvedValue({});
       vi.mocked(mockClassRepo.getBookingById).mockResolvedValue({
@@ -464,7 +479,7 @@ describe('ClassService', () => {
         customerName: dto.customerName,
         customerEmail: dto.customerEmail,
         quantity: 1,
-        amountPaid: 5000,
+        payment: paidPayment(5000),
         instance: { date: '2099-12-01', startTime: '10:00', durationMinutes: 60 },
         catalog: { name: 'Welding Class' },
       });
@@ -474,25 +489,27 @@ describe('ClassService', () => {
       const result = await classService.bookClass(dto);
 
       expect(result).toEqual(booking);
-      expect(mockClassRepo.processSquarePayment).toHaveBeenCalledWith(
+      expect(mockPaymentRepo.authorize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'class_booking',
+          customer: { name: 'Jane Doe', email: 'jane@test.com' },
+          bill: expect.objectContaining({
+            total: 5000,
+            lineItems: [{ name: 'Welding Class - Dec 1, 2099', quantity: 1, unitAmount: 5000 }],
+          }),
+        }),
         'sq-nonce-123',
-        5000,
-        'loc-1',
-        'jane@test.com',
-        'Jane Doe',
-        'Welding Class',
-        expect.stringContaining('Class booking'),
       );
       expect(mockClassRepo.createBooking).toHaveBeenCalledWith({
         instanceId: 'inst-1',
         customerName: 'Jane Doe',
         customerEmail: 'jane@test.com',
         customerPhone: '555-1234',
-        squarePaymentId: 'pay-1',
+        paymentId: 'payment-1',
         status: 'confirmed',
         quantity: 1,
-        amountPaid: 5000,
       });
+      expect(mockPaymentRepo.capture).toHaveBeenCalledWith(authorized);
     });
 
     it('should throw when instance not found', async () => {
@@ -525,32 +542,33 @@ describe('ClassService', () => {
       await expect(classService.bookClass(dto)).rejects.toThrow('This class is fully booked');
     });
 
-    it('should throw when payment fails', async () => {
-      vi.mocked(mockClassRepo.processSquarePayment).mockResolvedValue(null);
+    it('should throw when the card is declined', async () => {
+      const { PaymentDeclinedError } = await import('$lib/server/repositories/payment.repository');
+      vi.mocked(mockPaymentRepo.authorize).mockRejectedValue(new PaymentDeclinedError());
 
       await expect(classService.bookClass(dto)).rejects.toThrow('Payment failed');
+      expect(mockClassRepo.createBooking).not.toHaveBeenCalled();
     });
 
-    it('should throw when payment status is not COMPLETED', async () => {
-      vi.mocked(mockClassRepo.processSquarePayment).mockResolvedValue({
-        id: 'pay-1',
-        status: 'FAILED',
-      });
+    it('should cancel the booking when the capture fails', async () => {
+      vi.mocked(mockPaymentRepo.capture).mockRejectedValue(new Error('capture failed'));
+      vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
 
       await expect(classService.bookClass(dto)).rejects.toThrow('Payment failed');
+      expect(mockClassRepo.updateBooking).toHaveBeenCalledWith('book-1', { status: 'canceled' });
     });
 
-    it('should refund and cancel if overbooking detected after insert', async () => {
+    it('should void and cancel if overbooking detected after insert', async () => {
       // First call returns 0 (pre-check passes), second call returns 11 (overbooked)
       vi.mocked(mockClassRepo.getConfirmedBookingCount)
         .mockResolvedValueOnce(0)
         .mockResolvedValueOnce(11);
       vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
-      vi.mocked(mockClassRepo.refundPayment).mockResolvedValue({});
 
       await expect(classService.bookClass(dto)).rejects.toThrow('This class is fully booked');
       expect(mockClassRepo.updateBooking).toHaveBeenCalledWith('book-1', { status: 'canceled' });
-      expect(mockClassRepo.refundPayment).toHaveBeenCalledWith('pay-1', 5000);
+      expect(mockPaymentRepo.void).toHaveBeenCalledWith(authorized);
+      expect(mockPaymentRepo.capture).not.toHaveBeenCalled();
     });
   });
 
@@ -559,17 +577,16 @@ describe('ClassService', () => {
       const booking = {
         id: 'book-1',
         status: 'confirmed',
-        squarePaymentId: 'pay-1',
-        amountPaid: 5000,
+        payment: paidPayment(5000),
       };
       vi.mocked(mockClassRepo.getBookingByToken).mockResolvedValue(booking);
-      vi.mocked(mockClassRepo.refundPayment).mockResolvedValue({});
+      vi.mocked(mockPaymentRepo.refund).mockResolvedValue(true);
       vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
 
       const result = await classService.cancelBooking({ bookingToken: 'tok-abc' });
 
       expect(result).toEqual({ success: true });
-      expect(mockClassRepo.refundPayment).toHaveBeenCalledWith('pay-1', 5000);
+      expect(mockPaymentRepo.refund).toHaveBeenCalledWith(paidPayment(5000));
       expect(mockClassRepo.updateBooking).toHaveBeenCalledWith('book-1', { status: 'canceled' });
     });
 
@@ -577,15 +594,14 @@ describe('ClassService', () => {
       const booking = {
         id: 'book-1',
         status: 'confirmed',
-        squarePaymentId: null,
-        amountPaid: 0,
+        payment: null,
       };
       vi.mocked(mockClassRepo.getBookingByToken).mockResolvedValue(booking);
       vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
 
       await classService.cancelBooking({ bookingToken: 'tok-abc' });
 
-      expect(mockClassRepo.refundPayment).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.refund).not.toHaveBeenCalled();
       expect(mockClassRepo.updateBooking).toHaveBeenCalledWith('book-1', { status: 'canceled' });
     });
 
@@ -614,17 +630,16 @@ describe('ClassService', () => {
       const booking = {
         id: 'book-1',
         status: 'confirmed',
-        squarePaymentId: 'pay-1',
-        amountPaid: 3000,
+        payment: paidPayment(3000),
       };
       vi.mocked(mockClassRepo.getBookingById).mockResolvedValue(booking);
-      vi.mocked(mockClassRepo.refundPayment).mockResolvedValue({});
+      vi.mocked(mockPaymentRepo.refund).mockResolvedValue(true);
       vi.mocked(mockClassRepo.updateBooking).mockResolvedValue({});
 
       const result = await classService.cancelBookingStaff({ bookingId: 'book-1' });
 
       expect(result).toEqual({ success: true });
-      expect(mockClassRepo.refundPayment).toHaveBeenCalledWith('pay-1', 3000);
+      expect(mockPaymentRepo.refund).toHaveBeenCalledWith(paidPayment(3000));
     });
 
     it('should throw when booking not found', async () => {
@@ -657,7 +672,7 @@ describe('ClassService', () => {
         customerEmail: 'jane@test.com',
         bookingToken: 'tok-abc',
         quantity: 1,
-        amountPaid: 5000,
+        payment: paidPayment(5000),
         instance: { date: '2099-12-01', startTime: '10:00', durationMinutes: 60 },
         catalog: { name: 'Welding Class' },
       });

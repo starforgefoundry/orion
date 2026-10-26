@@ -119,6 +119,7 @@ export type CarBayBookingView = Omit<
   endAt: string;
   blockedUntil: string;
   createdDate: string;
+  amountPaid: number;
 };
 
 export type CarBayStaffSchedule = {

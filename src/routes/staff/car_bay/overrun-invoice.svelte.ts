@@ -1,8 +1,8 @@
+import { lineItemsTotal } from '$lib/utils/billing';
 import { sendCarBayOverrunInvoice } from '$lib/remotes/endpoints/car_bay.remote';
 import {
   CAR_BAY_OVERRUN,
   CarBayRuleError,
-  lineItemsTotal,
   overrunLineItems,
   type CarBayOverrun,
   type CarBayRates,

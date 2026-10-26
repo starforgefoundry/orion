@@ -19,7 +19,6 @@
   import ScanLineIcon from '@lucide/svelte/icons/scan-line';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import ShoppingCartIcon from '@lucide/svelte/icons/shopping-cart';
-  import TicketIcon from '@lucide/svelte/icons/ticket';
   import UsersIcon from '@lucide/svelte/icons/users';
   import type { Component } from 'svelte';
 
@@ -69,7 +68,6 @@
           ],
         },
         { href: '/staff/organizations', title: 'Organizations', icon: UsersIcon },
-        { href: '/staff/billing_codes', title: 'Billing Codes', icon: TicketIcon },
       ],
     },
   ];

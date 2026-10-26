@@ -6,6 +6,7 @@ import {
   classSettingsDto,
   memberSquareSettingsDto,
   printRequestSettings,
+  printPricingSettingsDto,
   printRequestSquareSettings,
 } from '$lib/remotes/dtos/settings.dto';
 import { verifyAuth } from '$lib/remotes/utils';
@@ -100,6 +101,19 @@ export const memberSquareSettingsForm = form(memberSquareSettingsDto, async (dto
   verifyAuth();
   const response = await settingsService.setMemberSquareSettings(dto);
   getMemberSquareSettings().refresh();
+
+  return response;
+});
+
+export const getPrintPricing = query(() => {
+  verifyAuth();
+  return settingsService.getPrintPricing();
+});
+
+export const printPricingSettingsForm = form(printPricingSettingsDto, async (dto) => {
+  verifyAuth();
+  const response = await settingsService.setPrintPricing(dto);
+  getPrintPricing().refresh();
 
   return response;
 });

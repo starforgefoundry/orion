@@ -16,6 +16,7 @@ describe('SettingsService', () => {
   let mockSettingsRepo: any;
   let mockPrintMaterialsRepo: any;
   let mockBambuddyRepo: any;
+  let mockSquareRepo: any;
   let getPrintRequestSettings: any;
   let getPrintRequestSquareSettings: any;
 
@@ -24,12 +25,15 @@ describe('SettingsService', () => {
 
     mockSettingsRepo = {
       getSetting: vi.fn(),
+      getStoredSetting: vi.fn(),
       setSetting: vi.fn(),
     };
 
     mockPrintMaterialsRepo = {
       get: vi.fn(),
     };
+
+    mockSquareRepo = { getCatalogObjects: vi.fn() };
 
     mockBambuddyRepo = {
       getCurrentUser: vi.fn(),
@@ -42,7 +46,7 @@ describe('SettingsService', () => {
       undefined,
       undefined,
       mockSettingsRepo,
-      undefined,
+      mockSquareRepo,
       undefined,
       undefined,
       undefined,
@@ -58,6 +62,58 @@ describe('SettingsService', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe('importLegacyPrintPricing', () => {
+    const LEGACY = {
+      locationId: 'loc-1',
+      memberPrintDiscountId: 'discount-1',
+      additionalBuildPlateItemId: 'plate-1',
+    };
+
+    function storedSettings(values: Record<string, unknown>) {
+      vi.mocked(mockSettingsRepo.getStoredSetting).mockImplementation(
+        async (key: string) => values[key],
+      );
+    }
+
+    it('copies the member discount and build plate price from Square', async () => {
+      storedSettings({ printRequestSquare: LEGACY });
+      mockSquareRepo.getCatalogObjects.mockResolvedValue([
+        { type: 'DISCOUNT', id: 'discount-1', discountData: { percentage: '15.0' } },
+        {
+          type: 'ITEM_VARIATION',
+          id: 'plate-1',
+          itemVariationData: { priceMoney: { amount: 250n } },
+        },
+      ]);
+
+      await settingsService.importLegacyPrintPricing();
+
+      expect(mockSquareRepo.getCatalogObjects).toHaveBeenCalledWith(['discount-1', 'plate-1']);
+      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printPricing', {
+        memberDiscountPercent: 15,
+        additionalBuildPlatePrice: 250,
+      });
+    });
+
+    it('does nothing once Orion has its own print pricing', async () => {
+      storedSettings({ printPricing: { memberDiscountPercent: 5 }, printRequestSquare: LEGACY });
+
+      await settingsService.importLegacyPrintPricing();
+
+      expect(mockSquareRepo.getCatalogObjects).not.toHaveBeenCalled();
+      expect(mockSettingsRepo.setSetting).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when Square was never set up for prints', async () => {
+      storedSettings({ printRequestSquare: { locationId: 'loc-1' } });
+
+      await settingsService.importLegacyPrintPricing();
+
+      expect(mockSquareRepo.getCatalogObjects).not.toHaveBeenCalled();
+      expect(mockSettingsRepo.setSetting).not.toHaveBeenCalled();
+    });
   });
 
   describe('getPublicPrintRequestForm', () => {

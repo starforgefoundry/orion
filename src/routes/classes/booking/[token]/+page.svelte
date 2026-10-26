@@ -10,6 +10,7 @@
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import BanIcon from '@lucide/svelte/icons/ban';
+  import { formatCents } from '$lib/utils/billing';
   import CalendarPlusIcon from '@lucide/svelte/icons/calendar-plus';
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
   import { DateTime } from 'luxon';
@@ -143,7 +144,7 @@
         <InfoRow label="Name">{booking.customerName}</InfoRow>
         <InfoRow label="Email">{booking.customerEmail}</InfoRow>
         <InfoRow label="Spots">{booking.quantity ?? 1}</InfoRow>
-        <InfoRow label="Amount Paid">${(booking.amountPaid / 100).toFixed(2)}</InfoRow>
+        <InfoRow label="Amount Paid">{formatCents(booking.amountPaid)}</InfoRow>
       </dl>
     </Section>
 

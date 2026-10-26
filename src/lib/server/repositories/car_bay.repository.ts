@@ -1,4 +1,4 @@
-import { schema } from '$lib/server/db/schema';
+import { schema, type CarBayBooking, type Payment } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import {
   CAR_BAY_STATUS,
@@ -10,6 +10,15 @@ import { and, asc, eq, gt, gte, isNull, lt, lte, type InferInsertModel } from 'd
 import type { DateTime } from 'luxon';
 
 const EXCLUSION_VIOLATION = '23P01';
+
+export type CarBayBookingWithPayment = CarBayBooking & { payment: Payment | null };
+
+function withPayment(row: {
+  booking: CarBayBooking;
+  payment: Payment | null;
+}): CarBayBookingWithPayment {
+  return { ...row.booking, payment: row.payment };
+}
 
 function isExclusionViolation(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -37,20 +46,23 @@ export class CarBayRepository extends BaseRepository {
     return booking;
   }
 
-  async getById(id: string) {
-    const [booking] = await this.db
-      .select()
+  private selectWithPayment() {
+    return this.db
+      .select({ booking: schema.carBayBooking, payment: schema.payment })
       .from(schema.carBayBooking)
-      .where(eq(schema.carBayBooking.id, id));
-    return booking ?? null;
+      .leftJoin(schema.payment, eq(schema.carBayBooking.paymentId, schema.payment.id));
   }
 
-  async getByToken(token: string) {
-    const [booking] = await this.db
-      .select()
-      .from(schema.carBayBooking)
-      .where(eq(schema.carBayBooking.bookingToken, token));
-    return booking ?? null;
+  async getById(id: string): Promise<CarBayBookingWithPayment | null> {
+    const [row] = await this.selectWithPayment().where(eq(schema.carBayBooking.id, id));
+    return row ? withPayment(row) : null;
+  }
+
+  async getByToken(token: string): Promise<CarBayBookingWithPayment | null> {
+    const [row] = await this.selectWithPayment().where(
+      eq(schema.carBayBooking.bookingToken, token),
+    );
+    return row ? withPayment(row) : null;
   }
 
   async getConfirmedInRange(from: DateTime, to: DateTime) {
@@ -67,12 +79,11 @@ export class CarBayRepository extends BaseRepository {
       .orderBy(asc(schema.carBayBooking.startAt));
   }
 
-  async getAllInRange(from: DateTime, to: DateTime) {
-    return await this.db
-      .select()
-      .from(schema.carBayBooking)
+  async getAllInRange(from: DateTime, to: DateTime): Promise<CarBayBookingWithPayment[]> {
+    const rows = await this.selectWithPayment()
       .where(and(lt(schema.carBayBooking.startAt, to), gt(schema.carBayBooking.blockedUntil, from)))
       .orderBy(asc(schema.carBayBooking.startAt));
+    return rows.map(withPayment);
   }
 
   async hasConfirmedForCustomer(
@@ -111,12 +122,22 @@ export class CarBayRepository extends BaseRepository {
       );
   }
 
+  async createOverrun(bookingId: string, paymentId: string) {
+    const [overrun] = await this.db
+      .insert(schema.carBayOverrun)
+      .values({ bookingId, paymentId })
+      .returning();
+    return overrun;
+  }
+
   async getOverrunPayments(bookingId: string) {
-    return await this.db
-      .select()
-      .from(schema.payment)
-      .where(eq(schema.payment.carBayBookingId, bookingId))
+    const rows = await this.db
+      .select({ payment: schema.payment })
+      .from(schema.carBayOverrun)
+      .innerJoin(schema.payment, eq(schema.carBayOverrun.paymentId, schema.payment.id))
+      .where(eq(schema.carBayOverrun.bookingId, bookingId))
       .orderBy(asc(schema.payment.issuedDate));
+    return rows.map((row) => row.payment);
   }
 
   async createClosure(data: InferInsertModel<typeof schema.carBayClosure>) {

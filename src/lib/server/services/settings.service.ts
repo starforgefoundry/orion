@@ -1,6 +1,16 @@
 import type { PublicPrintRequestFormDto } from '$lib/remotes/dtos/settings.dto';
 import type { SettingsMap } from '$lib/server/repositories/settings.repository';
 import { BaseService } from '$lib/server/services/base.service';
+import type { CatalogObject } from 'square';
+
+const CATALOG_DISCOUNT = 'DISCOUNT';
+const CATALOG_ITEM_VARIATION = 'ITEM_VARIATION';
+
+/** What the Square settings held before print pricing moved into Orion. */
+type LegacyPrintSquareSettings = {
+  memberPrintDiscountId?: string;
+  additionalBuildPlateItemId?: string;
+};
 
 export class SettingsService extends BaseService {
   async getPublicPrintRequestForm(): Promise<PublicPrintRequestFormDto> {
@@ -66,6 +76,45 @@ export class SettingsService extends BaseService {
         reason: cause instanceof Error ? cause.message : 'Bambuddy rejected the request.',
       };
     }
+  }
+
+  /**
+   * Prices used to live in Square's catalog. The first time Orion runs without its own print
+   * pricing, it copies them over so billing doesn't start at zero.
+   */
+  async importLegacyPrintPricing() {
+    if (await this.settingsRepository.getStoredSetting('printPricing')) return;
+
+    const legacy = (await this.settingsRepository.getStoredSetting('printRequestSquare')) as
+      | LegacyPrintSquareSettings
+      | undefined;
+    const discountId = legacy?.memberPrintDiscountId;
+    const buildPlateId = legacy?.additionalBuildPlateItemId;
+    const ids = [discountId, buildPlateId].filter((id): id is string => !!id);
+    if (ids.length === 0) return;
+
+    const objects = await this.squareRepository.getCatalogObjects(ids);
+    const discount = objects.find(
+      (object): object is CatalogObject.Discount =>
+        object.type === CATALOG_DISCOUNT && object.id === discountId,
+    );
+    const buildPlate = objects.find(
+      (object): object is CatalogObject.ItemVariation =>
+        object.type === CATALOG_ITEM_VARIATION && object.id === buildPlateId,
+    );
+
+    return await this.settingsRepository.setSetting('printPricing', {
+      memberDiscountPercent: Number(discount?.discountData?.percentage ?? 0),
+      additionalBuildPlatePrice: Number(buildPlate?.itemVariationData?.priceMoney?.amount ?? 0),
+    });
+  }
+
+  async getPrintPricing() {
+    return await this.settingsRepository.getSetting('printPricing');
+  }
+
+  async setPrintPricing(value: SettingsMap['printPricing']) {
+    return await this.settingsRepository.setSetting('printPricing', value);
   }
 
   async getPrintRequestSquareSettings() {

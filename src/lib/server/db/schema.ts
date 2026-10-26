@@ -12,6 +12,12 @@ import {
 } from '../../member_enums';
 import { DateTime } from 'luxon';
 import { luxonTimestamp } from './custom/luxon';
+import {
+  PAYMENT_STATUS,
+  PAYMENT_TYPE,
+  type BillingDiscount,
+  type BillingLineItem,
+} from '../../utils/billing';
 
 export const user = pgTable('user', {
   email: text('email').notNull().unique().primaryKey(),
@@ -129,23 +135,24 @@ export const payment = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     issuedDate: luxonTimestamp('issued_date').notNull(),
     paymentDate: luxonTimestamp('payment_date'),
-    status: text('status', { enum: ['quote', 'pending', 'paid', 'canceled'] }).notNull(),
-    squareInvoiceId: text('square_invoice_id'),
-    squareOrderId: text('square_order_id'),
-    organizationId: text('organization_id').references(() => organization.id),
-    type: text('type', {
-      enum: ['print_request', 'balance', 'org_charge', 'car_bay_overrun'],
-    }).notNull(),
-
+    refundedDate: luxonTimestamp('refunded_date'),
+    status: text('status', { enum: enumValues(PAYMENT_STATUS) }).notNull(),
+    type: text('type', { enum: enumValues(PAYMENT_TYPE) }).notNull(),
+    customerName: text('customer_name').notNull().default(''),
+    customerEmail: text('customer_email').notNull().default(''),
+    lineItems: jsonb('line_items').$type<BillingLineItem[]>().notNull().default([]),
+    discounts: jsonb('discounts').$type<BillingDiscount[]>().notNull().default([]),
     total: integer('total').notNull(), // in cents
-    orderObject: text('order_object'),
+    // Where the customer goes to pay; a Square invoice link on payments from before Orion billing.
     paymentUrl: text('payment_url'),
-    carBayBookingId: text('car_bay_booking_id').references(() => carBayBooking.id),
+    organizationId: text('organization_id').references(() => organization.id),
+    squareOrderId: text('square_order_id'),
+    squarePaymentId: text('square_payment_id'),
+    squareInvoiceId: text('square_invoice_id'),
   },
   (table) => [
     index('square_invoice_idx').on(table.squareInvoiceId),
     index('square_order_idx').on(table.squareOrderId),
-    index('payment_car_bay_booking_idx').on(table.carBayBookingId),
   ],
 );
 
@@ -189,7 +196,6 @@ export const billingCode = pgTable('billing_code', {
   code: text('code').notNull().unique(),
   description: text('description').notNull(),
   organizationId: text('organization_id').references(() => organization.id),
-  discountId: text('discount_id'),
   archived: boolean('archived').notNull().default(false),
 });
 
@@ -502,13 +508,12 @@ export const classBooking = pgTable(
     customerName: text('customer_name').notNull(),
     customerEmail: text('customer_email').notNull(),
     customerPhone: text('customer_phone').notNull(),
-    squarePaymentId: text('square_payment_id'),
+    paymentId: text('payment_id').references(() => payment.id),
     status: text('status', { enum: ['confirmed', 'canceled'] }).notNull(),
     bookingToken: text('booking_token')
       .notNull()
       .$defaultFn(() => crypto.randomUUID()),
     quantity: integer('quantity').notNull().default(1),
-    amountPaid: integer('amount_paid').notNull().default(0), // in cents
     createdDate: luxonTimestamp('created_date')
       .notNull()
       .$defaultFn(() => DateTime.now()),
@@ -538,9 +543,7 @@ export const carBayBooking = pgTable(
     customerName: text('customer_name').notNull(),
     customerEmail: text('customer_email').notNull(),
     customerPhone: text('customer_phone').notNull(),
-    amountPaid: integer('amount_paid').notNull().default(0), // in cents
-    squarePaymentId: text('square_payment_id'),
-    squareOrderId: text('square_order_id'),
+    paymentId: text('payment_id').references(() => payment.id),
     createdByEmail: text('created_by_email').references(() => user.email),
     bookingToken: text('booking_token')
       .notNull()
@@ -557,6 +560,28 @@ export const carBayBooking = pgTable(
 );
 
 export type CarBayBooking = InferSelectModel<typeof carBayBooking>;
+
+export const carBayOverrun = pgTable(
+  'car_bay_overrun',
+  {
+    id: text('id')
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    bookingId: text('booking_id')
+      .notNull()
+      .references(() => carBayBooking.id),
+    paymentId: text('payment_id')
+      .notNull()
+      .references(() => payment.id),
+    createdDate: luxonTimestamp('created_date')
+      .notNull()
+      .$defaultFn(() => DateTime.now()),
+  },
+  (table) => [index('car_bay_overrun_booking_idx').on(table.bookingId)],
+);
+
+export type CarBayOverrun = InferSelectModel<typeof carBayOverrun>;
 
 // Overlapping closures are rejected by the car_bay_closure_no_overlap exclusion constraint.
 export const carBayClosure = pgTable(
@@ -605,5 +630,6 @@ export const schema = {
   classInstance,
   classBooking,
   carBayBooking,
+  carBayOverrun,
   carBayClosure,
 };

@@ -2,88 +2,47 @@ import type {
   CreateBillingCodeDto,
   UpdateBillingCodeDto,
 } from '$lib/remotes/dtos/billing_code.dto';
+import type { BillingCode, Organization } from '$lib/server/db/schema';
 import { BaseService } from '$lib/server/services/base.service';
+
+export const BILLING_CODE_NOT_FOUND = 'Billing code not found';
+export const BILLING_CODE_TAKEN = 'A billing code with that code already exists';
+
+type BillingCodeRow = { billingCode: BillingCode; organization: Organization | null };
+
+function withOrganizationName({ billingCode, organization }: BillingCodeRow) {
+  return { ...billingCode, organizationName: organization?.name ?? null };
+}
 
 export class BillingCodeService extends BaseService {
   async getBillingCodes() {
     const codes = await this.billingCodeRepository.getAll();
+    return codes.map(withOrganizationName);
+  }
 
-    // Get all unique discount IDs
-    const discountIds = codes
-      .map((row) => row.billingCode.discountId)
-      .filter((id): id is string => !!id);
-
-    // Fetch discount names from Square if there are any
-    let discountMap = new Map<string, string>();
-    if (discountIds.length > 0) {
-      const catalog = await this.squareRepository.getCatalogByIds(discountIds);
-      catalog.objects?.forEach((obj) => {
-        if (obj.type === 'DISCOUNT' && obj.id) {
-          discountMap.set(obj.id, obj.discountData?.name || 'Unnamed Discount');
-        }
-      });
-    }
-
-    return codes.map((row) => ({
-      ...row.billingCode,
-      organizationName: row.organization?.name ?? null,
-      discountName: row.billingCode.discountId
-        ? (discountMap.get(row.billingCode.discountId) ?? null)
-        : null,
-    }));
+  async getBillingCodesForOrganization(organizationId: string) {
+    const codes = await this.billingCodeRepository.getByOrganization(organizationId);
+    return codes.map(withOrganizationName);
   }
 
   async getBillingCodeById(id: string) {
     const code = await this.billingCodeRepository.getById(id);
     if (!code) {
-      throw new Error('Billing code not found');
+      throw new Error(BILLING_CODE_NOT_FOUND);
     }
-
-    let discountName: string | null = null;
-    if (code.billingCode.discountId) {
-      const catalog = await this.squareRepository.getCatalogByIds([code.billingCode.discountId]);
-      const discount = catalog.objects?.find((obj) => obj.id === code.billingCode.discountId);
-      discountName = (discount as any)?.discountData?.name || 'Unnamed Discount';
-    }
-
-    return {
-      ...code.billingCode,
-      organizationName: code.organization?.name ?? null,
-      discountName,
-    };
+    return withOrganizationName(code);
   }
 
   async getBillingCodeByCode(code: string) {
     const billingCode = await this.billingCodeRepository.getByCode(code);
-    if (!billingCode) {
-      return null;
-    }
-
-    let discountName: string | null = null;
-    if (billingCode.billingCode.discountId) {
-      const catalog = await this.squareRepository.getCatalogByIds([
-        billingCode.billingCode.discountId,
-      ]);
-      const discount = catalog.objects?.find(
-        (obj) => obj.id === billingCode.billingCode.discountId,
-      );
-      discountName = (discount as any)?.discountData?.name || 'Unnamed Discount';
-    }
-
-    return {
-      ...billingCode.billingCode,
-      organizationName: billingCode.organization?.name ?? null,
-      discountName,
-    };
+    return billingCode ? withOrganizationName(billingCode) : null;
   }
 
   async createBillingCode(data: CreateBillingCodeDto) {
-    if ((data.discountId ?? '') === '' && (data.organizationId ?? '') === '') {
-      throw new Error('Either discountId or organizationId must be provided');
+    if (await this.billingCodeRepository.getByCode(data.code)) {
+      throw new Error(BILLING_CODE_TAKEN);
     }
-
-    const billingCode = await this.billingCodeRepository.create(data);
-    return billingCode;
+    return await this.billingCodeRepository.create(data);
   }
 
   async updateBillingCode(id: string, updates: Omit<UpdateBillingCodeDto, 'id'>) {

@@ -1,6 +1,6 @@
 <script lang="ts" module>
+  import { CENTS_PER_DOLLAR } from '$lib/utils/billing';
   import {
-    CENTS_PER_DOLLAR,
     formatHour,
     type CarBayPolicy,
     type CarBayRates,

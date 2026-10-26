@@ -160,6 +160,7 @@ export class ClassRepository extends BaseRepository {
       .select()
       .from(schema.classBooking)
       .where(eq(schema.classBooking.id, id))
+      .leftJoin(schema.payment, eq(schema.classBooking.paymentId, schema.payment.id))
       .leftJoin(schema.classInstance, eq(schema.classBooking.instanceId, schema.classInstance.id))
       .leftJoin(schema.classCatalog, eq(schema.classInstance.classId, schema.classCatalog.id));
 
@@ -167,6 +168,7 @@ export class ClassRepository extends BaseRepository {
 
     return {
       ...result.class_booking,
+      payment: result.payment,
       instance: result.class_instance,
       catalog: result.class_catalog && withPhotoUrl(result.class_catalog),
     };
@@ -177,6 +179,7 @@ export class ClassRepository extends BaseRepository {
       .select()
       .from(schema.classBooking)
       .where(eq(schema.classBooking.bookingToken, token))
+      .leftJoin(schema.payment, eq(schema.classBooking.paymentId, schema.payment.id))
       .leftJoin(schema.classInstance, eq(schema.classBooking.instanceId, schema.classInstance.id))
       .leftJoin(schema.classCatalog, eq(schema.classInstance.classId, schema.classCatalog.id));
 
@@ -184,6 +187,7 @@ export class ClassRepository extends BaseRepository {
 
     return {
       ...result.class_booking,
+      payment: result.payment,
       instance: result.class_instance,
       catalog: result.class_catalog && withPhotoUrl(result.class_catalog),
     };
@@ -198,23 +202,28 @@ export class ClassRepository extends BaseRepository {
     return booking;
   }
 
-  async getBookingsForInstance(instanceId: string) {
-    return await this.db
-      .select()
+  private selectBookingsWithPayment() {
+    return this.db
+      .select({ booking: schema.classBooking, payment: schema.payment })
       .from(schema.classBooking)
-      .where(eq(schema.classBooking.instanceId, instanceId));
+      .leftJoin(schema.payment, eq(schema.classBooking.paymentId, schema.payment.id));
+  }
+
+  async getBookingsForInstance(instanceId: string) {
+    const rows = await this.selectBookingsWithPayment().where(
+      eq(schema.classBooking.instanceId, instanceId),
+    );
+    return rows.map(({ booking, payment }) => ({ ...booking, payment }));
   }
 
   async getConfirmedBookingsForInstance(instanceId: string) {
-    return await this.db
-      .select()
-      .from(schema.classBooking)
-      .where(
-        and(
-          eq(schema.classBooking.instanceId, instanceId),
-          eq(schema.classBooking.status, 'confirmed'),
-        ),
-      );
+    const rows = await this.selectBookingsWithPayment().where(
+      and(
+        eq(schema.classBooking.instanceId, instanceId),
+        eq(schema.classBooking.status, 'confirmed'),
+      ),
+    );
+    return rows.map(({ booking, payment }) => ({ ...booking, payment }));
   }
 
   async getConfirmedBookingCount(instanceId: string): Promise<number> {
@@ -259,73 +268,9 @@ export class ClassRepository extends BaseRepository {
     return rows.map((r) => r.id);
   }
 
-  // ── Staff / Payment ──
+  // ── Staff ──
 
   async getStaffUsers() {
     return await this.db.select().from(schema.user);
-  }
-
-  async processSquarePayment(
-    sourceId: string,
-    amountCents: number,
-    locationId: string,
-    customerEmail: string,
-    customerName: string,
-    itemName?: string,
-    itemDescription?: string,
-  ) {
-    const customer = await this.square.customers.search({
-      query: {
-        filter: {
-          emailAddress: { exact: customerEmail },
-        },
-      },
-    });
-
-    let customerId: string | undefined;
-    const customers = customer.customers ?? [];
-    if (customers.length > 0) {
-      customerId = customers[0].id;
-    } else {
-      const [firstName, ...lastNameParts] = customerName.split(' ');
-      const created = await this.square.customers.create({
-        givenName: firstName,
-        familyName: lastNameParts.join(' '),
-        emailAddress: customerEmail,
-      });
-      customerId = created.customer?.id;
-    }
-
-    const result = await this.square.payments.create({
-      sourceId,
-      idempotencyKey: crypto.randomUUID(),
-      amountMoney: {
-        amount: BigInt(amountCents),
-        currency: 'USD',
-      },
-      locationId,
-      customerId,
-      ...(itemName ? { note: itemName } : {}),
-      ...(itemDescription
-        ? {
-            statementDescriptionIdentifier: itemName,
-          }
-        : {}),
-    });
-
-    return result.payment;
-  }
-
-  async refundPayment(paymentId: string, amountCents: number) {
-    const result = await this.square.refunds.refundPayment({
-      paymentId,
-      idempotencyKey: crypto.randomUUID(),
-      amountMoney: {
-        amount: BigInt(amountCents),
-        currency: 'USD',
-      },
-    });
-
-    return result.refund;
   }
 }

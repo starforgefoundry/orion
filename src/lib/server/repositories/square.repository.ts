@@ -2,14 +2,12 @@ import { schema, type SquareWebhookLog } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { SQUARE_CURRENCY, type SquareWebhook } from '$lib/server/utils/square';
 import type {
-  CalculateOrderRequest,
   CreateOrderRequest,
   CreatePaymentRequest,
   Customer,
   Invoice,
   Payment,
   Subscription,
-  UpdateOrderRequest,
 } from 'square';
 
 const SUBSCRIPTION_REFUND_KEY_PREFIX = 'refund-';
@@ -27,10 +25,9 @@ export class SquareRepository extends BaseRepository {
     return response.data ?? [];
   }
 
-  async getCatalogByIds(ids: string[]) {
-    return await this.square.catalog.batchGet({
-      objectIds: ids,
-    });
+  async getCatalogObjects(ids: string[]) {
+    const response = await this.square.catalog.batchGet({ objectIds: ids });
+    return response.objects ?? [];
   }
 
   async getOrderById(orderId: string) {
@@ -44,25 +41,6 @@ export class SquareRepository extends BaseRepository {
   async createOrder(order: CreateOrderRequest) {
     const created = await this.square.orders.create(order);
     return created.order;
-  }
-
-  async updateOrder(order: UpdateOrderRequest) {
-    const updated = await this.square.orders.update(order);
-    return updated.order;
-  }
-
-  async sendInvoice(invoiceId: string, invoiceVersion: number) {
-    const response = await this.square.invoices.publish({
-      invoiceId,
-      version: invoiceVersion,
-    });
-
-    return response.invoice;
-  }
-
-  async calculateOrder(order: CalculateOrderRequest) {
-    const calculated = await this.square.orders.calculate(order);
-    return calculated.order;
   }
 
   async getInvoiceById(invoiceId: string) {

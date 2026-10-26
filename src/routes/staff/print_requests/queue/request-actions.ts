@@ -6,15 +6,10 @@ import {
   sendPickupNotification,
   updatePrintRequestStatus,
 } from '$lib/remotes/endpoints/print_request.remote';
+import { PRINT_REQUEST_STATUS } from '$lib/utils/print_request';
 import { toast } from 'svelte-sonner';
 
-export const STATUS = {
-  IN_QUEUE: 'in_queue',
-  PRINTING: 'printing',
-  DONE: 'done',
-  PICKED_UP: 'picked_up',
-  CANCELED: 'canceled',
-} as const satisfies Record<string, PrintRequestStatus>;
+export const STATUS = PRINT_REQUEST_STATUS;
 
 export const BOARD_STATUSES = [STATUS.IN_QUEUE, STATUS.PRINTING, STATUS.DONE] as const;
 

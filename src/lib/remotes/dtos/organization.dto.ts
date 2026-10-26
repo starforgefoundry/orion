@@ -62,7 +62,7 @@ export const organizationDetailDto = v.object({
       paymentDate: v.optional(v.nullable(v.string())),
       total: v.number(),
       status: v.string(),
-      squareInvoiceId: v.optional(v.nullable(v.string())),
+      paymentUrl: v.optional(v.nullable(v.string())),
     }),
   ),
 });
