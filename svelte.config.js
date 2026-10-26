@@ -8,6 +8,9 @@ const config = {
   preprocess: vitePreprocess(),
   kit: {
     adapter: adapter(),
+    alias: {
+      $test: 'src/test',
+    },
     experimental: {
       remoteFunctions: true,
     },

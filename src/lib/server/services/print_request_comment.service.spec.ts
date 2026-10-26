@@ -1,48 +1,44 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { factory } from '$test/factory';
+import { newTestService, type ServiceMocks } from '$test/utils';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { PrintRequestCommentService } from './print_request_comment.service';
 
-vi.mock('$lib/server/repositories/print_request_comment.repository', () => {
-  const MockPrintRequestCommentRepository = vi.fn();
-  MockPrintRequestCommentRepository.prototype.create = vi.fn();
-  MockPrintRequestCommentRepository.prototype.getForRequest = vi.fn();
-  return { PrintRequestCommentRepository: MockPrintRequestCommentRepository };
-});
+describe(PrintRequestCommentService.name, () => {
+  let sut: PrintRequestCommentService;
+  let mocks: ServiceMocks;
 
-describe('PrintRequestCommentService', () => {
-  let printRequestCommentService: any;
-  let mockCommentRepo: any;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-
-    const { printRequestCommentService: service } =
-      await import('$lib/server/services/print_request_comment.service');
-    printRequestCommentService = service;
-
-    const { PrintRequestCommentRepository } =
-      await import('$lib/server/repositories/print_request_comment.repository');
-    mockCommentRepo = PrintRequestCommentRepository.prototype;
+  beforeEach(() => {
+    ({ sut, mocks } = newTestService(PrintRequestCommentService));
   });
 
   describe('getForRequest', () => {
     it('should return the comments for the request', async () => {
-      const comments = [{ id: 'comment-1', body: 'Reprinted the base' }];
-      vi.mocked(mockCommentRepo.getForRequest).mockResolvedValue(comments);
+      const comment = factory.printRequestComment({
+        printRequestId: 'request-123',
+        body: 'Reprinted the base',
+      });
+      const comments = [{ ...comment, authorName: 'Staff Member', attachments: [] }];
+      mocks.printRequestCommentRepository.getForRequest.mockResolvedValue(comments);
 
-      const result = await printRequestCommentService.getForRequest('request-123');
+      const result = await sut.getForRequest('request-123');
 
-      expect(mockCommentRepo.getForRequest).toHaveBeenCalledWith('request-123');
+      expect(mocks.printRequestCommentRepository.getForRequest).toHaveBeenCalledWith('request-123');
       expect(result).toEqual(comments);
     });
   });
 
   describe('addComment', () => {
+    beforeEach(() => {
+      mocks.printRequestCommentRepository.create.mockResolvedValue(factory.printRequestComment());
+    });
+
     it('should attribute the comment to the signed in staff member', async () => {
-      await printRequestCommentService.addComment(
+      await sut.addComment(
         { printRequestId: 'request-123', body: 'Waiting on filament' },
         'staff@example.com',
       );
 
-      expect(mockCommentRepo.create).toHaveBeenCalledWith({
+      expect(mocks.printRequestCommentRepository.create).toHaveBeenCalledWith({
         printRequestId: 'request-123',
         authorEmail: 'staff@example.com',
         body: 'Waiting on filament',
@@ -53,12 +49,14 @@ describe('PrintRequestCommentService', () => {
     it('should pass the attachments through to the repository', async () => {
       const attachments = [new File(['solid'], 'fixed-base.3mf'), new File(['solid'], 'lid.stl')];
 
-      await printRequestCommentService.addComment(
+      await sut.addComment(
         { printRequestId: 'request-123', body: 'Reoriented the parts', attachments },
         'staff@example.com',
       );
 
-      expect(mockCommentRepo.create).toHaveBeenCalledWith(expect.objectContaining({ attachments }));
+      expect(mocks.printRequestCommentRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ attachments }),
+      );
     });
   });
 });

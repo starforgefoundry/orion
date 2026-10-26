@@ -1,8 +1,6 @@
 import { DateTime } from 'luxon';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { retryAfter } from './mailgun.repository';
-
-vi.mock('$env/dynamic/private', () => ({ env: {} }));
 
 describe('retryAfter', () => {
   it('reads the reset time from the Mailgun limit message', () => {

@@ -1,32 +1,23 @@
-import type { Member } from '$lib/server/db/schema';
-import type { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
-import type { MemberEmailRepository } from '$lib/server/repositories/member_email.repository';
-import { DateTime } from 'luxon';
-import { describe, expect, it, vi } from 'vitest';
+import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
+import { MemberEmailRepository } from '$lib/server/repositories/member_email.repository';
+import { factory } from '$test/factory';
+import { automock } from '$test/utils';
+import { describe, expect, it } from 'vitest';
 import { MemberNotificationRepository } from './member_notification.repository';
 
-vi.mock('$env/dynamic/private', () => ({
-  env: { FRONTEND_URL: 'https://orion.example.com' },
-}));
-
-const MEMBER: Member = {
+const MEMBER = factory.member({
   id: 'member-1',
   email: 'sam@example.com',
   name: 'Sam <Smith>',
-  phone: null,
-  squareCustomerId: null,
-  passToken: 'token-abc',
   onboardingToken: 'onboarding-abc',
-  createdDate: DateTime.now(),
-};
+});
 
 function setup() {
-  const mailgun = { sendTemplate: vi.fn().mockResolvedValue(undefined) };
-  const memberEmail = { log: vi.fn().mockResolvedValue(undefined) };
-  const repository = new MemberNotificationRepository(
-    mailgun as unknown as MailgunRepository,
-    memberEmail as unknown as MemberEmailRepository,
-  );
+  const mailgun = automock(MailgunRepository);
+  const memberEmail = automock(MemberEmailRepository);
+  mailgun.sendTemplate.mockResolvedValue(undefined as never);
+  memberEmail.log.mockResolvedValue(factory.memberEmail());
+  const repository = new MemberNotificationRepository(mailgun, memberEmail);
   return { mailgun, memberEmail, repository };
 }
 

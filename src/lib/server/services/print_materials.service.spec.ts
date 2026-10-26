@@ -2,277 +2,123 @@ import type {
   CreatePrintMaterialDto,
   UpdatePrintMaterialDto,
 } from '$lib/remotes/dtos/print_materials.dto';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { factory } from '$test/factory';
+import { newTestService, type ServiceMocks } from '$test/utils';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { PrintMaterialsService } from './print_materials.service';
 
-vi.mock('$lib/server/repositories/print_files.repository', () => {
-  const MockPrintFilesRepository = vi.fn();
-  return { PrintFilesRepository: MockPrintFilesRepository };
-});
+describe(PrintMaterialsService.name, () => {
+  let sut: PrintMaterialsService;
+  let mocks: ServiceMocks;
 
-vi.mock('$lib/server/repositories/print_materials.repository', () => {
-  const MockPrintMaterialsRepository = vi.fn();
-  MockPrintMaterialsRepository.prototype.create = vi.fn();
-  MockPrintMaterialsRepository.prototype.get = vi.fn();
-  MockPrintMaterialsRepository.prototype.update = vi.fn();
-  return { PrintMaterialsRepository: MockPrintMaterialsRepository };
-});
-
-vi.mock('$lib/server/repositories/print_request.repository', () => {
-  const MockPrintRequestRepository = vi.fn();
-  return { PrintRequestRepository: MockPrintRequestRepository };
-});
-
-// Mock $app/server
-vi.mock('$app/server', () => ({
-  getRequestEvent: vi.fn(),
-  form: vi.fn((schema, handler) => handler),
-  command: vi.fn((schema, handler) => handler),
-  query: vi.fn((schemaOrHandler, handler?) => {
-    const actualHandler = handler || schemaOrHandler;
-    (actualHandler as any).refresh = vi.fn().mockResolvedValue(undefined);
-    return actualHandler;
-  }),
-}));
-
-// Mock getPrintMaterials to avoid circular dependency
-vi.mock('$lib/remotes/endpoints/print_materials.remote', () => ({
-  getPrintMaterials: vi.fn(() => ({
-    refresh: vi.fn().mockResolvedValue(undefined),
-  })),
-}));
-
-describe('PrintMaterialsService', () => {
-  let printMaterialsService: any;
-  let mockMaterialsRepo: any;
-
-  beforeEach(async () => {
-    // Clear all mocks
-    vi.clearAllMocks();
-
-    // Import the service
-    const { printMaterialsService: service } =
-      await import('$lib/server/services/print_materials.service');
-    printMaterialsService = service;
-
-    // Get reference to the repository mock
-    const { PrintMaterialsRepository } =
-      await import('$lib/server/repositories/print_materials.repository');
-    mockMaterialsRepo = PrintMaterialsRepository.prototype;
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
+  beforeEach(() => {
+    ({ sut, mocks } = newTestService(PrintMaterialsService));
   });
 
   describe('getMaterials', () => {
     it('should return all materials when no filter is provided', async () => {
-      // Arrange
-      const mockMaterials = [
-        {
-          id: 'mat-1',
-          name: 'PLA',
-          pricePerGram: 0.05,
-          available: true,
-          archived: false,
-        },
-        {
-          id: 'mat-2',
-          name: 'ABS',
-          pricePerGram: 0.06,
-          available: true,
-          archived: false,
-        },
-      ];
+      const materials = [factory.printMaterial(), factory.printMaterial({ name: 'ABS' })];
+      mocks.printMaterialsRepository.get.mockResolvedValue(materials);
 
-      vi.mocked(mockMaterialsRepo.get).mockResolvedValue(mockMaterials);
+      const result = await sut.getMaterials();
 
-      // Act
-      const result = await printMaterialsService.getMaterials();
-
-      // Assert
-      expect(mockMaterialsRepo.get).toHaveBeenCalledWith(undefined);
-      expect(result).toEqual(mockMaterials);
+      expect(mocks.printMaterialsRepository.get).toHaveBeenCalledWith(undefined);
+      expect(result).toEqual(materials);
     });
 
     it('should return only available materials when filter is true', async () => {
-      // Arrange
-      const mockAvailableMaterials = [
-        {
-          id: 'mat-1',
-          name: 'PLA',
-          pricePerGram: 0.05,
-          available: true,
-          archived: false,
-        },
-      ];
+      const materials = [factory.printMaterial({ available: true })];
+      mocks.printMaterialsRepository.get.mockResolvedValue(materials);
 
-      vi.mocked(mockMaterialsRepo.get).mockResolvedValue(mockAvailableMaterials);
+      const result = await sut.getMaterials(true);
 
-      // Act
-      const result = await printMaterialsService.getMaterials(true);
-
-      // Assert
-      expect(mockMaterialsRepo.get).toHaveBeenCalledWith(true);
-      expect(result).toEqual(mockAvailableMaterials);
+      expect(mocks.printMaterialsRepository.get).toHaveBeenCalledWith(true);
+      expect(result).toEqual(materials);
     });
 
     it('should return unavailable materials when filter is false', async () => {
-      // Arrange
-      const mockUnavailableMaterials = [
-        {
-          id: 'mat-3',
-          name: 'Nylon',
-          pricePerGram: 0.08,
-          available: false,
-          archived: false,
-        },
-      ];
+      const materials = [factory.printMaterial({ name: 'Nylon', available: false })];
+      mocks.printMaterialsRepository.get.mockResolvedValue(materials);
 
-      vi.mocked(mockMaterialsRepo.get).mockResolvedValue(mockUnavailableMaterials);
+      const result = await sut.getMaterials(false);
 
-      // Act
-      const result = await printMaterialsService.getMaterials(false);
-
-      // Assert
-      expect(mockMaterialsRepo.get).toHaveBeenCalledWith(false);
-      expect(result).toEqual(mockUnavailableMaterials);
+      expect(mocks.printMaterialsRepository.get).toHaveBeenCalledWith(false);
+      expect(result).toEqual(materials);
     });
 
     it('should return empty array when no materials exist', async () => {
-      // Arrange
-      vi.mocked(mockMaterialsRepo.get).mockResolvedValue([]);
+      mocks.printMaterialsRepository.get.mockResolvedValue([]);
 
-      // Act
-      const result = await printMaterialsService.getMaterials();
+      const result = await sut.getMaterials();
 
-      // Assert
       expect(result).toEqual([]);
     });
   });
 
   describe('createMaterial', () => {
     it('should create a new material with correct parameters', async () => {
-      // Arrange
-      const dto: CreatePrintMaterialDto = {
-        name: 'PETG',
-        available: true,
-      };
+      const dto: CreatePrintMaterialDto = { name: 'PETG', available: true };
+      mocks.printMaterialsRepository.create.mockResolvedValue(factory.printMaterial(dto));
 
-      vi.mocked(mockMaterialsRepo.create).mockResolvedValue(undefined);
+      await sut.createMaterial(dto);
 
-      // Act
-      await printMaterialsService.createMaterial(dto);
-
-      // Assert
-      expect(mockMaterialsRepo.create).toHaveBeenCalledWith(dto);
+      expect(mocks.printMaterialsRepository.create).toHaveBeenCalledWith(dto);
     });
 
     it('should create unavailable material', async () => {
-      // Arrange
-      const dto: CreatePrintMaterialDto = {
-        name: 'TPU',
-        available: false,
-      };
+      const dto: CreatePrintMaterialDto = { name: 'TPU', available: false };
+      mocks.printMaterialsRepository.create.mockResolvedValue(factory.printMaterial(dto));
 
-      vi.mocked(mockMaterialsRepo.create).mockResolvedValue(undefined);
+      await sut.createMaterial(dto);
 
-      // Act
-      await printMaterialsService.createMaterial(dto);
-
-      // Assert
-      expect(mockMaterialsRepo.create).toHaveBeenCalledWith(dto);
+      expect(mocks.printMaterialsRepository.create).toHaveBeenCalledWith(dto);
     });
   });
 
   describe('updateMaterial', () => {
-    it('should update material and refresh the materials list', async () => {
-      // Arrange
-      const id = 'mat-123';
-      const updates: Omit<UpdatePrintMaterialDto, 'id'> = {
-        name: 'Updated PLA',
-      };
+    it('should update material and return the updated row', async () => {
+      const updates: Omit<UpdatePrintMaterialDto, 'id'> = { name: 'Updated PLA' };
+      const updated = factory.printMaterial({ id: 'mat-123', name: 'Updated PLA' });
+      mocks.printMaterialsRepository.update.mockResolvedValue(updated);
 
-      const mockUpdatedMaterial = {
-        id: 'mat-123',
-        name: 'Updated PLA',
-        cost: 0.06,
-        available: true,
-        archived: false,
-      };
+      const result = await sut.updateMaterial('mat-123', updates);
 
-      vi.mocked(mockMaterialsRepo.update).mockResolvedValue(mockUpdatedMaterial);
-
-      // Act
-      const result = await printMaterialsService.updateMaterial(id, updates);
-
-      // Assert
-      expect(mockMaterialsRepo.update).toHaveBeenCalledWith(id, updates);
-      expect(result).toEqual(mockUpdatedMaterial);
+      expect(mocks.printMaterialsRepository.update).toHaveBeenCalledWith('mat-123', updates);
+      expect(result).toEqual(updated);
     });
 
     it('should update material availability', async () => {
-      // Arrange
-      const id = 'mat-456';
-      const updates: Omit<UpdatePrintMaterialDto, 'id'> = {
-        available: false,
-      };
+      const updates: Omit<UpdatePrintMaterialDto, 'id'> = { available: false };
+      mocks.printMaterialsRepository.update.mockResolvedValue(
+        factory.printMaterial({ id: 'mat-456', available: false }),
+      );
 
-      const mockUpdatedMaterial = {
-        id: 'mat-456',
-        name: 'ABS',
-        cost: 0.06,
-        available: false,
-        archived: false,
-      };
+      const result = await sut.updateMaterial('mat-456', updates);
 
-      vi.mocked(mockMaterialsRepo.update).mockResolvedValue(mockUpdatedMaterial);
-
-      // Act
-      const result = await printMaterialsService.updateMaterial(id, updates);
-
-      // Assert
-      expect(mockMaterialsRepo.update).toHaveBeenCalledWith(id, updates);
+      expect(mocks.printMaterialsRepository.update).toHaveBeenCalledWith('mat-456', updates);
       expect(result.available).toBe(false);
     });
 
     it('should handle multiple field updates simultaneously', async () => {
-      // Arrange
-      const id = 'mat-789';
       const updates: Omit<UpdatePrintMaterialDto, 'id'> = {
         name: 'PETG Premium',
         available: true,
       };
+      mocks.printMaterialsRepository.update.mockResolvedValue(
+        factory.printMaterial({ id: 'mat-789', ...updates }),
+      );
 
-      const mockUpdatedMaterial = {
-        id: 'mat-789',
-        name: 'PETG Premium',
-        cost: 0.07,
-        available: true,
-        archived: false,
-      };
+      const result = await sut.updateMaterial('mat-789', updates);
 
-      vi.mocked(mockMaterialsRepo.update).mockResolvedValue(mockUpdatedMaterial);
-
-      // Act
-      const result = await printMaterialsService.updateMaterial(id, updates);
-
-      // Assert
-      expect(mockMaterialsRepo.update).toHaveBeenCalledWith(id, updates);
+      expect(mocks.printMaterialsRepository.update).toHaveBeenCalledWith('mat-789', updates);
       expect(result.name).toBe('PETG Premium');
       expect(result.available).toBe(true);
     });
 
     it('should throw error when material not found', async () => {
-      // Arrange
-      const id = 'nonexistent-mat';
-      const updates: Omit<UpdatePrintMaterialDto, 'id'> = {
-        name: 'New Name',
-      };
+      mocks.printMaterialsRepository.update.mockRejectedValue(new Error('Material not found'));
 
-      vi.mocked(mockMaterialsRepo.update).mockRejectedValue(new Error('Material not found'));
-
-      // Act & Assert
-      await expect(printMaterialsService.updateMaterial(id, updates)).rejects.toThrow(
+      await expect(sut.updateMaterial('nonexistent-mat', { name: 'New Name' })).rejects.toThrow(
         'Material not found',
       );
     });
@@ -280,26 +126,31 @@ describe('PrintMaterialsService', () => {
 
   describe('updateAMS', () => {
     it('should reset slots scanned with the empty slot card', async () => {
-      const bambuddy = printMaterialsService.bambuddyRepository;
-      vi.spyOn(printMaterialsService.settingsRepository, 'getSetting').mockResolvedValue({
+      mocks.settingsRepository.getSetting.mockResolvedValue({
         serverUrl: 'http://bambuddy',
         apiKey: 'key',
       });
-      vi.spyOn(bambuddy, 'listPrinters').mockResolvedValue([{ id: 7, name: 'SF 01' }]);
-      vi.spyOn(bambuddy, 'listAmsSlots').mockResolvedValue([
+      mocks.bambuddyRepository.listPrinters.mockResolvedValue([
+        { id: 7, name: 'SF 01', model: 'X1C', is_active: true },
+      ]);
+      mocks.bambuddyRepository.listAmsSlots.mockResolvedValue([
         { amsId: 0, trayId: 0 },
         { amsId: 0, trayId: 1 },
       ]);
-      const configure = vi.spyOn(bambuddy, 'configureAmsSlot').mockResolvedValue(undefined);
-      const reset = vi.spyOn(bambuddy, 'resetAmsSlot').mockResolvedValue(undefined);
-      vi.mocked(mockMaterialsRepo.get).mockResolvedValue([
-        { name: 'PLA', tagId: 'A1B2C3D4', filamentId: 'GFA00', materialType: 'PLA' },
+      mocks.bambuddyRepository.configureAmsSlot.mockResolvedValue(undefined);
+      mocks.bambuddyRepository.resetAmsSlot.mockResolvedValue(undefined);
+      mocks.printMaterialsRepository.get.mockResolvedValue([
+        factory.printMaterial({ name: 'PLA', tagId: 'A1B2C3D4', filamentId: 'GFA00' }),
       ]);
 
-      await printMaterialsService.updateAMS('SF-01', { filaments: ['EMPTY---', 'A1B2C3D4'] });
+      await sut.updateAMS('SF-01', { filaments: ['EMPTY---', 'A1B2C3D4'] });
 
-      expect(reset).toHaveBeenCalledExactlyOnceWith(expect.anything(), 7, { amsId: 0, trayId: 0 });
-      expect(configure).toHaveBeenCalledExactlyOnceWith(
+      expect(mocks.bambuddyRepository.resetAmsSlot).toHaveBeenCalledExactlyOnceWith(
+        expect.anything(),
+        7,
+        { amsId: 0, trayId: 0 },
+      );
+      expect(mocks.bambuddyRepository.configureAmsSlot).toHaveBeenCalledExactlyOnceWith(
         expect.anything(),
         7,
         { amsId: 0, trayId: 1 },
@@ -310,24 +161,17 @@ describe('PrintMaterialsService', () => {
 
   describe('edge cases', () => {
     it('should handle repository errors in getMaterials', async () => {
-      // Arrange
-      vi.mocked(mockMaterialsRepo.get).mockRejectedValue(new Error('Database error'));
+      mocks.printMaterialsRepository.get.mockRejectedValue(new Error('Database error'));
 
-      // Act & Assert
-      await expect(printMaterialsService.getMaterials()).rejects.toThrow('Database error');
+      await expect(sut.getMaterials()).rejects.toThrow('Database error');
     });
 
     it('should handle repository errors in createMaterial', async () => {
-      // Arrange
-      const dto: CreatePrintMaterialDto = {
-        name: 'Error Material',
-        available: true,
-      };
+      mocks.printMaterialsRepository.create.mockRejectedValue(
+        new Error('Failed to create material'),
+      );
 
-      vi.mocked(mockMaterialsRepo.create).mockRejectedValue(new Error('Failed to create material'));
-
-      // Act & Assert
-      await expect(printMaterialsService.createMaterial(dto)).rejects.toThrow(
+      await expect(sut.createMaterial({ name: 'Error Material', available: true })).rejects.toThrow(
         'Failed to create material',
       );
     });

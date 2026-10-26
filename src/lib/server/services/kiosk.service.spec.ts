@@ -1,49 +1,28 @@
 import { KIOSK_CHECK_IN_STATUS } from '$lib/remotes/dtos/kiosk.dto';
-import type { DayPass, Member, MemberSubscription } from '$lib/server/db/schema';
+import type { DayPass } from '$lib/server/db/schema';
 import type { MemberAccessContext } from '$lib/server/utils/member_access';
+import { factory } from '$test/factory';
+import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { KioskService } from './kiosk.service';
-
-vi.mock('$env/dynamic/private', () => ({ env: {} }));
 
 const NOW = DateTime.fromISO('2026-10-16T15:00:00', { zone: 'America/Chicago' }) as DateTime<true>;
 const TODAY = '2026-10-16';
 
-const member: Member = {
-  id: 'member-1',
-  email: 'ada@example.com',
-  name: 'Ada Lovelace',
-  phone: null,
-  squareCustomerId: null,
-  passToken: 'pass-token-1',
-  onboardingToken: 'onboarding-token-1',
-  createdDate: NOW,
-};
+const member = factory.member({ name: 'Ada Lovelace', email: 'ada@example.com' });
 
-const activeSubscription: MemberSubscription = {
-  id: 'sub-1',
+const activeSubscription = factory.memberSubscription({
   memberId: member.id,
-  planVariationId: 'plan-1',
-  planName: 'Monthly',
-  status: 'active',
   startDate: '2026-01-01',
-  chargedThroughDate: null,
-  canceledDate: null,
-  accessEndedDate: null,
-  refundedPaymentId: null,
-  updatedDate: NOW,
-};
+});
 
-function dayPass(overrides: Partial<DayPass>): DayPass {
-  return {
-    id: 'pass-1',
+function dayPass(overrides: Partial<DayPass> = {}) {
+  return factory.dayPass({
     memberId: member.id,
-    squareOrderId: 'order-1',
     purchasedDate: NOW.minus({ days: 3 }),
-    usedDate: null,
     ...overrides,
-  };
+  });
 }
 
 function context(overrides: Partial<MemberAccessContext> = {}): MemberAccessContext {
@@ -57,66 +36,41 @@ function context(overrides: Partial<MemberAccessContext> = {}): MemberAccessCont
   };
 }
 
-describe('KioskService', () => {
-  let service: KioskService;
-  let memberRepository: any;
-  let visitRepository: any;
-  let dayPassRepository: any;
-  let waiverRepository: any;
-  let settingsRepository: any;
+describe(KioskService.name, () => {
+  let sut: KioskService;
+  let mocks: ServiceMocks;
 
   beforeEach(() => {
-    memberRepository = {
-      getByPassToken: vi.fn().mockResolvedValue(member),
-      getAccessContext: vi.fn().mockResolvedValue(context()),
-    };
-    visitRepository = { create: vi.fn() };
-    dayPassRepository = { markUsed: vi.fn() };
-    waiverRepository = { submit: vi.fn() };
-    settingsRepository = { getSetting: vi.fn(), setSetting: vi.fn() };
-
-    service = new KioskService(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      settingsRepository,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      waiverRepository,
-      undefined,
-      undefined,
-      { memberRepository, visitRepository, dayPassRepository },
-    );
+    ({ sut, mocks } = newTestService(KioskService));
+    mocks.memberRepository.getByPassToken.mockResolvedValue(member);
+    mocks.memberRepository.getAccessContext.mockResolvedValue(context());
+    mocks.visitRepository.create.mockResolvedValue(factory.visit({ memberId: member.id }));
+    mocks.dayPassRepository.markUsed.mockResolvedValue();
+    mocks.waiverRepository.submit.mockResolvedValue(factory.waiver({ memberId: member.id }));
   });
 
   describe('checkIn', () => {
     it('reads the pass token out of a scanned pass URL', async () => {
-      await service.checkIn(`https://example.com/pass/${member.passToken}?ref=qr`, NOW);
+      await sut.checkIn(`https://example.com/pass/${member.passToken}?ref=qr`, NOW);
 
-      expect(memberRepository.getByPassToken).toHaveBeenCalledWith(member.passToken);
+      expect(mocks.memberRepository.getByPassToken).toHaveBeenCalledWith(member.passToken);
     });
 
     it('reports unknown passes without recording a visit', async () => {
-      memberRepository.getByPassToken.mockResolvedValue(undefined);
+      mocks.memberRepository.getByPassToken.mockResolvedValue(undefined as never);
 
-      const result = await service.checkIn('nope', NOW);
+      const result = await sut.checkIn('nope', NOW);
 
       expect(result).toEqual({ status: KIOSK_CHECK_IN_STATUS.UNKNOWN_PASS });
-      expect(visitRepository.create).not.toHaveBeenCalled();
+      expect(mocks.visitRepository.create).not.toHaveBeenCalled();
     });
 
     it('asks for a waiver and records the denial when none is on file', async () => {
-      memberRepository.getAccessContext.mockResolvedValue(
+      mocks.memberRepository.getAccessContext.mockResolvedValue(
         context({ hasWaiver: false, subscriptions: [activeSubscription] }),
       );
 
-      const result = await service.checkIn(member.passToken, NOW);
+      const result = await sut.checkIn(member.passToken, NOW);
 
       expect(result).toEqual({
         status: KIOSK_CHECK_IN_STATUS.NEEDS_WAIVER,
@@ -124,7 +78,7 @@ describe('KioskService', () => {
         name: member.name,
         email: member.email,
       });
-      expect(visitRepository.create).toHaveBeenCalledExactlyOnceWith({
+      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith({
         memberId: member.id,
         source: 'kiosk',
         accessBasis: 'subscription',
@@ -133,20 +87,20 @@ describe('KioskService', () => {
     });
 
     it('does not use a day pass when the member still needs a waiver', async () => {
-      memberRepository.getAccessContext.mockResolvedValue(
-        context({ hasWaiver: false, dayPasses: [dayPass({})] }),
+      mocks.memberRepository.getAccessContext.mockResolvedValue(
+        context({ hasWaiver: false, dayPasses: [dayPass()] }),
       );
 
-      await service.checkIn(member.passToken, NOW);
+      await sut.checkIn(member.passToken, NOW);
 
-      expect(dayPassRepository.markUsed).not.toHaveBeenCalled();
+      expect(mocks.dayPassRepository.markUsed).not.toHaveBeenCalled();
     });
 
     it('denies members without any access', async () => {
-      const result = await service.checkIn(member.passToken, NOW);
+      const result = await sut.checkIn(member.passToken, NOW);
 
       expect(result).toEqual({ status: KIOSK_CHECK_IN_STATUS.DENIED, name: member.name });
-      expect(visitRepository.create).toHaveBeenCalledExactlyOnceWith({
+      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith({
         memberId: member.id,
         source: 'kiosk',
         accessBasis: 'none',
@@ -155,19 +109,19 @@ describe('KioskService', () => {
     });
 
     it('admits members with an active subscription', async () => {
-      memberRepository.getAccessContext.mockResolvedValue(
+      mocks.memberRepository.getAccessContext.mockResolvedValue(
         context({ subscriptions: [activeSubscription] }),
       );
 
-      const result = await service.checkIn(member.passToken, NOW);
+      const result = await sut.checkIn(member.passToken, NOW);
 
       expect(result).toEqual({
         status: KIOSK_CHECK_IN_STATUS.ADMITTED,
         name: member.name,
         basis: 'subscription',
       });
-      expect(dayPassRepository.markUsed).not.toHaveBeenCalled();
-      expect(visitRepository.create).toHaveBeenCalledExactlyOnceWith({
+      expect(mocks.dayPassRepository.markUsed).not.toHaveBeenCalled();
+      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith({
         memberId: member.id,
         source: 'kiosk',
         accessBasis: 'subscription',
@@ -176,35 +130,32 @@ describe('KioskService', () => {
     });
 
     it('uses an unused day pass for today', async () => {
-      memberRepository.getAccessContext.mockResolvedValue(
-        context({ dayPasses: [dayPass({ id: 'unused-pass' })] }),
-      );
+      const unused = dayPass();
+      mocks.memberRepository.getAccessContext.mockResolvedValue(context({ dayPasses: [unused] }));
 
-      const result = await service.checkIn(member.passToken, NOW);
+      const result = await sut.checkIn(member.passToken, NOW);
 
       expect(result).toEqual({
         status: KIOSK_CHECK_IN_STATUS.ADMITTED,
         name: member.name,
         basis: 'day_pass',
       });
-      expect(dayPassRepository.markUsed).toHaveBeenCalledExactlyOnceWith('unused-pass', TODAY);
-      expect(visitRepository.create).toHaveBeenCalledExactlyOnceWith(
+      expect(mocks.dayPassRepository.markUsed).toHaveBeenCalledExactlyOnceWith(unused.id, TODAY);
+      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ accessBasis: 'day_pass', outcome: 'admitted' }),
       );
     });
 
     it('re-admits on a day pass already used today without using another', async () => {
-      memberRepository.getAccessContext.mockResolvedValue(
-        context({
-          dayPasses: [dayPass({ id: 'used-pass', usedDate: TODAY }), dayPass({ id: 'spare' })],
-        }),
+      mocks.memberRepository.getAccessContext.mockResolvedValue(
+        context({ dayPasses: [dayPass({ usedDate: TODAY }), dayPass()] }),
       );
 
-      const result = await service.checkIn(member.passToken, NOW);
+      const result = await sut.checkIn(member.passToken, NOW);
 
       expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.ADMITTED, basis: 'day_pass' });
-      expect(dayPassRepository.markUsed).not.toHaveBeenCalled();
-      expect(visitRepository.create).toHaveBeenCalledOnce();
+      expect(mocks.dayPassRepository.markUsed).not.toHaveBeenCalled();
+      expect(mocks.visitRepository.create).toHaveBeenCalledOnce();
     });
   });
 
@@ -212,68 +163,72 @@ describe('KioskService', () => {
     const signature = new File(['ink'], 'signature.jpg');
 
     it('saves a kiosk waiver with the member email, then checks the member in', async () => {
-      memberRepository.getAccessContext.mockResolvedValue(
+      mocks.memberRepository.getAccessContext.mockResolvedValue(
         context({ subscriptions: [activeSubscription] }),
       );
 
-      const result = await service.submitWaiver(
+      const result = await sut.submitWaiver(
         { passToken: member.passToken, name: 'Ada King', signature, isAdult: true },
         NOW,
       );
 
-      expect(waiverRepository.submit).toHaveBeenCalledWith(
+      expect(mocks.waiverRepository.submit).toHaveBeenCalledWith(
         { name: 'Ada King', email: member.email, signature, isAdult: true },
         member.id,
         'kiosk',
       );
       expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.ADMITTED });
-      expect(visitRepository.create).toHaveBeenCalledExactlyOnceWith(
+      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ outcome: 'admitted' }),
       );
     });
 
     it('rejects unknown pass tokens without saving a waiver', async () => {
-      memberRepository.getByPassToken.mockResolvedValue(undefined);
+      mocks.memberRepository.getByPassToken.mockResolvedValue(undefined as never);
 
-      const result = await service.submitWaiver(
+      const result = await sut.submitWaiver(
         { passToken: 'nope', name: 'Ada', signature, isAdult: true },
         NOW,
       );
 
       expect(result).toEqual({ status: KIOSK_CHECK_IN_STATUS.UNKNOWN_PASS });
-      expect(waiverRepository.submit).not.toHaveBeenCalled();
+      expect(mocks.waiverRepository.submit).not.toHaveBeenCalled();
     });
   });
 
   describe('device pairing', () => {
     it('accepts only the current device token', async () => {
-      settingsRepository.getSetting.mockResolvedValue({ deviceToken: 'current' });
+      stubSettings(mocks.settingsRepository, { kiosk: { deviceToken: 'current' } });
 
-      expect(await service.isPairedDevice('current')).toBe(true);
-      expect(await service.isPairedDevice('old')).toBe(false);
-      expect(await service.isPairedDevice(undefined)).toBe(false);
+      expect(await sut.isPairedDevice('current')).toBe(true);
+      expect(await sut.isPairedDevice('old')).toBe(false);
+      expect(await sut.isPairedDevice(undefined)).toBe(false);
     });
 
     it('rejects every device before a token is generated', async () => {
-      settingsRepository.getSetting.mockResolvedValue({ deviceToken: '' });
+      stubSettings(mocks.settingsRepository, { kiosk: { deviceToken: '' } });
 
-      expect(await service.isPairedDevice('')).toBe(false);
-      expect(await service.isPairedDevice('anything')).toBe(false);
+      expect(await sut.isPairedDevice('')).toBe(false);
+      expect(await sut.isPairedDevice('anything')).toBe(false);
     });
 
     it('stores a fresh token on rotate and returns its pairing link', async () => {
-      const first = await service.rotateDeviceToken();
-      const second = await service.rotateDeviceToken();
+      mocks.settingsRepository.setSetting.mockImplementation(async (_key, value) => value);
 
-      const [[, stored]] = settingsRepository.setSetting.mock.calls;
-      expect(first.pairingPath).toBe(`/kiosk/pair?token=${stored.deviceToken}`);
+      const first = await sut.rotateDeviceToken();
+      const second = await sut.rotateDeviceToken();
+
+      const [[, stored]] = mocks.settingsRepository.setSetting.mock.calls;
+      expect(first.pairingPath).toBe(
+        `/kiosk/pair?token=${(stored as { deviceToken: string }).deviceToken}`,
+      );
       expect(second.pairingPath).not.toBe(first.pairingPath);
     });
 
     it('has no pairing link before a token is generated', async () => {
-      settingsRepository.getSetting.mockResolvedValue({ deviceToken: '' });
+      stubSettings(mocks.settingsRepository, { kiosk: { deviceToken: '' } });
 
-      expect(await service.getPairing()).toEqual({ pairingPath: null });
+      expect(await sut.getPairing()).toEqual({ pairingPath: null });
     });
   });
 });

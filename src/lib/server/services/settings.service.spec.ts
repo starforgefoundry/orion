@@ -1,67 +1,44 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SettingsMap } from '$lib/server/repositories/settings.repository';
+import { factory } from '$test/factory';
+import { newTestService, type ServiceMocks } from '$test/utils';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { SettingsService } from './settings.service';
 
-// Mock remote endpoints
-vi.mock('$lib/remotes/endpoints/settings.remote', () => ({
-  getPrintRequestSettings: vi.fn(() => ({
-    refresh: vi.fn().mockResolvedValue(undefined),
-  })),
-  getPrintRequestSquareSettings: vi.fn(() => ({
-    refresh: vi.fn().mockResolvedValue(undefined),
-  })),
-}));
+type StoredSetting = Awaited<ReturnType<ServiceMocks['settingsRepository']['getSetting']>>;
 
-describe('SettingsService', () => {
-  let settingsService: SettingsService;
-  let mockSettingsRepo: any;
-  let mockPrintMaterialsRepo: any;
-  let mockBambuddyRepo: any;
-  let mockSquareRepo: any;
-  let getPrintRequestSettings: any;
-  let getPrintRequestSquareSettings: any;
+function printRequestSettings(
+  overrides: Partial<SettingsMap['printRequest']> = {},
+): SettingsMap['printRequest'] {
+  return {
+    isOpen: true,
+    announcement: '',
+    announcementUntil: '',
+    maxUploadMB: 1000,
+    allowedFileTypes: '.stl, .3mf',
+    discordWebhookUrl: '',
+    ...overrides,
+  };
+}
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
+function squareSettings(
+  overrides: Partial<SettingsMap['printRequestSquare']> = {},
+): SettingsMap['printRequestSquare'] {
+  return {
+    locationId: 'loc-123',
+    ...overrides,
+  };
+}
 
-    mockSettingsRepo = {
-      getSetting: vi.fn(),
-      getStoredSetting: vi.fn(),
-      setSetting: vi.fn(),
-    };
+describe(SettingsService.name, () => {
+  let sut: SettingsService;
+  let mocks: ServiceMocks;
 
-    mockPrintMaterialsRepo = {
-      get: vi.fn(),
-    };
+  function stubSetting(value: SettingsMap[keyof SettingsMap]) {
+    mocks.settingsRepository.getSetting.mockResolvedValue(value as StoredSetting);
+  }
 
-    mockSquareRepo = { getCatalogObjects: vi.fn() };
-
-    mockBambuddyRepo = {
-      getCurrentUser: vi.fn(),
-      listPrinters: vi.fn(),
-    };
-
-    settingsService = new SettingsService(
-      undefined,
-      mockPrintMaterialsRepo,
-      undefined,
-      undefined,
-      mockSettingsRepo,
-      mockSquareRepo,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      mockBambuddyRepo,
-    );
-
-    const settingsRemote = await import('$lib/remotes/endpoints/settings.remote');
-    getPrintRequestSettings = settingsRemote.getPrintRequestSettings;
-    getPrintRequestSquareSettings = settingsRemote.getPrintRequestSquareSettings;
-  });
-
-  afterEach(() => {
-    vi.clearAllMocks();
+  beforeEach(() => {
+    ({ sut, mocks } = newTestService(SettingsService));
   });
 
   describe('importLegacyPrintPricing', () => {
@@ -71,15 +48,13 @@ describe('SettingsService', () => {
       additionalBuildPlateItemId: 'plate-1',
     };
 
-    function storedSettings(values: Record<string, unknown>) {
-      vi.mocked(mockSettingsRepo.getStoredSetting).mockImplementation(
-        async (key: string) => values[key],
-      );
+    function storedSettings(values: Partial<Record<keyof SettingsMap, Record<string, unknown>>>) {
+      mocks.settingsRepository.getStoredSetting.mockImplementation(async (key) => values[key]);
     }
 
     it('copies the member discount and build plate price from Square', async () => {
       storedSettings({ printRequestSquare: LEGACY });
-      mockSquareRepo.getCatalogObjects.mockResolvedValue([
+      mocks.squareRepository.getCatalogObjects.mockResolvedValue([
         { type: 'DISCOUNT', id: 'discount-1', discountData: { percentage: '15.0' } },
         {
           type: 'ITEM_VARIATION',
@@ -87,11 +62,15 @@ describe('SettingsService', () => {
           itemVariationData: { priceMoney: { amount: 250n } },
         },
       ]);
+      mocks.settingsRepository.setSetting.mockImplementation(async (_key, value) => value);
 
-      await settingsService.importLegacyPrintPricing();
+      await sut.importLegacyPrintPricing();
 
-      expect(mockSquareRepo.getCatalogObjects).toHaveBeenCalledWith(['discount-1', 'plate-1']);
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printPricing', {
+      expect(mocks.squareRepository.getCatalogObjects).toHaveBeenCalledWith([
+        'discount-1',
+        'plate-1',
+      ]);
+      expect(mocks.settingsRepository.setSetting).toHaveBeenCalledWith('printPricing', {
         memberDiscountPercent: 15,
         additionalBuildPlatePrice: 250,
       });
@@ -100,42 +79,40 @@ describe('SettingsService', () => {
     it('does nothing once Orion has its own print pricing', async () => {
       storedSettings({ printPricing: { memberDiscountPercent: 5 }, printRequestSquare: LEGACY });
 
-      await settingsService.importLegacyPrintPricing();
+      await sut.importLegacyPrintPricing();
 
-      expect(mockSquareRepo.getCatalogObjects).not.toHaveBeenCalled();
-      expect(mockSettingsRepo.setSetting).not.toHaveBeenCalled();
+      expect(mocks.squareRepository.getCatalogObjects).not.toHaveBeenCalled();
+      expect(mocks.settingsRepository.setSetting).not.toHaveBeenCalled();
     });
 
     it('does nothing when Square was never set up for prints', async () => {
       storedSettings({ printRequestSquare: { locationId: 'loc-1' } });
 
-      await settingsService.importLegacyPrintPricing();
+      await sut.importLegacyPrintPricing();
 
-      expect(mockSquareRepo.getCatalogObjects).not.toHaveBeenCalled();
-      expect(mockSettingsRepo.setSetting).not.toHaveBeenCalled();
+      expect(mocks.squareRepository.getCatalogObjects).not.toHaveBeenCalled();
+      expect(mocks.settingsRepository.setSetting).not.toHaveBeenCalled();
     });
   });
 
   describe('getPublicPrintRequestForm', () => {
     beforeEach(() => {
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        isOpen: true,
-        announcement: 'Delays this week',
-        announcementUntil: '2026-09-24T17:00:00.000Z',
-        maxUploadMB: 1000,
-        allowedFileTypes: '.stl',
-        discordWebhookUrl: 'https://discord.com/api/webhooks/secret',
-      });
-      vi.mocked(mockPrintMaterialsRepo.get).mockResolvedValue([
-        { id: 'material-1', name: 'PLA', available: true, archived: false, tagId: 'A1B2C3D4' },
+      stubSetting(
+        printRequestSettings({
+          announcement: 'Delays this week',
+          announcementUntil: '2026-09-24T17:00:00.000Z',
+          allowedFileTypes: '.stl',
+          discordWebhookUrl: 'https://discord.com/api/webhooks/secret',
+        }),
+      );
+      mocks.printMaterialsRepository.get.mockResolvedValue([
+        factory.printMaterial({ id: 'material-1', name: 'PLA', tagId: 'A1B2C3D4' }),
       ]);
     });
 
     it('should only expose the fields the public form renders', async () => {
-      // Act
-      const result = await settingsService.getPublicPrintRequestForm();
+      const result = await sut.getPublicPrintRequestForm();
 
-      // Assert
       expect(result).toEqual({
         isOpen: true,
         announcement: 'Delays this week',
@@ -147,110 +124,77 @@ describe('SettingsService', () => {
     });
 
     it('should only list materials marked available', async () => {
-      // Act
-      await settingsService.getPublicPrintRequestForm();
+      await sut.getPublicPrintRequestForm();
 
-      // Assert
-      expect(mockPrintMaterialsRepo.get).toHaveBeenCalledWith(true);
+      expect(mocks.printMaterialsRepository.get).toHaveBeenCalledWith(true);
     });
   });
 
   describe('getPrintRequestSettings', () => {
     it('should return print request settings', async () => {
-      // Arrange
-      const mockSettings = {
-        enabled: true,
-        maxFileSize: 100000000,
-        allowedFileTypes: ['.stl', '.obj', '.3mf'],
-      };
+      const settings = printRequestSettings({ maxUploadMB: 100 });
+      stubSetting(settings);
 
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSettings);
+      const result = await sut.getPrintRequestSettings();
 
-      // Act
-      const result = await settingsService.getPrintRequestSettings();
-
-      // Assert
-      expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequest');
-      expect(result).toEqual(mockSettings);
+      expect(mocks.settingsRepository.getSetting).toHaveBeenCalledWith('printRequest');
+      expect(result).toEqual(settings);
     });
   });
 
   describe('setPrintRequestSettings', () => {
-    const newSettings = {
+    const newSettings = printRequestSettings({
       isOpen: false,
       announcement: 'Prints are delayed one week.',
       announcementUntil: '2026-09-24T17:00:00.000Z',
       maxUploadMB: 50000,
       allowedFileTypes: '.stl',
       discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/abcdefghijklmnopqrstuvwxyz',
-    };
+    });
 
     it('should update print request settings', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({ isOpen: true });
-      vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue(newSettings);
+      stubSetting(printRequestSettings());
+      mocks.settingsRepository.setSetting.mockResolvedValue(newSettings);
 
-      // Act
-      const result = await settingsService.setPrintRequestSettings(newSettings);
+      const result = await sut.setPrintRequestSettings(newSettings);
 
-      // Assert
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('printRequest', newSettings);
+      expect(mocks.settingsRepository.setSetting).toHaveBeenCalledWith('printRequest', newSettings);
       expect(result).toEqual(newSettings);
     });
   });
 
   describe('getBambuddySettings', () => {
     it('should report that a key is saved without handing it out', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        serverUrl: 'https://print.example.com',
-        apiKey: 'bb_secret',
-      });
+      stubSetting({ serverUrl: 'https://print.example.com', apiKey: 'bb_secret' });
 
-      // Act
-      const result = await settingsService.getBambuddySettings();
+      const result = await sut.getBambuddySettings();
 
-      // Assert
       expect(result).toEqual({ serverUrl: 'https://print.example.com', hasApiKey: true });
     });
   });
 
   describe('setBambuddySettings', () => {
+    beforeEach(() => {
+      mocks.settingsRepository.setSetting.mockImplementation(async (_key, value) => value);
+    });
+
     it('should keep the saved key when the form submits a blank one', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        serverUrl: 'https://old.example.com',
-        apiKey: 'bb_saved',
-      });
+      stubSetting({ serverUrl: 'https://old.example.com', apiKey: 'bb_saved' });
 
-      // Act
-      await settingsService.setBambuddySettings({
-        serverUrl: 'https://print.example.com',
-        apiKey: '',
-      });
+      await sut.setBambuddySettings({ serverUrl: 'https://print.example.com', apiKey: '' });
 
-      // Assert
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('bambuddy', {
+      expect(mocks.settingsRepository.setSetting).toHaveBeenCalledWith('bambuddy', {
         serverUrl: 'https://print.example.com',
         apiKey: 'bb_saved',
       });
     });
 
     it('should replace the saved key when the form submits a new one', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        serverUrl: 'https://print.example.com',
-        apiKey: 'bb_saved',
-      });
+      stubSetting({ serverUrl: 'https://print.example.com', apiKey: 'bb_saved' });
 
-      // Act
-      await settingsService.setBambuddySettings({
-        serverUrl: 'https://print.example.com',
-        apiKey: 'bb_new',
-      });
+      await sut.setBambuddySettings({ serverUrl: 'https://print.example.com', apiKey: 'bb_new' });
 
-      // Assert
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith('bambuddy', {
+      expect(mocks.settingsRepository.setSetting).toHaveBeenCalledWith('bambuddy', {
         serverUrl: 'https://print.example.com',
         apiKey: 'bb_new',
       });
@@ -259,231 +203,149 @@ describe('SettingsService', () => {
 
   describe('getBambuddyStatus', () => {
     it('should report not connected when no server is configured', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({ serverUrl: '', apiKey: '' });
+      stubSetting({ serverUrl: '', apiKey: '' });
 
-      // Act
-      const result = await settingsService.getBambuddyStatus();
+      const result = await sut.getBambuddyStatus();
 
-      // Assert
       expect(result.connected).toBe(false);
-      expect(mockBambuddyRepo.getCurrentUser).not.toHaveBeenCalled();
+      expect(mocks.bambuddyRepository.getCurrentUser).not.toHaveBeenCalled();
     });
 
     it('should report the signed in user and printer count', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        serverUrl: 'https://print.example.com',
-        apiKey: 'bb_secret',
-      });
-      vi.mocked(mockBambuddyRepo.getCurrentUser).mockResolvedValue({
+      stubSetting({ serverUrl: 'https://print.example.com', apiKey: 'bb_secret' });
+      mocks.bambuddyRepository.getCurrentUser.mockResolvedValue({
         username: 'starforge',
         email: null,
       });
-      vi.mocked(mockBambuddyRepo.listPrinters).mockResolvedValue([{ id: 3 }, { id: 4 }]);
+      mocks.bambuddyRepository.listPrinters.mockResolvedValue([
+        { id: 3, name: 'X1C', model: 'X1C', is_active: true },
+        { id: 4, name: 'P1S', model: 'P1S', is_active: true },
+      ]);
 
-      // Act
-      const result = await settingsService.getBambuddyStatus();
+      const result = await sut.getBambuddyStatus();
 
-      // Assert
       expect(result).toEqual({ connected: true, username: 'starforge', printerCount: 2 });
     });
 
     it('should surface why Bambuddy rejected the key', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({
-        serverUrl: 'https://print.example.com',
-        apiKey: 'bb_stale',
-      });
-      vi.mocked(mockBambuddyRepo.getCurrentUser).mockRejectedValue(new Error('Invalid API key'));
-      vi.mocked(mockBambuddyRepo.listPrinters).mockRejectedValue(new Error('Invalid API key'));
+      stubSetting({ serverUrl: 'https://print.example.com', apiKey: 'bb_stale' });
+      mocks.bambuddyRepository.getCurrentUser.mockRejectedValue(new Error('Invalid API key'));
+      mocks.bambuddyRepository.listPrinters.mockRejectedValue(new Error('Invalid API key'));
 
-      // Act
-      const result = await settingsService.getBambuddyStatus();
+      const result = await sut.getBambuddyStatus();
 
-      // Assert
       expect(result).toEqual({ connected: false, reason: 'Invalid API key' });
     });
   });
 
   describe('getPrintRequestSquareSettings', () => {
     it('should return print request square settings', async () => {
-      // Arrange
-      const mockSquareSettings = {
-        locationId: 'loc-123',
-        printRequestItemId: 'item-456',
-        additionalBuildPlateItemId: 'item-789',
-        memberPrintDiscountId: 'discount-999',
-      };
+      const settings = squareSettings();
+      stubSetting(settings);
 
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(mockSquareSettings);
+      const result = await sut.getPrintRequestSquareSettings();
 
-      // Act
-      const result = await settingsService.getPrintRequestSquareSettings();
-
-      // Assert
-      expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequestSquare');
-      expect(result).toEqual(mockSquareSettings);
+      expect(mocks.settingsRepository.getSetting).toHaveBeenCalledWith('printRequestSquare');
+      expect(result).toEqual(settings);
     });
 
     it('should handle null square settings', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue(null);
+      mocks.settingsRepository.getSetting.mockResolvedValue(null as never);
 
-      // Act
-      const result = await settingsService.getPrintRequestSquareSettings();
+      const result = await sut.getPrintRequestSquareSettings();
 
-      // Assert
-      expect(mockSettingsRepo.getSetting).toHaveBeenCalledWith('printRequestSquare');
+      expect(mocks.settingsRepository.getSetting).toHaveBeenCalledWith('printRequestSquare');
       expect(result).toBeNull();
     });
 
     it('should return different settings than printRequest', async () => {
-      // Arrange
-      const mockPrintRequestSettings = { enabled: true };
-      const mockSquareSettings = { locationId: 'loc-123' };
+      const printRequest = printRequestSettings();
+      const square = squareSettings();
+      mocks.settingsRepository.getSetting
+        .mockResolvedValueOnce(printRequest as StoredSetting)
+        .mockResolvedValueOnce(square as StoredSetting);
 
-      vi.mocked(mockSettingsRepo.getSetting)
-        .mockResolvedValueOnce(mockPrintRequestSettings)
-        .mockResolvedValueOnce(mockSquareSettings);
+      const printRequestResult = await sut.getPrintRequestSettings();
+      const squareResult = await sut.getPrintRequestSquareSettings();
 
-      // Act
-      const printRequestResult = await settingsService.getPrintRequestSettings();
-      const squareResult = await settingsService.getPrintRequestSquareSettings();
-
-      // Assert
-      expect(mockSettingsRepo.getSetting).toHaveBeenNthCalledWith(1, 'printRequest');
-      expect(mockSettingsRepo.getSetting).toHaveBeenNthCalledWith(2, 'printRequestSquare');
-      expect(printRequestResult).toEqual(mockPrintRequestSettings);
-      expect(squareResult).toEqual(mockSquareSettings);
+      expect(mocks.settingsRepository.getSetting).toHaveBeenNthCalledWith(1, 'printRequest');
+      expect(mocks.settingsRepository.getSetting).toHaveBeenNthCalledWith(2, 'printRequestSquare');
+      expect(printRequestResult).toEqual(printRequest);
+      expect(squareResult).toEqual(square);
     });
   });
 
   describe('setPrintRequestSquareSettings', () => {
     it('should update square settings', async () => {
-      // Arrange
-      const newSquareSettings = {
+      const newSquareSettings = squareSettings({
         locationId: 'loc-new',
-        printRequestItemId: 'item-new',
-        additionalBuildPlateItemId: 'item-plate-new',
-        memberPrintDiscountId: 'discount-new',
-      };
+      });
+      const updatedSettings = { ...newSquareSettings, id: 'square-setting-123' };
+      mocks.settingsRepository.setSetting.mockResolvedValue(updatedSettings);
 
-      const mockUpdatedSettings = {
-        ...newSquareSettings,
-        id: 'square-setting-123',
-      };
+      const result = await sut.setPrintRequestSquareSettings(newSquareSettings);
 
-      vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue(mockUpdatedSettings);
-
-      // Act
-      const result = await settingsService.setPrintRequestSquareSettings(newSquareSettings);
-
-      // Assert
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith(
+      expect(mocks.settingsRepository.setSetting).toHaveBeenCalledWith(
         'printRequestSquare',
         newSquareSettings,
       );
-      expect(result).toEqual(mockUpdatedSettings);
-    });
-
-    it('should handle square settings with all required fields', async () => {
-      // Arrange
-      const newSquareSettings = {
-        locationId: 'loc-999',
-        printRequestItemId: 'item-999',
-        additionalBuildPlateItemId: 'item-plate-999',
-        memberPrintDiscountId: 'discount-999',
-      };
-
-      const mockUpdatedSettings = {
-        ...newSquareSettings,
-        id: 'square-setting-456',
-      };
-
-      vi.mocked(mockSettingsRepo.setSetting).mockResolvedValue(mockUpdatedSettings);
-
-      // Act
-      const result = await settingsService.setPrintRequestSquareSettings(newSquareSettings);
-
-      // Assert
-      expect(mockSettingsRepo.setSetting).toHaveBeenCalledWith(
-        'printRequestSquare',
-        newSquareSettings,
-      );
-      expect(result).toEqual(mockUpdatedSettings);
+      expect(result).toEqual(updatedSettings);
     });
   });
 
   describe('setting isolation', () => {
     it('should not mix up printRequest and printRequestSquare settings', async () => {
-      // Arrange
-      const printRequestSettings = { enabled: true };
-      const squareSettings = { locationId: 'loc-isolated' };
+      const printRequest = printRequestSettings();
+      const square = squareSettings({ locationId: 'loc-isolated' });
+      stubSetting(printRequestSettings());
+      mocks.settingsRepository.setSetting
+        .mockResolvedValueOnce(printRequest)
+        .mockResolvedValueOnce(square);
 
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({});
-      vi.mocked(mockSettingsRepo.setSetting)
-        .mockResolvedValueOnce(printRequestSettings)
-        .mockResolvedValueOnce(squareSettings);
+      await sut.setPrintRequestSettings(printRequest);
+      await sut.setPrintRequestSquareSettings(square);
 
-      // Act
-      await settingsService.setPrintRequestSettings(printRequestSettings as any);
-      await settingsService.setPrintRequestSquareSettings(squareSettings as any);
-
-      // Assert
-      expect(mockSettingsRepo.setSetting).toHaveBeenNthCalledWith(
+      expect(mocks.settingsRepository.setSetting).toHaveBeenNthCalledWith(
         1,
         'printRequest',
-        printRequestSettings,
+        printRequest,
       );
-      expect(mockSettingsRepo.setSetting).toHaveBeenNthCalledWith(
+      expect(mocks.settingsRepository.setSetting).toHaveBeenNthCalledWith(
         2,
         'printRequestSquare',
-        squareSettings,
+        square,
       );
     });
   });
 
   describe('error handling', () => {
     it('should handle repository errors in getPrintRequestSettings', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockRejectedValue(new Error('Database error'));
+      mocks.settingsRepository.getSetting.mockRejectedValue(new Error('Database error'));
 
-      // Act & Assert
-      await expect(settingsService.getPrintRequestSettings()).rejects.toThrow('Database error');
+      await expect(sut.getPrintRequestSettings()).rejects.toThrow('Database error');
     });
 
     it('should handle repository errors in setPrintRequestSettings', async () => {
-      // Arrange
-      const newSettings = { enabled: true };
-      vi.mocked(mockSettingsRepo.getSetting).mockResolvedValue({});
-      vi.mocked(mockSettingsRepo.setSetting).mockRejectedValue(new Error('Update failed'));
+      stubSetting(printRequestSettings());
+      mocks.settingsRepository.setSetting.mockRejectedValue(new Error('Update failed'));
 
-      // Act & Assert
-      await expect(settingsService.setPrintRequestSettings(newSettings as any)).rejects.toThrow(
+      await expect(sut.setPrintRequestSettings(printRequestSettings())).rejects.toThrow(
         'Update failed',
       );
     });
 
     it('should handle repository errors in getPrintRequestSquareSettings', async () => {
-      // Arrange
-      vi.mocked(mockSettingsRepo.getSetting).mockRejectedValue(new Error('Connection error'));
+      mocks.settingsRepository.getSetting.mockRejectedValue(new Error('Connection error'));
 
-      // Act & Assert
-      await expect(settingsService.getPrintRequestSquareSettings()).rejects.toThrow(
-        'Connection error',
-      );
+      await expect(sut.getPrintRequestSquareSettings()).rejects.toThrow('Connection error');
     });
 
     it('should handle repository errors in setPrintRequestSquareSettings', async () => {
-      // Arrange
-      const newSettings = { locationId: 'loc-test' };
-      vi.mocked(mockSettingsRepo.setSetting).mockRejectedValue(new Error('Save failed'));
+      mocks.settingsRepository.setSetting.mockRejectedValue(new Error('Save failed'));
 
-      // Act & Assert
-      await expect(
-        settingsService.setPrintRequestSquareSettings(newSettings as any),
-      ).rejects.toThrow('Save failed');
+      await expect(sut.setPrintRequestSquareSettings(squareSettings())).rejects.toThrow(
+        'Save failed',
+      );
     });
   });
 });

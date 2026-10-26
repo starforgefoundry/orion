@@ -13,18 +13,9 @@ import type {
   UpsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
 import type { Payment, User } from '$lib/server/db/schema';
-import { ClassRepository } from '$lib/server/repositories/class.repository';
-import { DiscordRepository } from '$lib/server/repositories/discord.repository';
-import {
-  GoogleCalendarRepository,
-  type GoogleCalendarEventInput,
-} from '$lib/server/repositories/google_calendar.repository';
-import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
-import {
-  PaymentDeclinedError,
-  PaymentRepository,
-} from '$lib/server/repositories/payment.repository';
-import { SettingsRepository } from '$lib/server/repositories/settings.repository';
+import type { GoogleCalendarEventInput } from '$lib/server/repositories/google_calendar.repository';
+import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
+import { BaseService } from '$lib/server/services/base.service';
 import {
   buildBill,
   amountPaid,
@@ -41,30 +32,7 @@ const PAYMENT_FAILED_MESSAGE = 'Payment failed';
 
 type PaidBooking = { payment: Payment | null };
 
-export class ClassService {
-  private classRepository: ClassRepository;
-  private discordRepository: DiscordRepository;
-  private googleCalendarRepository: GoogleCalendarRepository;
-  private mailgunRepository: MailgunRepository;
-  private settingsRepository: SettingsRepository;
-  private paymentRepository: PaymentRepository;
-
-  constructor(
-    classRepository?: ClassRepository,
-    mailgunRepository?: MailgunRepository,
-    settingsRepository?: SettingsRepository,
-    discordRepository?: DiscordRepository,
-    googleCalendarRepository?: GoogleCalendarRepository,
-    paymentRepository?: PaymentRepository,
-  ) {
-    this.classRepository = classRepository ?? new ClassRepository();
-    this.discordRepository = discordRepository ?? new DiscordRepository();
-    this.googleCalendarRepository = googleCalendarRepository ?? new GoogleCalendarRepository();
-    this.mailgunRepository = mailgunRepository ?? new MailgunRepository();
-    this.settingsRepository = settingsRepository ?? new SettingsRepository();
-    this.paymentRepository = paymentRepository ?? new PaymentRepository();
-  }
-
+export class ClassService extends BaseService {
   private async refund(booking: PaidBooking) {
     if (!booking.payment) return;
     await this.paymentRepository.refund(booking.payment);

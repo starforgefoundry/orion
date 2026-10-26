@@ -1,9 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('$env/dynamic/private', () => ({
-  env: { FILE_SIGNING_SECRET: 'test-secret' },
-}));
-
 import { signUrl, verifySignedUrl } from './signed_url';
 
 const BASE_URL = 'https://orion.test';

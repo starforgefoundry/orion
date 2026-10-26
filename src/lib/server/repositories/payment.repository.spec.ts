@@ -1,20 +1,22 @@
 import type { Database } from '$lib/server/db';
 import { schema } from '$lib/server/db/schema';
+import { SettingsRepository } from '$lib/server/repositories/settings.repository';
+import { SquareRepository } from '$lib/server/repositories/square.repository';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
+import { factory } from '$test/factory';
+import { automock, stubSettings } from '$test/utils';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, type Mocked } from 'vitest';
 import {
   PaymentDeclinedError,
   PaymentRepository,
   PaymentStateError,
   type NewPayment,
 } from './payment.repository';
-
-vi.mock('$env/dynamic/private', () => ({ env: {} }));
 
 const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../db/migrations');
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -37,13 +39,13 @@ const NEW_PAYMENT: NewPayment = {
   bill: BILL,
 };
 
-describe.skipIf(!TEST_DATABASE_URL)('PaymentRepository', () => {
+describe.skipIf(!TEST_DATABASE_URL)(PaymentRepository.name, () => {
   const admin = postgres(TEST_DATABASE_URL ?? '', { max: 1, onnotice: () => {} });
   const url = new URL(TEST_DATABASE_URL ?? 'postgres://localhost');
   url.pathname = `/${DATABASE_NAME}`;
   let sql: postgres.Sql;
   let db: Database;
-  let square: any;
+  let square: Mocked<SquareRepository>;
   let repository: PaymentRepository;
 
   beforeAll(async () => {
@@ -62,20 +64,20 @@ describe.skipIf(!TEST_DATABASE_URL)('PaymentRepository', () => {
 
   beforeEach(async () => {
     await db.delete(schema.payment);
-    square = {
-      upsertCustomer: vi.fn(async () => ({ id: 'customer-1' })),
-      createOrder: vi.fn(async () => ({ id: 'order-1' })),
-      createPayment: vi.fn(async ({ autocomplete }) => ({
-        id: 'square-payment-1',
-        status: autocomplete ? 'COMPLETED' : 'APPROVED',
-      })),
-      completePayment: vi.fn(),
-      cancelPayment: vi.fn(),
-      refundPayment: vi.fn(),
-      cancelInvoice: vi.fn(),
-    };
-    const settings = { getSetting: vi.fn(async () => ({ locationId: 'location-1' })) };
-    repository = new PaymentRepository(db, undefined, square, settings as any);
+    square = automock(SquareRepository);
+    square.upsertCustomer.mockResolvedValue(factory.squareCustomer({ id: 'customer-1' }));
+    square.createOrder.mockResolvedValue(factory.squareOrder({ id: 'order-1' }));
+    square.createPayment.mockImplementation(async ({ autocomplete }) => ({
+      id: 'square-payment-1',
+      status: autocomplete ? 'COMPLETED' : 'APPROVED',
+    }));
+    square.completePayment.mockResolvedValue(undefined);
+    square.cancelPayment.mockResolvedValue(undefined);
+    square.refundPayment.mockResolvedValue(undefined);
+    square.cancelInvoice.mockResolvedValue(undefined);
+    const settings = automock(SettingsRepository);
+    stubSettings(settings, { printRequestSquare: { locationId: 'location-1' } });
+    repository = new PaymentRepository(db, undefined, square, settings);
   });
 
   describe('save', () => {
@@ -218,7 +220,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PaymentRepository', () => {
 
       const paid = await repository.pay(stale, 'card-token');
 
-      expect(square.createPayment.mock.calls[0][0].amountMoney.amount).toBe(500n);
+      expect(square.createPayment.mock.calls[0][0].amountMoney?.amount).toBe(500n);
       expect(paid?.total).toBe(500);
     });
 
