@@ -23,13 +23,17 @@ describe('renderTemplate', () => {
 
 describe('unknownVariables', () => {
   it('accepts the variables the template documents', () => {
-    expect(unknownVariables('print_pickup', '{{projectName}} {{ statusURL }}')).toEqual([]);
+    expect(
+      unknownVariables('print_pickup', { subject: '{{projectName}}', body: '{{ statusURL }}' }),
+    ).toEqual([]);
   });
 
-  it('lists each variable the template does not know once', () => {
-    expect(unknownVariables('print_pickup', '{{customerName}} {{customerName}} {{typo}}')).toEqual([
-      'customerName',
-      'typo',
-    ]);
+  it('lists each variable the template does not know once across subject and body', () => {
+    expect(
+      unknownVariables('print_pickup', {
+        subject: '{{customerName}}',
+        body: '{{customerName}} {{typo}}',
+      }),
+    ).toEqual(['customerName', 'typo']);
   });
 });

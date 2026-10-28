@@ -10,7 +10,7 @@ describe('MailgunRepository.sendTemplate', () => {
     templates.get.mockResolvedValue(
       template ? { key: 'print_pickup', ...template } : (undefined as never),
     );
-    const fetch = vi.fn(async () => new Response());
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response());
     vi.stubGlobal('fetch', fetch);
     return { fetch, repository: new MailgunRepository(templates) };
   }
@@ -25,8 +25,7 @@ describe('MailgunRepository.sendTemplate', () => {
 
     await repository.sendTemplate('a@b.com', 'from', 'reply', 'print_pickup', VARIABLES);
 
-    const body = (fetch.mock.calls[0] as unknown as [string, RequestInit])[1]
-      .body as URLSearchParams;
+    const body = fetch.mock.calls[0][1]?.body as URLSearchParams;
     expect(body.get('subject')).toBe('Ready - Robot Arm');
     expect(body.get('html')).toBe('<a href="https://x">Robot Arm</a>');
   });

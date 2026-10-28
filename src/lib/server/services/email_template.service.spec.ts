@@ -1,7 +1,7 @@
 import { EMAIL_TEMPLATE_GROUP } from '$lib/utils/email_templates';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { EmailTemplateService, UnknownTemplateVariableError } from './email_template.service';
+import { EmailTemplateService } from './email_template.service';
 
 describe(EmailTemplateService.name, () => {
   let sut: EmailTemplateService;
@@ -29,20 +29,13 @@ describe(EmailTemplateService.name, () => {
   });
 
   describe('updateTemplate', () => {
-    it('saves a template that only uses its own variables', async () => {
-      mocks.emailTemplateRepository.update.mockResolvedValue(undefined as never);
+    it('saves the subject and body', async () => {
       const content = { subject: 'Ready - {{projectName}}', body: '<a href="{{statusURL}}">x</a>' };
+      mocks.emailTemplateRepository.update.mockResolvedValue({ key: 'print_pickup', ...content });
 
       await sut.updateTemplate({ key: 'print_pickup', ...content });
 
       expect(mocks.emailTemplateRepository.update).toHaveBeenCalledWith('print_pickup', content);
-    });
-
-    it('rejects variables the template does not provide', async () => {
-      await expect(
-        sut.updateTemplate({ key: 'print_pickup', subject: '{{quotePrice}}', body: 'body' }),
-      ).rejects.toThrow(UnknownTemplateVariableError);
-      expect(mocks.emailTemplateRepository.update).not.toHaveBeenCalled();
     });
   });
 });

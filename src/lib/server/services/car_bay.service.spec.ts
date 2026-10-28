@@ -432,7 +432,7 @@ describe(CarBayService.name, () => {
         'jane@example.com',
         expect.any(String),
         expect.any(String),
-        'payment_request',
+        'car_bay_overrun',
         expect.objectContaining({
           total: '40.00',
           paymentUrl: `https://orion.example.com/pay/${payment.id}`,

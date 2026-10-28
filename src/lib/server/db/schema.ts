@@ -18,6 +18,7 @@ import {
   type BillingDiscount,
   type BillingLineItem,
 } from '../../utils/billing';
+import type { EmailTemplateKey } from '../../utils/email_templates';
 
 export const user = pgTable('user', {
   email: text('email').notNull().unique().primaryKey(),
@@ -189,7 +190,7 @@ export const squareWebhookLog = pgTable('square_webhook_log', {
 export type SquareWebhookLog = InferSelectModel<typeof squareWebhookLog>;
 
 export const emailTemplate = pgTable('email_template', {
-  key: text('key').notNull().primaryKey(),
+  key: text('key').$type<EmailTemplateKey>().notNull().primaryKey(),
   subject: text('subject').notNull(),
   body: text('body').notNull(),
 });

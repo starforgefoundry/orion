@@ -53,6 +53,17 @@ const CAR_BAY_WHEN: TemplateVariable = {
   description: 'When the booking starts and ends',
   example: 'Saturday, March 7, 1:00 PM – 4:00 PM',
 };
+const ONBOARDING_VARIABLES = {
+  memberName: { description: 'Name of the member', example: 'Jane Doe' },
+  introMessage: {
+    description: 'Opening line, which depends on how the member joined',
+    example: 'Thanks for becoming a member of Starforge Foundry!',
+  },
+  onboardingUrl: {
+    description: 'Link to sign the waiver and add the pass',
+    example: 'https://orion.starforgefoundry.com/member/onboard/example',
+  },
+} as const satisfies Record<string, TemplateVariable>;
 
 export const EMAIL_TEMPLATE_DEFINITIONS = {
   print_submitted: {
@@ -146,45 +157,35 @@ export const EMAIL_TEMPLATE_DEFINITIONS = {
       bookingUrl: BOOKING_URL,
     },
   },
-  member_onboarding: {
-    name: 'Member Onboarding',
-    description: 'Sent when a member needs to sign the waiver and set up their pass.',
+  member_welcome: {
+    name: 'New Member Welcome',
+    description: 'Sent to new members to sign the waiver and set up their pass.',
     group: EMAIL_TEMPLATE_GROUP.MEMBERS,
-    variables: {
-      subject: {
-        description: 'Suggested subject, which differs for new and existing members',
-        example: 'Welcome to Starforge Foundry',
-      },
-      memberName: { description: 'Name of the member', example: 'Jane Doe' },
-      introMessage: {
-        description: 'Opening line, which depends on how the member joined',
-        example: 'Thanks for becoming a member of Starforge Foundry!',
-      },
-      setupMessage: {
-        description: 'Setup instructions, which differ for new and existing members',
-        example: 'Before your first visit, finish setting up your access. It only takes a minute.',
-      },
-      onboardingUrl: {
-        description: 'Link to sign the waiver and add the pass',
-        example: 'https://orion.starforgefoundry.com/member/onboard/example',
-      },
-    },
+    variables: ONBOARDING_VARIABLES,
   },
-  payment_request: {
-    name: 'Payment Request',
-    description: 'Sent for organization balances and car bay overruns.',
+  member_pass_setup: {
+    name: 'Member Pass Setup',
+    description: 'Sent to existing members when staff or the member request the pass link.',
+    group: EMAIL_TEMPLATE_GROUP.MEMBERS,
+    variables: ONBOARDING_VARIABLES,
+  },
+  organization_balance: {
+    name: 'Organization Balance Due',
+    description: "Sent when staff request payment for an organization's outstanding balance.",
     group: EMAIL_TEMPLATE_GROUP.PAYMENTS,
     variables: {
-      subject: {
-        description:
-          'Suggested subject, which differs for organization balances and car bay overruns',
-        example: 'Car Bay Overrun Payment',
-      },
-      customerName: { ...CUSTOMER_NAME, description: 'Name of the customer or organization' },
-      description: {
-        description: 'What the payment is for',
-        example: 'car bay overrun on March 2',
-      },
+      organizationName: { description: 'Name of the organization', example: 'Acme Robotics' },
+      total: DOLLARS_DUE,
+      paymentUrl: PAYMENT_URL,
+    },
+  },
+  car_bay_overrun: {
+    name: 'Car Bay Overrun Payment',
+    description: 'Sent when staff bill a car bay booking for staying past its end time.',
+    group: EMAIL_TEMPLATE_GROUP.PAYMENTS,
+    variables: {
+      customerName: CUSTOMER_NAME,
+      bookingEndDate: { description: 'Day the booking was due to end', example: 'March 2' },
       total: DOLLARS_DUE,
       paymentUrl: PAYMENT_URL,
     },
@@ -202,6 +203,8 @@ export type Templates = {
 
 export const EMAIL_TEMPLATE_KEYS = Object.keys(EMAIL_TEMPLATE_DEFINITIONS) as EmailTemplateKey[];
 
+export type TemplateContent = { subject: string; body: string };
+
 const VARIABLE_PATTERN = /\{\{\s*([^}]*?)\s*\}\}/g;
 
 export function variableToken(name: string) {
@@ -212,15 +215,19 @@ export function renderTemplate(text: string, variables: Record<string, string>) 
   return text.replace(VARIABLE_PATTERN, (token, name: string) => variables[name] ?? token);
 }
 
-export function exampleVariables(key: EmailTemplateKey): Record<string, string> {
+export function templateVariables(key: EmailTemplateKey) {
   const variables: Record<string, TemplateVariable> = EMAIL_TEMPLATE_DEFINITIONS[key].variables;
-  return Object.fromEntries(
-    Object.entries(variables).map(([name, variable]) => [name, variable.example]),
-  );
+  return Object.entries(variables).map(([name, variable]) => ({
+    ...variable,
+    name,
+    token: variableToken(name),
+  }));
 }
 
-export function unknownVariables(key: EmailTemplateKey, text: string) {
+export function unknownVariables(key: EmailTemplateKey, content: TemplateContent) {
   const known = Object.keys(EMAIL_TEMPLATE_DEFINITIONS[key].variables);
-  const used = [...text.matchAll(VARIABLE_PATTERN)].map(([, name]) => name);
+  const used = [content.subject, content.body].flatMap((text) =>
+    [...text.matchAll(VARIABLE_PATTERN)].map(([, name]) => name),
+  );
   return [...new Set(used.filter((name) => !known.includes(name)))];
 }

@@ -27,7 +27,6 @@ import { DateTime } from 'luxon';
 export const ORGANIZATION_NOT_FOUND = 'Organization not found';
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
 const BALANCE_LINE_ITEM_NAME = 'Organization Balance Payment';
-const BALANCE_DESCRIPTION = "your organization's outstanding balance";
 const OWED_STATUSES = new Set<PaymentStatus>([
   PAYMENT_STATUS.PENDING,
   PAYMENT_STATUS.PROCESSING,
@@ -225,11 +224,9 @@ export class OrganizationService extends BaseService {
       organization.email,
       foundrySender(),
       publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
-      'payment_request',
+      'organization_balance',
       {
-        subject: 'Starforge Organization Balance Due',
-        customerName: organization.name,
-        description: BALANCE_DESCRIPTION,
+        organizationName: organization.name,
         total: centsToDollars(payment.total),
         paymentUrl: payUrl(payment),
       },

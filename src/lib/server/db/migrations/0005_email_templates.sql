@@ -162,11 +162,11 @@ INSERT INTO "email_template" ("key", "subject", "body") VALUES ('car_bay_reminde
 <p>Starforge Foundry</p>
 $tpl$);
 --> statement-breakpoint
-INSERT INTO "email_template" ("key", "subject", "body") VALUES ('member_onboarding', '{{subject}}', $tpl$<h3>Howdy, {{memberName}}!</h3>
+INSERT INTO "email_template" ("key", "subject", "body") VALUES ('member_welcome', 'Welcome to Starforge Foundry', $tpl$<h3>Howdy, {{memberName}}!</h3>
 
 <p>{{introMessage}}</p>
 
-<p>{{setupMessage}}</p>
+<p>Before your first visit, finish setting up your access. It only takes a minute: sign the liability waiver if you haven't already, then add your member pass to your phone. Scan the pass at the front door kiosk each time you visit.</p>
 
 <p>
   <a href="{{onboardingUrl}}">Set Up My Pass</a>
@@ -179,9 +179,44 @@ INSERT INTO "email_template" ("key", "subject", "body") VALUES ('member_onboardi
 <p>Starforge Foundry</p>
 $tpl$);
 --> statement-breakpoint
-INSERT INTO "email_template" ("key", "subject", "body") VALUES ('payment_request', '{{subject}}', $tpl$<h3>Howdy, {{customerName}}!</h3>
+INSERT INTO "email_template" ("key", "subject", "body") VALUES ('member_pass_setup', 'Set up your Starforge Foundry member pass', $tpl$<h3>Howdy, {{memberName}}!</h3>
 
-<p>You have a payment due to Starforge for {{description}}.</p>
+<p>{{introMessage}}</p>
+
+<p>Set up your pass before your next visit. It only takes a minute: sign the liability waiver if you haven't already, then add the pass to your phone. From then on, scan it at the front door kiosk to check in.</p>
+
+<p>
+  <a href="{{onboardingUrl}}">Set Up My Pass</a>
+</p>
+
+<p>If you have any questions, feel free to reply to this email.</p>
+
+<p>Thanks!</p>
+
+<p>Starforge Foundry</p>
+$tpl$);
+--> statement-breakpoint
+INSERT INTO "email_template" ("key", "subject", "body") VALUES ('organization_balance', 'Starforge Organization Balance Due', $tpl$<h3>Howdy, {{organizationName}}!</h3>
+
+<p>You have a payment due to Starforge for your organization's outstanding balance.</p>
+
+<p><strong>Total due: ${{total}}</strong></p>
+
+<p>
+  You can see what the charge covers and pay with a card here:
+  <a href="{{paymentUrl}}">Pay Now</a>
+</p>
+
+<p>If you have any questions, feel free to reply to this email.</p>
+
+<p>Thanks!</p>
+
+<p>Starforge Foundry</p>
+$tpl$);
+--> statement-breakpoint
+INSERT INTO "email_template" ("key", "subject", "body") VALUES ('car_bay_overrun', 'Car Bay Overrun Payment', $tpl$<h3>Howdy, {{customerName}}!</h3>
+
+<p>You have a payment due to Starforge for a car bay overrun on {{bookingEndDate}}.</p>
 
 <p><strong>Total due: ${{total}}</strong></p>
 

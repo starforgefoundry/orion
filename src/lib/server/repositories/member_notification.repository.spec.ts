@@ -31,12 +31,10 @@ describe('MemberNotificationRepository.sendOnboarding', () => {
       'sam@example.com',
       'Starforge Foundry <contact@starforgefoundry.com>',
       'contact@starforgefoundry.com',
-      'member_onboarding',
+      'member_welcome',
       {
-        subject: 'Welcome to Starforge Foundry',
         memberName: 'Sam &lt;Smith&gt;',
         introMessage: 'Thanks for picking up a day pass at Starforge Foundry!',
-        setupMessage: expect.stringContaining('Before your first visit'),
         onboardingUrl: 'https://orion.example.com/member/onboard/onboarding-abc',
       },
     );
@@ -44,7 +42,7 @@ describe('MemberNotificationRepository.sendOnboarding', () => {
   });
 
   it.each(['manual', 'self_service'] as const)(
-    'sends existing-member copy for %s sends',
+    'sends the existing-member template for %s sends',
     async (trigger) => {
       const { mailgun, repository } = setup();
 
@@ -54,11 +52,8 @@ describe('MemberNotificationRepository.sendOnboarding', () => {
         expect.anything(),
         expect.anything(),
         expect.anything(),
-        'member_onboarding',
-        expect.objectContaining({
-          subject: 'Set up your Starforge Foundry member pass',
-          setupMessage: expect.stringContaining('before your next visit'),
-        }),
+        'member_pass_setup',
+        expect.anything(),
       );
     },
   );
