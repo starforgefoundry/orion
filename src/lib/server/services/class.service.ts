@@ -8,6 +8,7 @@ import type {
   CreateInstanceDto,
   GenerateInstancesDto,
   ManualBookClassDto,
+  RescheduleBookingDto,
   UpdateInstanceDto,
   UpsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
@@ -36,12 +37,14 @@ import {
   CLASS_BOOKING_STATUS,
   CLASS_DATE_FORMAT,
   CLASS_INSTANCE_STATUS,
+  classHasStarted,
   classStartsAt,
   formatClassTime,
 } from '$lib/utils/classes';
 import { DateTime, Duration } from 'luxon';
 
 const PAYMENT_FAILED_MESSAGE = 'Payment failed';
+const FULLY_BOOKED_MESSAGE = 'This class is fully booked';
 const CLASS_EMAIL = 'classes@starforgefoundry.com';
 const CLASS_SENDER = `Starforge Classes <${CLASS_EMAIL}>`;
 export const CLASS_REMINDER_LEAD = Duration.fromObject({ hours: 24 });
@@ -307,24 +310,9 @@ export class ClassService extends BaseService {
     const catalog = instance.catalog;
     if (!catalog) throw new Error('Class not found');
 
-    // Verify the instance start time is in the future
-    const now = DateTime.now().setZone(SPACE_ZONE);
-    const instanceStart = DateTime.fromISO(`${instance.date}T${instance.startTime}`, {
-      zone: SPACE_ZONE,
-    });
-    if (instanceStart <= now) {
-      throw new Error('Cannot book a class in the past');
-    }
+    if (classHasStarted(instance)) throw new Error('Cannot book a class in the past');
 
-    // Check seat availability
-    const confirmedCount = await this.classRepository.getConfirmedBookingCount(dto.instanceId);
-    if (confirmedCount + dto.quantity > instance.seats) {
-      throw new Error(
-        confirmedCount >= instance.seats
-          ? 'This class is fully booked'
-          : `Only ${instance.seats - confirmedCount} spot${instance.seats - confirmedCount !== 1 ? 's' : ''} remaining`,
-      );
-    }
+    await this.assertSeatsAvailable(instance, dto.quantity);
 
     const formattedDate = DateTime.fromISO(instance.date, { zone: SPACE_ZONE }).toFormat(
       'MMM d, yyyy',
@@ -366,14 +354,12 @@ export class ClassService extends BaseService {
       throw error;
     }
 
-    // Re-check booking count after insert (overbooking prevention)
-    const newCount = await this.classRepository.getConfirmedBookingCount(dto.instanceId);
-    if (newCount > instance.seats) {
+    if (await this.isOverbooked(instance)) {
       await this.classRepository.updateBooking(booking.id, {
         status: CLASS_BOOKING_STATUS.CANCELED,
       });
       await this.paymentRepository.void(authorized);
-      throw new Error('This class is fully booked');
+      throw new Error(FULLY_BOOKED_MESSAGE);
     }
 
     try {
@@ -395,6 +381,28 @@ export class ClassService extends BaseService {
     runInBackground(this.syncInstanceToCalendar(dto.instanceId), 'sync booking change to calendar');
 
     return booking;
+  }
+
+  private async assertSeatsAvailable(
+    instance: Pick<ClassInstance, 'id' | 'seats'>,
+    quantity: number,
+    confirmedCount?: number,
+  ) {
+    const booked =
+      confirmedCount ?? (await this.classRepository.getConfirmedBookingCount(instance.id));
+    if (booked + quantity <= instance.seats) return;
+
+    const remaining = instance.seats - booked;
+    throw new Error(
+      remaining <= 0
+        ? FULLY_BOOKED_MESSAGE
+        : `Only ${remaining} spot${remaining !== 1 ? 's' : ''} remaining`,
+    );
+  }
+
+  private async isOverbooked(instance: Pick<ClassInstance, 'id' | 'seats'>) {
+    const booked = await this.classRepository.getConfirmedBookingCount(instance.id);
+    return booked > instance.seats;
   }
 
   private async customerColumns(dto: CustomerDetails) {
@@ -451,21 +459,66 @@ export class ClassService extends BaseService {
     return { success: true };
   }
 
+  async rescheduleBooking(dto: RescheduleBookingDto) {
+    const booking = await this.classRepository.getBookingById(dto.bookingId);
+    if (!booking || !booking.instance) throw new Error('Booking not found');
+    if (booking.status === CLASS_BOOKING_STATUS.CANCELED)
+      throw new Error('Booking is already canceled');
+    if (booking.instanceId === dto.targetInstanceId)
+      throw new Error('Booking is already in this class session');
+
+    const target = await this.classRepository.getInstanceById(dto.targetInstanceId);
+    if (!target) throw new Error('Class session not found');
+    if (target.classId !== booking.instance.classId)
+      throw new Error('Bookings can only move to a session of the same class');
+    if (target.status !== CLASS_INSTANCE_STATUS.SCHEDULED)
+      throw new Error('This class has been canceled');
+    if (classHasStarted(target)) throw new Error('Cannot move a booking to a class in the past');
+
+    const targetBookings = await this.classRepository.getConfirmedBookingsForInstance(target.id);
+    const customerEmail = booking.customerEmail.toLowerCase();
+    if (targetBookings.some((b) => b.customerEmail.toLowerCase() === customerEmail))
+      throw new Error('Customer is already booked in that session');
+
+    const confirmedCount = targetBookings.reduce((total, b) => total + b.quantity, 0);
+    await this.assertSeatsAvailable(target, booking.quantity, confirmedCount);
+
+    const updated = await this.classRepository.updateBooking(booking.id, {
+      instanceId: target.id,
+      reminderSentDate: null,
+    });
+
+    if (await this.isOverbooked(target)) {
+      await this.classRepository.updateBooking(booking.id, {
+        instanceId: booking.instanceId,
+        reminderSentDate: booking.reminderSentDate,
+      });
+      throw new Error(FULLY_BOOKED_MESSAGE);
+    }
+
+    runInBackground(
+      this.sendBookingConfirmationEmail(booking.id),
+      'send rescheduled booking email',
+    );
+    runInBackground(
+      this.syncInstanceToCalendar(booking.instanceId),
+      'sync rescheduled booking source to calendar',
+    );
+    runInBackground(
+      this.syncInstanceToCalendar(target.id),
+      'sync rescheduled booking target to calendar',
+    );
+
+    return { booking: updated, previousInstanceId: booking.instanceId };
+  }
+
   async manualBookClass(dto: ManualBookClassDto) {
     const instance = await this.classRepository.getInstanceById(dto.instanceId);
     if (!instance) throw new Error('Class not found');
     if (instance.status !== CLASS_INSTANCE_STATUS.SCHEDULED)
       throw new Error('This class has been canceled');
 
-    // Check seat availability
-    const confirmedCount = await this.classRepository.getConfirmedBookingCount(dto.instanceId);
-    if (confirmedCount + dto.quantity > instance.seats) {
-      throw new Error(
-        confirmedCount >= instance.seats
-          ? 'This class is fully booked'
-          : `Only ${instance.seats - confirmedCount} spot${instance.seats - confirmedCount !== 1 ? 's' : ''} remaining`,
-      );
-    }
+    await this.assertSeatsAvailable(instance, dto.quantity);
 
     // Create booking with no payment
     const booking = await this.classRepository.createBooking({
@@ -475,13 +528,11 @@ export class ClassService extends BaseService {
       quantity: dto.quantity,
     });
 
-    // Re-check booking count after insert (overbooking prevention)
-    const newCount = await this.classRepository.getConfirmedBookingCount(dto.instanceId);
-    if (newCount > instance.seats) {
+    if (await this.isOverbooked(instance)) {
       await this.classRepository.updateBooking(booking.id, {
         status: CLASS_BOOKING_STATUS.CANCELED,
       });
-      throw new Error('This class is fully booked');
+      throw new Error(FULLY_BOOKED_MESSAGE);
     }
 
     runInBackground(this.syncInstanceToCalendar(dto.instanceId), 'sync manual booking to calendar');

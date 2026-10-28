@@ -17,12 +17,15 @@
   } from '$lib/remotes/endpoints/class.remote';
   import BanIcon from '@lucide/svelte/icons/ban';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
+  import CalendarClockIcon from '@lucide/svelte/icons/calendar-clock';
   import TrashIcon from '@lucide/svelte/icons/trash';
   import UserPlusIcon from '@lucide/svelte/icons/user-plus';
   import { DateTime } from 'luxon';
   import { toast } from 'svelte-sonner';
   import AddBookingModal from './AddBookingModal.svelte';
   import CancelClassModal from './CancelClassModal.svelte';
+  import type { ReschedulableBooking } from './booking-reschedule.svelte';
+  import RescheduleBookingModal from './RescheduleBookingModal.svelte';
 
   interface Props extends ModalProps {
     instanceId: string;
@@ -82,6 +85,11 @@
         await getAllInstances().refresh();
       },
     });
+  }
+
+  function showRescheduleModal(booking: ReschedulableBooking) {
+    if (!detail) return;
+    modalManager.show(RescheduleBookingModal, { booking, classId: detail.classId });
   }
 
   function showCancelModal() {
@@ -170,16 +178,27 @@
                       {/if}
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    class="shrink-0 text-destructive hover:text-destructive"
-                    onclick={() => handleCancelBooking(booking)}
-                    disabled={cancelingBookingId === booking.id}
-                  >
-                    {#if cancelingBookingId === booking.id}<Spinner />{:else}<TrashIcon />{/if}
-                    {isPaid(booking) ? 'Cancel & Refund' : 'Cancel'}
-                  </Button>
+                  <div class="flex shrink-0 gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onclick={() => showRescheduleModal(booking)}
+                      disabled={cancelingBookingId === booking.id}
+                    >
+                      <CalendarClockIcon />
+                      Reschedule
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      class="text-destructive hover:text-destructive"
+                      onclick={() => handleCancelBooking(booking)}
+                      disabled={cancelingBookingId === booking.id}
+                    >
+                      {#if cancelingBookingId === booking.id}<Spinner />{:else}<TrashIcon />{/if}
+                      {isPaid(booking) ? 'Cancel & Refund' : 'Cancel'}
+                    </Button>
+                  </div>
                 </li>
               {/each}
             </ul>

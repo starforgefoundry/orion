@@ -20,6 +20,10 @@ export function classStartsAt(instance: Pick<ClassSchedule, 'date' | 'startTime'
   return DateTime.fromISO(`${instance.date}T${instance.startTime}`, { zone: SPACE_ZONE });
 }
 
+export function classHasStarted(instance: Pick<ClassSchedule, 'date' | 'startTime'>) {
+  return classStartsAt(instance) <= DateTime.now();
+}
+
 export function formatClassTime(instance: Pick<ClassSchedule, 'date' | 'startTime'>) {
   return classStartsAt(instance).toFormat(CLASS_TIME_FORMAT);
 }
