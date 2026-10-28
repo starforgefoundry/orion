@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import type { WalletProvider } from '$lib/remotes/dtos/onboarding.dto';
+  import type { WalletProvider } from '$lib/remotes/dtos/pass.dto';
   import { WALLET_LINKS, walletsForDevice } from './wallets';
 
   let { token, wallets }: { token: string; wallets: WalletProvider[] } = $props();

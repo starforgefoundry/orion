@@ -66,3 +66,24 @@ describe('MemberNotificationRepository.sendOnboarding', () => {
     expect(memberEmail.log).not.toHaveBeenCalled();
   });
 });
+
+describe('MemberNotificationRepository.sendDayPass', () => {
+  it('emails the day pass QR code and logs the send', async () => {
+    const { mailgun, memberEmail, repository } = setup();
+
+    await repository.sendDayPass(MEMBER, factory.dayPass({ passToken: 'day-abc' }));
+
+    expect(mailgun.sendTemplate).toHaveBeenCalledWith(
+      'sam@example.com',
+      'Starforge Foundry <contact@starforgefoundry.com>',
+      'contact@starforgefoundry.com',
+      'day_pass',
+      {
+        memberName: 'Sam &lt;Smith&gt;',
+        passUrl: 'https://orion.example.com/pass/day-abc',
+        passQrImageUrl: 'https://orion.example.com/api/pass/day-abc/qr',
+      },
+    );
+    expect(memberEmail.log).toHaveBeenCalledWith('member-1', 'day_pass', 'day_pass');
+  });
+});

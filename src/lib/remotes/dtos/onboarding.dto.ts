@@ -1,12 +1,5 @@
 import * as v from 'valibot';
 
-export const WALLET_PROVIDER = {
-  APPLE: 'apple',
-  GOOGLE: 'google',
-} as const;
-
-export type WalletProvider = (typeof WALLET_PROVIDER)[keyof typeof WALLET_PROVIDER];
-
 export const submitOnboardingWaiverDto = v.object({
   token: v.pipe(v.string(), v.minLength(1)),
   name: v.pipe(v.string(), v.trim(), v.minLength(1)),
@@ -23,13 +16,8 @@ export const requestPassEmailDto = v.object({
   email: v.pipe(v.string(), v.trim(), v.email()),
 });
 
-export type MemberPassDto = {
+export type OnboardingDto = {
   name: string;
-  passUrl: string;
-  wallets: WalletProvider[];
-};
-
-export type OnboardingDto = MemberPassDto & {
   email: string;
   passToken: string;
   hasWaiver: boolean;

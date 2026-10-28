@@ -28,6 +28,8 @@ const CUSTOMER = {
   isMember: true,
 };
 
+const CUSTOMER_MEMBER = factory.member({ name: 'Jane Doe', email: 'jane@example.com' });
+
 const QUICK_JOB = { tier: 'quick_job', date: MONDAY, startHour: 16 } as const;
 
 function at(iso: string) {
@@ -98,6 +100,7 @@ describe(CarBayService.name, () => {
   }
 
   function stubCreateBooking() {
+    mocks.memberRepository.upsertByEmail.mockResolvedValue(CUSTOMER_MEMBER);
     mocks.carBayRepository.create.mockImplementation(async (data) =>
       bookingRow(data as Partial<CarBayBooking>),
     );
@@ -243,8 +246,8 @@ describe(CarBayService.name, () => {
       );
     });
 
-    it('sends a confirmation email', async () => {
-      await sut.book(dto, NOW);
+    it('sends a confirmation email with the car bay pass', async () => {
+      const booking = await sut.book(dto, NOW);
 
       await vi.waitFor(() =>
         expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
@@ -252,8 +255,24 @@ describe(CarBayService.name, () => {
           expect.any(String),
           expect.any(String),
           'car_bay_booking',
-          expect.objectContaining({ amountPaid: '12.00' }),
+          expect.objectContaining({
+            amountPaid: '12.00',
+            passUrl: `https://orion.example.com/pass/${booking.passToken}`,
+            passQrImageUrl: `https://orion.example.com/api/pass/${booking.passToken}/qr`,
+          }),
         ),
+      );
+    });
+
+    it('links the booking to the member so the kiosk can find their waiver', async () => {
+      await sut.book(dto, NOW);
+
+      expect(mocks.memberRepository.upsertByEmail).toHaveBeenCalledWith(
+        'Jane Doe',
+        'jane@example.com',
+      );
+      expect(mocks.carBayRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ memberId: CUSTOMER_MEMBER.id }),
       );
     });
   });
@@ -455,6 +474,24 @@ describe(CarBayService.name, () => {
       mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
       mocks.carBayRepository.update.mockImplementation(async (id, updates) =>
         bookingRow({ id, ...(updates as Partial<CarBayBooking>) }),
+      );
+    });
+
+    it('includes the car bay pass', async () => {
+      const booking = storedBooking({ createdDate: NOW.minus({ days: 3 }) });
+      mocks.carBayRepository.getReminderCandidates.mockResolvedValue([booking]);
+
+      await sut.sendDueReminders(NOW);
+
+      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
+        'jane@example.com',
+        expect.any(String),
+        expect.any(String),
+        'car_bay_reminder',
+        expect.objectContaining({
+          passUrl: `https://orion.example.com/pass/${booking.passToken}`,
+          passQrImageUrl: `https://orion.example.com/api/pass/${booking.passToken}/qr`,
+        }),
       );
     });
 

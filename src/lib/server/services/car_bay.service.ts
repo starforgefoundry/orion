@@ -18,6 +18,7 @@ import { PaymentDeclinedError } from '$lib/server/repositories/payment.repositor
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { hasMembership } from '$lib/server/utils/member_access';
+import { passLinks } from '$lib/server/utils/member_links';
 import { payUrl } from '$lib/server/utils/payment_links';
 import {
   amountPaid,
@@ -161,6 +162,7 @@ export class CarBayService extends BaseService {
       customerEmail: booking.customerEmail,
       amountPaid: amountPaid(booking.payment),
       refundable: rules.isRefundable(booking.startAt, now),
+      passToken: booking.passToken,
     };
   }
 
@@ -259,7 +261,7 @@ export class CarBayService extends BaseService {
         startAt: period.startAt,
         endAt: period.endAt,
         blockedUntil: rules.blockedUntil(period.endAt),
-        ...this.customerColumns({ ...dto, isMember }),
+        ...(await this.customerColumns({ ...dto, isMember })),
         paymentId: authorized.id,
       });
     } catch (error) {
@@ -294,7 +296,7 @@ export class CarBayService extends BaseService {
       startAt: period.startAt,
       endAt: period.endAt,
       blockedUntil: rules.blockedUntil(period.endAt),
-      ...this.customerColumns(dto),
+      ...(await this.customerColumns(dto)),
       createdByEmail: staffEmail,
     });
 
@@ -305,8 +307,10 @@ export class CarBayService extends BaseService {
     return toView(booking, null);
   }
 
-  private customerColumns(dto: CustomerDetails) {
+  private async customerColumns(dto: CustomerDetails) {
+    const member = await this.memberRepository.upsertByEmail(dto.customerName, dto.customerEmail);
     return {
+      memberId: member.id,
       isMember: dto.isMember,
       customerName: dto.customerName,
       customerEmail: dto.customerEmail,
@@ -404,6 +408,7 @@ export class CarBayService extends BaseService {
             tierName: CAR_BAY_TIER_NAMES[booking.tier],
             bookingWhen: formatPeriod(booking),
             bookingUrl: this.bookingUrl(booking),
+            ...passLinks(booking),
           },
         );
         await this.carBayRepository.update(booking.id, { reminderSentDate: now });
@@ -435,6 +440,7 @@ export class CarBayService extends BaseService {
         refundCutoffHours: policy.refundCutoffHours.toString(),
         storageDays: policy.storageDays.toString(),
         bookingUrl: this.bookingUrl(booking),
+        ...passLinks(booking),
       },
     );
   }

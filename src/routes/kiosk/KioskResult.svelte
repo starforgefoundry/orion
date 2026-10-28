@@ -1,6 +1,10 @@
 <script lang="ts">
   import { cn } from '$lib/frontend/cn';
-  import { KIOSK_CHECK_IN_STATUS, type AdmittedBasis } from '$lib/remotes/dtos/kiosk.dto';
+  import {
+    KIOSK_CHECK_IN_STATUS,
+    type AdmittedBasis,
+    type KioskDenialReason,
+  } from '$lib/remotes/dtos/kiosk.dto';
   import CircleAlertIcon from '@lucide/svelte/icons/circle-alert';
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
   import CircleXIcon from '@lucide/svelte/icons/circle-x';
@@ -17,6 +21,15 @@
     subscription: 'Membership',
     organization: 'Organization membership',
     day_pass: 'Day pass',
+    class: 'Class',
+    car_bay: 'Car bay',
+  };
+
+  const DENIAL_DETAILS: Record<KioskDenialReason, string> = {
+    no_access: 'No active membership — please see staff',
+    not_today: "This pass isn't for today — please see staff",
+    canceled: 'This booking was canceled — please see staff',
+    already_used: 'This day pass was already used — please see staff',
   };
 
   const view = $derived.by(() => {
@@ -26,14 +39,16 @@
           icon: CircleCheckIcon,
           tone: 'bg-success text-success-foreground',
           title: `Welcome, ${result.name}!`,
-          detail: BASIS_LABELS[result.basis],
+          detail: result.detail
+            ? `${BASIS_LABELS[result.basis]}: ${result.detail}`
+            : BASIS_LABELS[result.basis],
         };
       case KIOSK_CHECK_IN_STATUS.DENIED:
         return {
           icon: CircleXIcon,
           tone: 'bg-destructive text-white',
           title: `Sorry, ${result.name}`,
-          detail: 'No active membership — please see staff',
+          detail: DENIAL_DETAILS[result.reason],
         };
       case KIOSK_CHECK_IN_STATUS.UNKNOWN_PASS:
         return {

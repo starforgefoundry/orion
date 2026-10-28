@@ -2,7 +2,6 @@
  * Convert a 24h "HH:mm" string to 12h format like "6:30 PM".
  */
 export function formatTime(time: string): string {
-  console.log('Formatting time:', time);
   const [h, m] = time.split(':').map(Number);
   const period = h >= 12 ? 'PM' : 'AM';
   const hour12 = h % 12 || 12;

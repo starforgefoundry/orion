@@ -146,4 +146,5 @@ export type CustomerCarBayBooking = {
   customerEmail: string;
   amountPaid: number;
   refundable: boolean;
+  passToken: string;
 };

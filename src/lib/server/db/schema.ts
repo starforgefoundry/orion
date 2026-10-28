@@ -1,11 +1,11 @@
-import { type InferSelectModel } from 'drizzle-orm';
+import { sql, type InferSelectModel } from 'drizzle-orm';
 import { boolean, foreignKey, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 import {
-  ACCESS_BASIS,
   enumValues,
   MEMBER_EMAIL_TRIGGER,
   MEMBER_EMAIL_TYPE,
   SUBSCRIPTION_STATUS,
+  VISIT_BASIS,
   VISIT_OUTCOME,
   VISIT_SOURCE,
   WAIVER_SOURCE,
@@ -19,6 +19,13 @@ import {
   type BillingLineItem,
 } from '../../utils/billing';
 import type { EmailTemplateKey } from '../../utils/email_templates';
+
+// A database default so rows that existed before passes were issued get a token too.
+const passTokenColumn = () =>
+  text('pass_token')
+    .notNull()
+    .unique()
+    .default(sql`gen_random_uuid()::text`);
 
 export const user = pgTable('user', {
   email: text('email').notNull().unique().primaryKey(),
@@ -366,6 +373,7 @@ export const dayPass = pgTable(
     squareOrderId: text('square_order_id').notNull(),
     purchasedDate: luxonTimestamp('purchased_date').notNull(),
     usedDate: text('used_date'), // YYYY-MM-DD in Central time
+    passToken: passTokenColumn(),
   },
   (table) => [
     index('day_pass_member_idx').on(table.memberId),
@@ -416,7 +424,7 @@ export const visit = pgTable(
       .$defaultFn(() => DateTime.now()),
     source: text('source', { enum: enumValues(VISIT_SOURCE) }).notNull(),
     accessBasis: text('access_basis', {
-      enum: enumValues(ACCESS_BASIS),
+      enum: enumValues(VISIT_BASIS),
     }).notNull(),
     outcome: text('outcome', {
       enum: enumValues(VISIT_OUTCOME),
@@ -523,6 +531,9 @@ export const classBooking = pgTable(
       .notNull()
       .$defaultFn(() => crypto.randomUUID()),
     quantity: integer('quantity').notNull().default(1),
+    memberId: text('member_id').references(() => member.id),
+    passToken: passTokenColumn(),
+    reminderSentDate: luxonTimestamp('reminder_sent_date'),
     createdDate: luxonTimestamp('created_date')
       .notNull()
       .$defaultFn(() => DateTime.now()),
@@ -558,6 +569,8 @@ export const carBayBooking = pgTable(
       .notNull()
       .$defaultFn(() => crypto.randomUUID()),
     reminderSentDate: luxonTimestamp('reminder_sent_date'),
+    memberId: text('member_id').references(() => member.id),
+    passToken: passTokenColumn(),
     createdDate: luxonTimestamp('created_date')
       .notNull()
       .$defaultFn(() => DateTime.now()),

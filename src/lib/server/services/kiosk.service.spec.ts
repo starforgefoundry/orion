@@ -1,5 +1,6 @@
 import { KIOSK_CHECK_IN_STATUS } from '$lib/remotes/dtos/kiosk.dto';
-import type { DayPass } from '$lib/server/db/schema';
+import type { CarBayBooking, ClassBooking, ClassInstance, DayPass } from '$lib/server/db/schema';
+import type { ClassPass, IssuedPass } from '$lib/server/repositories/pass.repository';
 import type { MemberAccessContext } from '$lib/server/utils/member_access';
 import { factory } from '$test/factory';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
@@ -25,6 +26,26 @@ function dayPass(overrides: Partial<DayPass> = {}) {
   });
 }
 
+const membershipPass = factory.membershipPass({ member });
+
+function classPass(
+  instanceOverrides: Partial<ClassInstance> = {},
+  bookingOverrides: Partial<ClassBooking> = {},
+): ClassPass {
+  return factory.classPass({
+    passToken: 'class-token',
+    member,
+    booking: factory.classBooking({
+      memberId: member.id,
+      customerName: member.name,
+      customerEmail: member.email,
+      ...bookingOverrides,
+    }),
+    instance: factory.classInstance({ date: TODAY, ...instanceOverrides }),
+    catalog: factory.classCatalog({ name: 'Intro to Welding' }),
+  });
+}
+
 function context(overrides: Partial<MemberAccessContext> = {}): MemberAccessContext {
   return {
     member,
@@ -42,7 +63,7 @@ describe(KioskService.name, () => {
 
   beforeEach(() => {
     ({ sut, mocks } = newTestService(KioskService));
-    mocks.memberRepository.getByPassToken.mockResolvedValue(member);
+    mocks.passRepository.getByToken.mockResolvedValue(membershipPass);
     mocks.memberRepository.getAccessContext.mockResolvedValue(context());
     mocks.visitRepository.create.mockResolvedValue(factory.visit({ memberId: member.id }));
     mocks.dayPassRepository.markUsed.mockResolvedValue();
@@ -53,11 +74,11 @@ describe(KioskService.name, () => {
     it('reads the pass token out of a scanned pass URL', async () => {
       await sut.checkIn(`https://example.com/pass/${member.passToken}?ref=qr`, NOW);
 
-      expect(mocks.memberRepository.getByPassToken).toHaveBeenCalledWith(member.passToken);
+      expect(mocks.passRepository.getByToken).toHaveBeenCalledWith(member.passToken);
     });
 
     it('reports unknown passes without recording a visit', async () => {
-      mocks.memberRepository.getByPassToken.mockResolvedValue(undefined as never);
+      mocks.passRepository.getByToken.mockResolvedValue(undefined);
 
       const result = await sut.checkIn('nope', NOW);
 
@@ -99,7 +120,11 @@ describe(KioskService.name, () => {
     it('denies members without any access', async () => {
       const result = await sut.checkIn(member.passToken, NOW);
 
-      expect(result).toEqual({ status: KIOSK_CHECK_IN_STATUS.DENIED, name: member.name });
+      expect(result).toEqual({
+        status: KIOSK_CHECK_IN_STATUS.DENIED,
+        name: member.name,
+        reason: 'no_access',
+      });
       expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith({
         memberId: member.id,
         source: 'kiosk',
@@ -159,6 +184,180 @@ describe(KioskService.name, () => {
     });
   });
 
+  describe('checkIn with a day pass ticket', () => {
+    function ticket(overrides: Partial<DayPass> = {}): IssuedPass {
+      return factory.dayPassTicket({ passToken: 'day-token', member, dayPass: dayPass(overrides) });
+    }
+
+    it('uses that day pass', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(ticket({ id: 'scanned-pass' }));
+
+      const result = await sut.checkIn('day-token', NOW);
+
+      expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.ADMITTED, basis: 'day_pass' });
+      expect(mocks.dayPassRepository.markUsed).toHaveBeenCalledExactlyOnceWith(
+        'scanned-pass',
+        TODAY,
+      );
+    });
+
+    it('lets the holder back in on the day it was used', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(ticket({ usedDate: TODAY }));
+
+      const result = await sut.checkIn('day-token', NOW);
+
+      expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.ADMITTED });
+      expect(mocks.dayPassRepository.markUsed).not.toHaveBeenCalled();
+    });
+
+    it('denies a day pass used on an earlier day', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(ticket({ usedDate: '2026-10-01' }));
+
+      const result = await sut.checkIn('day-token', NOW);
+
+      expect(result).toEqual({
+        status: KIOSK_CHECK_IN_STATUS.DENIED,
+        name: member.name,
+        reason: 'already_used',
+      });
+      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ accessBasis: 'day_pass', outcome: 'denied_no_access' }),
+      );
+    });
+  });
+
+  describe('checkIn with a class pass', () => {
+    it('admits on the day of the class and names the class', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(classPass());
+
+      const result = await sut.checkIn('class-token', NOW);
+
+      expect(result).toEqual({
+        status: KIOSK_CHECK_IN_STATUS.ADMITTED,
+        name: member.name,
+        basis: 'class',
+        detail: 'Intro to Welding',
+      });
+      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith({
+        memberId: member.id,
+        source: 'kiosk',
+        accessBasis: 'class',
+        outcome: 'admitted',
+      });
+    });
+
+    it('denies on any other day', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(classPass({ date: '2026-10-17' }));
+
+      const result = await sut.checkIn('class-token', NOW);
+
+      expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.DENIED, reason: 'not_today' });
+    });
+
+    it('denies a canceled booking', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(classPass({}, { status: 'canceled' }));
+
+      const result = await sut.checkIn('class-token', NOW);
+
+      expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.DENIED, reason: 'canceled' });
+    });
+
+    it('denies when the class itself was canceled', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(classPass({ status: 'canceled' }));
+
+      const result = await sut.checkIn('class-token', NOW);
+
+      expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.DENIED, reason: 'canceled' });
+    });
+
+    it('asks the booker for a waiver first', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(classPass());
+      mocks.memberRepository.getAccessContext.mockResolvedValue(context({ hasWaiver: false }));
+
+      const result = await sut.checkIn('class-token', NOW);
+
+      expect(result).toEqual({
+        status: KIOSK_CHECK_IN_STATUS.NEEDS_WAIVER,
+        passToken: 'class-token',
+        name: member.name,
+        email: member.email,
+      });
+    });
+
+    it('links a booking made before passes existed to a member on first scan', async () => {
+      const pass = classPass();
+      mocks.passRepository.getByToken.mockResolvedValue({ ...pass, member: null });
+      mocks.memberRepository.upsertByEmail.mockResolvedValue(member);
+      mocks.passRepository.linkMember.mockResolvedValue();
+
+      await sut.checkIn('class-token', NOW);
+
+      expect(mocks.memberRepository.upsertByEmail).toHaveBeenCalledWith(
+        'Ada Lovelace',
+        'ada@example.com',
+      );
+      expect(mocks.passRepository.linkMember).toHaveBeenCalledWith(
+        expect.objectContaining({ passToken: 'class-token' }),
+        member.id,
+      );
+    });
+  });
+
+  describe('checkIn with a car bay pass', () => {
+    function carBayPass(overrides: Partial<CarBayBooking> = {}): IssuedPass {
+      return factory.carBayPass({
+        passToken: 'bay-token',
+        member,
+        booking: factory.carBayBooking({
+          memberId: member.id,
+          startAt: NOW.set({ hour: 16 }),
+          endAt: NOW.set({ hour: 18 }),
+          ...overrides,
+        }),
+      });
+    }
+
+    it('admits on the booked day', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(carBayPass());
+
+      const result = await sut.checkIn('bay-token', NOW);
+
+      expect(result).toMatchObject({
+        status: KIOSK_CHECK_IN_STATUS.ADMITTED,
+        basis: 'car_bay',
+        detail: 'Hourly',
+      });
+    });
+
+    it('admits on every day of a booking that spans days', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(
+        carBayPass({ startAt: NOW.minus({ days: 1 }), endAt: NOW.plus({ days: 1 }) }),
+      );
+
+      const result = await sut.checkIn('bay-token', NOW);
+
+      expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.ADMITTED });
+    });
+
+    it('denies before the booked day', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(
+        carBayPass({ startAt: NOW.plus({ days: 2 }), endAt: NOW.plus({ days: 2, hours: 2 }) }),
+      );
+
+      const result = await sut.checkIn('bay-token', NOW);
+
+      expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.DENIED, reason: 'not_today' });
+    });
+
+    it('denies a no-show booking', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(carBayPass({ status: 'no_show' }));
+
+      const result = await sut.checkIn('bay-token', NOW);
+
+      expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.DENIED, reason: 'canceled' });
+    });
+  });
+
   describe('submitWaiver', () => {
     const signature = new File(['ink'], 'signature.jpg');
 
@@ -183,8 +382,24 @@ describe(KioskService.name, () => {
       );
     });
 
+    it('signs for the booking holder when the pass is a class pass', async () => {
+      mocks.passRepository.getByToken.mockResolvedValue(classPass());
+
+      const result = await sut.submitWaiver(
+        { passToken: 'class-token', name: 'Ada King', signature, isAdult: true },
+        NOW,
+      );
+
+      expect(mocks.waiverRepository.submit).toHaveBeenCalledWith(
+        expect.objectContaining({ email: member.email }),
+        member.id,
+        'kiosk',
+      );
+      expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.ADMITTED, basis: 'class' });
+    });
+
     it('rejects unknown pass tokens without saving a waiver', async () => {
-      mocks.memberRepository.getByPassToken.mockResolvedValue(undefined as never);
+      mocks.passRepository.getByToken.mockResolvedValue(undefined);
 
       const result = await sut.submitWaiver(
         { passToken: 'nope', name: 'Ada', signature, isAdult: true },

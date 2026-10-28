@@ -1,6 +1,6 @@
 import appleWalletBadge from '$lib/assets/wallet/apple-wallet-badge.svg';
 import googleWalletBadge from '$lib/assets/wallet/google-wallet-badge.svg';
-import { WALLET_PROVIDER, type WalletProvider } from '$lib/remotes/dtos/onboarding.dto';
+import { WALLET_PROVIDER, type WalletProvider } from '$lib/remotes/dtos/pass.dto';
 
 type WalletLink = {
   label: string;

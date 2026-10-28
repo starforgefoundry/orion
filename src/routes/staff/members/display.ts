@@ -9,6 +9,8 @@ export const ACCESS_BASIS_DISPLAY: Record<Visit['accessBasis'], Display> = {
   subscription: { label: 'Subscription', tone: 'success' },
   organization: { label: 'Organization', tone: 'info' },
   day_pass: { label: 'Day Pass', tone: 'primary' },
+  class: { label: 'Class', tone: 'info' },
+  car_bay: { label: 'Car Bay', tone: 'info' },
   none: { label: 'No Access', tone: 'neutral' },
 };
 
@@ -34,6 +36,7 @@ export const SUBSCRIPTION_STATUS_DISPLAY: Record<MemberSubscription['status'], D
 export const EMAIL_TYPE_LABEL: Record<MemberEmail['type'], string> = {
   onboarding: 'Onboarding',
   waiver_request: 'Waiver Request',
+  day_pass: 'Day Pass',
 };
 
 export const EMAIL_TRIGGER_LABEL: Record<MemberEmail['trigger'], string> = {

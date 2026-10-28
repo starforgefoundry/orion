@@ -4,13 +4,13 @@
   import logo from '$lib/assets/logo.png';
   import { Spinner } from '$lib/components/ui/spinner';
   import StepProgress from '$lib/frontend/components/StepProgress.svelte';
-  import MemberPassImage from '$lib/frontend/member-pass/MemberPassImage.svelte';
-  import SavePassImageButton from '$lib/frontend/member-pass/SavePassImageButton.svelte';
-  import WalletButtons from '$lib/frontend/member-pass/WalletButtons.svelte';
+  import PassCard from '$lib/frontend/member-pass/PassCard.svelte';
   import { getOnboarding } from '$lib/remotes/endpoints/onboarding.remote';
   import OnboardingWaiverForm from './OnboardingWaiverForm.svelte';
 
   const CONTACT_EMAIL = 'contact@starforgefoundry.com';
+  const PASS_INSTRUCTIONS =
+    "Add it to your wallet so it's ready when you arrive, then scan it at the front desk kiosk.";
 
   const STEPS = { WAIVER: 'waiver', PASS: 'pass' } as const;
   const STEP_LIST = [
@@ -58,14 +58,7 @@
     {#if step === STEPS.WAIVER}
       <OnboardingWaiverForm {token} name={onboarding.name} email={onboarding.email} />
     {:else}
-      <section class="flex flex-col items-center gap-5">
-        <p class="self-start text-sm text-muted-foreground">
-          Add your pass to your wallet so it's ready when you arrive.
-        </p>
-        <MemberPassImage name={onboarding.name} passUrl={onboarding.passUrl} />
-        <WalletButtons token={onboarding.passToken} wallets={onboarding.wallets} />
-        <SavePassImageButton name={onboarding.name} passUrl={onboarding.passUrl} />
-      </section>
+      <PassCard token={onboarding.passToken} instructions={PASS_INSTRUCTIONS} />
     {/if}
   {/if}
 

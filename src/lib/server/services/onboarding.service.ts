@@ -4,31 +4,15 @@ import {
   MEMBER_EMAIL_TYPE,
   WAIVER_SOURCE,
 } from '$lib/member_enums';
-import {
-  WALLET_PROVIDER,
-  type MemberPassDto,
-  type OnboardingDto,
-  type SubmitOnboardingWaiverDto,
-  type WalletProvider,
-} from '$lib/remotes/dtos/onboarding.dto';
+import type { OnboardingDto, SubmitOnboardingWaiverDto } from '$lib/remotes/dtos/onboarding.dto';
 import { BaseService } from '$lib/server/services/base.service';
-import { appleWalletConfig, buildApplePass } from '$lib/server/utils/apple_wallet';
-import { googleWalletConfig, googleWalletSaveUrl } from '$lib/server/utils/google_wallet';
 import { belongsToOrganization, resolveAccess } from '$lib/server/utils/member_access';
-import { passUrl } from '$lib/server/utils/member_links';
 import { DateTime, Duration } from 'luxon';
 
 /** Keeps the public form from being used to flood a member's inbox. */
 export const PASS_EMAIL_COOLDOWN = Duration.fromObject({ minutes: 10 });
 
 export class OnboardingService extends BaseService {
-  async getMemberPass(token: string): Promise<MemberPassDto | undefined> {
-    const member = await this.memberRepository.getByPassToken(token);
-    if (!member) return undefined;
-
-    return { name: member.name, passUrl: passUrl(member), wallets: this.availableWallets() };
-  }
-
   async getOnboarding(onboardingToken: string): Promise<OnboardingDto | undefined> {
     const member = await this.memberRepository.getByOnboardingToken(onboardingToken);
     if (!member) return undefined;
@@ -39,9 +23,7 @@ export class OnboardingService extends BaseService {
       name: member.name,
       email: member.email,
       passToken: member.passToken,
-      passUrl: passUrl(member),
       hasWaiver: access?.hasWaiver ?? false,
-      wallets: this.availableWallets(),
     };
   }
 
@@ -78,34 +60,6 @@ export class OnboardingService extends BaseService {
       context.member,
       MEMBER_EMAIL_TRIGGER.SELF_SERVICE,
     );
-  }
-
-  async getGoogleWalletUrl(token: string): Promise<string | undefined> {
-    const config = googleWalletConfig();
-    if (!config) return undefined;
-
-    const member = await this.memberRepository.getByPassToken(token);
-    if (!member) return undefined;
-
-    return googleWalletSaveUrl(member, config);
-  }
-
-  async getApplePass(token: string): Promise<Buffer | undefined> {
-    const config = appleWalletConfig();
-    if (!config) return undefined;
-
-    const member = await this.memberRepository.getByPassToken(token);
-    if (!member) return undefined;
-
-    return buildApplePass(member, config);
-  }
-
-  private availableWallets(): WalletProvider[] {
-    const configured: Record<WalletProvider, boolean> = {
-      [WALLET_PROVIDER.APPLE]: Boolean(appleWalletConfig()),
-      [WALLET_PROVIDER.GOOGLE]: Boolean(googleWalletConfig()),
-    };
-    return Object.values(WALLET_PROVIDER).filter((provider) => configured[provider]);
   }
 }
 

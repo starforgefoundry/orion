@@ -3,15 +3,16 @@ import {
   MEMBER_EMAIL_TYPE,
   type MemberEmailTrigger,
 } from '$lib/member_enums';
-import type { Member } from '$lib/server/db/schema';
+import type { DayPass, Member } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
 import { MemberEmailRepository } from '$lib/server/repositories/member_email.repository';
-import { onboardingUrl } from '$lib/server/utils/member_links';
+import { onboardingUrl, passLinks } from '$lib/server/utils/member_links';
 import type { EmailTemplateKey } from '$lib/utils/email_templates';
 
 const MEMBER_EMAIL_REPLY_TO = 'contact@starforgefoundry.com';
 const MEMBER_EMAIL_FROM = `Starforge Foundry <${MEMBER_EMAIL_REPLY_TO}>`;
+const DAY_PASS_TEMPLATE: EmailTemplateKey = 'day_pass';
 
 type OnboardingTemplate = Extract<EmailTemplateKey, 'member_welcome' | 'member_pass_setup'>;
 
@@ -71,5 +72,20 @@ export class MemberNotificationRepository extends BaseRepository {
       },
     );
     await this.memberEmailRepository.log(member.id, MEMBER_EMAIL_TYPE.ONBOARDING, trigger);
+  }
+
+  async sendDayPass(member: Member, dayPass: DayPass): Promise<void> {
+    await this.mailgunRepository.sendTemplate(
+      member.email,
+      MEMBER_EMAIL_FROM,
+      MEMBER_EMAIL_REPLY_TO,
+      DAY_PASS_TEMPLATE,
+      { memberName: escapeHtml(member.name), ...passLinks(dayPass) },
+    );
+    await this.memberEmailRepository.log(
+      member.id,
+      MEMBER_EMAIL_TYPE.DAY_PASS,
+      MEMBER_EMAIL_TRIGGER.DAY_PASS,
+    );
   }
 }

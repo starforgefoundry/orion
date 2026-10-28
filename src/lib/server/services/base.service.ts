@@ -15,6 +15,7 @@ import { MemberSubscriptionRepository } from '$lib/server/repositories/member_su
 import { OrganizationMemberRepository } from '$lib/server/repositories/organization_member.repository';
 import { VisitRepository } from '$lib/server/repositories/visit.repository';
 import { OrganizationRepository } from '$lib/server/repositories/organization.repository';
+import { PassRepository } from '$lib/server/repositories/pass.repository';
 import { PrintFilesRepository } from '$lib/server/repositories/print_files.repository';
 import { PrintMaterialsRepository } from '$lib/server/repositories/print_materials.repository';
 import { PaymentRepository } from '$lib/server/repositories/payment.repository';
@@ -41,6 +42,7 @@ export type ServiceRepositories = {
   memberSubscriptionRepository: MemberSubscriptionRepository;
   organizationMemberRepository: OrganizationMemberRepository;
   organizationRepository: OrganizationRepository;
+  passRepository: PassRepository;
   paymentRepository: PaymentRepository;
   printFilesRepository: PrintFilesRepository;
   printMaterialsRepository: PrintMaterialsRepository;
@@ -69,6 +71,7 @@ export class BaseService {
   protected memberSubscriptionRepository: MemberSubscriptionRepository;
   protected organizationMemberRepository: OrganizationMemberRepository;
   protected organizationRepository: OrganizationRepository;
+  protected passRepository: PassRepository;
   protected paymentRepository: PaymentRepository;
   protected printFilesRepository: PrintFilesRepository;
   protected printMaterialsRepository: PrintMaterialsRepository;
@@ -102,6 +105,7 @@ export class BaseService {
       repositories.organizationMemberRepository ?? new OrganizationMemberRepository();
     this.organizationRepository =
       repositories.organizationRepository ?? new OrganizationRepository();
+    this.passRepository = repositories.passRepository ?? new PassRepository();
     this.paymentRepository = repositories.paymentRepository ?? new PaymentRepository();
     this.printFilesRepository = repositories.printFilesRepository ?? new PrintFilesRepository();
     this.printMaterialsRepository =

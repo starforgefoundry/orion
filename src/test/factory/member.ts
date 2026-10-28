@@ -84,6 +84,7 @@ export function dayPass(overrides: Partial<DayPass> = {}): DayPass {
     squareOrderId: newId(),
     purchasedDate: DateTime.now(),
     usedDate: null,
+    passToken: newId(),
     ...overrides,
   };
 }

@@ -82,6 +82,7 @@ function dayPass(id: string, purchasedDaysAgo: number, usedDate: string | null =
     squareOrderId: `order-${id}`,
     purchasedDate: NOW.minus({ days: purchasedDaysAgo }),
     usedDate,
+    passToken: `pass-${id}`,
   };
 }
 

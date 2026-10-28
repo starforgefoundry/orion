@@ -402,3 +402,52 @@ describe.skipIf(!TEST_DATABASE_URL)('unified payments migration', () => {
     ]);
   });
 });
+
+describe.skipIf(!TEST_DATABASE_URL)('booking passes migration', () => {
+  const sql = postgres(TEST_DATABASE_URL ?? '', { max: 1, onnotice: () => {} });
+  const EDITED_BODY = '<p>Our own car bay confirmation</p>';
+
+  async function runMigrationFile(tag: string) {
+    const contents = await readFile(join(MIGRATIONS_DIR, `${tag}.sql`), 'utf8');
+    for (const statement of contents.split('--> statement-breakpoint')) {
+      await sql.unsafe(statement);
+    }
+  }
+
+  async function templateBody(key: string) {
+    const [row] = await sql<{ body: string }[]>`SELECT body FROM email_template WHERE key = ${key}`;
+    return row.body;
+  }
+
+  beforeAll(async () => {
+    await sql`DROP SCHEMA IF EXISTS public CASCADE`;
+    await sql`DROP SCHEMA IF EXISTS drizzle CASCADE`;
+    await sql`CREATE SCHEMA public`;
+    for (const tag of [
+      '0000_baseline',
+      '0001_car_bay_booking',
+      '0002_member_management',
+      '0003_car_bay_closure',
+      '0004_unified_payments',
+      '0005_email_templates',
+    ]) {
+      await runMigrationFile(tag);
+    }
+    await sql`UPDATE email_template SET body = ${EDITED_BODY} WHERE key = 'car_bay_booking'`;
+
+    await runMigrationFile('0006_booking_passes');
+  });
+
+  afterAll(async () => {
+    await sql.end();
+  });
+
+  it('adds the pass to templates staff have not edited', async () => {
+    expect(await templateBody('class_booking')).toContain('{{passQrImageUrl}}');
+    expect(await templateBody('car_bay_reminder')).toContain('{{passQrImageUrl}}');
+  });
+
+  it('keeps templates staff have edited', async () => {
+    expect(await templateBody('car_bay_booking')).toBe(EDITED_BODY);
+  });
+});

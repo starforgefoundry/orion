@@ -5,6 +5,7 @@ import { WebhooksHelper } from 'square';
 
 export const HTTP_FOUND = 302;
 export const HTTP_NOT_FOUND = 404;
+export const INVALID_LINK_MESSAGE = 'This link is invalid or has expired';
 
 export function verifyAuth() {
   const event = getRequestEvent();

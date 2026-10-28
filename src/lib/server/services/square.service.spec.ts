@@ -233,6 +233,7 @@ describe(SquareService.name, () => {
       mocks.dayPassRepository.existsForOrder.mockResolvedValue(false);
       mocks.dayPassRepository.createForOrder.mockResolvedValue([]);
       mocks.memberNotificationRepository.sendOnboarding.mockResolvedValue();
+      mocks.memberNotificationRepository.sendDayPass.mockResolvedValue();
       mocks.squareRepository.logWebhook.mockResolvedValue(webhookLog());
       mocks.squareRepository.getSubscription.mockResolvedValue(subscription);
       mocks.squareRepository.getCustomer.mockResolvedValue(customer);
@@ -425,7 +426,7 @@ describe(SquareService.name, () => {
         ]);
       });
 
-      it('creates one pass per day pass item and sends onboarding', async () => {
+      it('creates one pass per day pass item and emails each one', async () => {
         await sut.processWebhook(paymentWebhook);
 
         expect(mocks.dayPassRepository.createForOrder).toHaveBeenCalledWith(
@@ -441,10 +442,22 @@ describe(SquareService.name, () => {
           member.id,
           'cust-1',
         );
-        expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+        expect(mocks.memberNotificationRepository.sendDayPass).toHaveBeenCalledTimes(2);
+        expect(mocks.memberNotificationRepository.sendDayPass).toHaveBeenCalledWith(
           member,
-          'day_pass',
+          expect.objectContaining({ id: 'order-1:1' }),
         );
+        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      });
+
+      it('still sends the other passes when one email fails', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        mocks.memberNotificationRepository.sendDayPass.mockRejectedValueOnce(
+          new Error('Mailgun down'),
+        );
+
+        await expect(sut.processWebhook(paymentWebhook)).resolves.toEqual({ success: true });
+        expect(mocks.memberNotificationRepository.sendDayPass).toHaveBeenCalledTimes(2);
       });
 
       it('keeps an existing member name', async () => {
@@ -467,12 +480,12 @@ describe(SquareService.name, () => {
         expect(mocks.dayPassRepository.createForOrder).not.toHaveBeenCalled();
       });
 
-      it('does not resend onboarding when a concurrent webhook already created the passes', async () => {
+      it('does not resend passes when a concurrent webhook already created them', async () => {
         mocks.dayPassRepository.createForOrder.mockResolvedValue([]);
 
         await sut.processWebhook(paymentWebhook);
 
-        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+        expect(mocks.memberNotificationRepository.sendDayPass).not.toHaveBeenCalled();
       });
 
       it('ignores payments that are not completed', async () => {
