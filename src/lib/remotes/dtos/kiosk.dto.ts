@@ -1,5 +1,5 @@
 import { submitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
-import { VISIT_BASIS, type VisitBasis } from '$lib/member_enums';
+import { VISIT_BASIS, type EnumValue, type VisitBasis } from '$lib/member_enums';
 import * as v from 'valibot';
 
 export const KIOSK_PATH = '/kiosk';
@@ -21,7 +21,7 @@ export const KIOSK_DENIAL_REASON = {
   ALREADY_USED: 'already_used',
 } as const;
 
-export type KioskDenialReason = (typeof KIOSK_DENIAL_REASON)[keyof typeof KIOSK_DENIAL_REASON];
+export type KioskDenialReason = EnumValue<typeof KIOSK_DENIAL_REASON>;
 
 export type AdmittedBasis = Exclude<VisitBasis, typeof VISIT_BASIS.NONE>;
 

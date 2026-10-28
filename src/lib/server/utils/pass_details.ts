@@ -3,12 +3,10 @@ import type { IssuedPass } from '$lib/server/repositories/pass.repository';
 import { memberSince } from '$lib/server/utils/pass_brand';
 import { SPACE_ZONE } from '$lib/space';
 import { CAR_BAY_TIER_NAMES, formatPeriod } from '$lib/utils/car_bay';
-import { classEndsAt, classStartsAt } from '$lib/utils/classes';
+import { CLASS_DATE_FORMAT, classEndsAt, classStartsAt, formatClassTime } from '$lib/utils/classes';
 import { DateTime } from 'luxon';
 
-const DATE_FORMAT = 'EEEE, MMMM d, yyyy';
 const SHORT_DATE_FORMAT = 'MMM d, yyyy';
-const TIME_FORMAT = 'h:mm a';
 
 export const PASS_TITLES: Record<PassKind, string> = {
   [PASS_KIND.MEMBERSHIP]: 'Membership',
@@ -33,12 +31,13 @@ export type PassDetails = {
   expiresAt?: DateTime;
 };
 
-function spaceDay(date: DateTime, format = DATE_FORMAT) {
-  return date.setZone(SPACE_ZONE).toFormat(format);
-}
-
 export function passDetails(pass: IssuedPass): PassDetails {
-  const common = { kind: pass.kind, title: PASS_TITLES[pass.kind], passToken: pass.passToken };
+  const common = {
+    kind: pass.kind,
+    title: PASS_TITLES[pass.kind],
+    passToken: pass.passToken,
+    serial: `${pass.kind}-${pass.passToken}`,
+  };
 
   switch (pass.kind) {
     case PASS_KIND.MEMBERSHIP:
@@ -54,14 +53,13 @@ export function passDetails(pass: IssuedPass): PassDetails {
     case PASS_KIND.DAY_PASS:
       return {
         ...common,
-        serial: `${pass.kind}-${pass.passToken}`,
         holderLabel: 'Guest',
         holderName: pass.member.name,
         fields: [
           {
             key: 'purchased',
             label: 'Purchased',
-            value: spaceDay(pass.dayPass.purchasedDate, SHORT_DATE_FORMAT),
+            value: pass.dayPass.purchasedDate.setZone(SPACE_ZONE).toFormat(SHORT_DATE_FORMAT),
           },
         ],
       };
@@ -70,13 +68,12 @@ export function passDetails(pass: IssuedPass): PassDetails {
       const startsAt = classStartsAt(pass.instance);
       return {
         ...common,
-        serial: `${pass.kind}-${pass.passToken}`,
         holderLabel: 'Attendee',
         holderName: pass.booking.customerName,
         fields: [
           { key: 'class', label: 'Class', value: pass.catalog.name },
-          { key: 'date', label: 'Date', value: spaceDay(startsAt) },
-          { key: 'time', label: 'Time', value: startsAt.toFormat(TIME_FORMAT) },
+          { key: 'date', label: 'Date', value: startsAt.toFormat(CLASS_DATE_FORMAT) },
+          { key: 'time', label: 'Time', value: formatClassTime(pass.instance) },
           { key: 'spots', label: 'Spots', value: pass.booking.quantity.toString() },
         ],
         relevantDate: startsAt,
@@ -87,7 +84,6 @@ export function passDetails(pass: IssuedPass): PassDetails {
     case PASS_KIND.CAR_BAY:
       return {
         ...common,
-        serial: `${pass.kind}-${pass.passToken}`,
         holderLabel: 'Booked by',
         holderName: pass.booking.customerName,
         fields: [

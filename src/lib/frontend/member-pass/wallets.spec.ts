@@ -1,4 +1,4 @@
-import { WALLET_PROVIDER } from '$lib/remotes/dtos/onboarding.dto';
+import { WALLET_PROVIDER } from '$lib/remotes/dtos/pass.dto';
 import { describe, expect, it } from 'vitest';
 import { walletsForDevice } from './wallets';
 

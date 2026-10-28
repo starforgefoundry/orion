@@ -46,21 +46,18 @@ function denied(basis: VisitBasis, reason: KioskDenialReason): PassVerdict {
   return { admitted: false, basis, reason };
 }
 
-function judgeMembership(context: MemberAccessContext, now: DateTime): PassVerdict {
-  const access = resolveAccess(context, now);
-  if (access.basis === ACCESS_BASIS.NONE) {
-    return denied(access.basis, KIOSK_DENIAL_REASON.NO_ACCESS);
-  }
-  return { admitted: true, basis: access.basis, dayPassToUse: access.dayPassToUse };
-}
-
 /** Booking and day pass tickets admit on their own day only, whatever membership the holder has. */
 function judgePass(pass: IssuedPass, context: MemberAccessContext, now: DateTime): PassVerdict {
   const today = spaceDate(now);
 
   switch (pass.kind) {
-    case PASS_KIND.MEMBERSHIP:
-      return judgeMembership(context, now);
+    case PASS_KIND.MEMBERSHIP: {
+      const access = resolveAccess(context, now);
+      if (access.basis === ACCESS_BASIS.NONE) {
+        return denied(access.basis, KIOSK_DENIAL_REASON.NO_ACCESS);
+      }
+      return { admitted: true, basis: access.basis, dayPassToUse: access.dayPassToUse };
+    }
 
     case PASS_KIND.DAY_PASS: {
       const { usedDate } = pass.dayPass;

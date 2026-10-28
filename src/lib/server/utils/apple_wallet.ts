@@ -9,6 +9,7 @@ import STRIP from '$lib/assets/wallet/strip.png?inline';
 import STRIP_2X from '$lib/assets/wallet/strip@2x.png?inline';
 import STRIP_3X from '$lib/assets/wallet/strip@3x.png?inline';
 import { PASS_KIND } from '$lib/member_enums';
+import { decodeDataUrl } from '$lib/server/utils/data_url';
 import { passUrl } from '$lib/server/utils/member_links';
 import { PASS_BRAND } from '$lib/server/utils/pass_brand';
 import type { PassDetails } from '$lib/server/utils/pass_details';
@@ -121,13 +122,9 @@ export function applePassJson(pass: PassDetails, config: AppleWalletConfig) {
   };
 }
 
-function dataUrlToBuffer(dataUrl: string) {
-  return Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64');
-}
-
 export function buildApplePass(pass: PassDetails, config: AppleWalletConfig): Buffer {
   const images = Object.fromEntries(
-    Object.entries(PASS_IMAGES).map(([name, dataUrl]) => [name, dataUrlToBuffer(dataUrl)]),
+    Object.entries(PASS_IMAGES).map(([name, dataUrl]) => [name, decodeDataUrl(dataUrl).body]),
   );
 
   const pkPass = new PKPass(

@@ -7,8 +7,6 @@ import {
 import type { OnboardingDto, SubmitOnboardingWaiverDto } from '$lib/remotes/dtos/onboarding.dto';
 import { BaseService } from '$lib/server/services/base.service';
 import { belongsToOrganization, resolveAccess } from '$lib/server/utils/member_access';
-import { passUrl } from '$lib/server/utils/member_links';
-import { availableWallets } from '$lib/server/utils/wallet_providers';
 import { DateTime, Duration } from 'luxon';
 
 /** Keeps the public form from being used to flood a member's inbox. */
@@ -25,9 +23,7 @@ export class OnboardingService extends BaseService {
       name: member.name,
       email: member.email,
       passToken: member.passToken,
-      passUrl: passUrl(member),
       hasWaiver: access?.hasWaiver ?? false,
-      wallets: availableWallets(),
     };
   }
 

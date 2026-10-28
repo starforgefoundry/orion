@@ -1,12 +1,4 @@
-import type { PassKind } from '$lib/member_enums';
 import * as v from 'valibot';
-
-export const WALLET_PROVIDER = {
-  APPLE: 'apple',
-  GOOGLE: 'google',
-} as const;
-
-export type WalletProvider = (typeof WALLET_PROVIDER)[keyof typeof WALLET_PROVIDER];
 
 export const submitOnboardingWaiverDto = v.object({
   token: v.pipe(v.string(), v.minLength(1)),
@@ -24,20 +16,9 @@ export const requestPassEmailDto = v.object({
   email: v.pipe(v.string(), v.trim(), v.email()),
 });
 
-export type PassDto = {
-  kind: PassKind;
-  title: string;
-  holderName: string;
-  passUrl: string;
-  fields: { label: string; value: string }[];
-  wallets: WalletProvider[];
-};
-
 export type OnboardingDto = {
   name: string;
   email: string;
   passToken: string;
-  passUrl: string;
   hasWaiver: boolean;
-  wallets: WalletProvider[];
 };

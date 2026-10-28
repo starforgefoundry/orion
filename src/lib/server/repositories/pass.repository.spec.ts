@@ -1,6 +1,7 @@
 import { PASS_KIND } from '$lib/member_enums';
 import type { Database } from '$lib/server/db';
 import { schema } from '$lib/server/db/schema';
+import { factory } from '$test/factory';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { eq } from 'drizzle-orm';
@@ -108,11 +109,9 @@ describe.skipIf(!TEST_DATABASE_URL)(PassRepository.name, () => {
   it('finds a membership by the member pass token', async () => {
     const member = await addMember('member');
 
-    expect(await repository.getByToken(member.passToken)).toEqual({
-      kind: PASS_KIND.MEMBERSHIP,
-      passToken: member.passToken,
-      member,
-    });
+    expect(await repository.getByToken(member.passToken)).toEqual(
+      factory.membershipPass({ member }),
+    );
   });
 
   it('finds a day pass with its holder', async () => {

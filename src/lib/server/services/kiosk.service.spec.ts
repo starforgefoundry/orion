@@ -1,4 +1,3 @@
-import { PASS_KIND } from '$lib/member_enums';
 import { KIOSK_CHECK_IN_STATUS } from '$lib/remotes/dtos/kiosk.dto';
 import type { CarBayBooking, ClassBooking, ClassInstance, DayPass } from '$lib/server/db/schema';
 import type { ClassPass, IssuedPass } from '$lib/server/repositories/pass.repository';
@@ -27,18 +26,13 @@ function dayPass(overrides: Partial<DayPass> = {}) {
   });
 }
 
-const membershipPass: IssuedPass = {
-  kind: PASS_KIND.MEMBERSHIP,
-  passToken: member.passToken,
-  member,
-};
+const membershipPass = factory.membershipPass({ member });
 
 function classPass(
   instanceOverrides: Partial<ClassInstance> = {},
   bookingOverrides: Partial<ClassBooking> = {},
 ): ClassPass {
-  return {
-    kind: PASS_KIND.CLASS,
+  return factory.classPass({
     passToken: 'class-token',
     member,
     booking: factory.classBooking({
@@ -49,7 +43,7 @@ function classPass(
     }),
     instance: factory.classInstance({ date: TODAY, ...instanceOverrides }),
     catalog: factory.classCatalog({ name: 'Intro to Welding' }),
-  };
+  });
 }
 
 function context(overrides: Partial<MemberAccessContext> = {}): MemberAccessContext {
@@ -192,12 +186,7 @@ describe(KioskService.name, () => {
 
   describe('checkIn with a day pass ticket', () => {
     function ticket(overrides: Partial<DayPass> = {}): IssuedPass {
-      return {
-        kind: PASS_KIND.DAY_PASS,
-        passToken: 'day-token',
-        member,
-        dayPass: dayPass(overrides),
-      };
+      return factory.dayPassTicket({ passToken: 'day-token', member, dayPass: dayPass(overrides) });
     }
 
     it('uses that day pass', async () => {
@@ -316,8 +305,7 @@ describe(KioskService.name, () => {
 
   describe('checkIn with a car bay pass', () => {
     function carBayPass(overrides: Partial<CarBayBooking> = {}): IssuedPass {
-      return {
-        kind: PASS_KIND.CAR_BAY,
+      return factory.carBayPass({
         passToken: 'bay-token',
         member,
         booking: factory.carBayBooking({
@@ -326,7 +314,7 @@ describe(KioskService.name, () => {
           endAt: NOW.set({ hour: 18 }),
           ...overrides,
         }),
-      };
+      });
     }
 
     it('admits on the booked day', async () => {

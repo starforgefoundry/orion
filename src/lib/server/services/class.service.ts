@@ -1,6 +1,5 @@
 import { runInBackground } from '$lib/server/utils/background';
 import { env } from '$env/dynamic/private';
-import { formatTime } from '$lib/frontend/utils';
 import type {
   BookClassDto,
   CancelBookingDto,
@@ -12,7 +11,13 @@ import type {
   UpdateInstanceDto,
   UpsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
-import type { Payment, User } from '$lib/server/db/schema';
+import type {
+  ClassBooking,
+  ClassCatalog,
+  ClassInstance,
+  Payment,
+  User,
+} from '$lib/server/db/schema';
 import type { GoogleCalendarEventInput } from '$lib/server/repositories/google_calendar.repository';
 import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
 import { BaseService } from '$lib/server/services/base.service';
@@ -27,20 +32,42 @@ import {
 import { SPACE_ZONE } from '$lib/space';
 import { spaceDate } from '$lib/server/utils/member_access';
 import { passLinks } from '$lib/server/utils/member_links';
-import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS, classStartsAt } from '$lib/utils/classes';
+import {
+  CLASS_BOOKING_STATUS,
+  CLASS_DATE_FORMAT,
+  CLASS_INSTANCE_STATUS,
+  classStartsAt,
+  formatClassTime,
+} from '$lib/utils/classes';
 import { DateTime, Duration } from 'luxon';
 
 const PAYMENT_FAILED_MESSAGE = 'Payment failed';
 const CLASS_EMAIL = 'classes@starforgefoundry.com';
 const CLASS_SENDER = `Starforge Classes <${CLASS_EMAIL}>`;
-const CLASS_DATE_FORMAT = 'EEEE, MMMM d, yyyy';
 export const CLASS_REMINDER_LEAD = Duration.fromObject({ hours: 24 });
 
 function bookingUrl(booking: { bookingToken: string }) {
   return `${env.FRONTEND_URL}/classes/booking/${booking.bookingToken}`;
 }
 
+function bookingEmailVariables(
+  booking: Pick<ClassBooking, 'customerName' | 'quantity' | 'bookingToken' | 'passToken'>,
+  instance: Pick<ClassInstance, 'date' | 'startTime'>,
+  catalog: Pick<ClassCatalog, 'name'>,
+) {
+  return {
+    customerName: booking.customerName,
+    className: catalog.name,
+    classDate: classStartsAt(instance).toFormat(CLASS_DATE_FORMAT),
+    classTime: formatClassTime(instance),
+    quantity: booking.quantity.toString(),
+    bookingUrl: bookingUrl(booking),
+    ...passLinks(booking),
+  };
+}
+
 type PaidBooking = { payment: Payment | null };
+type CustomerDetails = Pick<BookClassDto, 'customerName' | 'customerEmail' | 'customerPhone'>;
 
 export class ClassService extends BaseService {
   private async refund(booking: PaidBooking) {
@@ -327,13 +354,9 @@ export class ClassService extends BaseService {
 
     let booking;
     try {
-      const member = await this.memberRepository.upsertByEmail(dto.customerName, dto.customerEmail);
       booking = await this.classRepository.createBooking({
         instanceId: dto.instanceId,
-        memberId: member.id,
-        customerName: dto.customerName,
-        customerEmail: dto.customerEmail,
-        customerPhone: dto.customerPhone,
+        ...(await this.customerColumns(dto)),
         paymentId: authorized.id,
         status: CLASS_BOOKING_STATUS.CONFIRMED,
         quantity: dto.quantity,
@@ -372,6 +395,16 @@ export class ClassService extends BaseService {
     runInBackground(this.syncInstanceToCalendar(dto.instanceId), 'sync booking change to calendar');
 
     return booking;
+  }
+
+  private async customerColumns(dto: CustomerDetails) {
+    const member = await this.memberRepository.upsertByEmail(dto.customerName, dto.customerEmail);
+    return {
+      memberId: member.id,
+      customerName: dto.customerName,
+      customerEmail: dto.customerEmail,
+      customerPhone: dto.customerPhone,
+    };
   }
 
   async getBookingByToken(token: string) {
@@ -435,13 +468,9 @@ export class ClassService extends BaseService {
     }
 
     // Create booking with no payment
-    const member = await this.memberRepository.upsertByEmail(dto.customerName, dto.customerEmail);
     const booking = await this.classRepository.createBooking({
       instanceId: dto.instanceId,
-      memberId: member.id,
-      customerName: dto.customerName,
-      customerEmail: dto.customerEmail,
-      customerPhone: dto.customerPhone,
+      ...(await this.customerColumns(dto)),
       status: CLASS_BOOKING_STATUS.CONFIRMED,
       quantity: dto.quantity,
     });
@@ -466,23 +495,15 @@ export class ClassService extends BaseService {
       throw new Error('Booking not found');
     }
 
-    const dateDt = DateTime.fromISO(booking.instance.date, { zone: SPACE_ZONE });
-
     await this.mailgunRepository.sendTemplate(
       booking.customerEmail,
       CLASS_SENDER,
       CLASS_EMAIL,
       'class_booking',
       {
-        customerName: booking.customerName,
-        className: booking.catalog.name,
-        classDate: dateDt.toFormat(CLASS_DATE_FORMAT),
-        classTime: formatTime(booking.instance.startTime),
+        ...bookingEmailVariables(booking, booking.instance, booking.catalog),
         classDuration: booking.instance.durationMinutes.toString(),
-        quantity: booking.quantity.toString(),
         amountPaid: centsToDollars(amountPaid(booking.payment)),
-        bookingUrl: bookingUrl(booking),
-        ...passLinks(booking),
       },
     );
   }
@@ -511,15 +532,7 @@ export class ClassService extends BaseService {
           CLASS_SENDER,
           CLASS_EMAIL,
           'class_reminder',
-          {
-            customerName: booking.customerName,
-            className: catalog.name,
-            classDate: classStartsAt(instance).toFormat(CLASS_DATE_FORMAT),
-            classTime: formatTime(instance.startTime),
-            quantity: booking.quantity.toString(),
-            bookingUrl: bookingUrl(booking),
-            ...passLinks(booking),
-          },
+          bookingEmailVariables(booking, instance, catalog),
         );
         await this.classRepository.updateBooking(booking.id, { reminderSentDate: now });
       } catch (error) {
@@ -541,7 +554,6 @@ export class ClassService extends BaseService {
       return;
     }
 
-    const dateDt = DateTime.fromISO(booking.instance.date, { zone: SPACE_ZONE });
     const confirmedCount = await this.classRepository.getConfirmedBookingCount(booking.instance.id);
 
     const embed = {
@@ -555,12 +567,12 @@ export class ClassService extends BaseService {
         },
         {
           name: 'Date',
-          value: dateDt.toFormat('EEEE, MMMM d, yyyy'),
+          value: classStartsAt(booking.instance).toFormat(CLASS_DATE_FORMAT),
           inline: true,
         },
         {
           name: 'Time',
-          value: formatTime(booking.instance.startTime),
+          value: formatClassTime(booking.instance),
           inline: true,
         },
         {

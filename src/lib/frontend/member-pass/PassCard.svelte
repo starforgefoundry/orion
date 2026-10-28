@@ -5,7 +5,11 @@
   import SavePassImageButton from './SavePassImageButton.svelte';
   import WalletButtons from './WalletButtons.svelte';
 
-  let { token }: { token: string } = $props();
+  const KIOSK_INSTRUCTIONS =
+    "Scan it at the front desk kiosk when you arrive. If you haven't signed our waiver yet, the kiosk will walk you through it.";
+
+  let { token, instructions = KIOSK_INSTRUCTIONS }: { token: string; instructions?: string } =
+    $props();
 
   const passRemote = $derived(getPass(token));
   const pass = $derived(passRemote.current);
@@ -34,10 +38,7 @@
     <section class="flex w-full flex-col items-center gap-4">
       <div class="text-center">
         <h2 class="font-semibold">Keep it on your phone</h2>
-        <p class="mt-1 text-sm text-muted-foreground">
-          Scan it at the front desk kiosk when you arrive. If you haven't signed our waiver yet, the
-          kiosk will walk you through it.
-        </p>
+        <p class="mt-1 text-sm text-muted-foreground">{instructions}</p>
       </div>
       <WalletButtons {token} wallets={pass.wallets} />
       <SavePassImageButton name={pass.holderName} passUrl={pass.passUrl} label={pass.title} />

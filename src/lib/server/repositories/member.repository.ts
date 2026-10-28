@@ -63,15 +63,6 @@ export class MemberRepository extends BaseRepository {
     return member;
   }
 
-  async getByPassToken(passToken: string) {
-    const [member] = await this.db
-      .select()
-      .from(schema.member)
-      .where(eq(schema.member.passToken, passToken))
-      .limit(1);
-    return member;
-  }
-
   async getByOnboardingToken(onboardingToken: string) {
     const [member] = await this.db
       .select()

@@ -1,5 +1,3 @@
-import { PASS_KIND } from '$lib/member_enums';
-import type { IssuedPass } from '$lib/server/repositories/pass.repository';
 import {
   appleWalletConfig,
   buildApplePass,
@@ -37,26 +35,17 @@ const MEMBER = factory.member({
   createdDate: DateTime.fromISO('2026-03-01T12:00:00', { zone: SPACE_ZONE }),
 });
 
-const MEMBERSHIP: IssuedPass = {
-  kind: PASS_KIND.MEMBERSHIP,
-  passToken: 'token-abc',
-  member: MEMBER,
-};
+const MEMBERSHIP = factory.membershipPass({ member: MEMBER });
 
-const DAY_PASS: IssuedPass = {
-  kind: PASS_KIND.DAY_PASS,
-  passToken: 'token-day',
+const DAY_PASS = factory.dayPassTicket({
   member: MEMBER,
   dayPass: factory.dayPass({
     passToken: 'token-day',
     purchasedDate: DateTime.fromISO('2026-10-02T12:00:00', { zone: SPACE_ZONE }),
   }),
-};
+});
 
-const CLASS_PASS: IssuedPass = {
-  kind: PASS_KIND.CLASS,
-  passToken: 'token-class',
-  member: null,
+const CLASS_PASS = factory.classPass({
   booking: factory.classBooking({
     customerName: 'Jo Booker',
     passToken: 'token-class',
@@ -64,12 +53,9 @@ const CLASS_PASS: IssuedPass = {
   }),
   instance: factory.classInstance({ date: '2026-10-20', startTime: '18:30', durationMinutes: 90 }),
   catalog: factory.classCatalog({ name: 'Intro to Welding' }),
-};
+});
 
-const CAR_BAY_PASS: IssuedPass = {
-  kind: PASS_KIND.CAR_BAY,
-  passToken: 'token-bay',
-  member: null,
+const CAR_BAY_PASS = factory.carBayPass({
   booking: factory.carBayBooking({
     customerName: 'Jo Booker',
     passToken: 'token-bay',
@@ -77,7 +63,7 @@ const CAR_BAY_PASS: IssuedPass = {
     startAt: DateTime.fromISO('2026-10-21T16:00', { zone: SPACE_ZONE }),
     endAt: DateTime.fromISO('2026-10-21T18:00', { zone: SPACE_ZONE }),
   }),
-};
+});
 
 describe(PassService.name, () => {
   let sut: PassService;
@@ -96,19 +82,28 @@ describe(PassService.name, () => {
 
     it('labels a member pass as a membership', async () => {
       expect(await sut.getPass('token-abc')).toEqual({
-        kind: 'membership',
         title: 'Membership',
         holderName: 'Sam Smith',
         passUrl: 'https://orion.example.com/pass/token-abc',
-        fields: [{ label: 'Member since', value: 'Mar 2026' }],
+        fields: [{ key: 'memberSince', label: 'Member since', value: 'Mar 2026' }],
         wallets: [],
       });
+    });
+
+    it('offers Google Wallet when it is configured', async () => {
+      vi.mocked(googleWalletConfig).mockReturnValue(GOOGLE_CONFIG);
+      expect((await sut.getPass('token-abc'))?.wallets).toEqual(['google']);
+    });
+
+    it('offers both wallets when both are configured', async () => {
+      vi.mocked(googleWalletConfig).mockReturnValue(GOOGLE_CONFIG);
+      vi.mocked(appleWalletConfig).mockReturnValue(APPLE_CONFIG);
+      expect((await sut.getPass('token-abc'))?.wallets).toEqual(['apple', 'google']);
     });
 
     it('labels a day pass with its purchase date', async () => {
       mocks.passRepository.getByToken.mockResolvedValue(DAY_PASS);
       expect(await sut.getPass('token-day')).toMatchObject({
-        kind: 'day_pass',
         title: 'Day Pass',
         passUrl: 'https://orion.example.com/pass/token-day',
         fields: [{ label: 'Purchased', value: 'Oct 2, 2026' }],
@@ -118,7 +113,6 @@ describe(PassService.name, () => {
     it('shows the class, when it is and how many spots for a class pass', async () => {
       mocks.passRepository.getByToken.mockResolvedValue(CLASS_PASS);
       expect(await sut.getPass('token-class')).toMatchObject({
-        kind: 'class',
         title: 'Class Pass',
         holderName: 'Jo Booker',
         fields: [
@@ -133,7 +127,6 @@ describe(PassService.name, () => {
     it('shows the tier and booked time for a car bay pass', async () => {
       mocks.passRepository.getByToken.mockResolvedValue(CAR_BAY_PASS);
       expect(await sut.getPass('token-bay')).toMatchObject({
-        kind: 'car_bay',
         title: 'Car Bay Pass',
         fields: [
           { label: 'Booking', value: 'Hourly' },

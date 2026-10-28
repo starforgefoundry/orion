@@ -1,21 +1,9 @@
-import { appleWalletConfig, type AppleWalletConfig } from '$lib/server/utils/apple_wallet';
-import { googleWalletConfig, type GoogleWalletConfig } from '$lib/server/utils/google_wallet';
 import { factory } from '$test/factory';
 import { memberAccessContext, organizationAccess } from '$test/factory/member_access';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { OnboardingService, PASS_EMAIL_COOLDOWN } from './onboarding.service';
-
-vi.mock('$lib/server/utils/google_wallet', () => ({
-  googleWalletConfig: vi.fn(),
-  googleWalletSaveUrl: vi.fn(() => 'https://pay.google.com/gp/v/save/jwt'),
-}));
-
-vi.mock('$lib/server/utils/apple_wallet', () => ({
-  appleWalletConfig: vi.fn(),
-  buildApplePass: vi.fn(() => Buffer.from('pkpass')),
-}));
 
 const MEMBER = factory.member({
   email: 'sam@example.com',
@@ -29,8 +17,6 @@ const ACTIVE_CONTEXT = memberAccessContext({
   dayPasses: [factory.dayPass({ memberId: MEMBER.id })],
 });
 
-const WALLET_CONFIG = { issuerId: 'issuer' } as GoogleWalletConfig;
-const APPLE_CONFIG = { passTypeId: 'pass.test' } as AppleWalletConfig;
 const SIGNATURE = new File(['sig'], 'signature.jpg');
 
 describe(OnboardingService.name, () => {
@@ -60,38 +46,24 @@ describe(OnboardingService.name, () => {
       await sut.getOnboarding('onboarding-abc');
 
       expect(mocks.memberRepository.getByOnboardingToken).toHaveBeenCalledWith('onboarding-abc');
-      expect(mocks.memberRepository.getByPassToken).not.toHaveBeenCalled();
     });
 
-    it('reports waiver status and hides wallets that are not configured', async () => {
+    it('reports waiver status', async () => {
       expect(await sut.getOnboarding('onboarding-abc')).toEqual({
         name: 'Sam Smith',
         email: 'sam@example.com',
         passToken: 'token-abc',
-        passUrl: 'https://orion.example.com/pass/token-abc',
         hasWaiver: false,
-        wallets: [],
       });
       expect(mocks.memberRepository.getAccessContext).toHaveBeenCalledWith(MEMBER.id);
     });
 
-    it('offers Google Wallet when it is configured', async () => {
-      vi.mocked(googleWalletConfig).mockReturnValue(WALLET_CONFIG);
+    it('reports a signed waiver', async () => {
       mocks.memberRepository.getAccessContext.mockResolvedValue(
         memberAccessContext({ member: MEMBER, hasWaiver: true }),
       );
 
-      const onboarding = await sut.getOnboarding('token-abc');
-
-      expect(onboarding?.hasWaiver).toBe(true);
-      expect(onboarding?.wallets).toEqual(['google']);
-    });
-
-    it('offers both wallets when both are configured', async () => {
-      vi.mocked(googleWalletConfig).mockReturnValue(WALLET_CONFIG);
-      vi.mocked(appleWalletConfig).mockReturnValue(APPLE_CONFIG);
-
-      expect((await sut.getOnboarding('token-abc'))?.wallets).toEqual(['apple', 'google']);
+      expect((await sut.getOnboarding('onboarding-abc'))?.hasWaiver).toBe(true);
     });
   });
 
