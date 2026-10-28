@@ -8,9 +8,10 @@ function connect() {
 
 export type Database = ReturnType<typeof connect>;
 
-let db: Database | undefined;
+// Vite re-runs this module on every hot reload, so a module-level cache would open a new pool each time.
+const cache = globalThis as typeof globalThis & { orionDB?: Database };
 
 export function getDB() {
-  db ??= connect();
-  return db;
+  cache.orionDB ??= connect();
+  return cache.orionDB;
 }
