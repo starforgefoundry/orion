@@ -13,6 +13,13 @@
       "options": {
         "parser": "svelte"
       }
+    },
+    {
+      "files": "src/lib/server/db/migrations/meta/*_snapshot.json",
+      "options": {
+        "printWidth": 1000000000000000,
+        "objectWrap": "collapse"
+      }
     }
   ]
 }
