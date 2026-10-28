@@ -29,6 +29,7 @@
   import MailIcon from '@lucide/svelte/icons/mail';
   import MonitorUpIcon from '@lucide/svelte/icons/monitor-up';
   import PencilIcon from '@lucide/svelte/icons/pencil';
+  import PackageXIcon from '@lucide/svelte/icons/package-x';
   import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
   import TagIcon from '@lucide/svelte/icons/tag';
   import UserPenIcon from '@lucide/svelte/icons/user-pen';
@@ -52,6 +53,7 @@
     isAwaitingPayment,
     isClosed,
     sendPickupEmail,
+    unmarkPickedUp,
     STATUS,
   } from './request-actions';
   import { formatPrice, PAYMENT_STATUS_DISPLAY, REQUEST_STATUS_DISPLAY } from './utils';
@@ -119,7 +121,11 @@
   });
 
   const hasFooterActions = $derived(
-    canCancel || canEditPayment || canCreatePayment || request?.status === STATUS.DONE,
+    canCancel ||
+      canEditPayment ||
+      canCreatePayment ||
+      request?.status === STATUS.DONE ||
+      request?.status === STATUS.PICKED_UP,
   );
 
   function handleClose() {
@@ -387,6 +393,12 @@
       >
         {#if isUpdatingStatus}<Spinner />{:else}<PackageCheckIcon />{/if}
         {isAwaitingPayment(request) ? 'Awaiting Payment' : 'Mark Picked Up'}
+      </Button>
+    {/if}
+    {#if request?.status === STATUS.PICKED_UP}
+      <Button variant="outline" onclick={() => request && unmarkPickedUp(request)}>
+        <PackageXIcon />
+        Unmark Picked Up
       </Button>
     {/if}
   </div>

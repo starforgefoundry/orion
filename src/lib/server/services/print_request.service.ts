@@ -65,8 +65,11 @@ export class PrintRequestService extends BaseService {
       : undefined;
 
     const updates: Partial<PrintRequest> = { status: dto.status };
+    const isUnmarkingPickup =
+      request?.status === PRINT_REQUEST_STATUS.PICKED_UP &&
+      dto.status === PRINT_REQUEST_STATUS.DONE;
 
-    if (dto.status === PRINT_REQUEST_STATUS.DONE) {
+    if (dto.status === PRINT_REQUEST_STATUS.DONE && !isUnmarkingPickup) {
       updates.completionDate = DateTime.now();
 
       if (payment?.organizationId) {

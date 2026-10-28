@@ -536,5 +536,19 @@ describe(PrintRequestService.name, () => {
         ),
       );
     });
+
+    it('should move a picked up request back to done without side effects', async () => {
+      const payment = factory.payment({ organizationId: 'org-456', status: 'pending' });
+      const request = factory.printRequestDetail({ status: 'picked_up', paymentId: payment.id });
+      stubStatusUpdate(request, payment);
+
+      await sut.updatePrintRequestStatus(request.id, { status: 'done' });
+
+      expect(mocks.printRequestRepository.update).toHaveBeenCalledWith(request.id, {
+        status: 'done',
+      });
+      expect(mocks.paymentRepository.markPaid).not.toHaveBeenCalled();
+      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
+    });
   });
 });

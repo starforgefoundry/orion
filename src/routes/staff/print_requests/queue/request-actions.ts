@@ -64,6 +64,25 @@ export async function changeStatus(request: RequestSummary, status: PrintRequest
   }
 }
 
+export async function unmarkPickedUp(request: RequestSummary) {
+  const confirmed = await modalManager.confirm({
+    title: 'Unmark Picked Up',
+    prompt: 'Move this print request back to Ready for Pickup?',
+    confirmText: 'Unmark',
+  });
+  if (!confirmed) return false;
+
+  try {
+    await updatePrintRequestStatus({ id: request.id, status: STATUS.DONE }).updates(
+      getPrintRequestById(request.id),
+    );
+    return true;
+  } catch {
+    toast.error('Failed to update print request status.');
+    return false;
+  }
+}
+
 export async function cancelRequest(request: RequestSummary) {
   const confirmed = await modalManager.confirm({
     title: 'Cancel Print Request',
