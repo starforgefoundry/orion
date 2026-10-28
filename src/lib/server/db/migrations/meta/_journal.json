@@ -36,6 +36,13 @@
       "when": 1792866671510,
       "tag": "0004_unified_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793204941533,
+      "tag": "0005_email_templates",
+      "breakpoints": true
     }
   ]
 }

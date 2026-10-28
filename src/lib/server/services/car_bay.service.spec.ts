@@ -251,7 +251,6 @@ describe(CarBayService.name, () => {
           'jane@example.com',
           expect.any(String),
           expect.any(String),
-          expect.any(String),
           'car_bay_booking',
           expect.objectContaining({ amountPaid: '12.00' }),
         ),
@@ -431,7 +430,6 @@ describe(CarBayService.name, () => {
       expect(mocks.carBayRepository.createOverrun).toHaveBeenCalledWith('booking-1', payment.id);
       expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
-        expect.any(String),
         expect.any(String),
         expect.any(String),
         'payment_request',

@@ -398,7 +398,6 @@ describe(PrintRequestService.name, () => {
         'customer@example.com',
         expect.stringContaining('Starforge 3D Prints'),
         expect.any(String),
-        expect.stringContaining('Completed Project'),
         'print_pickup',
         expect.objectContaining({ projectName: 'Completed Project' }),
       );
@@ -530,7 +529,6 @@ describe(PrintRequestService.name, () => {
           request.email,
           expect.any(String),
           expect.any(String),
-          expect.stringContaining('Pickup Project'),
           'print_pickup',
           expect.objectContaining({ projectName: 'Pickup Project' }),
         ),

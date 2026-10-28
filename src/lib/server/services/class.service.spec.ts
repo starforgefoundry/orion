@@ -590,7 +590,6 @@ describe(ClassService.name, () => {
         'jane@test.com',
         'Starforge Classes <classes@starforgefoundry.com>',
         'classes@starforgefoundry.com',
-        'Class Booking Confirmation - Welding Class',
         'class_booking',
         expect.objectContaining({
           customerName: 'Jane Doe',

@@ -188,6 +188,14 @@ export const squareWebhookLog = pgTable('square_webhook_log', {
 
 export type SquareWebhookLog = InferSelectModel<typeof squareWebhookLog>;
 
+export const emailTemplate = pgTable('email_template', {
+  key: text('key').notNull().primaryKey(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+});
+
+export type EmailTemplate = InferSelectModel<typeof emailTemplate>;
+
 export const billingCode = pgTable('billing_code', {
   id: text('id')
     .notNull()
@@ -614,6 +622,7 @@ export const schema = {
   printMaterial,
   settings,
   squareWebhookLog,
+  emailTemplate,
   billingCode,
   organization,
   organizationCharge,

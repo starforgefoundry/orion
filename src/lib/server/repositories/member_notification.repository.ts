@@ -76,9 +76,9 @@ export class MemberNotificationRepository extends BaseRepository {
       member.email,
       MEMBER_EMAIL_FROM,
       MEMBER_EMAIL_REPLY_TO,
-      copy.subject,
       ONBOARDING_TEMPLATE,
       {
+        subject: copy.subject,
         memberName: escapeHtml(member.name),
         introMessage: ONBOARDING_INTRO[trigger],
         setupMessage: copy.setupMessage,

@@ -14,6 +14,7 @@
     getPrintPricing,
     getPrintRequestSquareSettings,
   } from '$lib/remotes/endpoints/settings.remote';
+  import { EMAIL_TEMPLATE_GROUP } from '$lib/utils/email_templates';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
   import CarIcon from '@lucide/svelte/icons/car';
   import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
@@ -26,6 +27,7 @@
   import BambuddyStatus from './BambuddyStatus.svelte';
   import CarBaySettings from './CarBaySettings.svelte';
   import ClassSettings from './ClassSettings.svelte';
+  import EmailTemplateSettings from './EmailTemplateSettings.svelte';
   import KioskSettings from './KioskSettings.svelte';
   import MemberSquareSettings from './MemberSquareSettings.svelte';
   import SettingsSection from './SettingsSection.svelte';
@@ -148,6 +150,10 @@
             <SystemSettings printRequestSettings={printRequestSettings.current} />
           {/if}
         </SettingsSection>
+        <EmailTemplateSettings
+          group={EMAIL_TEMPLATE_GROUP.PRINTING}
+          description="Emails sent to customers as their print request moves along."
+        />
         <SettingsSection
           title="Print Pricing"
           description="Build plate price and member discount used when billing print requests."
@@ -173,53 +179,77 @@
         </SettingsSection>
       </div>
     {:else if active.id === SECTIONS.SQUARE}
-      <SettingsSection
-        title={active.title}
-        description={active.description}
-        formId="square-settings"
-      >
-        {#snippet actions()}
-          <Button variant="ghost" size="sm" onclick={() => modalManager.show(SquareInfoModal)}>
-            <CircleHelpIcon />
-            Setup help
-          </Button>
-        {/snippet}
-        {@render loadState(squareSettings, 'Square')}
-        {#if squareSettings.current}
-          <SquareSettings squareSettings={squareSettings.current} />
-        {/if}
-      </SettingsSection>
+      <div class="flex flex-col gap-6">
+        <SettingsSection
+          title={active.title}
+          description={active.description}
+          formId="square-settings"
+        >
+          {#snippet actions()}
+            <Button variant="ghost" size="sm" onclick={() => modalManager.show(SquareInfoModal)}>
+              <CircleHelpIcon />
+              Setup help
+            </Button>
+          {/snippet}
+          {@render loadState(squareSettings, 'Square')}
+          {#if squareSettings.current}
+            <SquareSettings squareSettings={squareSettings.current} />
+          {/if}
+        </SettingsSection>
+        <EmailTemplateSettings
+          group={EMAIL_TEMPLATE_GROUP.PAYMENTS}
+          description="Payment requests for organization balances and car bay overruns."
+        />
+      </div>
     {:else if active.id === SECTIONS.CLASSES}
-      <SettingsSection
-        title={active.title}
-        description={active.description}
-        formId="class-settings"
-      >
-        {@render loadState(classSettings, 'class')}
-        {#if classSettings.current}
-          <ClassSettings classSettings={classSettings.current} />
-        {/if}
-      </SettingsSection>
+      <div class="flex flex-col gap-6">
+        <SettingsSection
+          title={active.title}
+          description={active.description}
+          formId="class-settings"
+        >
+          {@render loadState(classSettings, 'class')}
+          {#if classSettings.current}
+            <ClassSettings classSettings={classSettings.current} />
+          {/if}
+        </SettingsSection>
+        <EmailTemplateSettings
+          group={EMAIL_TEMPLATE_GROUP.CLASSES}
+          description="Emails sent to people who book a class."
+        />
+      </div>
     {:else if active.id === SECTIONS.CAR_BAY}
-      <SettingsSection
-        title={active.title}
-        description={active.description}
-        formId="car-bay-settings"
-      >
-        {@render loadState(carBayRates, 'car bay rates')}
-        {@render loadState(carBayPolicy, 'car bay rules')}
-        {#if carBayRates.current && carBayPolicy.current}
-          <CarBaySettings rates={carBayRates.current} policy={carBayPolicy.current} />
-        {/if}
-      </SettingsSection>
+      <div class="flex flex-col gap-6">
+        <SettingsSection
+          title={active.title}
+          description={active.description}
+          formId="car-bay-settings"
+        >
+          {@render loadState(carBayRates, 'car bay rates')}
+          {@render loadState(carBayPolicy, 'car bay rules')}
+          {#if carBayRates.current && carBayPolicy.current}
+            <CarBaySettings rates={carBayRates.current} policy={carBayPolicy.current} />
+          {/if}
+        </SettingsSection>
+        <EmailTemplateSettings
+          group={EMAIL_TEMPLATE_GROUP.CAR_BAY}
+          description="Emails sent to people who book the car bay."
+        />
+      </div>
     {:else if active.id === SECTIONS.MEMBERS}
-      <SettingsSection
-        title={active.title}
-        description={active.description}
-        formId="member-square-settings"
-      >
-        <MemberSquareSettings />
-      </SettingsSection>
+      <div class="flex flex-col gap-6">
+        <SettingsSection
+          title={active.title}
+          description={active.description}
+          formId="member-square-settings"
+        >
+          <MemberSquareSettings />
+        </SettingsSection>
+        <EmailTemplateSettings
+          group={EMAIL_TEMPLATE_GROUP.MEMBERS}
+          description="Emails sent to members to set up their pass."
+        />
+      </div>
     {:else if active.id === SECTIONS.KIOSK}
       <SettingsSection title={active.title} description={active.description}>
         <KioskSettings />

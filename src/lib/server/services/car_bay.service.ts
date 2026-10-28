@@ -373,9 +373,9 @@ export class CarBayService extends BaseService {
       booking.customerEmail,
       CAR_BAY_SENDER,
       CAR_BAY_EMAIL,
-      'Car Bay Overrun Payment',
       'payment_request',
       {
+        subject: 'Car Bay Overrun Payment',
         customerName: booking.customerName,
         description: `car bay overrun on ${booking.endAt.setZone(CAR_BAY_ZONE).toFormat('MMMM d')}`,
         total: centsToDollars(payment.total),
@@ -399,7 +399,6 @@ export class CarBayService extends BaseService {
           booking.customerEmail,
           CAR_BAY_SENDER,
           CAR_BAY_EMAIL,
-          'Car Bay Booking Reminder',
           'car_bay_reminder',
           {
             customerName: booking.customerName,
@@ -428,7 +427,6 @@ export class CarBayService extends BaseService {
       booking.customerEmail,
       CAR_BAY_SENDER,
       CAR_BAY_EMAIL,
-      `Car Bay Booking Confirmation - ${CAR_BAY_TIER_NAMES[booking.tier]}`,
       'car_bay_booking',
       {
         customerName: booking.customerName,

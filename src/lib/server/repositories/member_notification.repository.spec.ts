@@ -31,9 +31,9 @@ describe('MemberNotificationRepository.sendOnboarding', () => {
       'sam@example.com',
       'Starforge Foundry <contact@starforgefoundry.com>',
       'contact@starforgefoundry.com',
-      'Welcome to Starforge Foundry',
       'member_onboarding',
       {
+        subject: 'Welcome to Starforge Foundry',
         memberName: 'Sam &lt;Smith&gt;',
         introMessage: 'Thanks for picking up a day pass at Starforge Foundry!',
         setupMessage: expect.stringContaining('Before your first visit'),
@@ -54,9 +54,9 @@ describe('MemberNotificationRepository.sendOnboarding', () => {
         expect.anything(),
         expect.anything(),
         expect.anything(),
-        'Set up your Starforge Foundry member pass',
         'member_onboarding',
         expect.objectContaining({
+          subject: 'Set up your Starforge Foundry member pass',
           setupMessage: expect.stringContaining('before your next visit'),
         }),
       );

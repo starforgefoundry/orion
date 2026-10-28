@@ -225,9 +225,9 @@ export class OrganizationService extends BaseService {
       organization.email,
       foundrySender(),
       publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
-      'Starforge Organization Balance Due',
       'payment_request',
       {
+        subject: 'Starforge Organization Balance Due',
         customerName: organization.name,
         description: BALANCE_DESCRIPTION,
         total: centsToDollars(payment.total),

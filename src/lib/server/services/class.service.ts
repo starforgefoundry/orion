@@ -459,7 +459,6 @@ export class ClassService extends BaseService {
       booking.customerEmail,
       'Starforge Classes <classes@starforgefoundry.com>',
       'classes@starforgefoundry.com',
-      `Class Booking Confirmation - ${booking.catalog.name}`,
       'class_booking',
       {
         customerName: booking.customerName,

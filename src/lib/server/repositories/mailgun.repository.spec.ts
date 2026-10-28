@@ -1,6 +1,45 @@
+import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
+import { automock } from '$test/utils';
 import { DateTime } from 'luxon';
-import { describe, expect, it } from 'vitest';
-import { retryAfter } from './mailgun.repository';
+import { describe, expect, it, vi } from 'vitest';
+import { MailgunRepository, retryAfter } from './mailgun.repository';
+
+describe('MailgunRepository.sendTemplate', () => {
+  function setup(template?: { subject: string; body: string }) {
+    const templates = automock(EmailTemplateRepository);
+    templates.get.mockResolvedValue(
+      template ? { key: 'print_pickup', ...template } : (undefined as never),
+    );
+    const fetch = vi.fn(async () => new Response());
+    vi.stubGlobal('fetch', fetch);
+    return { fetch, repository: new MailgunRepository(templates) };
+  }
+
+  const VARIABLES = { projectName: 'Robot Arm', paymentNote: 'Paid.', statusURL: 'https://x' };
+
+  it('fills the stored subject and body', async () => {
+    const { fetch, repository } = setup({
+      subject: 'Ready - {{projectName}}',
+      body: '<a href="{{statusURL}}">{{projectName}}</a>',
+    });
+
+    await repository.sendTemplate('a@b.com', 'from', 'reply', 'print_pickup', VARIABLES);
+
+    const body = (fetch.mock.calls[0] as unknown as [string, RequestInit])[1]
+      .body as URLSearchParams;
+    expect(body.get('subject')).toBe('Ready - Robot Arm');
+    expect(body.get('html')).toBe('<a href="https://x">Robot Arm</a>');
+  });
+
+  it('fails when the template is missing from the database', async () => {
+    const { fetch, repository } = setup();
+
+    await expect(
+      repository.sendTemplate('a@b.com', 'from', 'reply', 'print_pickup', VARIABLES),
+    ).rejects.toThrow('Email template "print_pickup" not found');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
 
 describe('retryAfter', () => {
   it('reads the reset time from the Mailgun limit message', () => {

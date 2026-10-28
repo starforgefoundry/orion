@@ -131,7 +131,6 @@ describe(PrintPaymentService.name, () => {
         'jane@example.com',
         expect.any(String),
         PRINT_EMAIL,
-        'Print Request Payment - Robot Arm',
         'print_payment',
         {
           customerName: 'Jane Doe',
@@ -163,7 +162,6 @@ describe(PrintPaymentService.name, () => {
         'jane@example.com',
         expect.any(String),
         expect.any(String),
-        'Print Request Quote - Robot Arm',
         'print_quote',
         expect.objectContaining({ quotePrice: '12.00', quoteURL: STATUS_URL }),
       );
