@@ -6,6 +6,10 @@ import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
 
+function matchesCode(code: string) {
+  return eq(sql`upper(${schema.billingCode.code})`, code.toUpperCase());
+}
+
 export class BillingCodeRepository extends BaseRepository {
   async create(dto: CreateBillingCodeDto) {
     const [billingCode] = await this.db.insert(schema.billingCode).values(dto).returning();
@@ -44,11 +48,13 @@ export class BillingCodeRepository extends BaseRepository {
 
   async getByCode(code: string) {
     const [billingCode] = await this.selectWithOrganization(
-      and(
-        eq(sql`upper(${schema.billingCode.code})`, code.toUpperCase()),
-        eq(schema.billingCode.archived, false),
-      ),
+      and(matchesCode(code), eq(schema.billingCode.archived, false)),
     );
+    return billingCode;
+  }
+
+  async getByCodeIncludingArchived(code: string) {
+    const [billingCode] = await this.selectWithOrganization(matchesCode(code));
     return billingCode;
   }
 

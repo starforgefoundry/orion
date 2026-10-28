@@ -1,8 +1,8 @@
 import type { BillingCode, Organization } from '$lib/server/db/schema';
 import {
   BILLING_CODE_NOT_FOUND,
-  BILLING_CODE_TAKEN,
   BillingCodeService,
+  BillingCodeTakenError,
 } from '$lib/server/services/billing_code.service';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
@@ -77,7 +77,7 @@ describe(BillingCodeService.name, () => {
 
   it('creates a code for an organization', async () => {
     const dto = { code: 'NEW', description: 'New club', organizationId: 'org-1' };
-    mocks.billingCodeRepository.getByCode.mockResolvedValue(undefined as never);
+    mocks.billingCodeRepository.getByCodeIncludingArchived.mockResolvedValue(undefined as never);
     mocks.billingCodeRepository.create.mockResolvedValue(factory.billingCode(dto));
 
     const created = await sut.createBillingCode(dto);
@@ -86,12 +86,27 @@ describe(BillingCodeService.name, () => {
     expect(created.organizationId).toBe('org-1');
   });
 
-  it('rejects a code that is already in use', async () => {
-    mocks.billingCodeRepository.getByCode.mockResolvedValue(codeRow());
+  it('rejects a code that is already in use, naming its organization', async () => {
+    mocks.billingCodeRepository.getByCodeIncludingArchived.mockResolvedValue(codeRow());
+
+    await expect(
+      sut.createBillingCode({ code: 'engclub', description: 'Dup', organizationId: 'org-1' }),
+    ).rejects.toThrow(
+      new BillingCodeTakenError('Group code ENGCLUB is already used by Engineering Club'),
+    );
+    expect(mocks.billingCodeRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a code that matches an archived one', async () => {
+    mocks.billingCodeRepository.getByCodeIncludingArchived.mockResolvedValue(
+      codeRow({ archived: true }),
+    );
 
     await expect(
       sut.createBillingCode({ code: 'ENGCLUB', description: 'Dup', organizationId: 'org-1' }),
-    ).rejects.toThrow(BILLING_CODE_TAKEN);
+    ).rejects.toThrow(
+      new BillingCodeTakenError("Group code ENGCLUB was archived and can't be reused"),
+    );
     expect(mocks.billingCodeRepository.create).not.toHaveBeenCalled();
   });
 

@@ -1,8 +1,14 @@
 import { command, form, query } from '$app/server';
 import { createBillingCodeDto, updateBillingCodeDto } from '$lib/remotes/dtos/billing_code.dto';
 import { verifyAuth } from '$lib/remotes/utils';
-import { billingCodeService } from '$lib/server/services/billing_code.service';
+import {
+  billingCodeService,
+  BillingCodeTakenError,
+} from '$lib/server/services/billing_code.service';
+import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
+
+const CONFLICT = 409;
 
 export const getBillingCodes = query(async () => {
   verifyAuth();
@@ -28,9 +34,14 @@ async function refreshCodes(organizationId: string | null) {
 
 export const createBillingCode = form(createBillingCodeDto, async (data) => {
   verifyAuth();
-  const code = await billingCodeService.createBillingCode(data);
-  await refreshCodes(code.organizationId);
-  return code;
+  try {
+    const code = await billingCodeService.createBillingCode(data);
+    await refreshCodes(code.organizationId);
+    return code;
+  } catch (cause) {
+    if (cause instanceof BillingCodeTakenError) error(CONFLICT, cause.message);
+    throw cause;
+  }
 });
 
 export const updateBillingCode = command(updateBillingCodeDto, async (dto) => {

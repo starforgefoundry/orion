@@ -6,12 +6,20 @@ import type { BillingCode, Organization } from '$lib/server/db/schema';
 import { BaseService } from '$lib/server/services/base.service';
 
 export const BILLING_CODE_NOT_FOUND = 'Billing code not found';
-export const BILLING_CODE_TAKEN = 'A billing code with that code already exists';
+export class BillingCodeTakenError extends Error {}
 
 type BillingCodeRow = { billingCode: BillingCode; organization: Organization | null };
 
 function withOrganizationName({ billingCode, organization }: BillingCodeRow) {
   return { ...billingCode, organizationName: organization?.name ?? null };
+}
+
+function takenMessage({ billingCode, organization }: BillingCodeRow) {
+  if (billingCode.archived) {
+    return `Group code ${billingCode.code} was archived and can't be reused`;
+  }
+  const owner = organization?.name ?? 'another organization';
+  return `Group code ${billingCode.code} is already used by ${owner}`;
 }
 
 export class BillingCodeService extends BaseService {
@@ -39,8 +47,9 @@ export class BillingCodeService extends BaseService {
   }
 
   async createBillingCode(data: CreateBillingCodeDto) {
-    if (await this.billingCodeRepository.getByCode(data.code)) {
-      throw new Error(BILLING_CODE_TAKEN);
+    const existing = await this.billingCodeRepository.getByCodeIncludingArchived(data.code);
+    if (existing) {
+      throw new BillingCodeTakenError(takenMessage(existing));
     }
     return await this.billingCodeRepository.create(data);
   }
