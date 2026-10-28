@@ -14,7 +14,7 @@
     getPrintPricing,
     getPrintRequestSquareSettings,
   } from '$lib/remotes/endpoints/settings.remote';
-  import { EMAIL_TEMPLATE_GROUP } from '$lib/utils/email_templates';
+  import { EMAIL_TEMPLATE_GROUP, type EmailTemplateGroup } from '$lib/utils/email_templates';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
   import CarIcon from '@lucide/svelte/icons/car';
   import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
@@ -48,7 +48,13 @@
   } as const;
   type SectionId = (typeof SECTIONS)[keyof typeof SECTIONS];
 
-  type SectionInfo = { id: SectionId; title: string; description: string; icon: Component };
+  type SectionInfo = {
+    id: SectionId;
+    title: string;
+    description: string;
+    icon: Component;
+    emailTemplates?: { group: EmailTemplateGroup; description: string };
+  };
 
   const SECTION_LIST: SectionInfo[] = [
     {
@@ -56,30 +62,50 @@
       title: '3D Printing',
       description: 'Print request intake and the connection to the printers.',
       icon: Printer3dIcon,
+      emailTemplates: {
+        group: EMAIL_TEMPLATE_GROUP.PRINTING,
+        description: 'Emails sent to customers as their print request moves along.',
+      },
     },
     {
       id: SECTIONS.SQUARE,
       title: 'Square',
       description: 'Location and catalog items used when billing print requests.',
       icon: CreditCardIcon,
+      emailTemplates: {
+        group: EMAIL_TEMPLATE_GROUP.PAYMENTS,
+        description: 'Payment requests for organization balances and car bay overruns.',
+      },
     },
     {
       id: SECTIONS.CLASSES,
       title: 'Classes',
       description: 'Notifications for class bookings.',
       icon: CalendarIcon,
+      emailTemplates: {
+        group: EMAIL_TEMPLATE_GROUP.CLASSES,
+        description: 'Emails sent to people who book a class.',
+      },
     },
     {
       id: SECTIONS.CAR_BAY,
       title: 'Car Bay',
       description: 'Open hours, booking lengths, booking window and rates.',
       icon: CarIcon,
+      emailTemplates: {
+        group: EMAIL_TEMPLATE_GROUP.CAR_BAY,
+        description: 'Emails sent to people who book the car bay.',
+      },
     },
     {
       id: SECTIONS.MEMBERS,
       title: 'Members',
       description: 'Square day pass items and syncing memberships from Square.',
       icon: UsersIcon,
+      emailTemplates: {
+        group: EMAIL_TEMPLATE_GROUP.MEMBERS,
+        description: 'Emails sent to members to set up their pass.',
+      },
     },
     {
       id: SECTIONS.KIOSK,
@@ -137,7 +163,7 @@
     {/each}
   </nav>
 
-  <div class="min-w-0 flex-1 md:max-w-3xl">
+  <div class="flex min-w-0 flex-1 flex-col gap-6 md:max-w-3xl">
     {#if active.id === SECTIONS.PRINTING}
       <div class="flex flex-col gap-6">
         <SettingsSection
@@ -150,10 +176,6 @@
             <SystemSettings printRequestSettings={printRequestSettings.current} />
           {/if}
         </SettingsSection>
-        <EmailTemplateSettings
-          group={EMAIL_TEMPLATE_GROUP.PRINTING}
-          description="Emails sent to customers as their print request moves along."
-        />
         <SettingsSection
           title="Print Pricing"
           description="Build plate price and member discount used when billing print requests."
@@ -179,81 +201,60 @@
         </SettingsSection>
       </div>
     {:else if active.id === SECTIONS.SQUARE}
-      <div class="flex flex-col gap-6">
-        <SettingsSection
-          title={active.title}
-          description={active.description}
-          formId="square-settings"
-        >
-          {#snippet actions()}
-            <Button variant="ghost" size="sm" onclick={() => modalManager.show(SquareInfoModal)}>
-              <CircleHelpIcon />
-              Setup help
-            </Button>
-          {/snippet}
-          {@render loadState(squareSettings, 'Square')}
-          {#if squareSettings.current}
-            <SquareSettings squareSettings={squareSettings.current} />
-          {/if}
-        </SettingsSection>
-        <EmailTemplateSettings
-          group={EMAIL_TEMPLATE_GROUP.PAYMENTS}
-          description="Payment requests for organization balances and car bay overruns."
-        />
-      </div>
+      <SettingsSection
+        title={active.title}
+        description={active.description}
+        formId="square-settings"
+      >
+        {#snippet actions()}
+          <Button variant="ghost" size="sm" onclick={() => modalManager.show(SquareInfoModal)}>
+            <CircleHelpIcon />
+            Setup help
+          </Button>
+        {/snippet}
+        {@render loadState(squareSettings, 'Square')}
+        {#if squareSettings.current}
+          <SquareSettings squareSettings={squareSettings.current} />
+        {/if}
+      </SettingsSection>
     {:else if active.id === SECTIONS.CLASSES}
-      <div class="flex flex-col gap-6">
-        <SettingsSection
-          title={active.title}
-          description={active.description}
-          formId="class-settings"
-        >
-          {@render loadState(classSettings, 'class')}
-          {#if classSettings.current}
-            <ClassSettings classSettings={classSettings.current} />
-          {/if}
-        </SettingsSection>
-        <EmailTemplateSettings
-          group={EMAIL_TEMPLATE_GROUP.CLASSES}
-          description="Emails sent to people who book a class."
-        />
-      </div>
+      <SettingsSection
+        title={active.title}
+        description={active.description}
+        formId="class-settings"
+      >
+        {@render loadState(classSettings, 'class')}
+        {#if classSettings.current}
+          <ClassSettings classSettings={classSettings.current} />
+        {/if}
+      </SettingsSection>
     {:else if active.id === SECTIONS.CAR_BAY}
-      <div class="flex flex-col gap-6">
-        <SettingsSection
-          title={active.title}
-          description={active.description}
-          formId="car-bay-settings"
-        >
-          {@render loadState(carBayRates, 'car bay rates')}
-          {@render loadState(carBayPolicy, 'car bay rules')}
-          {#if carBayRates.current && carBayPolicy.current}
-            <CarBaySettings rates={carBayRates.current} policy={carBayPolicy.current} />
-          {/if}
-        </SettingsSection>
-        <EmailTemplateSettings
-          group={EMAIL_TEMPLATE_GROUP.CAR_BAY}
-          description="Emails sent to people who book the car bay."
-        />
-      </div>
+      <SettingsSection
+        title={active.title}
+        description={active.description}
+        formId="car-bay-settings"
+      >
+        {@render loadState(carBayRates, 'car bay rates')}
+        {@render loadState(carBayPolicy, 'car bay rules')}
+        {#if carBayRates.current && carBayPolicy.current}
+          <CarBaySettings rates={carBayRates.current} policy={carBayPolicy.current} />
+        {/if}
+      </SettingsSection>
     {:else if active.id === SECTIONS.MEMBERS}
-      <div class="flex flex-col gap-6">
-        <SettingsSection
-          title={active.title}
-          description={active.description}
-          formId="member-square-settings"
-        >
-          <MemberSquareSettings />
-        </SettingsSection>
-        <EmailTemplateSettings
-          group={EMAIL_TEMPLATE_GROUP.MEMBERS}
-          description="Emails sent to members to set up their pass."
-        />
-      </div>
+      <SettingsSection
+        title={active.title}
+        description={active.description}
+        formId="member-square-settings"
+      >
+        <MemberSquareSettings />
+      </SettingsSection>
     {:else if active.id === SECTIONS.KIOSK}
       <SettingsSection title={active.title} description={active.description}>
         <KioskSettings />
       </SettingsSection>
+    {/if}
+    {#if active.emailTemplates}
+      <EmailTemplateSettings {...active.emailTemplates} />
     {/if}
   </div>
 </div>
