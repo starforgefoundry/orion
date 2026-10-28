@@ -7,12 +7,6 @@ import * as v from 'valibot';
 
 const MEMBER_NOT_FOUND = 'This link is invalid or has expired';
 
-export const getMemberPass = query(v.string(), async (token) => {
-  const pass = await onboardingService.getMemberPass(token);
-  if (!pass) error(HTTP_NOT_FOUND, MEMBER_NOT_FOUND);
-  return pass;
-});
-
 export const getOnboarding = query(v.string(), async (token) => {
   const onboarding = await onboardingService.getOnboarding(token);
   if (!onboarding) error(HTTP_NOT_FOUND, MEMBER_NOT_FOUND);

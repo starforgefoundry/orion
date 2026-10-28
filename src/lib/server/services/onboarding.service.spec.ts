@@ -1,8 +1,4 @@
-import {
-  appleWalletConfig,
-  buildApplePass,
-  type AppleWalletConfig,
-} from '$lib/server/utils/apple_wallet';
+import { appleWalletConfig, type AppleWalletConfig } from '$lib/server/utils/apple_wallet';
 import { googleWalletConfig, type GoogleWalletConfig } from '$lib/server/utils/google_wallet';
 import { factory } from '$test/factory';
 import { memberAccessContext, organizationAccess } from '$test/factory/member_access';
@@ -44,7 +40,6 @@ describe(OnboardingService.name, () => {
   beforeEach(() => {
     ({ sut, mocks } = newTestService(OnboardingService));
 
-    mocks.memberRepository.getByPassToken.mockResolvedValue(MEMBER);
     mocks.memberRepository.getByOnboardingToken.mockResolvedValue(MEMBER);
     mocks.memberRepository.getAccessContext.mockResolvedValue(
       memberAccessContext({ member: MEMBER, hasWaiver: false }),
@@ -100,25 +95,6 @@ describe(OnboardingService.name, () => {
     });
   });
 
-  describe('getApplePass', () => {
-    it('returns undefined when Apple Wallet is not configured', async () => {
-      expect(await sut.getApplePass('token-abc')).toBeUndefined();
-      expect(buildApplePass).not.toHaveBeenCalled();
-    });
-
-    it('returns undefined for an unknown token', async () => {
-      vi.mocked(appleWalletConfig).mockReturnValue(APPLE_CONFIG);
-      mocks.memberRepository.getByPassToken.mockResolvedValue(undefined as never);
-      expect(await sut.getApplePass('nope')).toBeUndefined();
-    });
-
-    it("builds the member's pass", async () => {
-      vi.mocked(appleWalletConfig).mockReturnValue(APPLE_CONFIG);
-      expect((await sut.getApplePass('token-abc'))?.toString()).toBe('pkpass');
-      expect(buildApplePass).toHaveBeenCalledWith(MEMBER, APPLE_CONFIG);
-    });
-  });
-
   describe('submitWaiver', () => {
     const dto = { token: 'onboarding-abc', name: 'Sam S', signature: SIGNATURE, isAdult: true };
 
@@ -143,30 +119,6 @@ describe(OnboardingService.name, () => {
       mocks.memberRepository.getByOnboardingToken.mockResolvedValue(undefined as never);
       expect(await sut.submitWaiver(dto)).toBe(false);
       expect(mocks.waiverRepository.submit).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('getGoogleWalletUrl', () => {
-    it('returns undefined when Google Wallet is not configured', async () => {
-      expect(await sut.getGoogleWalletUrl('token-abc')).toBeUndefined();
-      expect(mocks.memberRepository.getByPassToken).not.toHaveBeenCalled();
-    });
-
-    it('returns a save link for the member', async () => {
-      vi.mocked(googleWalletConfig).mockReturnValue(WALLET_CONFIG);
-      expect(await sut.getGoogleWalletUrl('token-abc')).toBe(
-        'https://pay.google.com/gp/v/save/jwt',
-      );
-    });
-  });
-
-  describe('getMemberPass', () => {
-    it('returns the name, QR value and configured wallets', async () => {
-      expect(await sut.getMemberPass('token-abc')).toEqual({
-        name: 'Sam Smith',
-        passUrl: 'https://orion.example.com/pass/token-abc',
-        wallets: [],
-      });
     });
   });
 

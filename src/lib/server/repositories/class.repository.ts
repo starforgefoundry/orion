@@ -1,7 +1,8 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { fileUrl, saveFile } from '$lib/server/utils/storage';
-import { and, eq, gte, sum, type InferInsertModel } from 'drizzle-orm';
+import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '$lib/utils/classes';
+import { and, eq, gte, isNull, lte, sum, type InferInsertModel } from 'drizzle-orm';
 
 function withPhotoUrl<T extends { photoUrl: string | null }>(catalog: T): T {
   return { ...catalog, photoUrl: fileUrl(catalog.photoUrl) };
@@ -224,6 +225,28 @@ export class ClassRepository extends BaseRepository {
       ),
     );
     return rows.map(({ booking, payment }) => ({ ...booking, payment }));
+  }
+
+  /** Dates are YYYY-MM-DD in Central time, both ends inclusive. */
+  async getReminderCandidates(fromDate: string, toDate: string) {
+    return await this.db
+      .select({
+        booking: schema.classBooking,
+        instance: schema.classInstance,
+        catalog: schema.classCatalog,
+      })
+      .from(schema.classBooking)
+      .innerJoin(schema.classInstance, eq(schema.classBooking.instanceId, schema.classInstance.id))
+      .innerJoin(schema.classCatalog, eq(schema.classInstance.classId, schema.classCatalog.id))
+      .where(
+        and(
+          eq(schema.classBooking.status, CLASS_BOOKING_STATUS.CONFIRMED),
+          eq(schema.classInstance.status, CLASS_INSTANCE_STATUS.SCHEDULED),
+          isNull(schema.classBooking.reminderSentDate),
+          gte(schema.classInstance.date, fromDate),
+          lte(schema.classInstance.date, toDate),
+        ),
+      );
   }
 
   async getConfirmedBookingCount(instanceId: string): Promise<number> {

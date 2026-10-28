@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
-import type { Member } from '$lib/server/db/schema';
 import { passUrl } from '$lib/server/utils/member_links';
-import { hexColor, memberSince, PASS_BRAND } from '$lib/server/utils/pass_brand';
+import { hexColor, PASS_BRAND } from '$lib/server/utils/pass_brand';
+import type { PassDetails } from '$lib/server/utils/pass_details';
 import { sign } from 'node:crypto';
 
 export const GOOGLE_WALLET_SAVE_URL = 'https://pay.google.com/gp/v/save';
@@ -11,7 +11,6 @@ const JWT_HEADER = { alg: 'RS256', typ: 'JWT' };
 const JWT_SIGNING_HASH = 'sha256';
 const PASS_LANGUAGE = 'en-US';
 const PASS_TITLE = 'Starforge Foundry';
-const PASS_SUBHEADER = 'Member';
 const PASS_BACKGROUND_COLOR = hexColor(PASS_BRAND.navy);
 const PASS_LOGO_PATH = '/logo.png';
 const PASS_HERO_PATH = '/wallet/pass-hero.jpg';
@@ -25,8 +24,6 @@ export type GoogleWalletConfig = {
   privateKey: string;
   origin: string;
 };
-
-type WalletMember = Pick<Member, 'id' | 'name' | 'passToken' | 'createdDate'>;
 
 export function googleWalletConfig(): GoogleWalletConfig | undefined {
   const {
@@ -60,7 +57,7 @@ function localized(value: string) {
 }
 
 export function googleWalletClaims(
-  member: WalletMember,
+  pass: PassDetails,
   config: GoogleWalletConfig,
   issuedAt: Date = new Date(),
 ) {
@@ -76,17 +73,22 @@ export function googleWalletClaims(
       genericClasses: [{ id: classId }],
       genericObjects: [
         {
-          id: `${config.issuerId}.${member.id}`,
+          id: `${config.issuerId}.${pass.serial}`,
           classId,
           state: OBJECT_STATE_ACTIVE,
           cardTitle: localized(PASS_TITLE),
-          header: localized(member.name),
-          subheader: localized(PASS_SUBHEADER),
+          header: localized(pass.holderName),
+          subheader: localized(pass.title),
+          validTimeInterval: pass.expiresAt && { end: { date: pass.expiresAt.toISO() } },
           hexBackgroundColor: PASS_BACKGROUND_COLOR,
           logo: { sourceUri: { uri: `${config.origin}${PASS_LOGO_PATH}` } },
           heroImage: { sourceUri: { uri: `${config.origin}${PASS_HERO_PATH}` } },
           textModulesData: [
-            { id: 'member_since', header: 'Member since', body: memberSince(member) },
+            ...pass.fields.map((field) => ({
+              id: field.key,
+              header: field.label,
+              body: field.value,
+            })),
             { id: 'checking_in', header: 'Checking in', body: PASS_BRAND.checkInInstructions },
           ],
           linksModuleData: {
@@ -99,7 +101,7 @@ export function googleWalletClaims(
               },
             ],
           },
-          barcode: { type: BARCODE_TYPE_QR, value: passUrl(member) },
+          barcode: { type: BARCODE_TYPE_QR, value: passUrl(pass) },
         },
       ],
     },
@@ -116,7 +118,7 @@ export function signJwt(claims: object, privateKeyPem: string) {
   return `${unsigned}.${base64Url(signature)}`;
 }
 
-export function googleWalletSaveUrl(member: WalletMember, config: GoogleWalletConfig) {
-  const jwt = signJwt(googleWalletClaims(member, config), config.privateKey);
+export function googleWalletSaveUrl(pass: PassDetails, config: GoogleWalletConfig) {
+  const jwt = signJwt(googleWalletClaims(pass, config), config.privateKey);
   return `${GOOGLE_WALLET_SAVE_URL}/${jwt}`;
 }

@@ -34,7 +34,6 @@ const FONTS = {
 };
 
 const TITLE = 'Starforge Foundry';
-const LABEL = 'MEMBER PASS';
 const LABEL_LETTER_SPACING = '4px';
 
 function makeQr(qrValue: string) {
@@ -84,7 +83,7 @@ function drawQr(context: CanvasRenderingContext2D, qrValue: string, x: number, y
   }
 }
 
-export async function renderPassImage(qrValue: string, name: string) {
+export async function renderPassImage(qrValue: string, name: string, label: string) {
   const { width, padding, headerHeight } = LAYOUT;
   const qrTop = headerHeight + LAYOUT.qrTopGap;
   const nameY = qrTop + LAYOUT.qrBoxSize + LAYOUT.nameGap;
@@ -117,7 +116,7 @@ export async function renderPassImage(qrValue: string, name: string) {
   context.fillStyle = PASS_COLORS.gold;
   context.font = FONTS.label;
   context.letterSpacing = LABEL_LETTER_SPACING;
-  context.fillText(LABEL, textX, headerHeight / 2 + 36);
+  context.fillText(label.toUpperCase(), textX, headerHeight / 2 + 36);
   context.letterSpacing = '0px';
 
   context.fillStyle = PASS_COLORS.divider;

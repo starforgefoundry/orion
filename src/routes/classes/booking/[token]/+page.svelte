@@ -7,6 +7,7 @@
   import { Spinner } from '$lib/components/ui/spinner';
   import InfoRow from '$lib/frontend/components/InfoRow.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
+  import PassCard from '$lib/frontend/member-pass/PassCard.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import BanIcon from '@lucide/svelte/icons/ban';
@@ -149,6 +150,10 @@
     </Section>
 
     {#if isConfirmed}
+      <Section title="Your Class Pass">
+        <PassCard token={booking.passToken} />
+      </Section>
+
       <Section title="Add to Calendar">
         <div class="flex flex-col gap-2 sm:flex-row">
           <Button

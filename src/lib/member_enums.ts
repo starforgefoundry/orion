@@ -27,6 +27,22 @@ export const ACCESS_BASIS = {
 } as const;
 export type AccessBasis = EnumValue<typeof ACCESS_BASIS>;
 
+/** Bookings admit their holder for the booked day only, so they never count as member access. */
+export const VISIT_BASIS = {
+  ...ACCESS_BASIS,
+  CLASS: 'class',
+  CAR_BAY: 'car_bay',
+} as const;
+export type VisitBasis = EnumValue<typeof VISIT_BASIS>;
+
+export const PASS_KIND = {
+  MEMBERSHIP: 'membership',
+  DAY_PASS: 'day_pass',
+  CLASS: 'class',
+  CAR_BAY: 'car_bay',
+} as const;
+export type PassKind = EnumValue<typeof PASS_KIND>;
+
 export const VISIT_OUTCOME = {
   ADMITTED: 'admitted',
   DENIED_NO_WAIVER: 'denied_no_waiver',
@@ -37,6 +53,7 @@ export type VisitOutcome = EnumValue<typeof VISIT_OUTCOME>;
 export const MEMBER_EMAIL_TYPE = {
   ONBOARDING: 'onboarding',
   WAIVER_REQUEST: 'waiver_request',
+  DAY_PASS: 'day_pass',
 } as const;
 export type MemberEmailType = EnumValue<typeof MEMBER_EMAIL_TYPE>;
 

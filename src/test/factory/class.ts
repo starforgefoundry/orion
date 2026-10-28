@@ -42,6 +42,9 @@ export function classBooking(overrides: Partial<ClassBooking> = {}): ClassBookin
     bookingToken: newId(),
     quantity: 1,
     paymentId: null,
+    memberId: null,
+    passToken: newId(),
+    reminderSentDate: null,
     createdDate: DateTime.now(),
     ...overrides,
   };

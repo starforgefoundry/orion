@@ -4,9 +4,18 @@ import type { Member } from '$lib/server/db/schema';
 export const PASS_PATH = '/pass';
 export const ONBOARDING_PATH = '/member/onboard';
 
-/** The value encoded in a member's QR code. Phone cameras open it; the kiosk reads the token. */
-export function passUrl(member: Pick<Member, 'passToken'>) {
-  return `${env.FRONTEND_URL}${PASS_PATH}/${member.passToken}`;
+/** The value encoded in a pass's QR code. Phone cameras open it; the kiosk reads the token. */
+export function passUrl(pass: { passToken: string }) {
+  return `${env.FRONTEND_URL}${PASS_PATH}/${pass.passToken}`;
+}
+
+/** A QR image email clients can load, since most of them block inline images. */
+export function passQrImageUrl(pass: { passToken: string }) {
+  return `${env.FRONTEND_URL}/api${PASS_PATH}/${pass.passToken}/qr`;
+}
+
+export function passLinks(pass: { passToken: string }) {
+  return { passUrl: passUrl(pass), passQrImageUrl: passQrImageUrl(pass) };
 }
 
 export function passTokenFromScan(scanned: string) {

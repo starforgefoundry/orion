@@ -188,9 +188,13 @@ export class SquareService extends BaseService {
       purchasedAt ? DateTime.fromISO(purchasedAt) : DateTime.now(),
       quantity,
     );
-    if (created.length === 0) return;
-
-    await this.sendOnboarding(member, MEMBER_EMAIL_TRIGGER.DAY_PASS);
+    for (const dayPass of created) {
+      try {
+        await this.memberNotificationRepository.sendDayPass(member, dayPass);
+      } catch (error) {
+        console.error(`Failed to send day pass ${dayPass.id} to member ${member.id}:`, error);
+      }
+    }
   }
 
   private async findBuyer(order: Order, payment: Payment): Promise<Buyer | undefined> {

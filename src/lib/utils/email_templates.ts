@@ -64,6 +64,25 @@ const ONBOARDING_VARIABLES = {
     example: 'https://orion.starforgefoundry.com/member/onboard/example',
   },
 } as const satisfies Record<string, TemplateVariable>;
+const PASS_URL: TemplateVariable = {
+  description: 'Link to the pass page, where it can be added to Apple or Google Wallet',
+  example: 'https://orion.starforgefoundry.com/pass/example',
+};
+const PASS_QR_IMAGE_URL: TemplateVariable = {
+  description: 'Image link for the pass QR code, for use in an <img> tag',
+  example: 'https://orion.starforgefoundry.com/api/pass/example/qr',
+};
+const PASS_LINKS = { passUrl: PASS_URL, passQrImageUrl: PASS_QR_IMAGE_URL };
+const CLASS_NAME: TemplateVariable = {
+  description: 'Name of the class',
+  example: 'Intro to Welding',
+};
+const CLASS_DATE: TemplateVariable = {
+  description: 'Date of the class',
+  example: 'Monday, March 2, 2026',
+};
+const CLASS_TIME: TemplateVariable = { description: 'Start time of the class', example: '6:00 PM' };
+const CLASS_QUANTITY: TemplateVariable = { description: 'Number of spots booked', example: '2' };
 
 export const EMAIL_TEMPLATE_DEFINITIONS = {
   print_submitted: {
@@ -120,13 +139,28 @@ export const EMAIL_TEMPLATE_DEFINITIONS = {
     group: EMAIL_TEMPLATE_GROUP.CLASSES,
     variables: {
       customerName: CUSTOMER_NAME,
-      className: { description: 'Name of the class', example: 'Intro to Welding' },
-      classDate: { description: 'Date of the class', example: 'Monday, March 2, 2026' },
-      classTime: { description: 'Start time of the class', example: '6:00 PM' },
+      className: CLASS_NAME,
+      classDate: CLASS_DATE,
+      classTime: CLASS_TIME,
       classDuration: { description: 'Length of the class in minutes', example: '90' },
-      quantity: { description: 'Number of spots booked', example: '2' },
+      quantity: CLASS_QUANTITY,
       amountPaid: DOLLARS_PAID,
       bookingUrl: BOOKING_URL,
+      ...PASS_LINKS,
+    },
+  },
+  class_reminder: {
+    name: 'Class Reminder',
+    description: 'Sent the day before a booked class.',
+    group: EMAIL_TEMPLATE_GROUP.CLASSES,
+    variables: {
+      customerName: CUSTOMER_NAME,
+      className: CLASS_NAME,
+      classDate: CLASS_DATE,
+      classTime: CLASS_TIME,
+      quantity: CLASS_QUANTITY,
+      bookingUrl: BOOKING_URL,
+      ...PASS_LINKS,
     },
   },
   car_bay_booking: {
@@ -144,6 +178,7 @@ export const EMAIL_TEMPLATE_DEFINITIONS = {
         example: '24',
       },
       storageDays: { description: 'Days a vehicle can stay on the property', example: '7' },
+      ...PASS_LINKS,
     },
   },
   car_bay_reminder: {
@@ -155,6 +190,7 @@ export const EMAIL_TEMPLATE_DEFINITIONS = {
       tierName: CAR_BAY_TIER,
       bookingWhen: CAR_BAY_WHEN,
       bookingUrl: BOOKING_URL,
+      ...PASS_LINKS,
     },
   },
   member_welcome: {
@@ -168,6 +204,15 @@ export const EMAIL_TEMPLATE_DEFINITIONS = {
     description: 'Sent to existing members when staff or the member request the pass link.',
     group: EMAIL_TEMPLATE_GROUP.MEMBERS,
     variables: ONBOARDING_VARIABLES,
+  },
+  day_pass: {
+    name: 'Day Pass',
+    description: 'Sent when someone buys a day pass.',
+    group: EMAIL_TEMPLATE_GROUP.MEMBERS,
+    variables: {
+      memberName: { description: 'Name of the member', example: 'Jane Doe' },
+      ...PASS_LINKS,
+    },
   },
   organization_balance: {
     name: 'Organization Balance Due',

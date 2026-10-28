@@ -15,6 +15,7 @@ import { MemberNotificationRepository } from '$lib/server/repositories/member_no
 import { MemberSubscriptionRepository } from '$lib/server/repositories/member_subscription.repository';
 import { OrganizationRepository } from '$lib/server/repositories/organization.repository';
 import { OrganizationMemberRepository } from '$lib/server/repositories/organization_member.repository';
+import { PassRepository } from '$lib/server/repositories/pass.repository';
 import { PaymentRepository } from '$lib/server/repositories/payment.repository';
 import { PrintFilesRepository } from '$lib/server/repositories/print_files.repository';
 import { PrintMaterialsRepository } from '$lib/server/repositories/print_materials.repository';
@@ -46,6 +47,7 @@ const REPOSITORIES: { [K in keyof ServiceRepositories]: Constructor<ServiceRepos
   memberSubscriptionRepository: MemberSubscriptionRepository,
   organizationMemberRepository: OrganizationMemberRepository,
   organizationRepository: OrganizationRepository,
+  passRepository: PassRepository,
   paymentRepository: PaymentRepository,
   printFilesRepository: PrintFilesRepository,
   printMaterialsRepository: PrintMaterialsRepository,

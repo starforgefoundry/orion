@@ -20,6 +20,8 @@ export function carBayBooking(overrides: Partial<CarBayBooking> = {}): CarBayBoo
     createdByEmail: null,
     bookingToken: newId(),
     reminderSentDate: null,
+    memberId: null,
+    passToken: newId(),
     createdDate: DateTime.now(),
     ...overrides,
   };

@@ -25,10 +25,20 @@ import {
   PAYMENT_TYPE,
 } from '$lib/utils/billing';
 import { SPACE_ZONE } from '$lib/space';
-import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '$lib/utils/classes';
-import { DateTime } from 'luxon';
+import { spaceDate } from '$lib/server/utils/member_access';
+import { passLinks } from '$lib/server/utils/member_links';
+import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS, classStartsAt } from '$lib/utils/classes';
+import { DateTime, Duration } from 'luxon';
 
 const PAYMENT_FAILED_MESSAGE = 'Payment failed';
+const CLASS_EMAIL = 'classes@starforgefoundry.com';
+const CLASS_SENDER = `Starforge Classes <${CLASS_EMAIL}>`;
+const CLASS_DATE_FORMAT = 'EEEE, MMMM d, yyyy';
+export const CLASS_REMINDER_LEAD = Duration.fromObject({ hours: 24 });
+
+function bookingUrl(booking: { bookingToken: string }) {
+  return `${env.FRONTEND_URL}/classes/booking/${booking.bookingToken}`;
+}
 
 type PaidBooking = { payment: Payment | null };
 
@@ -317,8 +327,10 @@ export class ClassService extends BaseService {
 
     let booking;
     try {
+      const member = await this.memberRepository.upsertByEmail(dto.customerName, dto.customerEmail);
       booking = await this.classRepository.createBooking({
         instanceId: dto.instanceId,
+        memberId: member.id,
         customerName: dto.customerName,
         customerEmail: dto.customerEmail,
         customerPhone: dto.customerPhone,
@@ -423,8 +435,10 @@ export class ClassService extends BaseService {
     }
 
     // Create booking with no payment
+    const member = await this.memberRepository.upsertByEmail(dto.customerName, dto.customerEmail);
     const booking = await this.classRepository.createBooking({
       instanceId: dto.instanceId,
+      memberId: member.id,
       customerName: dto.customerName,
       customerEmail: dto.customerEmail,
       customerPhone: dto.customerPhone,
@@ -453,24 +467,65 @@ export class ClassService extends BaseService {
     }
 
     const dateDt = DateTime.fromISO(booking.instance.date, { zone: SPACE_ZONE });
-    const bookingUrl = `${env.FRONTEND_URL}/classes/booking/${booking.bookingToken}`;
 
     await this.mailgunRepository.sendTemplate(
       booking.customerEmail,
-      'Starforge Classes <classes@starforgefoundry.com>',
-      'classes@starforgefoundry.com',
+      CLASS_SENDER,
+      CLASS_EMAIL,
       'class_booking',
       {
         customerName: booking.customerName,
         className: booking.catalog.name,
-        classDate: dateDt.toFormat('EEEE, MMMM d, yyyy'),
+        classDate: dateDt.toFormat(CLASS_DATE_FORMAT),
         classTime: formatTime(booking.instance.startTime),
         classDuration: booking.instance.durationMinutes.toString(),
         quantity: booking.quantity.toString(),
         amountPaid: centsToDollars(amountPaid(booking.payment)),
-        bookingUrl,
+        bookingUrl: bookingUrl(booking),
+        ...passLinks(booking),
       },
     );
+  }
+
+  /** Skips bookings made inside the reminder window, since their confirmation just went out. */
+  async sendDueReminders(now: DateTime = DateTime.now()) {
+    const until = now.plus(CLASS_REMINDER_LEAD);
+    const candidates = await this.classRepository.getReminderCandidates(
+      spaceDate(now),
+      spaceDate(until),
+    );
+
+    const due = candidates.filter(({ booking, instance }) => {
+      const startsAt = classStartsAt(instance);
+      return (
+        startsAt > now &&
+        startsAt <= until &&
+        startsAt.diff(booking.createdDate).toMillis() > CLASS_REMINDER_LEAD.toMillis()
+      );
+    });
+
+    for (const { booking, instance, catalog } of due) {
+      try {
+        await this.mailgunRepository.sendTemplate(
+          booking.customerEmail,
+          CLASS_SENDER,
+          CLASS_EMAIL,
+          'class_reminder',
+          {
+            customerName: booking.customerName,
+            className: catalog.name,
+            classDate: classStartsAt(instance).toFormat(CLASS_DATE_FORMAT),
+            classTime: formatTime(instance.startTime),
+            quantity: booking.quantity.toString(),
+            bookingUrl: bookingUrl(booking),
+            ...passLinks(booking),
+          },
+        );
+        await this.classRepository.updateBooking(booking.id, { reminderSentDate: now });
+      } catch (error) {
+        console.error(`Failed to send class reminder for booking ${booking.id}:`, error);
+      }
+    }
   }
 
   async sendBookingDiscordNotification(bookingId: string) {

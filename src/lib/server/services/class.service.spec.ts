@@ -6,9 +6,11 @@ import type {
   User,
 } from '$lib/server/db/schema';
 import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
+import { SPACE_ZONE } from '$lib/space';
 import { PAYMENT_STATUS } from '$lib/utils/billing';
 import { factory } from '$test/factory';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
+import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ClassService } from './class.service';
 
@@ -373,6 +375,7 @@ describe(ClassService.name, () => {
       bookingToken: 'tok-abc',
       status: 'confirmed',
     });
+    const member = factory.member({ name: 'Jane Doe', email: 'jane@test.com' });
 
     beforeEach(() => {
       mocks.classRepository.getInstanceById.mockResolvedValue(instance);
@@ -380,6 +383,7 @@ describe(ClassService.name, () => {
       stubSettings(mocks.settingsRepository, { classSettings: { discordWebhookUrl: '' } });
       mocks.paymentRepository.authorize.mockResolvedValue(authorized);
       mocks.paymentRepository.capture.mockResolvedValue(paidPayment(5000));
+      mocks.memberRepository.upsertByEmail.mockResolvedValue(member);
       mocks.classRepository.createBooking.mockResolvedValue(booking);
       mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
       mocks.classRepository.getBookingById.mockResolvedValue(
@@ -407,8 +411,13 @@ describe(ClassService.name, () => {
         }),
         'sq-nonce-123',
       );
+      expect(mocks.memberRepository.upsertByEmail).toHaveBeenCalledWith(
+        'Jane Doe',
+        'jane@test.com',
+      );
       expect(mocks.classRepository.createBooking).toHaveBeenCalledWith({
         instanceId: 'inst-1',
+        memberId: member.id,
         customerName: 'Jane Doe',
         customerEmail: 'jane@test.com',
         customerPhone: '555-1234',
@@ -575,6 +584,7 @@ describe(ClassService.name, () => {
             customerName: 'Jane Doe',
             customerEmail: 'jane@test.com',
             bookingToken: 'tok-abc',
+            passToken: 'pass-abc',
             quantity: 1,
           },
           paidPayment(5000),
@@ -597,6 +607,8 @@ describe(ClassService.name, () => {
           quantity: '1',
           amountPaid: '50.00',
           bookingUrl: 'https://orion.example.com/classes/booking/tok-abc',
+          passUrl: 'https://orion.example.com/pass/pass-abc',
+          passQrImageUrl: 'https://orion.example.com/api/pass/pass-abc/qr',
         }),
       );
     });
@@ -605,6 +617,107 @@ describe(ClassService.name, () => {
       mocks.classRepository.getBookingById.mockResolvedValue(null);
 
       await expect(sut.sendBookingConfirmationEmail('bad-id')).rejects.toThrow('Booking not found');
+    });
+  });
+
+  describe('sendDueReminders', () => {
+    const NOW = DateTime.fromISO('2026-10-12T09:00', { zone: SPACE_ZONE });
+    const catalog = factory.classCatalog({ name: 'Welding Class' });
+
+    function candidate(startsAt: DateTime, bookedAt: DateTime, id: string) {
+      return {
+        booking: factory.classBooking({
+          id,
+          createdDate: bookedAt,
+          bookingToken: `tok-${id}`,
+          passToken: `pass-${id}`,
+        }),
+        instance: factory.classInstance({
+          date: startsAt.toISODate()!,
+          startTime: startsAt.toFormat('HH:mm'),
+        }),
+        catalog,
+      };
+    }
+
+    beforeEach(() => {
+      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
+    });
+
+    it('looks at classes from today through tomorrow', async () => {
+      mocks.classRepository.getReminderCandidates.mockResolvedValue([]);
+
+      await sut.sendDueReminders(NOW);
+
+      expect(mocks.classRepository.getReminderCandidates).toHaveBeenCalledWith(
+        '2026-10-12',
+        '2026-10-13',
+      );
+    });
+
+    it('reminds bookings for classes in the next 24 hours with their class pass', async () => {
+      mocks.classRepository.getReminderCandidates.mockResolvedValue([
+        candidate(NOW.plus({ hours: 20 }), NOW.minus({ days: 3 }), 'due'),
+      ]);
+
+      await sut.sendDueReminders(NOW);
+
+      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledExactlyOnceWith(
+        'customer@example.com',
+        'Starforge Classes <classes@starforgefoundry.com>',
+        'classes@starforgefoundry.com',
+        'class_reminder',
+        expect.objectContaining({
+          className: 'Welding Class',
+          classDate: 'Tuesday, October 13, 2026',
+          bookingUrl: 'https://orion.example.com/classes/booking/tok-due',
+          passUrl: 'https://orion.example.com/pass/pass-due',
+          passQrImageUrl: 'https://orion.example.com/api/pass/pass-due/qr',
+        }),
+      );
+      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('due', {
+        reminderSentDate: NOW,
+      });
+    });
+
+    it('skips classes that already started or are more than 24 hours out', async () => {
+      mocks.classRepository.getReminderCandidates.mockResolvedValue([
+        candidate(NOW.minus({ hours: 1 }), NOW.minus({ days: 3 }), 'started'),
+        candidate(NOW.plus({ hours: 30 }), NOW.minus({ days: 3 }), 'later'),
+      ]);
+
+      await sut.sendDueReminders(NOW);
+
+      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
+    });
+
+    it('skips bookings made inside the reminder window', async () => {
+      mocks.classRepository.getReminderCandidates.mockResolvedValue([
+        candidate(NOW.plus({ hours: 20 }), NOW.minus({ hours: 1 }), 'recent'),
+      ]);
+
+      await sut.sendDueReminders(NOW);
+
+      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
+    });
+
+    it('keeps going when one reminder fails', async () => {
+      mocks.classRepository.getReminderCandidates.mockResolvedValue([
+        candidate(NOW.plus({ hours: 20 }), NOW.minus({ days: 3 }), 'fails'),
+        candidate(NOW.plus({ hours: 21 }), NOW.minus({ days: 3 }), 'sends'),
+      ]);
+      mocks.mailgunRepository.sendTemplate.mockRejectedValueOnce(new Error('mailgun down'));
+
+      await sut.sendDueReminders(NOW);
+
+      expect(mocks.classRepository.updateBooking).not.toHaveBeenCalledWith(
+        'fails',
+        expect.anything(),
+      );
+      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('sends', {
+        reminderSentDate: NOW,
+      });
     });
   });
 

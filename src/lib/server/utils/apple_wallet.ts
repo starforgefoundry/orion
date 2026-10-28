@@ -8,15 +8,17 @@ import LOGO_3X from '$lib/assets/wallet/logo@3x.png?inline';
 import STRIP from '$lib/assets/wallet/strip.png?inline';
 import STRIP_2X from '$lib/assets/wallet/strip@2x.png?inline';
 import STRIP_3X from '$lib/assets/wallet/strip@3x.png?inline';
-import type { Member } from '$lib/server/db/schema';
+import { PASS_KIND } from '$lib/member_enums';
 import { passUrl } from '$lib/server/utils/member_links';
-import { memberSince, PASS_BRAND } from '$lib/server/utils/pass_brand';
+import { PASS_BRAND } from '$lib/server/utils/pass_brand';
+import type { PassDetails } from '$lib/server/utils/pass_details';
 import { PKPass } from 'passkit-generator';
 
 export const APPLE_PASS_CONTENT_TYPE = 'application/vnd.apple.pkpass';
 const PASS_FORMAT_VERSION = 1;
 const ORGANIZATION_NAME = 'Starforge Foundry';
-const PASS_DESCRIPTION = 'Starforge Foundry member pass';
+const PASS_STYLE_STORE_CARD = 'storeCard';
+const PASS_STYLE_EVENT_TICKET = 'eventTicket';
 const BACKGROUND_COLOR = `rgb(${PASS_BRAND.navy.join(', ')})`;
 const FOREGROUND_COLOR = `rgb(${PASS_BRAND.white.join(', ')})`;
 const LABEL_COLOR = `rgb(${PASS_BRAND.gold.join(', ')})`;
@@ -44,8 +46,6 @@ export type AppleWalletConfig = {
   signerKeyPassphrase?: string;
   wwdr: string;
 };
-
-type WalletMember = Pick<Member, 'id' | 'name' | 'passToken' | 'createdDate'>;
 
 function unescapePem(value: string) {
   return value.replace(/\\n/g, '\n');
@@ -80,28 +80,31 @@ export function appleWalletConfig(): AppleWalletConfig | undefined {
   };
 }
 
-export function applePassJson(member: WalletMember, config: AppleWalletConfig) {
+export function applePassJson(pass: PassDetails, config: AppleWalletConfig) {
+  const [firstField, ...otherFields] = pass.fields;
+  const style =
+    pass.kind === PASS_KIND.MEMBERSHIP ? PASS_STYLE_STORE_CARD : PASS_STYLE_EVENT_TICKET;
+
   return {
     formatVersion: PASS_FORMAT_VERSION,
     passTypeIdentifier: config.passTypeId,
     teamIdentifier: config.teamId,
-    serialNumber: member.id,
+    serialNumber: pass.serial,
     organizationName: ORGANIZATION_NAME,
-    description: PASS_DESCRIPTION,
+    description: `${ORGANIZATION_NAME} ${pass.title}`,
     logoText: ORGANIZATION_NAME,
     backgroundColor: BACKGROUND_COLOR,
     foregroundColor: FOREGROUND_COLOR,
     labelColor: LABEL_COLOR,
-    storeCard: {
+    relevantDate: pass.relevantDate?.toISO() ?? undefined,
+    expirationDate: pass.expiresAt?.toISO() ?? undefined,
+    [style]: {
+      headerFields: [{ key: 'kind', label: 'Pass', value: pass.title }],
       secondaryFields: [
-        { key: 'member', label: 'Member', value: member.name },
-        {
-          key: 'memberSince',
-          label: 'Member since',
-          value: memberSince(member),
-          textAlignment: TEXT_ALIGN_RIGHT,
-        },
+        { key: 'holder', label: pass.holderLabel, value: pass.holderName },
+        ...(firstField ? [{ ...firstField, textAlignment: TEXT_ALIGN_RIGHT }] : []),
       ],
+      auxiliaryFields: otherFields,
       backFields: [
         { key: 'howTo', label: 'Checking in', value: PASS_BRAND.checkInInstructions },
         { key: 'website', label: 'Website', value: PASS_BRAND.website },
@@ -111,7 +114,7 @@ export function applePassJson(member: WalletMember, config: AppleWalletConfig) {
     barcodes: [
       {
         format: BARCODE_FORMAT_QR,
-        message: passUrl(member),
+        message: passUrl(pass),
         messageEncoding: BARCODE_ENCODING,
       },
     ],
@@ -122,13 +125,13 @@ function dataUrlToBuffer(dataUrl: string) {
   return Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64');
 }
 
-export function buildApplePass(member: WalletMember, config: AppleWalletConfig): Buffer {
+export function buildApplePass(pass: PassDetails, config: AppleWalletConfig): Buffer {
   const images = Object.fromEntries(
     Object.entries(PASS_IMAGES).map(([name, dataUrl]) => [name, dataUrlToBuffer(dataUrl)]),
   );
 
-  const pass = new PKPass(
-    { ...images, 'pass.json': Buffer.from(JSON.stringify(applePassJson(member, config))) },
+  const pkPass = new PKPass(
+    { ...images, 'pass.json': Buffer.from(JSON.stringify(applePassJson(pass, config))) },
     {
       wwdr: config.wwdr,
       signerCert: config.signerCert,
@@ -137,5 +140,5 @@ export function buildApplePass(member: WalletMember, config: AppleWalletConfig):
     },
   );
 
-  return pass.getAsBuffer();
+  return pkPass.getAsBuffer();
 }

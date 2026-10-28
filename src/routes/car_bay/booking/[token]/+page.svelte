@@ -5,6 +5,7 @@
   import { Spinner } from '$lib/components/ui/spinner';
   import InfoRow from '$lib/frontend/components/InfoRow.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
+  import PassCard from '$lib/frontend/member-pass/PassCard.svelte';
   import ContactLine from '../../ContactLine.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import { submitWithToast } from '$lib/frontend/form-submit';
@@ -108,6 +109,12 @@
         <InfoRow label="Amount Paid">{formatDollars(booking.amountPaid)}</InfoRow>
       </dl>
     </Section>
+
+    {#if isConfirmed}
+      <Section title="Your Car Bay Pass">
+        <PassCard token={booking.passToken} />
+      </Section>
+    {/if}
 
     <ContactLine />
 

@@ -1,6 +1,8 @@
 import { DateTime } from 'luxon';
 import { generateKeyPairSync, verify } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { PASS_KIND } from '$lib/member_enums';
+import type { PassDetails } from './pass_details';
 import {
   GOOGLE_WALLET_SAVE_URL,
   googleWalletClaims,
@@ -18,11 +20,14 @@ const CONFIG: GoogleWalletConfig = {
   origin: 'https://orion.example.com',
 };
 
-const MEMBER = {
-  id: 'member-1',
-  name: 'Sam Smith',
+const MEMBER: PassDetails = {
+  kind: PASS_KIND.MEMBERSHIP,
+  title: 'Membership',
+  serial: 'member-1',
   passToken: 'token-abc',
-  createdDate: DateTime.fromISO('2026-03-01T03:00:00Z'),
+  holderLabel: 'Member',
+  holderName: 'Sam Smith',
+  fields: [{ key: 'memberSince', label: 'Member since', value: 'Feb 2026' }],
 };
 
 function decodeSegment(segment: string) {
@@ -47,15 +52,37 @@ describe('googleWalletClaims', () => {
             classId: '3388000000012345678.member_pass',
             state: 'ACTIVE',
             header: { defaultValue: { language: 'en-US', value: 'Sam Smith' } },
+            subheader: { defaultValue: { language: 'en-US', value: 'Membership' } },
             hexBackgroundColor: '#0e1630',
             heroImage: { sourceUri: { uri: 'https://orion.example.com/wallet/pass-hero.jpg' } },
             textModulesData: expect.arrayContaining([
-              { id: 'member_since', header: 'Member since', body: 'Feb 2026' },
+              { id: 'memberSince', header: 'Member since', body: 'Feb 2026' },
             ]),
             barcode: { type: 'QR_CODE', value: 'https://orion.example.com/pass/token-abc' },
           },
         ],
       },
+    });
+    expect(claims.payload.genericObjects[0].validTimeInterval).toBeUndefined();
+  });
+
+  it('labels booking passes by type and stops them being valid after they end', () => {
+    const expiresAt = DateTime.fromISO('2026-10-20T20:00:00Z');
+    const claims = googleWalletClaims(
+      {
+        ...MEMBER,
+        kind: PASS_KIND.CAR_BAY,
+        title: 'Car Bay Pass',
+        serial: 'car_bay-token-xyz',
+        expiresAt,
+      },
+      CONFIG,
+    );
+
+    expect(claims.payload.genericObjects[0]).toMatchObject({
+      id: '3388000000012345678.car_bay-token-xyz',
+      subheader: { defaultValue: { language: 'en-US', value: 'Car Bay Pass' } },
+      validTimeInterval: { end: { date: expiresAt.toISO() } },
     });
   });
 });

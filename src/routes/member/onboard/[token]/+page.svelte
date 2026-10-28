@@ -4,13 +4,14 @@
   import logo from '$lib/assets/logo.png';
   import { Spinner } from '$lib/components/ui/spinner';
   import StepProgress from '$lib/frontend/components/StepProgress.svelte';
-  import MemberPassImage from '$lib/frontend/member-pass/MemberPassImage.svelte';
+  import PassImage from '$lib/frontend/member-pass/PassImage.svelte';
   import SavePassImageButton from '$lib/frontend/member-pass/SavePassImageButton.svelte';
   import WalletButtons from '$lib/frontend/member-pass/WalletButtons.svelte';
   import { getOnboarding } from '$lib/remotes/endpoints/onboarding.remote';
   import OnboardingWaiverForm from './OnboardingWaiverForm.svelte';
 
   const CONTACT_EMAIL = 'contact@starforgefoundry.com';
+  const PASS_LABEL = 'Member Pass';
 
   const STEPS = { WAIVER: 'waiver', PASS: 'pass' } as const;
   const STEP_LIST = [
@@ -62,9 +63,13 @@
         <p class="self-start text-sm text-muted-foreground">
           Add your pass to your wallet so it's ready when you arrive.
         </p>
-        <MemberPassImage name={onboarding.name} passUrl={onboarding.passUrl} />
+        <PassImage name={onboarding.name} passUrl={onboarding.passUrl} label={PASS_LABEL} />
         <WalletButtons token={onboarding.passToken} wallets={onboarding.wallets} />
-        <SavePassImageButton name={onboarding.name} passUrl={onboarding.passUrl} />
+        <SavePassImageButton
+          name={onboarding.name}
+          passUrl={onboarding.passUrl}
+          label={PASS_LABEL}
+        />
       </section>
     {/if}
   {/if}

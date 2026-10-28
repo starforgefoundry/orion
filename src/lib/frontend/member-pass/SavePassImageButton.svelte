@@ -4,7 +4,7 @@
   import DownloadIcon from '@lucide/svelte/icons/download';
   import { passImageFilename, renderPassImage } from './pass-image';
 
-  let { name, passUrl }: { name: string; passUrl: string } = $props();
+  let { name, passUrl, label }: { name: string; passUrl: string; label: string } = $props();
 
   let saving = $state(false);
 
@@ -12,7 +12,7 @@
     saving = true;
     try {
       const link = document.createElement('a');
-      link.href = await renderPassImage(passUrl, name);
+      link.href = await renderPassImage(passUrl, name, label);
       link.download = passImageFilename(name);
       link.click();
     } finally {
