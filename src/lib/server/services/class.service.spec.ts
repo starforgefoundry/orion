@@ -597,6 +597,17 @@ describe(ClassService.name, () => {
       );
     }
 
+    function stubCounts(before: number, after: number) {
+      mocks.classRepository.getConfirmedBookingsForInstance.mockResolvedValue([
+        bookingWithPayment({
+          instanceId: TARGET_ID,
+          customerEmail: 'other@example.com',
+          quantity: before,
+        }),
+      ]);
+      mocks.classRepository.getConfirmedBookingCount.mockResolvedValue(after);
+    }
+
     beforeEach(() => {
       mocks.classRepository.getConfirmedBookingsForInstance.mockResolvedValue([]);
     });
@@ -604,9 +615,7 @@ describe(ClassService.name, () => {
     it('should move the booking without touching its payment', async () => {
       stubBooking({}, paidPayment(5000));
       stubTarget();
-      mocks.classRepository.getConfirmedBookingCount
-        .mockResolvedValueOnce(8)
-        .mockResolvedValueOnce(10);
+      stubCounts(8, 10);
       const moved = factory.classBooking({ id: 'book-1', instanceId: TARGET_ID });
       mocks.classRepository.updateBooking.mockResolvedValue(moved);
 
@@ -688,11 +697,9 @@ describe(ClassService.name, () => {
     it('should throw when target session lacks capacity', async () => {
       stubBooking();
       stubTarget();
-      mocks.classRepository.getConfirmedBookingCount.mockResolvedValue(9);
+      stubCounts(9, 9);
 
-      await expect(sut.rescheduleBooking(dto)).rejects.toThrow(
-        'Not enough spots remaining in that session',
-      );
+      await expect(sut.rescheduleBooking(dto)).rejects.toThrow('Only 1 spot remaining');
       expect(mocks.classRepository.updateBooking).not.toHaveBeenCalled();
     });
 
@@ -700,77 +707,44 @@ describe(ClassService.name, () => {
       const reminderSentDate = DateTime.now();
       stubBooking({ reminderSentDate });
       stubTarget();
-      mocks.classRepository.getConfirmedBookingCount
-        .mockResolvedValueOnce(8)
-        .mockResolvedValueOnce(11);
+      stubCounts(8, 11);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
+      const sendEmail = vi.spyOn(sut, 'sendBookingConfirmationEmail');
 
-      await expect(sut.rescheduleBooking(dto)).rejects.toThrow(
-        'Not enough spots remaining in that session',
-      );
+      await expect(sut.rescheduleBooking(dto)).rejects.toThrow('This class is fully booked');
       expect(mocks.classRepository.updateBooking).toHaveBeenLastCalledWith('book-1', {
         instanceId: SOURCE_ID,
         reminderSentDate,
       });
-      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
+      expect(sendEmail).not.toHaveBeenCalled();
     });
 
     describe('confirmation email', () => {
       beforeEach(() => {
         stubBooking();
-        stubTarget({ date: '2099-12-01', startTime: '10:00' });
-        mocks.classRepository.getConfirmedBookingCount
-          .mockResolvedValueOnce(0)
-          .mockResolvedValueOnce(2);
+        stubTarget();
+        stubCounts(0, 2);
         mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
-        mocks.classRepository.getBookingById.mockResolvedValueOnce(
-          bookingDetail(
-            { id: 'book-1', instanceId: SOURCE_ID, quantity: 2 },
-            null,
-            factory.classInstance({ id: SOURCE_ID, classId: CLASS_ID }),
-          ),
-        );
-        mocks.classRepository.getBookingById.mockResolvedValueOnce(
-          bookingDetail(
-            { id: 'book-1', instanceId: TARGET_ID, quantity: 2 },
-            null,
-            factory.classInstance({
-              id: TARGET_ID,
-              classId: CLASS_ID,
-              date: '2099-12-01',
-              startTime: '10:00',
-            }),
-          ),
-        );
       });
 
-      it('should resend the confirmation with the new session date and time', async () => {
-        mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
+      it('should resend the confirmation for the moved booking', async () => {
+        const sendEmail = vi.spyOn(sut, 'sendBookingConfirmationEmail').mockResolvedValue();
 
         await sut.rescheduleBooking(dto);
 
-        await vi.waitFor(() =>
-          expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
-            'customer@example.com',
-            expect.any(String),
-            expect.any(String),
-            'class_booking',
-            expect.objectContaining({
-              classDate: 'Tuesday, December 1, 2099',
-              classTime: '10:00 AM',
-            }),
-          ),
-        );
+        expect(sendEmail).toHaveBeenCalledExactlyOnceWith('book-1');
       });
 
       it('should keep the move when the email fails', async () => {
-        mocks.mailgunRepository.sendTemplate.mockRejectedValue(new Error('Mailgun down'));
+        const sendEmail = vi
+          .spyOn(sut, 'sendBookingConfirmationEmail')
+          .mockRejectedValue(new Error('Mailgun down'));
 
         await expect(sut.rescheduleBooking(dto)).resolves.toMatchObject({
           previousInstanceId: SOURCE_ID,
         });
 
-        await vi.waitFor(() => expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalled());
+        expect(sendEmail).toHaveBeenCalledExactlyOnceWith('book-1');
         expect(mocks.classRepository.updateBooking).toHaveBeenCalledExactlyOnceWith('book-1', {
           instanceId: TARGET_ID,
           reminderSentDate: null,

@@ -24,6 +24,7 @@
   import { toast } from 'svelte-sonner';
   import AddBookingModal from './AddBookingModal.svelte';
   import CancelClassModal from './CancelClassModal.svelte';
+  import type { ReschedulableBooking } from './booking-reschedule.svelte';
   import RescheduleBookingModal from './RescheduleBookingModal.svelte';
 
   interface Props extends ModalProps {
@@ -86,16 +87,9 @@
     });
   }
 
-  function showRescheduleModal(booking: any) {
+  function showRescheduleModal(booking: ReschedulableBooking) {
     if (!detail) return;
-    modalManager.show(RescheduleBookingModal, {
-      booking,
-      classId: detail.classId,
-      onRescheduled: async () => {
-        await getInstanceDetail(instanceId).refresh();
-        await getAllInstances().refresh();
-      },
-    });
+    modalManager.show(RescheduleBookingModal, { booking, classId: detail.classId });
   }
 
   function showCancelModal() {

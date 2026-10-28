@@ -1,48 +1,43 @@
 import type { SelectOption } from '$lib/frontend/components/form/OptionSelect.svelte';
+import { submitWithToast } from '$lib/frontend/form-submit';
 import { formatTime } from '$lib/frontend/utils';
 import { rescheduleBookingStaff } from '$lib/remotes/endpoints/class.remote';
-import type { ClassInstance } from '$lib/server/db/schema';
-import { SPACE_ZONE } from '$lib/space';
-import { CLASS_INSTANCE_STATUS } from '$lib/utils/classes';
-import { DateTime } from 'luxon';
+import type { ClassBooking, ClassInstance } from '$lib/server/db/schema';
+import { CLASS_INSTANCE_STATUS, classHasStarted, classStartsAt } from '$lib/utils/classes';
 
 type Session = ClassInstance & { confirmedCount: number };
 
-type RescheduledBooking = {
-  id: string;
-  instanceId: string;
-  classId: string;
-  quantity: number;
-};
-
-function startOf(session: Session) {
-  return DateTime.fromISO(`${session.date}T${session.startTime}`, { zone: SPACE_ZONE });
-}
+export type ReschedulableBooking = Pick<
+  ClassBooking,
+  'id' | 'instanceId' | 'customerName' | 'quantity'
+>;
 
 export class BookingReschedule {
   targetInstanceId = $state('');
+  submitting = $state(false);
 
-  #booking: RescheduledBooking;
+  #booking: ReschedulableBooking;
+  #classId: string;
 
-  constructor(booking: RescheduledBooking) {
+  constructor(booking: ReschedulableBooking, classId: string) {
     this.#booking = booking;
+    this.#classId = classId;
   }
 
   options(sessions: Session[]): SelectOption[] {
-    const now = DateTime.now().setZone(SPACE_ZONE);
     return sessions
       .filter(
         (session) =>
-          session.classId === this.#booking.classId &&
+          session.classId === this.#classId &&
           session.id !== this.#booking.instanceId &&
           session.status === CLASS_INSTANCE_STATUS.SCHEDULED &&
           session.seats - session.confirmedCount >= this.#booking.quantity &&
-          startOf(session) > now,
+          !classHasStarted(session),
       )
-      .sort((a, b) => startOf(a).toMillis() - startOf(b).toMillis())
+      .sort((a, b) => classStartsAt(a).toMillis() - classStartsAt(b).toMillis())
       .map((session) => ({
         value: session.id,
-        label: `${startOf(session).toFormat('EEE, MMM d, yyyy')} · ${formatTime(session.startTime)} (${session.seats - session.confirmedCount} open)`,
+        label: `${classStartsAt(session).toFormat('EEE, MMM d, yyyy')} · ${formatTime(session.startTime)} (${session.seats - session.confirmedCount} open)`,
       }));
   }
 
@@ -51,9 +46,16 @@ export class BookingReschedule {
   }
 
   async submit() {
-    return await rescheduleBookingStaff({
-      bookingId: this.#booking.id,
-      targetInstanceId: this.targetInstanceId,
-    });
+    this.submitting = true;
+    const ok = await submitWithToast(
+      () =>
+        rescheduleBookingStaff({
+          bookingId: this.#booking.id,
+          targetInstanceId: this.targetInstanceId,
+        }),
+      { success: 'Booking rescheduled', error: 'Failed to reschedule booking' },
+    );
+    this.submitting = false;
+    return ok;
   }
 }

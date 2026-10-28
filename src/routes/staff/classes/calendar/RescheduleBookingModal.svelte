@@ -3,37 +3,24 @@
   import OptionSelect from '$lib/frontend/components/form/OptionSelect.svelte';
   import ModalForm from '$lib/frontend/components/ModalForm.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
-  import { submitWithToast } from '$lib/frontend/form-submit';
   import { getAllInstances } from '$lib/remotes/endpoints/class.remote';
   import CalendarClockIcon from '@lucide/svelte/icons/calendar-clock';
   import CheckIcon from '@lucide/svelte/icons/check';
   import { untrack } from 'svelte';
-  import { BookingReschedule } from './booking-reschedule.svelte';
+  import { BookingReschedule, type ReschedulableBooking } from './booking-reschedule.svelte';
 
   interface Props extends ModalProps {
-    booking: { id: string; instanceId: string; customerName: string; quantity: number };
+    booking: ReschedulableBooking;
     classId: string;
-    onRescheduled: () => void;
   }
 
-  let { onClose, booking, classId, onRescheduled }: Props = $props();
+  let { onClose, booking, classId }: Props = $props();
 
-  const reschedule = untrack(() => new BookingReschedule({ ...booking, classId }));
+  const reschedule = untrack(() => new BookingReschedule(booking, classId));
   const options = $derived(reschedule.options(getAllInstances().current ?? []));
 
-  let submitting = $state(false);
-
   async function handleSubmit() {
-    submitting = true;
-    const ok = await submitWithToast(() => reschedule.submit(), {
-      success: 'Booking rescheduled',
-      error: 'Failed to reschedule booking',
-    });
-    submitting = false;
-    if (ok) {
-      onRescheduled();
-      onClose();
-    }
+    if (await reschedule.submit()) onClose();
   }
 </script>
 
@@ -45,7 +32,7 @@
   submitLabel="Reschedule"
   submitIcon={CheckIcon}
   canSubmit={reschedule.canSubmit}
-  {submitting}
+  submitting={reschedule.submitting}
   onSubmit={handleSubmit}
 >
   {#if options.length === 0}
