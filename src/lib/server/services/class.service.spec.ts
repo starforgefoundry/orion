@@ -615,6 +615,7 @@ describe(ClassService.name, () => {
       expect(result).toEqual({ booking: moved, previousInstanceId: SOURCE_ID });
       expect(mocks.classRepository.updateBooking).toHaveBeenCalledExactlyOnceWith('book-1', {
         instanceId: TARGET_ID,
+        reminderSentDate: null,
       });
       expect(mocks.paymentRepository.authorize).not.toHaveBeenCalled();
       expect(mocks.paymentRepository.refund).not.toHaveBeenCalled();
@@ -696,7 +697,8 @@ describe(ClassService.name, () => {
     });
 
     it('should move the booking back when a concurrent booking overfills the target', async () => {
-      stubBooking();
+      const reminderSentDate = DateTime.now();
+      stubBooking({ reminderSentDate });
       stubTarget();
       mocks.classRepository.getConfirmedBookingCount
         .mockResolvedValueOnce(8)
@@ -708,6 +710,7 @@ describe(ClassService.name, () => {
       );
       expect(mocks.classRepository.updateBooking).toHaveBeenLastCalledWith('book-1', {
         instanceId: SOURCE_ID,
+        reminderSentDate,
       });
       expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
     });
@@ -770,6 +773,7 @@ describe(ClassService.name, () => {
         await vi.waitFor(() => expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalled());
         expect(mocks.classRepository.updateBooking).toHaveBeenCalledExactlyOnceWith('book-1', {
           instanceId: TARGET_ID,
+          reminderSentDate: null,
         });
       });
     });

@@ -485,12 +485,16 @@ export class ClassService extends BaseService {
     const previousInstanceId = booking.instanceId;
     const updated = await this.classRepository.updateBooking(booking.id, {
       instanceId: target.id,
+      reminderSentDate: null,
     });
 
     // Re-check booking count after the move (overbooking prevention)
     const newCount = await this.classRepository.getConfirmedBookingCount(target.id);
     if (newCount > target.seats) {
-      await this.classRepository.updateBooking(booking.id, { instanceId: previousInstanceId });
+      await this.classRepository.updateBooking(booking.id, {
+        instanceId: previousInstanceId,
+        reminderSentDate: booking.reminderSentDate,
+      });
       throw new Error('Not enough spots remaining in that session');
     }
 
