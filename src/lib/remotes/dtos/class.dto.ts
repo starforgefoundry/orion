@@ -82,6 +82,13 @@ export const cancelBookingStaffDto = v.object({
 
 export type CancelBookingStaffDto = v.InferInput<typeof cancelBookingStaffDto>;
 
+export const rescheduleBookingDto = v.object({
+  bookingId: v.string(),
+  targetInstanceId: v.string(),
+});
+
+export type RescheduleBookingDto = v.InferInput<typeof rescheduleBookingDto>;
+
 export const manualBookClassDto = v.object({
   instanceId: v.string(),
   customerName: v.pipe(v.string(), v.minLength(1)),

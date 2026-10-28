@@ -8,6 +8,7 @@ import type {
   CreateInstanceDto,
   GenerateInstancesDto,
   ManualBookClassDto,
+  RescheduleBookingDto,
   UpdateInstanceDto,
   UpsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
@@ -68,6 +69,11 @@ function bookingEmailVariables(
 
 type PaidBooking = { payment: Payment | null };
 type CustomerDetails = Pick<BookClassDto, 'customerName' | 'customerEmail' | 'customerPhone'>;
+
+function hasStarted(instance: Pick<ClassInstance, 'date' | 'startTime'>) {
+  const start = DateTime.fromISO(`${instance.date}T${instance.startTime}`, { zone: SPACE_ZONE });
+  return start <= DateTime.now().setZone(SPACE_ZONE);
+}
 
 export class ClassService extends BaseService {
   private async refund(booking: PaidBooking) {
@@ -449,6 +455,59 @@ export class ClassService extends BaseService {
     );
 
     return { success: true };
+  }
+
+  async rescheduleBooking(dto: RescheduleBookingDto) {
+    const booking = await this.classRepository.getBookingById(dto.bookingId);
+    if (!booking || !booking.instance) throw new Error('Booking not found');
+    if (booking.status === CLASS_BOOKING_STATUS.CANCELED)
+      throw new Error('Booking is already canceled');
+    if (booking.instanceId === dto.targetInstanceId)
+      throw new Error('Booking is already in this class session');
+
+    const target = await this.classRepository.getInstanceById(dto.targetInstanceId);
+    if (!target) throw new Error('Class session not found');
+    if (target.classId !== booking.instance.classId)
+      throw new Error('Bookings can only move to a session of the same class');
+    if (target.status !== CLASS_INSTANCE_STATUS.SCHEDULED)
+      throw new Error('This class has been canceled');
+    if (hasStarted(target)) throw new Error('Cannot move a booking to a class in the past');
+
+    const targetBookings = await this.classRepository.getConfirmedBookingsForInstance(target.id);
+    const customerEmail = booking.customerEmail.toLowerCase();
+    if (targetBookings.some((b) => b.customerEmail.toLowerCase() === customerEmail))
+      throw new Error('Customer is already booked in that session');
+
+    const confirmedCount = await this.classRepository.getConfirmedBookingCount(target.id);
+    if (confirmedCount + booking.quantity > target.seats)
+      throw new Error('Not enough spots remaining in that session');
+
+    const previousInstanceId = booking.instanceId;
+    const updated = await this.classRepository.updateBooking(booking.id, {
+      instanceId: target.id,
+    });
+
+    // Re-check booking count after the move (overbooking prevention)
+    const newCount = await this.classRepository.getConfirmedBookingCount(target.id);
+    if (newCount > target.seats) {
+      await this.classRepository.updateBooking(booking.id, { instanceId: previousInstanceId });
+      throw new Error('Not enough spots remaining in that session');
+    }
+
+    runInBackground(
+      this.sendBookingConfirmationEmail(booking.id),
+      'send rescheduled booking email',
+    );
+    runInBackground(
+      this.syncInstanceToCalendar(previousInstanceId),
+      'sync rescheduled booking source to calendar',
+    );
+    runInBackground(
+      this.syncInstanceToCalendar(target.id),
+      'sync rescheduled booking target to calendar',
+    );
+
+    return { booking: updated, previousInstanceId };
   }
 
   async manualBookClass(dto: ManualBookClassDto) {

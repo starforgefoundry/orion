@@ -9,6 +9,7 @@ import {
   createInstanceDto,
   generateInstancesDto,
   manualBookClassDto,
+  rescheduleBookingDto,
   updateInstanceDto,
   upsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
@@ -94,6 +95,15 @@ export const cancelBookingStaff = command(cancelBookingStaffDto, async (dto) => 
   verifyAuth();
   const result = await classService.cancelBookingStaff(dto);
   await getAllInstances().refresh();
+  return result;
+});
+
+export const rescheduleBookingStaff = command(rescheduleBookingDto, async (dto) => {
+  verifyAuth();
+  const result = await classService.rescheduleBooking(dto);
+  await getAllInstances().refresh();
+  await getInstanceDetail(result.previousInstanceId).refresh();
+  await getInstanceDetail(dto.targetInstanceId).refresh();
   return result;
 });
 
