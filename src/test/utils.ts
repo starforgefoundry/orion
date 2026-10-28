@@ -5,6 +5,7 @@ import { CarBayRepository } from '$lib/server/repositories/car_bay.repository';
 import { ClassRepository } from '$lib/server/repositories/class.repository';
 import { DayPassRepository } from '$lib/server/repositories/day_pass.repository';
 import { DiscordRepository } from '$lib/server/repositories/discord.repository';
+import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
 import { GoogleCalendarRepository } from '$lib/server/repositories/google_calendar.repository';
 import { InventoryRepository } from '$lib/server/repositories/inventory.repository';
 import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
@@ -35,6 +36,7 @@ const REPOSITORIES: { [K in keyof ServiceRepositories]: Constructor<ServiceRepos
   classRepository: ClassRepository,
   dayPassRepository: DayPassRepository,
   discordRepository: DiscordRepository,
+  emailTemplateRepository: EmailTemplateRepository,
   googleCalendarRepository: GoogleCalendarRepository,
   inventoryRepository: InventoryRepository,
   mailgunRepository: MailgunRepository,

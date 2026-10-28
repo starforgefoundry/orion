@@ -8,31 +8,19 @@ import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
 import { MemberEmailRepository } from '$lib/server/repositories/member_email.repository';
 import { onboardingUrl } from '$lib/server/utils/member_links';
+import type { EmailTemplateKey } from '$lib/utils/email_templates';
 
 const MEMBER_EMAIL_REPLY_TO = 'contact@starforgefoundry.com';
 const MEMBER_EMAIL_FROM = `Starforge Foundry <${MEMBER_EMAIL_REPLY_TO}>`;
-const ONBOARDING_TEMPLATE = 'member_onboarding';
 
-type OnboardingCopy = { subject: string; setupMessage: string };
+type OnboardingTemplate = Extract<EmailTemplateKey, 'member_welcome' | 'member_pass_setup'>;
 
-const NEW_MEMBER_COPY: OnboardingCopy = {
-  subject: 'Welcome to Starforge Foundry',
-  setupMessage:
-    "Before your first visit, finish setting up your access. It only takes a minute: sign the liability waiver if you haven't already, then add your member pass to your phone. Scan the pass at the front door kiosk each time you visit.",
-};
-
-const EXISTING_MEMBER_COPY: OnboardingCopy = {
-  subject: 'Set up your Starforge Foundry member pass',
-  setupMessage:
-    "Set up your pass before your next visit. It only takes a minute: sign the liability waiver if you haven't already, then add the pass to your phone. From then on, scan it at the front door kiosk to check in.",
-};
-
-const ONBOARDING_COPY: Record<MemberEmailTrigger, OnboardingCopy> = {
-  [MEMBER_EMAIL_TRIGGER.SUBSCRIPTION]: NEW_MEMBER_COPY,
-  [MEMBER_EMAIL_TRIGGER.ORGANIZATION]: NEW_MEMBER_COPY,
-  [MEMBER_EMAIL_TRIGGER.DAY_PASS]: NEW_MEMBER_COPY,
-  [MEMBER_EMAIL_TRIGGER.MANUAL]: EXISTING_MEMBER_COPY,
-  [MEMBER_EMAIL_TRIGGER.SELF_SERVICE]: EXISTING_MEMBER_COPY,
+const ONBOARDING_TEMPLATE: Record<MemberEmailTrigger, OnboardingTemplate> = {
+  [MEMBER_EMAIL_TRIGGER.SUBSCRIPTION]: 'member_welcome',
+  [MEMBER_EMAIL_TRIGGER.ORGANIZATION]: 'member_welcome',
+  [MEMBER_EMAIL_TRIGGER.DAY_PASS]: 'member_welcome',
+  [MEMBER_EMAIL_TRIGGER.MANUAL]: 'member_pass_setup',
+  [MEMBER_EMAIL_TRIGGER.SELF_SERVICE]: 'member_pass_setup',
 };
 
 const ONBOARDING_INTRO: Record<MemberEmailTrigger, string> = {
@@ -71,17 +59,14 @@ export class MemberNotificationRepository extends BaseRepository {
   }
 
   async sendOnboarding(member: Member, trigger: MemberEmailTrigger): Promise<void> {
-    const copy = ONBOARDING_COPY[trigger];
     await this.mailgunRepository.sendTemplate(
       member.email,
       MEMBER_EMAIL_FROM,
       MEMBER_EMAIL_REPLY_TO,
-      copy.subject,
-      ONBOARDING_TEMPLATE,
+      ONBOARDING_TEMPLATE[trigger],
       {
         memberName: escapeHtml(member.name),
         introMessage: ONBOARDING_INTRO[trigger],
-        setupMessage: copy.setupMessage,
         onboardingUrl: onboardingUrl(member),
       },
     );

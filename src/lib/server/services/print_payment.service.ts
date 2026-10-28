@@ -125,7 +125,6 @@ export class PrintPaymentService extends BaseService {
       request.email,
       printSender(),
       publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
-      `Print Request Quote - ${request.projectName}`,
       'print_quote',
       {
         customerName: request.customerName,
@@ -141,7 +140,6 @@ export class PrintPaymentService extends BaseService {
       request.email,
       printSender(),
       publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
-      `Print Request Payment - ${request.projectName}`,
       'print_payment',
       {
         customerName: request.customerName,

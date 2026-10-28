@@ -1,32 +1,35 @@
 import { env } from '$env/dynamic/private';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { templates, type Templates } from '$lib/server/utils/email_templates';
+import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
+import { renderTemplate, type EmailTemplateKey, type Templates } from '$lib/utils/email_templates';
 import { DateTime } from 'luxon';
 
 export class MailgunRepository extends BaseRepository {
-  async sendTemplate<T extends keyof Templates>(
+  private emailTemplateRepository: EmailTemplateRepository;
+
+  constructor(emailTemplateRepository?: EmailTemplateRepository) {
+    super();
+    this.emailTemplateRepository = emailTemplateRepository ?? new EmailTemplateRepository();
+  }
+
+  async sendTemplate<T extends EmailTemplateKey>(
     to: string,
     from: string,
     replyTo: string,
-    subject: string,
     template: T,
     variables: Templates[T],
   ) {
-    let emailContent = templates[template];
-    if (!emailContent) {
-      throw new Error(`Mailgun template "${template}" not found`);
-    }
-
-    for (const [key, value] of Object.entries(variables)) {
-      emailContent = emailContent.replaceAll(`{{${key}}}`, value);
+    const content = await this.emailTemplateRepository.get(template);
+    if (!content) {
+      throw new Error(`Email template "${template}" not found`);
     }
 
     const body = new URLSearchParams({
       from,
       to,
       'h:Reply-To': replyTo,
-      subject: subject,
-      html: emailContent,
+      subject: renderTemplate(content.subject, variables),
+      html: renderTemplate(content.body, variables),
     });
 
     const response = await fetch('https://api.mailgun.net/v3/starforgefoundry.com/messages', {

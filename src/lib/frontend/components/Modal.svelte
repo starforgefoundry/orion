@@ -24,6 +24,8 @@
     size?: ModalSize;
     class?: string;
     onClose: () => void;
+    /** Given, Escape, clicking outside and the close button call this instead of closing. */
+    onDismiss?: () => void;
     children: Snippet;
     footer?: Snippet;
     headerActions?: Snippet;
@@ -36,15 +38,24 @@
     size = 'md',
     class: className,
     onClose,
+    onDismiss,
     children,
     footer,
     headerActions,
   }: Props = $props();
+
+  function interceptDismiss(event: Event) {
+    if (!onDismiss) return;
+    event.preventDefault();
+    onDismiss();
+  }
 </script>
 
 <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
   <Dialog.Content
     showCloseButton={false}
+    onEscapeKeydown={interceptDismiss}
+    onInteractOutside={interceptDismiss}
     class={cn(
       'flex max-h-[90dvh] flex-col gap-0 p-0',
       'max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:ring-0',
@@ -62,7 +73,10 @@
         {/if}
       </div>
       {@render headerActions?.()}
-      <Dialog.Close class={buttonVariants({ variant: 'ghost', size: 'icon' })}>
+      <Dialog.Close
+        class={buttonVariants({ variant: 'ghost', size: 'icon' })}
+        onclick={interceptDismiss}
+      >
         <XIcon />
         <span class="sr-only">Close</span>
       </Dialog.Close>

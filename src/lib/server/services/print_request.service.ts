@@ -110,7 +110,6 @@ export class PrintRequestService extends BaseService {
       request.email,
       printSender(),
       publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
-      `Your Print Request is Ready! - ${request.projectName}`,
       'print_pickup',
       {
         projectName: request.projectName,
@@ -130,7 +129,6 @@ export class PrintRequestService extends BaseService {
       request.email,
       printSender(),
       publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
-      `We Received Your Print Request - ${request.projectName}`,
       'print_submitted',
       {
         customerName: request.customerName,

@@ -331,10 +331,9 @@ describe(OrganizationService.name, () => {
         'charge@org.com',
         expect.any(String),
         expect.any(String),
-        expect.any(String),
-        'payment_request',
+        'organization_balance',
         expect.objectContaining({
-          customerName: 'Charge Org',
+          organizationName: 'Charge Org',
           total: '80.00',
           paymentUrl: `${PAY_URL}/${id}`,
         }),

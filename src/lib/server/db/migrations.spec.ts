@@ -1,6 +1,7 @@
 import { schema } from '$lib/server/db/schema';
 import { CarBayRepository } from '$lib/server/repositories/car_bay.repository';
 import { CarBayRules, CarBaySlotTakenError, DEFAULT_CAR_BAY_POLICY } from '$lib/utils/car_bay';
+import { EMAIL_TEMPLATE_KEYS } from '$lib/utils/email_templates';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -67,6 +68,13 @@ describe.skipIf(!TEST_DATABASE_URL)('migrations', () => {
       .filter((name) => !created.has(name));
 
     expect(missing).toEqual([]);
+  });
+
+  it('seeds every email template the app can send', async () => {
+    const rows = await sql<{ key: string }[]>`SELECT key FROM email_template`;
+    const seeded = new Set(rows.map((row) => row.key));
+
+    expect(EMAIL_TEMPLATE_KEYS.filter((key) => !seeded.has(key))).toEqual([]);
   });
 
   it('round-trips timestamps without shifting them', async () => {

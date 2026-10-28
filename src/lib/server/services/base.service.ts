@@ -3,6 +3,7 @@ import { BillingCodeRepository } from '$lib/server/repositories/billing_code.rep
 import { CarBayRepository } from '$lib/server/repositories/car_bay.repository';
 import { ClassRepository } from '$lib/server/repositories/class.repository';
 import { DiscordRepository } from '$lib/server/repositories/discord.repository';
+import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
 import { GoogleCalendarRepository } from '$lib/server/repositories/google_calendar.repository';
 import { InventoryRepository } from '$lib/server/repositories/inventory.repository';
 import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
@@ -30,6 +31,7 @@ export type ServiceRepositories = {
   classRepository: ClassRepository;
   dayPassRepository: DayPassRepository;
   discordRepository: DiscordRepository;
+  emailTemplateRepository: EmailTemplateRepository;
   googleCalendarRepository: GoogleCalendarRepository;
   inventoryRepository: InventoryRepository;
   mailgunRepository: MailgunRepository;
@@ -57,6 +59,7 @@ export class BaseService {
   protected classRepository: ClassRepository;
   protected dayPassRepository: DayPassRepository;
   protected discordRepository: DiscordRepository;
+  protected emailTemplateRepository: EmailTemplateRepository;
   protected googleCalendarRepository: GoogleCalendarRepository;
   protected inventoryRepository: InventoryRepository;
   protected mailgunRepository: MailgunRepository;
@@ -83,6 +86,8 @@ export class BaseService {
     this.classRepository = repositories.classRepository ?? new ClassRepository();
     this.dayPassRepository = repositories.dayPassRepository ?? new DayPassRepository();
     this.discordRepository = repositories.discordRepository ?? new DiscordRepository();
+    this.emailTemplateRepository =
+      repositories.emailTemplateRepository ?? new EmailTemplateRepository();
     this.googleCalendarRepository =
       repositories.googleCalendarRepository ?? new GoogleCalendarRepository();
     this.inventoryRepository = repositories.inventoryRepository ?? new InventoryRepository();
