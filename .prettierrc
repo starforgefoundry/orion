@@ -5,13 +5,23 @@
   "trailingComma": "all",
   "printWidth": 100,
   "semi": true,
-  "plugins": ["prettier-plugin-svelte", "prettier-plugin-tailwindcss"],
+  "plugins": [
+    "prettier-plugin-svelte",
+    "prettier-plugin-tailwindcss"
+  ],
   "tailwindStylesheet": "./src/app.css",
   "overrides": [
     {
       "files": "*.svelte",
       "options": {
         "parser": "svelte"
+      }
+    },
+    {
+      "files": "src/lib/server/db/migrations/meta/*_snapshot.json",
+      "options": {
+        "printWidth": 1000000000000000,
+        "objectWrap": "collapse"
       }
     }
   ]

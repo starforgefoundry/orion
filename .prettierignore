@@ -9,4 +9,4 @@ bun.lockb
 /static/
 /drizzle/
 
-src/lib/server/db/migrations/meta/
+src/lib/server/db/migrations/meta/_journal.json
