@@ -86,7 +86,7 @@ describe(KioskService.name, () => {
       expect(mocks.visitRepository.create).not.toHaveBeenCalled();
     });
 
-    it('asks for a waiver and records the denial when none is on file', async () => {
+    it('asks for a waiver without recording a visit when none is on file', async () => {
       mocks.memberRepository.getAccessContext.mockResolvedValue(
         context({ hasWaiver: false, subscriptions: [activeSubscription] }),
       );
@@ -99,12 +99,7 @@ describe(KioskService.name, () => {
         name: member.name,
         email: member.email,
       });
-      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith({
-        memberId: member.id,
-        source: 'kiosk',
-        accessBasis: 'subscription',
-        outcome: 'denied_no_waiver',
-      });
+      expect(mocks.visitRepository.create).not.toHaveBeenCalled();
     });
 
     it('does not use a day pass when the member still needs a waiver', async () => {

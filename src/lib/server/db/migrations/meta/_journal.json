@@ -50,6 +50,13 @@
       "when": 1793206840523,
       "tag": "0006_booking_passes",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793468705219,
+      "tag": "0007_remove_waiver_duplicate_visits",
+      "breakpoints": true
     }
   ]
 }
