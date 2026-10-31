@@ -167,15 +167,7 @@ export class KioskService extends BaseService {
     const context = await this.memberRepository.getAccessContext(member.id);
     if (!context) return { status: KIOSK_CHECK_IN_STATUS.UNKNOWN_PASS };
 
-    const verdict = judgePass(pass, context, now);
-    const visit = {
-      memberId: member.id,
-      source: VISIT_SOURCE.KIOSK,
-      accessBasis: verdict.basis,
-    } as const;
-
     if (!context.hasWaiver) {
-      await this.visitRepository.create({ ...visit, outcome: VISIT_OUTCOME.DENIED_NO_WAIVER });
       return {
         status: KIOSK_CHECK_IN_STATUS.NEEDS_WAIVER,
         passToken: pass.passToken,
@@ -183,6 +175,13 @@ export class KioskService extends BaseService {
         email: member.email,
       };
     }
+
+    const verdict = judgePass(pass, context, now);
+    const visit = {
+      memberId: member.id,
+      source: VISIT_SOURCE.KIOSK,
+      accessBasis: verdict.basis,
+    } as const;
 
     if (!verdict.admitted) {
       await this.visitRepository.create({ ...visit, outcome: VISIT_OUTCOME.DENIED_NO_ACCESS });
