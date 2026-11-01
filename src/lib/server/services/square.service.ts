@@ -3,10 +3,10 @@ import {
   SUBSCRIPTION_STATUS,
   type EnumValue,
   type MemberEmailTrigger,
-} from '$lib/member_enums';
+} from '$lib/utils/member-enums';
 import type { Member, MemberSubscription } from '$lib/server/db/schema';
 import { BaseService } from '$lib/server/services/base.service';
-import { spaceDate } from '$lib/space';
+import { spaceDate } from '$lib/utils/space';
 import {
   customerDisplayName,
   dayPassQuantity,

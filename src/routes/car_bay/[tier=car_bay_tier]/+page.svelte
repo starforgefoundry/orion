@@ -2,7 +2,7 @@
   import { page } from '$app/state';
   import { Spinner } from '$lib/components/ui/spinner';
   import BayWeekCalendar from '$lib/frontend/components/BayWeekCalendar.svelte';
-  import { CAR_BAY_TIER, CAR_BAY_TIER_NAMES, type CarBayTier } from '$lib/utils/car_bay';
+  import { CAR_BAY_TIER, CAR_BAY_TIER_NAMES, type CarBayTier } from '$lib/utils/car-bay';
   import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
   import ClosedNotice from '../ClosedNotice.svelte';
   import DayPicker from '../DayPicker.svelte';

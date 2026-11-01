@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { kioskPairPathFromScan } from '$lib/utils/kiosk_pairing';
+  import { kioskPairPathFromScan } from '$lib/utils/kiosk-pairing';
   import TabletIcon from '@lucide/svelte/icons/tablet';
   import KioskCameraView from './KioskCameraView.svelte';
 

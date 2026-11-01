@@ -12,7 +12,7 @@
   import SearchIcon from '@lucide/svelte/icons/search';
   import ShoppingCartPlusIcon from '@lucide/svelte/icons/shopping-cart-plus';
   import TrashIcon from '@lucide/svelte/icons/trash';
-  import { InventoryItemList } from './inventory-items.svelte';
+  import { InventoryItemList } from './inventory-item-list.svelte';
 
   const COLUMN_COUNT = 5;
 

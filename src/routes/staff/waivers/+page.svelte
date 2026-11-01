@@ -10,7 +10,7 @@
   import EyeIcon from '@lucide/svelte/icons/eye';
   import SearchIcon from '@lucide/svelte/icons/search';
   import UserIcon from '@lucide/svelte/icons/user';
-  import { WaiverDirectory } from './waivers.svelte';
+  import { WaiverDirectory } from './waiver-directory.svelte';
 
   const COLUMN_COUNT = 4;
 

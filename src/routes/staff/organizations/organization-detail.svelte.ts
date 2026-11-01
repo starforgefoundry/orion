@@ -6,7 +6,7 @@ import {
   getOrganizationDetail,
   updateOrganization,
 } from '$lib/remotes/endpoints/organization.remote';
-import { SPACE_ZONE } from '$lib/space';
+import { SPACE_ZONE } from '$lib/utils/space';
 import { formatCents } from '$lib/utils/billing';
 import CreateBillingCodeModal from './CreateBillingCodeModal.svelte';
 import CreateChargeModal from './CreateChargeModal.svelte';

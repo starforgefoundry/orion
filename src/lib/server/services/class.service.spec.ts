@@ -1,4 +1,4 @@
-import { SPACE_ZONE, spaceDate } from '$lib/space';
+import { SPACE_ZONE, spaceDate } from '$lib/utils/space';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';

@@ -6,7 +6,7 @@ import {
   type CarBayRates,
   type CarBayRequest,
   type CarBayTier,
-} from '$lib/utils/car_bay';
+} from '$lib/utils/car-bay';
 import { lineItemsTotal } from '$lib/utils/billing';
 import { DateTime } from 'luxon';
 

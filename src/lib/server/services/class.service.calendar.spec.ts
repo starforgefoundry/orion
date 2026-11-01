@@ -1,6 +1,6 @@
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
-import { SPACE_ZONE } from '$lib/space';
+import { SPACE_ZONE } from '$lib/utils/space';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClassService } from './class.service';
 

@@ -1,4 +1,4 @@
-import { PRINTER_LABEL_PREFIX, TAG_ID_LENGTH } from '$lib/utils/print_materials';
+import { PRINTER_LABEL_PREFIX, TAG_ID_LENGTH } from '$lib/utils/print-materials';
 
 export function isPrinterLabel(value: string) {
   return value.startsWith(PRINTER_LABEL_PREFIX);

@@ -1,4 +1,4 @@
-import { updateAMSForPrinter } from '$lib/remotes/endpoints/print_materials.remote';
+import { updateAMSForPrinter } from '$lib/remotes/endpoints/print-materials.remote';
 import type { DetectedBarcode } from 'barqode';
 import { toast } from 'svelte-sonner';
 import { isFilamentTag, isPrinterLabel, printerLabelName } from './ams-scan';

@@ -24,8 +24,8 @@
   generics="B extends { id: string; startAt: string; endAt: string; blockedUntil: string }"
 >
   import { cn } from '$lib/frontend/cn';
-  import { formatHour, toBlock, toPeriod, type CarBayRules } from '$lib/utils/car_bay';
-  import { SPACE_ZONE } from '$lib/space';
+  import { formatHour, toBlock, toPeriod, type CarBayRules } from '$lib/utils/car-bay';
+  import { SPACE_ZONE } from '$lib/utils/space';
   import { DateTime } from 'luxon';
   import type { Snippet } from 'svelte';
 

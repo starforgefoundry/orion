@@ -6,7 +6,7 @@ import {
   VISIT_OUTCOME,
   VISIT_SOURCE,
   WAIVER_SOURCE,
-} from '$lib/member_enums';
+} from '$lib/utils/member-enums';
 import type {
   DayPass,
   Member,

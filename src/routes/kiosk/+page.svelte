@@ -2,7 +2,7 @@
   import { Spinner } from '$lib/components/ui/spinner';
   import { getKioskStatus } from '$lib/remotes/endpoints/kiosk.remote';
   import { onDestroy } from 'svelte';
-  import { KIOSK_SCREEN, KioskSession } from './kiosk-manager.svelte';
+  import { KIOSK_SCREEN, KioskSession } from './kiosk-session.svelte';
   import KioskPairing from './KioskPairing.svelte';
   import KioskPassEmail from './KioskPassEmail.svelte';
   import KioskPassEmailSent from './KioskPassEmailSent.svelte';

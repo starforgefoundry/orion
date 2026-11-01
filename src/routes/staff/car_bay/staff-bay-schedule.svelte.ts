@@ -3,9 +3,9 @@ import { DATE_FORMAT } from '$lib/frontend/format';
 import { submitWithToast } from '$lib/frontend/form-submit';
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
 import { DAYS_IN_WEEK } from '$lib/frontend/month-grid';
-import { getCarBayStaffSchedule, reopenCarBay } from '$lib/remotes/endpoints/car_bay.remote';
+import { getCarBayStaffSchedule, reopenCarBay } from '$lib/remotes/endpoints/car-bay.remote';
 import { getCarBayPolicy } from '$lib/remotes/endpoints/settings.remote';
-import { SPACE_ZONE } from '$lib/space';
+import { SPACE_ZONE } from '$lib/utils/space';
 import {
   CAR_BAY_STATUS,
   CAR_BAY_TIER,
@@ -13,7 +13,7 @@ import {
   consecutiveDates,
   formatPeriod,
   toPeriod,
-} from '$lib/utils/car_bay';
+} from '$lib/utils/car-bay';
 import { DateTime } from 'luxon';
 import BookingDetailModal from './BookingDetailModal.svelte';
 import StaffBookingModal from './StaffBookingModal.svelte';

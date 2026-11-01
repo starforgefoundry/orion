@@ -4,7 +4,7 @@
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { enhanceWithToast } from '$lib/frontend/form-submit';
-  import { createBillingCode } from '$lib/remotes/endpoints/billing_code.remote';
+  import { createBillingCode } from '$lib/remotes/endpoints/billing-code.remote';
   import TicketIcon from '@lucide/svelte/icons/ticket';
 
   interface Props extends ModalProps {

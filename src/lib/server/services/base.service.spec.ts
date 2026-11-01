@@ -1,4 +1,4 @@
-import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
+import { EmailTemplateRepository } from '$lib/server/repositories/email-template.repository';
 import { BaseService, REPOSITORIES } from '$lib/server/services/base.service';
 import { describe, expect, it } from 'vitest';
 

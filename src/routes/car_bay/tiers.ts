@@ -6,7 +6,7 @@ import {
   type CarBayRates,
   type CarBayTier,
   type PricePair,
-} from '$lib/utils/car_bay';
+} from '$lib/utils/car-bay';
 import CalendarDaysIcon from '@lucide/svelte/icons/calendar-days';
 import ClockIcon from '@lucide/svelte/icons/clock';
 import WrenchIcon from '@lucide/svelte/icons/wrench';

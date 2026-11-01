@@ -4,8 +4,8 @@
   import ModalForm from '$lib/frontend/components/ModalForm.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { submitWithToast } from '$lib/frontend/form-submit';
-  import { staffCancelCarBayBooking } from '$lib/remotes/endpoints/car_bay.remote';
-  import { formatDollars } from '$lib/utils/car_bay';
+  import { staffCancelCarBayBooking } from '$lib/remotes/endpoints/car-bay.remote';
+  import { formatDollars } from '$lib/utils/car-bay';
   import BanIcon from '@lucide/svelte/icons/ban';
   import { untrack } from 'svelte';
 

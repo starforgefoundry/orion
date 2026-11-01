@@ -5,7 +5,7 @@ import {
   getOrganizationDetail,
   updateOrganization,
 } from '$lib/remotes/endpoints/organization.remote';
-import { SPACE_ZONE } from '$lib/space';
+import { SPACE_ZONE } from '$lib/utils/space';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHARGES_PER_PAGE, OrganizationDetail } from './organization-detail.svelte';

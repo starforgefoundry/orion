@@ -11,7 +11,7 @@
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import { formatIsoDate } from '$lib/frontend/format';
   import { toast } from 'svelte-sonner';
-  import { SPACE_EMAIL } from '$lib/space';
+  import { SPACE_EMAIL } from '$lib/utils/space';
 
   const CONTACT_EMAIL = SPACE_EMAIL.CONTACT;
 

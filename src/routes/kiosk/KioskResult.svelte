@@ -8,7 +8,7 @@
   import CircleAlertIcon from '@lucide/svelte/icons/circle-alert';
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
   import CircleXIcon from '@lucide/svelte/icons/circle-x';
-  import { KIOSK_ERROR, type KioskDisplayResult } from './kiosk-manager.svelte';
+  import { KIOSK_ERROR, type KioskDisplayResult } from './kiosk-session.svelte';
 
   interface Props {
     result: KioskDisplayResult;

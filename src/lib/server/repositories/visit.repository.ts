@@ -1,4 +1,4 @@
-import { VISIT_OUTCOME } from '$lib/member_enums';
+import { VISIT_OUTCOME } from '$lib/utils/member-enums';
 import { schema, type DayPass, type Visit } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { count, desc, eq } from 'drizzle-orm';

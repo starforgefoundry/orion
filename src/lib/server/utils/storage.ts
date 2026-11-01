@@ -5,7 +5,7 @@ import { dirname, posix, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
-import { signUrl } from '$lib/server/utils/signed_url';
+import { signUrl } from '$lib/server/utils/signed-url';
 
 export const FILE_ROUTE = '/files';
 export const SIGNED_PREFIXES = ['waivers/', 'print_requests/'];

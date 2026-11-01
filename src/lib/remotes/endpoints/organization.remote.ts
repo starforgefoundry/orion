@@ -6,8 +6,8 @@ import {
   removeOrganizationMembersDto,
   updateOrganizationDto,
 } from '$lib/remotes/dtos/organization.dto';
-import { createOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
-import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
+import { createOrgChargeDto } from '$lib/remotes/dtos/organization-charges.dto';
+import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
 import { organizationService } from '$lib/server/services/organization.service';
 import * as v from 'valibot';
 

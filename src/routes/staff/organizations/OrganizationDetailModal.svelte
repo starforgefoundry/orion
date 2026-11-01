@@ -19,7 +19,7 @@
   import TrashIcon from '@lucide/svelte/icons/trash';
   import UsersIcon from '@lucide/svelte/icons/users';
   import XIcon from '@lucide/svelte/icons/x';
-  import { SPACE_ZONE } from '$lib/space';
+  import { SPACE_ZONE } from '$lib/utils/space';
   import { formatDate } from '$lib/frontend/format';
   import UserMinusIcon from '@lucide/svelte/icons/user-minus';
   import UserPlusIcon from '@lucide/svelte/icons/user-plus';

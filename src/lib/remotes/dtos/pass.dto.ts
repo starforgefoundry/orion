@@ -1,4 +1,4 @@
-import type { EnumValue } from '$lib/member_enums';
+import type { EnumValue } from '$lib/utils/member-enums';
 
 export const WALLET_PROVIDER = {
   APPLE: 'apple',

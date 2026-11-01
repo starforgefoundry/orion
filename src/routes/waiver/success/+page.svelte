@@ -1,6 +1,6 @@
 <script lang="ts">
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
-  import { SPACE_EMAIL } from '$lib/space';
+  import { SPACE_EMAIL } from '$lib/utils/space';
 </script>
 
 <svelte:head>

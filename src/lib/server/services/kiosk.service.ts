@@ -6,7 +6,7 @@ import {
   VISIT_SOURCE,
   WAIVER_SOURCE,
   type VisitBasis,
-} from '$lib/member_enums';
+} from '$lib/utils/member-enums';
 import {
   KIOSK_CHECK_IN_STATUS,
   KIOSK_DENIAL_REASON,
@@ -19,12 +19,12 @@ import {
 import type { DayPass, Member } from '$lib/server/db/schema';
 import type { BookingPass, IssuedPass } from '$lib/server/repositories/pass.repository';
 import { BaseService } from '$lib/server/services/base.service';
-import { resolveAccess, type MemberAccessContext } from '$lib/server/utils/member_access';
-import { spaceDate } from '$lib/space';
-import { passTokenFromScan } from '$lib/server/utils/member_links';
-import { CAR_BAY_STATUS, CAR_BAY_TIER_NAMES } from '$lib/utils/car_bay';
+import { resolveAccess, type MemberAccessContext } from '$lib/server/utils/member-access';
+import { spaceDate } from '$lib/utils/space';
+import { passTokenFromScan } from '$lib/server/utils/member-links';
+import { CAR_BAY_STATUS, CAR_BAY_TIER_NAMES } from '$lib/utils/car-bay';
 import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '$lib/utils/classes';
-import { kioskPairPath } from '$lib/utils/kiosk_pairing';
+import { kioskPairPath } from '$lib/utils/kiosk-pairing';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { DateTime } from 'luxon';
 

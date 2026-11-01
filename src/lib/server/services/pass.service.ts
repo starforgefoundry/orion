@@ -1,11 +1,11 @@
 import type { PassDto } from '$lib/remotes/dtos/pass.dto';
 import { BaseService } from '$lib/server/services/base.service';
-import { appleWalletConfig, buildApplePass } from '$lib/server/utils/apple_wallet';
-import { decodeDataUrl } from '$lib/server/utils/data_url';
-import { googleWalletConfig, googleWalletSaveUrl } from '$lib/server/utils/google_wallet';
-import { passUrl } from '$lib/server/utils/member_links';
-import { passDetails } from '$lib/server/utils/pass_details';
-import { availableWallets } from '$lib/server/utils/wallet_providers';
+import { appleWalletConfig, buildApplePass } from '$lib/server/utils/apple-wallet';
+import { decodeDataUrl } from '$lib/server/utils/data-url';
+import { googleWalletConfig, googleWalletSaveUrl } from '$lib/server/utils/google-wallet';
+import { passUrl } from '$lib/server/utils/member-links';
+import { passDetails } from '$lib/server/utils/pass-details';
+import { availableWallets } from '$lib/server/utils/wallet-providers';
 import qrcode from 'qrcode-generator';
 
 const QR_TYPE_NUMBER_AUTO = 0;

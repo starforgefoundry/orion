@@ -9,7 +9,7 @@
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { enhanceWithToast } from '$lib/frontend/form-submit';
   import { submitWaiverForm } from '$lib/remotes/endpoints/waiver.remote';
-  import { SPACE_EMAIL } from '$lib/space';
+  import { SPACE_EMAIL } from '$lib/utils/space';
 
   const CONTACT_EMAIL = SPACE_EMAIL.CONTACT;
 

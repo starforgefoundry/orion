@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { verifySignedUrl } from './signed_url';
+import { verifySignedUrl } from './signed-url';
 import { InvalidStorageKeyError, fileUrl, openFile, saveFile, storagePath } from './storage';
 
 const STORAGE_DIR = mkdtempSync(join(tmpdir(), 'orion-storage-'));

@@ -1,10 +1,10 @@
-import { TAG_ID_LENGTH } from '$lib/utils/print_materials';
+import { TAG_ID_LENGTH } from '$lib/utils/print-materials';
 import {
   createPrintMaterial,
   getFilamentCatalog,
   setMaterialSetup,
   updatePrintMaterial,
-} from '$lib/remotes/endpoints/print_materials.remote';
+} from '$lib/remotes/endpoints/print-materials.remote';
 import type { PrintMaterial } from '$lib/server/db/schema';
 import { toast } from 'svelte-sonner';
 

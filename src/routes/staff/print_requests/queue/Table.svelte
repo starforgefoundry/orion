@@ -8,7 +8,7 @@
   import { DebouncedSearch } from '$lib/frontend/debounced-search.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { pollQuery } from './poll-query.svelte';
-  import { searchPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
+  import { searchPrintRequests } from '$lib/remotes/endpoints/print-request.remote';
   import SearchIcon from '@lucide/svelte/icons/search';
   import RequestDetailModal from './RequestDetailModal.svelte';
   import { PAYMENT_STATUS_DISPLAY } from '$lib/frontend/payment-status';

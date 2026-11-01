@@ -7,7 +7,7 @@
   import PassCard from '$lib/frontend/member-pass/PassCard.svelte';
   import { getOnboarding } from '$lib/remotes/endpoints/onboarding.remote';
   import OnboardingWaiverForm from './OnboardingWaiverForm.svelte';
-  import { SPACE_EMAIL } from '$lib/space';
+  import { SPACE_EMAIL } from '$lib/utils/space';
 
   const CONTACT_EMAIL = SPACE_EMAIL.CONTACT;
   const PASS_INSTRUCTIONS =

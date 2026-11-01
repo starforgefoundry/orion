@@ -1,7 +1,7 @@
 import type { ClassBooking, ClassInstance, Payment } from '$lib/server/db/schema';
 import { UserError } from '$lib/errors';
 import { PaymentDeclinedError } from '$lib/server/gateways/payment.gateway';
-import { SPACE_ZONE, spaceDate } from '$lib/space';
+import { SPACE_ZONE, spaceDate } from '$lib/utils/space';
 import { PAYMENT_STATUS } from '$lib/utils/billing';
 import { factory } from '$test/factory';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';

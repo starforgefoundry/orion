@@ -1,7 +1,7 @@
 import { schema, type Waiver } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { fileUrl, saveFile } from '$lib/server/utils/storage';
-import { spaceDate } from '$lib/space';
+import { spaceDate } from '$lib/utils/space';
 import { asc, count, desc, eq, ilike, or } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 

@@ -16,7 +16,7 @@
     getPrintPricing,
     getPrintRequestSquareSettings,
   } from '$lib/remotes/endpoints/settings.remote';
-  import { EMAIL_TEMPLATE_GROUP, type EmailTemplateGroup } from '$lib/utils/email_templates';
+  import { EMAIL_TEMPLATE_GROUP, type EmailTemplateGroup } from '$lib/utils/email-templates';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
   import CarIcon from '@lucide/svelte/icons/car';
   import CircleHelpIcon from '@lucide/svelte/icons/circle-help';

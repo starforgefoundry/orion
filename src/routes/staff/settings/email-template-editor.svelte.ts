@@ -1,6 +1,6 @@
 import { submitWithToast } from '$lib/frontend/form-submit';
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
-import { updateEmailTemplate } from '$lib/remotes/endpoints/email_template.remote';
+import { updateEmailTemplate } from '$lib/remotes/endpoints/email-template.remote';
 import type { EmailTemplate } from '$lib/server/db/schema';
 import {
   EMAIL_TEMPLATE_DEFINITIONS,
@@ -8,7 +8,7 @@ import {
   renderTemplate,
   templateVariables,
   unknownVariables,
-} from '$lib/utils/email_templates';
+} from '$lib/utils/email-templates';
 import { tick } from 'svelte';
 
 export const TEMPLATE_FIELD = {

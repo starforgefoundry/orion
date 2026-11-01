@@ -1,17 +1,17 @@
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
-import { getCarBaySchedule } from '$lib/remotes/endpoints/car_bay.remote';
+import { getCarBaySchedule } from '$lib/remotes/endpoints/car-bay.remote';
 import {
   getCarBayAvailability,
   getCarBayPolicy,
   getCarBayRates,
 } from '$lib/remotes/endpoints/settings.remote';
-import { SPACE_ZONE } from '$lib/space';
-import { CAR_BAY_TIER, DEFAULT_CAR_BAY_POLICY, type CarBayTier } from '$lib/utils/car_bay';
+import { SPACE_ZONE } from '$lib/utils/space';
+import { CAR_BAY_TIER, DEFAULT_CAR_BAY_POLICY, type CarBayTier } from '$lib/utils/car-bay';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TierSchedule } from './tier-schedule.svelte';
 
-vi.mock('$lib/remotes/endpoints/car_bay.remote', () => ({ getCarBaySchedule: vi.fn() }));
+vi.mock('$lib/remotes/endpoints/car-bay.remote', () => ({ getCarBaySchedule: vi.fn() }));
 
 vi.mock('$lib/remotes/endpoints/settings.remote', () => ({
   getCarBayAvailability: vi.fn(),

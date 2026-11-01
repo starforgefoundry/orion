@@ -1,7 +1,7 @@
 import { goto } from '$app/navigation';
-import type { PrintRequestFileDto } from '$lib/remotes/dtos/print_request.dto';
-import { submitPrintRequestForm } from '$lib/remotes/endpoints/print_request.remote';
-import { BYTES_PER_MB } from '$lib/utils/print_request';
+import type { PrintRequestFileDto } from '$lib/remotes/dtos/print-request.dto';
+import { submitPrintRequestForm } from '$lib/remotes/endpoints/print-request.remote';
+import { BYTES_PER_MB } from '$lib/utils/print-request';
 import { toast } from 'svelte-sonner';
 
 export const STEPS = { CONTACT: 'contact', PROJECT: 'project' } as const;

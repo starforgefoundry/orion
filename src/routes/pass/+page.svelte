@@ -7,7 +7,7 @@
   import { enhanceWithToast } from '$lib/frontend/form-submit';
   import { requestPassEmailForm } from '$lib/remotes/endpoints/onboarding.remote';
   import MailCheckIcon from '@lucide/svelte/icons/mail-check';
-  import { SPACE_EMAIL } from '$lib/space';
+  import { SPACE_EMAIL } from '$lib/utils/space';
 
   const CONTACT_EMAIL = SPACE_EMAIL.CONTACT;
 

@@ -10,13 +10,13 @@
   import Section from '$lib/frontend/components/Section.svelte';
   import StepProgress from '$lib/frontend/components/StepProgress.svelte';
   import { PAYMENT_STATUS } from '$lib/utils/billing';
-  import { PRINT_REQUEST_STATUS } from '$lib/utils/print_request';
+  import { PRINT_REQUEST_STATUS } from '$lib/utils/print-request';
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
   import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
   import XIcon from '@lucide/svelte/icons/x';
   import { formatIsoDate } from '$lib/frontend/format';
-  import { PrintRequestTracker } from './print-request-status.svelte';
-  import { SPACE_EMAIL } from '$lib/space';
+  import { PrintRequestTracker } from './print-request-tracker.svelte';
+  import { SPACE_EMAIL } from '$lib/utils/space';
 
   const CONTACT_EMAIL = SPACE_EMAIL.PRINTS;
 

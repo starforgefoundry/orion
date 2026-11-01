@@ -3,10 +3,10 @@ import {
   MEMBER_EMAIL_TRIGGER,
   MEMBER_EMAIL_TYPE,
   WAIVER_SOURCE,
-} from '$lib/member_enums';
+} from '$lib/utils/member-enums';
 import type { OnboardingDto, SubmitOnboardingWaiverDto } from '$lib/remotes/dtos/onboarding.dto';
 import { BaseService } from '$lib/server/services/base.service';
-import { belongsToOrganization, resolveAccess } from '$lib/server/utils/member_access';
+import { belongsToOrganization, resolveAccess } from '$lib/server/utils/member-access';
 import { DateTime, Duration } from 'luxon';
 
 /** Keeps the public form from being used to flood a member's inbox. */

@@ -8,9 +8,9 @@
   import Pagination from '$lib/frontend/components/Pagination.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
-  import { enumValues, ACCESS_BASIS } from '$lib/member_enums';
-  import { MEMBER_SORT, ONBOARDING_FILTER } from '$lib/member_enums';
-  import type { MemberSort } from '$lib/member_enums';
+  import { enumValues, ACCESS_BASIS } from '$lib/utils/member-enums';
+  import { MEMBER_SORT, ONBOARDING_FILTER } from '$lib/utils/member-enums';
+  import type { MemberSort } from '$lib/utils/member-enums';
   import MailIcon from '@lucide/svelte/icons/mail';
   import SearchIcon from '@lucide/svelte/icons/search';
   import XIcon from '@lucide/svelte/icons/x';
@@ -23,7 +23,7 @@
     waiverDisplay,
   } from '$lib/frontend/member-display';
   import { formatDate } from '$lib/frontend/format';
-  import { MemberDirectory, type FilterKey, type MemberFilters } from './members.svelte';
+  import { MemberDirectory, type FilterKey, type MemberFilters } from './member-directory.svelte';
 
   const COLUMN_COUNT = 6;
 

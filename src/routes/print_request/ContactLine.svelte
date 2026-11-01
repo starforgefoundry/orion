@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { SPACE_EMAIL } from '$lib/space';
+  import { SPACE_EMAIL } from '$lib/utils/space';
 </script>
 
 <p class="text-sm text-muted-foreground">

@@ -1,0 +1,417 @@
+import type {
+  BookCarBayDto,
+  CarBayBookingDetail,
+  CarBayBookingView,
+  CarBayClosureView,
+  CarBayStaffSchedule,
+  CustomerCarBayBooking,
+  PublicCarBaySchedule,
+  SendCarBayOverrunInvoiceDto,
+  StaffBookCarBayDto,
+  StaffCancelCarBayBookingDto,
+  StaffCloseCarBayDto,
+} from '$lib/remotes/dtos/car-bay.dto';
+import type { CarBayBooking, CarBayClosure, Payment } from '$lib/server/db/schema';
+import type { CarBayBookingWithPayment } from '$lib/server/repositories/car-bay.repository';
+import { BaseService } from '$lib/server/services/base.service';
+import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { forEachSettled, runInBackground } from '$lib/server/utils/background';
+import { carBayBookingUrl, passLinks } from '$lib/server/utils/member-links';
+import { bookWithPayment } from '$lib/server/utils/paid-booking';
+import { paymentLink, payUrl } from '$lib/server/utils/payment-links';
+import {
+  amountPaid,
+  buildBill,
+  centsToDollars,
+  PAYMENT_STATUS,
+  PAYMENT_TYPE,
+} from '$lib/utils/billing';
+import {
+  CAR_BAY_BOOKER,
+  CAR_BAY_STATUS,
+  CAR_BAY_TIER,
+  CAR_BAY_TIER_NAMES,
+  CarBayRuleError,
+  CarBayRules,
+  CarBaySlotTakenError,
+  bookingLineItems,
+  formatPeriod,
+  overrunLineItems,
+  type CarBayBooker,
+  type CarBayPolicy,
+  type CarBayRequest,
+} from '$lib/utils/car-bay';
+import { SPACE_ZONE } from '$lib/utils/space';
+import { dueForReminder } from '$lib/utils/reminders';
+import { DateTime, Duration } from 'luxon';
+
+const CLOSED_MESSAGE = 'The bay is closed at that time. Please pick another time.';
+const BOOKINGS_CLOSED_MESSAGE = 'The car bay is not taking bookings right now.';
+
+function toView(booking: CarBayBooking, payment: Payment | null): CarBayBookingView {
+  const { startAt, endAt, blockedUntil, createdDate, reminderSentDate, ...rest } = booking;
+  return {
+    ...rest,
+    startAt: startAt.toISO()!,
+    endAt: endAt.toISO()!,
+    blockedUntil: blockedUntil.toISO()!,
+    createdDate: createdDate.toISO()!,
+    amountPaid: amountPaid(payment),
+  };
+}
+
+function toClosureView(closure: CarBayClosure): CarBayClosureView {
+  return {
+    id: closure.id,
+    startAt: closure.startAt.toISO()!,
+    endAt: closure.endAt.toISO()!,
+    reason: closure.reason,
+  };
+}
+
+export class CarBayService extends BaseService {
+  private async rules() {
+    return new CarBayRules(await this.settingsRepository.getSetting('carBayPolicy'));
+  }
+  async getPublicSchedule(now: DateTime = DateTime.now()): Promise<PublicCarBaySchedule> {
+    const rules = await this.rules();
+    const from = now.setZone(SPACE_ZONE).startOf('day');
+    const to = from.plus({ days: rules.policy.publicHorizonDays + 1 });
+    const [bookings, closures] = await Promise.all([
+      this.carBayRepository.getConfirmedInRange(from, to),
+      this.carBayRepository.getClosuresInRange(from, to),
+    ]);
+
+    return {
+      today: from.toISODate()!,
+      bookings: bookings.map((booking) => ({
+        id: booking.id,
+        startAt: booking.startAt.toISO()!,
+        endAt: booking.endAt.toISO()!,
+        blockedUntil: booking.blockedUntil.toISO()!,
+      })),
+      closures: closures.map(({ id, startAt, endAt }) => ({
+        id,
+        startAt: startAt.toISO()!,
+        endAt: endAt.toISO()!,
+      })),
+    };
+  }
+
+  async getStaffSchedule(fromDate: string, toDate: string): Promise<CarBayStaffSchedule> {
+    const from = DateTime.fromISO(fromDate, { zone: SPACE_ZONE }).startOf('day');
+    const to = DateTime.fromISO(toDate, { zone: SPACE_ZONE }).endOf('day');
+    const [bookings, closures] = await Promise.all([
+      this.carBayRepository.getAllInRange(from, to),
+      this.carBayRepository.getClosuresInRange(from, to),
+    ]);
+    return {
+      bookings: bookings.map((booking) => toView(booking, booking.payment)),
+      closures: closures.map(toClosureView),
+    };
+  }
+
+  async getBookingDetail(
+    id: string,
+    now: DateTime = DateTime.now(),
+  ): Promise<CarBayBookingDetail | null> {
+    const rules = await this.rules();
+    const booking = await this.carBayRepository.getById(id);
+    if (!booking) return null;
+
+    const payments = await this.carBayRepository.getOverrunPayments(id);
+    return {
+      ...toView(booking, booking.payment),
+      refundable: rules.isRefundable(booking.startAt, now),
+      overrunInvoices: payments.map((payment) => ({
+        id: payment.id,
+        status: payment.status,
+        total: payment.total,
+        paymentUrl: paymentLink(payment),
+        issuedDate: payment.issuedDate.toISO()!,
+      })),
+    };
+  }
+
+  async getBookingByToken(
+    token: string,
+    now: DateTime = DateTime.now(),
+  ): Promise<CustomerCarBayBooking | null> {
+    const rules = await this.rules();
+    const booking = await this.carBayRepository.getByToken(token);
+    if (!booking) return null;
+
+    return {
+      id: booking.id,
+      tier: booking.tier,
+      status: booking.status,
+      startAt: booking.startAt.toISO()!,
+      endAt: booking.endAt.toISO()!,
+      customerName: booking.customerName,
+      customerEmail: booking.customerEmail,
+      amountPaid: amountPaid(booking.payment),
+      refundable: rules.isRefundable(booking.startAt, now),
+      passToken: booking.passToken,
+    };
+  }
+
+  private async validateRequest(
+    rules: CarBayRules,
+    request: CarBayRequest,
+    customerEmail: string,
+    now: DateTime,
+    booker: CarBayBooker,
+  ) {
+    const period = rules.resolvePeriod(request, now, booker);
+
+    if (request.tier === CAR_BAY_TIER.QUICK_JOB) {
+      const day = period.startAt.startOf('day');
+      const hasQuickJob = await this.carBayRepository.hasConfirmedForCustomer(
+        customerEmail,
+        CAR_BAY_TIER.QUICK_JOB,
+        day,
+        day.plus({ days: 1 }),
+      );
+      if (hasQuickJob) {
+        throw new CarBayRuleError(
+          'Only one Quick Job can be booked per day. Book the Hourly tier if you need more time.',
+        );
+      }
+    }
+
+    const blockedUntil = rules.blockedUntil(period.endAt);
+    const [overlapping, closures] = await Promise.all([
+      this.carBayRepository.getConfirmedInRange(period.startAt, blockedUntil),
+      this.carBayRepository.getClosuresInRange(period.startAt, blockedUntil),
+    ]);
+    if (closures.length > 0) throw new CarBayRuleError(CLOSED_MESSAGE);
+    if (overlapping.length > 0) throw new CarBaySlotTakenError();
+
+    return period;
+  }
+
+  async staffClose(dto: StaffCloseCarBayDto, staffEmail: string) {
+    const rules = await this.rules();
+    const period = rules.resolveClosure(dto);
+
+    const bookings = await this.carBayRepository.getConfirmedInRange(period.startAt, period.endAt);
+    if (bookings.length > 0) {
+      throw new CarBayRuleError('Cancel the bookings in that time before closing the bay');
+    }
+
+    const closure = await this.carBayRepository.createClosure({
+      startAt: period.startAt,
+      endAt: period.endAt,
+      reason: dto.reason || null,
+      createdByEmail: staffEmail,
+    });
+    return toClosureView(closure);
+  }
+
+  async reopen(closureId: string) {
+    const closure = await this.carBayRepository.deleteClosure(closureId);
+    if (!closure) throw new CarBayRuleError('Closure not found');
+    return toClosureView(closure);
+  }
+
+  async isMember(customerEmail: string) {
+    return await this.memberRepository.hasMembership(customerEmail, DateTime.now());
+  }
+
+  async book(dto: BookCarBayDto, now: DateTime = DateTime.now()) {
+    const { isOpen } = await this.settingsRepository.getSetting('carBayAvailability');
+    if (!isOpen) throw new CarBayRuleError(BOOKINGS_CLOSED_MESSAGE);
+
+    const rules = await this.rules();
+    const period = await this.validateRequest(
+      rules,
+      dto.request,
+      dto.customerEmail,
+      now,
+      CAR_BAY_BOOKER.CUSTOMER,
+    );
+
+    const [rates, isMember] = await Promise.all([
+      this.settingsRepository.getSetting('carBayRates'),
+      this.isMember(dto.customerEmail),
+    ]);
+
+    const { booking, payment } = await bookWithPayment(
+      this.paymentGateway,
+      {
+        type: PAYMENT_TYPE.CAR_BAY_BOOKING,
+        status: PAYMENT_STATUS.PENDING,
+        customer: { name: dto.customerName, email: dto.customerEmail },
+        bill: buildBill(bookingLineItems(dto.request, rates, isMember)),
+      },
+      dto.sourceId,
+      {
+        create: async (authorized) =>
+          await this.carBayRepository.create({
+            tier: dto.request.tier,
+            status: CAR_BAY_STATUS.CONFIRMED,
+            startAt: period.startAt,
+            endAt: period.endAt,
+            blockedUntil: rules.blockedUntil(period.endAt),
+            ...(await this.memberRepository.customerColumns(dto)),
+            isMember,
+            paymentId: authorized.id,
+          }),
+        cancel: (booking) =>
+          this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.CANCELED }),
+      },
+    );
+
+    runInBackground(
+      this.sendConfirmationEmail(booking, payment, rules.policy),
+      'send car bay booking email',
+    );
+    return toView(booking, payment);
+  }
+
+  async staffBook(dto: StaffBookCarBayDto, staffEmail: string, now: DateTime = DateTime.now()) {
+    const rules = await this.rules();
+    const period = await this.validateRequest(
+      rules,
+      dto.request,
+      dto.customerEmail,
+      now,
+      CAR_BAY_BOOKER.STAFF,
+    );
+
+    const booking = await this.carBayRepository.create({
+      tier: dto.request.tier,
+      status: CAR_BAY_STATUS.CONFIRMED,
+      startAt: period.startAt,
+      endAt: period.endAt,
+      blockedUntil: rules.blockedUntil(period.endAt),
+      ...(await this.memberRepository.customerColumns(dto)),
+      isMember: dto.isMember,
+      createdByEmail: staffEmail,
+    });
+
+    runInBackground(
+      this.sendConfirmationEmail(booking, null, rules.policy),
+      'send car bay booking email',
+    );
+    return toView(booking, null);
+  }
+
+  private async refund(booking: CarBayBookingWithPayment) {
+    if (!booking.payment) return false;
+    return await this.paymentGateway.refund(booking.payment);
+  }
+
+  private requireConfirmed(booking: CarBayBookingWithPayment | null): CarBayBookingWithPayment {
+    if (!booking) throw new CarBayRuleError('Booking not found');
+    if (booking.status !== CAR_BAY_STATUS.CONFIRMED)
+      throw new CarBayRuleError('This booking is no longer active');
+    return booking;
+  }
+
+  async cancelByToken(token: string, now: DateTime = DateTime.now()) {
+    const rules = await this.rules();
+    const booking = this.requireConfirmed(await this.carBayRepository.getByToken(token));
+    const refunded = rules.isRefundable(booking.startAt, now) && (await this.refund(booking));
+
+    await this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.CANCELED });
+    return { refunded };
+  }
+
+  async staffCancel(dto: StaffCancelCarBayBookingDto) {
+    const booking = this.requireConfirmed(await this.carBayRepository.getById(dto.bookingId));
+    const refunded = dto.refund && (await this.refund(booking));
+
+    await this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.CANCELED });
+    return { refunded };
+  }
+
+  async markNoShow(bookingId: string) {
+    const booking = this.requireConfirmed(await this.carBayRepository.getById(bookingId));
+    return toView(
+      await this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.NO_SHOW }),
+      booking.payment,
+    );
+  }
+
+  async sendOverrunInvoice(dto: SendCarBayOverrunInvoiceDto) {
+    const booking = this.requireConfirmed(await this.carBayRepository.getById(dto.bookingId));
+
+    const rates = await this.settingsRepository.getSetting('carBayRates');
+    const bookingEndDate = booking.endAt.toISODate()!;
+    const payment = await this.paymentRepository.save({
+      type: PAYMENT_TYPE.CAR_BAY_OVERRUN,
+      status: PAYMENT_STATUS.PENDING,
+      customer: { name: booking.customerName, email: booking.customerEmail },
+      bill: buildBill(overrunLineItems(dto.overrun, bookingEndDate, rates, booking.isMember)),
+    });
+    await this.carBayRepository.createOverrun(booking.id, payment.id);
+
+    await this.mailgunGateway.sendTemplate(
+      booking.customerEmail,
+      SENDERS.carBay,
+      'car_bay_overrun',
+      {
+        customerName: booking.customerName,
+        bookingEndDate: booking.endAt.setZone(SPACE_ZONE).toFormat('MMMM d'),
+        total: centsToDollars(payment.total),
+        paymentUrl: payUrl(payment),
+      },
+    );
+
+    return payment;
+  }
+
+  async sendDueReminders(now: DateTime = DateTime.now()) {
+    const rules = await this.rules();
+    const lead = Duration.fromObject({ hours: rules.policy.reminderLeadHours });
+    const candidates = await this.carBayRepository.getReminderCandidates(now, now.plus(lead));
+    const due = candidates.filter((booking) =>
+      dueForReminder({ startsAt: booking.startAt, bookedAt: booking.createdDate }, now, lead),
+    );
+
+    await forEachSettled(
+      due,
+      async (booking) => {
+        await this.mailgunGateway.sendTemplate(
+          booking.customerEmail,
+          SENDERS.carBay,
+          'car_bay_reminder',
+          {
+            customerName: booking.customerName,
+            tierName: CAR_BAY_TIER_NAMES[booking.tier],
+            bookingWhen: formatPeriod(booking),
+            bookingUrl: carBayBookingUrl(booking),
+            ...passLinks(booking),
+          },
+        );
+        await this.carBayRepository.update(booking.id, { reminderSentDate: now });
+      },
+      (booking) => `send car bay reminder for booking ${booking.id}`,
+    );
+  }
+
+  private async sendConfirmationEmail(
+    booking: CarBayBooking,
+    payment: Payment | null,
+    policy: CarBayPolicy,
+  ) {
+    await this.mailgunGateway.sendTemplate(
+      booking.customerEmail,
+      SENDERS.carBay,
+      'car_bay_booking',
+      {
+        customerName: booking.customerName,
+        tierName: CAR_BAY_TIER_NAMES[booking.tier],
+        bookingWhen: formatPeriod(booking),
+        amountPaid: centsToDollars(amountPaid(payment)),
+        refundCutoffHours: policy.refundCutoffHours.toString(),
+        storageDays: policy.storageDays.toString(),
+        bookingUrl: carBayBookingUrl(booking),
+        ...passLinks(booking),
+      },
+    );
+  }
+}
+
+export const carBayService = new CarBayService();

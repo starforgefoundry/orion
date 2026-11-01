@@ -1,4 +1,4 @@
-import { ACCESS_BASIS, VISIT_OUTCOME, VISIT_SOURCE } from '$lib/member_enums';
+import { ACCESS_BASIS, VISIT_OUTCOME, VISIT_SOURCE } from '$lib/utils/member-enums';
 import { schema } from '$lib/server/db/schema';
 import { describeWithDatabase, useTestDatabase } from '$test/db';
 import { eq } from 'drizzle-orm';

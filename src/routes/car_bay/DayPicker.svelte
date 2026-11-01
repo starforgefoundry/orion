@@ -8,8 +8,8 @@
     type CarBayBlock,
     type CarBayRates,
     type CarBayRules,
-  } from '$lib/utils/car_bay';
-  import { SPACE_ZONE } from '$lib/space';
+  } from '$lib/utils/car-bay';
+  import { SPACE_ZONE } from '$lib/utils/space';
   import { DateTime } from 'luxon';
 
   interface Props {

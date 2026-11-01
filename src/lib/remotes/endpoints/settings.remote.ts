@@ -10,7 +10,7 @@ import {
   printPricingSettingsDto,
   printRequestSquareSettings,
 } from '$lib/remotes/dtos/settings.dto';
-import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
+import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
 import { settingsService } from '$lib/server/services/settings.service';
 
 export const getPublicPrintRequestForm = query(

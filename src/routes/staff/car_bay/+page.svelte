@@ -4,7 +4,7 @@
   import BayWeekCalendar from '$lib/frontend/components/BayWeekCalendar.svelte';
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
-  import { CAR_BAY_TIER_NAMES } from '$lib/utils/car_bay';
+  import { CAR_BAY_TIER_NAMES } from '$lib/utils/car-bay';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
   import PlusIcon from '@lucide/svelte/icons/plus';

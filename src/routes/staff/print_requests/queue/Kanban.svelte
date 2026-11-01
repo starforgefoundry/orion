@@ -8,8 +8,8 @@
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { pollQuery } from './poll-query.svelte';
   import { PAYMENT_STATUS } from '$lib/utils/billing';
-  import type { PrintRequestStatus } from '$lib/utils/print_request';
-  import { getPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
+  import type { PrintRequestStatus } from '$lib/utils/print-request';
+  import { getPrintRequests } from '$lib/remotes/endpoints/print-request.remote';
   import EllipsisVerticalIcon from '@lucide/svelte/icons/ellipsis-vertical';
   import MailIcon from '@lucide/svelte/icons/mail';
   import PackageCheckIcon from '@lucide/svelte/icons/package-check';

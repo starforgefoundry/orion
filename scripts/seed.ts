@@ -14,8 +14,8 @@ import {
   WAIVER_SOURCE,
   type AccessBasis,
   type SubscriptionStatus,
-} from '../src/lib/member_enums.ts';
-import { SPACE_ZONE, spaceDate } from '../src/lib/space.ts';
+} from '../src/lib/utils/member-enums.ts';
+import { SPACE_ZONE, spaceDate } from '../src/lib/utils/space.ts';
 import {
   buildBill,
   PAYMENT_STATUS,
@@ -32,10 +32,10 @@ import {
   CarBayRules,
   DEFAULT_CAR_BAY_POLICY,
   type CarBayTier,
-} from '../src/lib/utils/car_bay.ts';
+} from '../src/lib/utils/car-bay.ts';
 import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '../src/lib/utils/classes.ts';
-import { printBill, type PrintPricing } from '../src/lib/utils/print_pricing.ts';
-import { PRINT_REQUEST_STATUS, type PrintRequestStatus } from '../src/lib/utils/print_request.ts';
+import { printBill, type PrintPricing } from '../src/lib/utils/print-pricing.ts';
+import { PRINT_REQUEST_STATUS, type PrintRequestStatus } from '../src/lib/utils/print-request.ts';
 
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
 

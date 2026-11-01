@@ -10,7 +10,7 @@
   } from '$lib/frontend/components/form/OptionSelect.svelte';
   import ModalForm from '$lib/frontend/components/ModalForm.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
-  import { TAG_ID_LENGTH } from '$lib/utils/print_materials';
+  import { TAG_ID_LENGTH } from '$lib/utils/print-materials';
   import type { PrintMaterial } from '$lib/server/db/schema';
   import SpoolIcon from '@lucide/svelte/icons/spool';
   import { untrack } from 'svelte';

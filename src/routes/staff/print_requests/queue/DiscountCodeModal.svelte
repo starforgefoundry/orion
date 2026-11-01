@@ -5,7 +5,7 @@
   import OptionSelect from '$lib/frontend/components/form/OptionSelect.svelte';
   import Modal from '$lib/frontend/components/Modal.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
-  import { getBillingCodes } from '$lib/remotes/endpoints/billing_code.remote';
+  import { getBillingCodes } from '$lib/remotes/endpoints/billing-code.remote';
   import TagIcon from '@lucide/svelte/icons/tag';
 
   type Props = ModalProps & {

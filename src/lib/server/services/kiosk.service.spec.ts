@@ -1,8 +1,8 @@
 import { KIOSK_CHECK_IN_STATUS } from '$lib/remotes/dtos/kiosk.dto';
 import type { CarBayBooking, ClassBooking, ClassInstance, DayPass } from '$lib/server/db/schema';
 import type { ClassPass, IssuedPass } from '$lib/server/repositories/pass.repository';
-import type { MemberAccessContext } from '$lib/server/utils/member_access';
-import { SPACE_ZONE, spaceDate } from '$lib/space';
+import type { MemberAccessContext } from '$lib/server/utils/member-access';
+import { SPACE_ZONE, spaceDate } from '$lib/utils/space';
 import { factory } from '$test/factory';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';

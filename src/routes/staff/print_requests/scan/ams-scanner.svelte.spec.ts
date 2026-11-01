@@ -1,5 +1,5 @@
-import { updateAMSForPrinter } from '$lib/remotes/endpoints/print_materials.remote';
-import { PRINTER_LABEL_PREFIX } from '$lib/utils/print_materials';
+import { updateAMSForPrinter } from '$lib/remotes/endpoints/print-materials.remote';
+import { PRINTER_LABEL_PREFIX } from '$lib/utils/print-materials';
 import type { DetectedBarcode } from 'barqode';
 import { toast } from 'svelte-sonner';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,7 @@ import {
   SAME_LABEL_DISTANCE_PX,
 } from './ams-scanner.svelte';
 
-vi.mock('$lib/remotes/endpoints/print_materials.remote', () => ({
+vi.mock('$lib/remotes/endpoints/print-materials.remote', () => ({
   updateAMSForPrinter: vi.fn(),
 }));
 

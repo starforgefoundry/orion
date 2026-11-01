@@ -1,6 +1,6 @@
 import { schema } from '$lib/server/db/schema';
-import { SPACE_ZONE } from '$lib/space';
-import { EMAIL_TEMPLATE_KEYS } from '$lib/utils/email_templates';
+import { SPACE_ZONE } from '$lib/utils/space';
+import { EMAIL_TEMPLATE_KEYS } from '$lib/utils/email-templates';
 import { describeWithDatabase, useTestDatabase } from '$test/db';
 import { eq } from 'drizzle-orm';
 import { getTableConfig, type PgTable } from 'drizzle-orm/pg-core';

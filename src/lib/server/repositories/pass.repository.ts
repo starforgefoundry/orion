@@ -1,4 +1,4 @@
-import { PASS_KIND } from '$lib/member_enums';
+import { PASS_KIND } from '$lib/utils/member-enums';
 import {
   schema,
   type CarBayBooking,

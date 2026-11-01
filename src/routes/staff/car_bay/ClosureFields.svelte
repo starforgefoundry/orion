@@ -5,7 +5,7 @@
     type SelectOption,
   } from '$lib/frontend/components/form/OptionSelect.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
-  import { formatPeriod } from '$lib/utils/car_bay';
+  import { formatPeriod } from '$lib/utils/car-bay';
   import { DateTime } from 'luxon';
   import type { CarBayClosureForm } from './staff-entry.svelte';
 

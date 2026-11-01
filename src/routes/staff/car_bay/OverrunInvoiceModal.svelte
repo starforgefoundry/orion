@@ -6,7 +6,7 @@
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { submitWithToast } from '$lib/frontend/form-submit';
   import { getCarBayRates } from '$lib/remotes/endpoints/settings.remote';
-  import { CAR_BAY_OVERRUN, formatDollars, type CarBayOverrun } from '$lib/utils/car_bay';
+  import { CAR_BAY_OVERRUN, formatDollars, type CarBayOverrun } from '$lib/utils/car-bay';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import SendIcon from '@lucide/svelte/icons/send';
   import { untrack } from 'svelte';

@@ -1,5 +1,5 @@
 import { MailgunRateLimitError } from '$lib/server/gateways/mailgun.gateway';
-import { SPACE_ZONE } from '$lib/space';
+import { SPACE_ZONE } from '$lib/utils/space';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';

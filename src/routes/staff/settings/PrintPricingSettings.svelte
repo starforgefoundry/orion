@@ -7,7 +7,7 @@
   import { enhanceWithToast } from '$lib/frontend/form-submit';
   import { printPricingSettingsForm } from '$lib/remotes/endpoints/settings.remote';
   import { CENTS_PER_DOLLAR } from '$lib/utils/billing';
-  import type { PrintPricing } from '$lib/utils/print_pricing';
+  import type { PrintPricing } from '$lib/utils/print-pricing';
 
   const MAX_PERCENT = 100;
 

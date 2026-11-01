@@ -1,4 +1,4 @@
-import { PASS_KIND } from '$lib/member_enums';
+import { PASS_KIND } from '$lib/utils/member-enums';
 import { schema } from '$lib/server/db/schema';
 import { describeWithDatabase, useTestDatabase } from '$test/db';
 import { factory } from '$test/factory';

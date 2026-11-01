@@ -4,17 +4,17 @@ import type {
   CreateOrganizationDto,
   UpdateOrganizationDto,
 } from '$lib/remotes/dtos/organization.dto';
-import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
+import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization-charges.dto';
 import { NotFoundError, UserError } from '$lib/errors';
-import { MEMBER_EMAIL_TRIGGER } from '$lib/member_enums';
+import { MEMBER_EMAIL_TRIGGER } from '$lib/utils/member-enums';
 import type { Member, Payment } from '$lib/server/db/schema';
 import { MailgunRateLimitError } from '$lib/server/gateways/mailgun.gateway';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
-import { accessEndOfDay } from '$lib/server/utils/member_access';
-import { parseMemberLines, type ParsedMemberLine } from '$lib/server/utils/member_lines';
-import { SENDERS } from '$lib/server/utils/email_templates/senders';
-import { paymentLink, payUrl } from '$lib/server/utils/payment_links';
+import { accessEndOfDay } from '$lib/server/utils/member-access';
+import { parseMemberLines, type ParsedMemberLine } from '$lib/server/utils/member-lines';
+import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { paymentLink, payUrl } from '$lib/server/utils/payment-links';
 import {
   buildBill,
   centsToDollars,

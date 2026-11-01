@@ -1,4 +1,4 @@
-import { DEFAULT_CAR_BAY_POLICY } from '$lib/utils/car_bay';
+import { DEFAULT_CAR_BAY_POLICY } from '$lib/utils/car-bay';
 import { describeWithDatabase, useTestDatabase } from '$test/db';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SettingsRepository, type SettingsMap } from './settings.repository';

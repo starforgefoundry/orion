@@ -14,7 +14,7 @@
   import PlusIcon from '@lucide/svelte/icons/plus';
   import SearchIcon from '@lucide/svelte/icons/search';
   import TrashIcon from '@lucide/svelte/icons/trash';
-  import { MaterialCatalog } from './materials.svelte';
+  import { MaterialCatalog } from './material-catalog.svelte';
 
   const manager = new MaterialCatalog();
 

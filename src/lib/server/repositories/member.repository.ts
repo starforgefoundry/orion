@@ -13,9 +13,9 @@ import {
   type OnboardingFilter,
   type SortDirection,
   type WaiverFilter,
-} from '$lib/member_enums';
-import { hasMembership, type MemberAccessContext } from '$lib/server/utils/member_access';
-import { spaceDate } from '$lib/space';
+} from '$lib/utils/member-enums';
+import { hasMembership, type MemberAccessContext } from '$lib/server/utils/member-access';
+import { spaceDate } from '$lib/utils/space';
 import {
   and,
   asc,

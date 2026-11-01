@@ -1,4 +1,4 @@
-import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
+import { EmailTemplateRepository } from '$lib/server/repositories/email-template.repository';
 import { automock } from '$test/utils';
 import { describe, expect, it, vi } from 'vitest';
 import { MailgunGateway, retryAfter } from './mailgun.gateway';

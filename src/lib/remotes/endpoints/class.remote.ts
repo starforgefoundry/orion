@@ -10,7 +10,7 @@ import {
   rescheduleBookingDto,
   upsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
-import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
+import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
 import { classService } from '$lib/server/services/class.service';
 import * as v from 'valibot';
 

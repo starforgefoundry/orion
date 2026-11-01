@@ -1,4 +1,4 @@
-import { CAR_BAY_TIER, type CarBayTier } from '$lib/utils/car_bay';
+import { CAR_BAY_TIER, type CarBayTier } from '$lib/utils/car-bay';
 import type { ParamMatcher } from '@sveltejs/kit';
 
 const TIERS: string[] = Object.values(CAR_BAY_TIER);

@@ -5,7 +5,7 @@
     type CarBayPolicy,
     type CarBayRates,
     type PricePair,
-  } from '$lib/utils/car_bay';
+  } from '$lib/utils/car-bay';
 
   type PairKey = {
     [K in keyof CarBayRates]: CarBayRates[K] extends PricePair ? K : never;

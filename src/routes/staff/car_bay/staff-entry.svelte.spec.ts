@@ -1,11 +1,11 @@
-import { staffBookCarBay, staffCloseCarBay } from '$lib/remotes/endpoints/car_bay.remote';
-import { SPACE_ZONE } from '$lib/space';
-import { CarBayRules, DEFAULT_CAR_BAY_POLICY, type CarBayBlock } from '$lib/utils/car_bay';
+import { staffBookCarBay, staffCloseCarBay } from '$lib/remotes/endpoints/car-bay.remote';
+import { SPACE_ZONE } from '$lib/utils/space';
+import { CarBayRules, DEFAULT_CAR_BAY_POLICY, type CarBayBlock } from '$lib/utils/car-bay';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CarBayClosureForm, CLOSED_ENTRY, StaffBayEntry } from './staff-entry.svelte';
 
-vi.mock('$lib/remotes/endpoints/car_bay.remote', () => ({
+vi.mock('$lib/remotes/endpoints/car-bay.remote', () => ({
   staffBookCarBay: vi.fn(),
   staffCloseCarBay: vi.fn(),
 }));

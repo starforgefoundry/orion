@@ -5,8 +5,8 @@ import {
   DEFAULT_CAR_BAY_RATES,
   type CarBayPolicy,
   type CarBayRates,
-} from '$lib/utils/car_bay';
-import { DEFAULT_PRINT_PRICING, type PrintPricing } from '$lib/utils/print_pricing';
+} from '$lib/utils/car-bay';
+import { DEFAULT_PRINT_PRICING, type PrintPricing } from '$lib/utils/print-pricing';
 import { eq } from 'drizzle-orm';
 
 export type SettingsMap = {

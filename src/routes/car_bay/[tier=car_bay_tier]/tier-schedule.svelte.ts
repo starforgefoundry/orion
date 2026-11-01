@@ -1,12 +1,12 @@
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
-import { getCarBaySchedule } from '$lib/remotes/endpoints/car_bay.remote';
+import { getCarBaySchedule } from '$lib/remotes/endpoints/car-bay.remote';
 import {
   CAR_BAY_TIER,
   CarBayRules,
   consecutiveDates,
   type CarBayRequest,
   type CarBayTier,
-} from '$lib/utils/car_bay';
+} from '$lib/utils/car-bay';
 import { DateTime } from 'luxon';
 import CheckoutModal from '../CheckoutModal.svelte';
 import { CarBayOffer } from '../car-bay-offer.svelte';

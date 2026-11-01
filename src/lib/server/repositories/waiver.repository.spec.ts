@@ -1,5 +1,5 @@
 import { fileUrl } from '$lib/server/utils/storage';
-import { SPACE_ZONE } from '$lib/space';
+import { SPACE_ZONE } from '$lib/utils/space';
 import { describeWithDatabase, useTestDatabase } from '$test/db';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it } from 'vitest';

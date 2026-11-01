@@ -11,7 +11,7 @@
   import {
     cancelCarBayBooking,
     getCarBayBookingByToken,
-  } from '$lib/remotes/endpoints/car_bay.remote';
+  } from '$lib/remotes/endpoints/car-bay.remote';
   import { getCarBayPolicy } from '$lib/remotes/endpoints/settings.remote';
   import {
     CAR_BAY_STATUS,
@@ -20,8 +20,8 @@
     formatDollars,
     formatPeriod,
     toPeriod,
-  } from '$lib/utils/car_bay';
-  import type { CustomerCarBayBooking } from '$lib/remotes/dtos/car_bay.dto';
+  } from '$lib/utils/car-bay';
+  import type { CustomerCarBayBooking } from '$lib/remotes/dtos/car-bay.dto';
 
   const STATUS_HEADINGS: Record<CustomerCarBayBooking['status'], string> = {
     confirmed: 'Booking Confirmed',

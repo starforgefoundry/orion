@@ -4,7 +4,7 @@
   import ModalForm from '$lib/frontend/components/ModalForm.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { submitWithToast } from '$lib/frontend/form-submit';
-  import { updatePrintRequest } from '$lib/remotes/endpoints/print_request.remote';
+  import { updatePrintRequest } from '$lib/remotes/endpoints/print-request.remote';
   import CheckIcon from '@lucide/svelte/icons/check';
   import UserPenIcon from '@lucide/svelte/icons/user-pen';
   import { untrack } from 'svelte';

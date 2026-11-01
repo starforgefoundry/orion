@@ -1,5 +1,5 @@
 import type { PrintRequestFile } from '$lib/server/db/schema';
-import { updatePartQuantity } from '$lib/remotes/endpoints/print_request.remote';
+import { updatePartQuantity } from '$lib/remotes/endpoints/print-request.remote';
 
 export class QuantityEditor {
   isEditing = $state(false);

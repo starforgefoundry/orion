@@ -9,7 +9,7 @@
     memberSquareSettingsForm,
   } from '$lib/remotes/endpoints/settings.remote';
   import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
-  import { MemberSquareSync } from './member-square-settings.svelte';
+  import { MemberSquareSync } from './member-square-sync.svelte';
 
   interface Props {
     formId?: string;

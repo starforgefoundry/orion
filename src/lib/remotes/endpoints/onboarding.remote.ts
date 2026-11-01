@@ -1,7 +1,7 @@
 import { form, query } from '$app/server';
 import { HTTP_STATUS } from '$lib/http';
 import { requestPassEmailDto, submitOnboardingWaiverDto } from '$lib/remotes/dtos/onboarding.dto';
-import { exposeUserErrors, INVALID_LINK_MESSAGE } from '$lib/remotes/utils';
+import { exposeUserErrors, INVALID_LINK_MESSAGE } from '$lib/server/remote-utils';
 import { onboardingService } from '$lib/server/services/onboarding.service';
 import { error } from '@sveltejs/kit';
 import * as v from 'valibot';

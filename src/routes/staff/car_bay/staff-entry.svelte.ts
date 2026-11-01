@@ -1,6 +1,6 @@
 import { CarBayBookingForm } from '$lib/frontend/car-bay-booking-form.svelte';
 import { submitWithToast } from '$lib/frontend/form-submit';
-import { staffBookCarBay, staffCloseCarBay } from '$lib/remotes/endpoints/car_bay.remote';
+import { staffBookCarBay, staffCloseCarBay } from '$lib/remotes/endpoints/car-bay.remote';
 import {
   CAR_BAY_TIER,
   CAR_BAY_TIER_NAMES,
@@ -8,7 +8,7 @@ import {
   type CarBayClosureRequest,
   type CarBayRules,
   type CarBayTier,
-} from '$lib/utils/car_bay';
+} from '$lib/utils/car-bay';
 
 export const CLOSED_ENTRY = 'closed';
 

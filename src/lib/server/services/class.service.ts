@@ -19,10 +19,10 @@ import type {
   User,
 } from '$lib/server/db/schema';
 import { DISCORD_COLOR } from '$lib/server/repositories/discord.repository';
-import type { GoogleCalendarEventInput } from '$lib/server/repositories/google_calendar.repository';
+import type { GoogleCalendarEventInput } from '$lib/server/repositories/google-calendar.repository';
 import { ConflictError, NotFoundError, UserError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
-import { SENDERS } from '$lib/server/utils/email_templates/senders';
+import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import {
   buildBill,
   amountPaid,
@@ -31,9 +31,9 @@ import {
   PAYMENT_STATUS,
   PAYMENT_TYPE,
 } from '$lib/utils/billing';
-import { SPACE_ZONE, spaceDate } from '$lib/space';
-import { classBookingUrl, passLinks } from '$lib/server/utils/member_links';
-import { bookWithPayment } from '$lib/server/utils/paid_booking';
+import { SPACE_ZONE, spaceDate } from '$lib/utils/space';
+import { classBookingUrl, passLinks } from '$lib/server/utils/member-links';
+import { bookWithPayment } from '$lib/server/utils/paid-booking';
 import {
   CANCEL_INSTANCE_MODE,
   CLASS_BOOKING_STATUS,

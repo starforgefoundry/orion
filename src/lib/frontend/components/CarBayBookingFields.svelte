@@ -9,7 +9,7 @@
   } from '$lib/frontend/components/form/OptionSelect.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
-  import { CAR_BAY_TIER, CAR_BAY_TIER_NAMES, formatPeriod } from '$lib/utils/car_bay';
+  import { CAR_BAY_TIER, CAR_BAY_TIER_NAMES, formatPeriod } from '$lib/utils/car-bay';
   import { DateTime } from 'luxon';
 
   interface Props {

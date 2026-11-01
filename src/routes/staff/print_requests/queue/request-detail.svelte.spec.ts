@@ -1,14 +1,14 @@
 import { goto } from '$app/navigation';
-import { getPrintRequestById } from '$lib/remotes/endpoints/print_request.remote';
+import { getPrintRequestById } from '$lib/remotes/endpoints/print-request.remote';
 import { PAYMENT_STATUS, type PaymentStatus } from '$lib/utils/billing';
-import { PRINT_REQUEST_STATUS, type PrintRequestStatus } from '$lib/utils/print_request';
+import { PRINT_REQUEST_STATUS, type PrintRequestStatus } from '$lib/utils/print-request';
 import { describe, expect, it, vi } from 'vitest';
 import { cancelRequest, changeStatus } from './request-actions';
 import { BILLING_TYPE, RequestDetail } from './request-detail.svelte';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-vi.mock('$lib/remotes/endpoints/print_request.remote', () => ({
+vi.mock('$lib/remotes/endpoints/print-request.remote', () => ({
   getPrintRequestById: vi.fn(),
   getPrintRequestComments: vi.fn(),
   getPrintRequestDownloadUrl: vi.fn(),

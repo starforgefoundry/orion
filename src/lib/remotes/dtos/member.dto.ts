@@ -5,7 +5,7 @@ import {
   ONBOARDING_FILTER,
   SORT_DIRECTION,
   WAIVER_FILTER,
-} from '$lib/member_enums';
+} from '$lib/utils/member-enums';
 import * as v from 'valibot';
 
 export const MEMBER_PAGE_SIZE = 25;

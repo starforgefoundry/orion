@@ -6,7 +6,7 @@ import {
   searchMembersDto,
   sendMemberOnboardingsDto,
 } from '$lib/remotes/dtos/member.dto';
-import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
+import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
 import { memberService } from '$lib/server/services/member.service';
 import * as v from 'valibot';
 

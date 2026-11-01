@@ -1,4 +1,4 @@
-import type { PrintRequestStatus } from '$lib/utils/print_request';
+import type { PrintRequestStatus } from '$lib/utils/print-request';
 import type { Attachment } from 'svelte/attachments';
 
 const LONG_PRESS_MS = 300;

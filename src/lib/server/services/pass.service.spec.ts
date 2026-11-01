@@ -2,25 +2,25 @@ import {
   appleWalletConfig,
   buildApplePass,
   type AppleWalletConfig,
-} from '$lib/server/utils/apple_wallet';
+} from '$lib/server/utils/apple-wallet';
 import {
   googleWalletConfig,
   googleWalletSaveUrl,
   type GoogleWalletConfig,
-} from '$lib/server/utils/google_wallet';
-import { SPACE_ZONE } from '$lib/space';
+} from '$lib/server/utils/google-wallet';
+import { SPACE_ZONE } from '$lib/utils/space';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PassService } from './pass.service';
 
-vi.mock('$lib/server/utils/google_wallet', () => ({
+vi.mock('$lib/server/utils/google-wallet', () => ({
   googleWalletConfig: vi.fn(),
   googleWalletSaveUrl: vi.fn(() => 'https://pay.google.com/gp/v/save/jwt'),
 }));
 
-vi.mock('$lib/server/utils/apple_wallet', () => ({
+vi.mock('$lib/server/utils/apple-wallet', () => ({
   appleWalletConfig: vi.fn(),
   buildApplePass: vi.fn(() => Buffer.from('pkpass')),
 }));

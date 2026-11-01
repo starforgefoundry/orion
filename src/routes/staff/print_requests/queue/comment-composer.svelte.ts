@@ -1,4 +1,4 @@
-import { MAX_COMMENT_ATTACHMENTS } from '$lib/remotes/dtos/print_request.dto';
+import { MAX_COMMENT_ATTACHMENTS } from '$lib/remotes/dtos/print-request.dto';
 import { toast } from 'svelte-sonner';
 
 export class CommentComposer {

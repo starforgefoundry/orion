@@ -1,6 +1,6 @@
 import { HTTP_STATUS } from '$lib/http';
 import { passService } from '$lib/server/services/pass.service';
-import { APPLE_PASS_CONTENT_TYPE } from '$lib/server/utils/apple_wallet';
+import { APPLE_PASS_CONTENT_TYPE } from '$lib/server/utils/apple-wallet';
 import { error, type RequestHandler } from '@sveltejs/kit';
 
 const PASS_FILENAME = 'starforge-pass.pkpass';

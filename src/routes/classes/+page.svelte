@@ -4,7 +4,7 @@
   import { Spinner } from '$lib/components/ui/spinner';
   import QueryState from '$lib/frontend/components/QueryState.svelte';
   import { getActiveClasses } from '$lib/remotes/endpoints/class.remote';
-  import { SPACE_EMAIL } from '$lib/space';
+  import { SPACE_EMAIL } from '$lib/utils/space';
 
   const catalogsQuery = $derived(getActiveClasses());
 </script>

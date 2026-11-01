@@ -1,5 +1,5 @@
 // Relative imports: the database schema and seed script load this file outside SvelteKit.
-import { SPACE_ZONE } from '../space.ts';
+import { SPACE_ZONE } from './space.ts';
 import { DateTime, Interval } from 'luxon';
 
 export const CLASS_INSTANCE_STATUS = {

@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import type { SortDirection } from '$lib/member_enums';
+  import type { SortDirection } from '$lib/utils/member-enums';
 
   export type ColumnSort = {
     direction: SortDirection | undefined;
@@ -17,7 +17,7 @@
 <script lang="ts" generics="T extends string">
   import { Button } from '$lib/components/ui/button';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-  import { SORT_DIRECTION } from '$lib/member_enums';
+  import { SORT_DIRECTION } from '$lib/utils/member-enums';
   import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
   import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
   import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';

@@ -1,5 +1,5 @@
 import { HTTP_STATUS } from '$lib/http';
-import { KIOSK_DEVICE_COOKIE, KIOSK_PAIR_TOKEN_PARAM, KIOSK_PATH } from '$lib/utils/kiosk_pairing';
+import { KIOSK_DEVICE_COOKIE, KIOSK_PAIR_TOKEN_PARAM, KIOSK_PATH } from '$lib/utils/kiosk-pairing';
 import { kioskService } from '$lib/server/services/kiosk.service';
 import { error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';

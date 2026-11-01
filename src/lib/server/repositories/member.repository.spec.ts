@@ -7,10 +7,10 @@ import {
   SORT_DIRECTION,
   SUBSCRIPTION_STATUS,
   enumValues,
-} from '$lib/member_enums';
+} from '$lib/utils/member-enums';
 import type { Organization, OrganizationMember } from '$lib/server/db/schema';
-import { resolveAccess } from '$lib/server/utils/member_access';
-import { spaceDate } from '$lib/space';
+import { resolveAccess } from '$lib/server/utils/member-access';
+import { spaceDate } from '$lib/utils/space';
 import { describeWithDatabase, useTestDatabase } from '$test/db';
 import { DateTime } from 'luxon';
 import { beforeEach, expect, it } from 'vitest';

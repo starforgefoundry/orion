@@ -6,7 +6,7 @@ import {
   getMemberVisits,
   resendMemberOnboarding,
 } from '$lib/remotes/endpoints/member.remote';
-import { SUBSCRIPTION_STATUS } from '$lib/member_enums';
+import { SUBSCRIPTION_STATUS } from '$lib/utils/member-enums';
 import type { MemberSubscription } from '$lib/server/db/schema';
 import CancelSubscriptionModal from './CancelSubscriptionModal.svelte';
 

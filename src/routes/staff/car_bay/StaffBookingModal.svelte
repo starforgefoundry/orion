@@ -7,7 +7,7 @@
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import ModalForm from '$lib/frontend/components/ModalForm.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
-  import type { CarBayBlock, CarBayRules } from '$lib/utils/car_bay';
+  import type { CarBayBlock, CarBayRules } from '$lib/utils/car-bay';
   import CarIcon from '@lucide/svelte/icons/car';
   import CheckIcon from '@lucide/svelte/icons/check';
   import { untrack } from 'svelte';

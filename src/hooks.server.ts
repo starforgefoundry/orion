@@ -1,16 +1,16 @@
 import { building, dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
-import { devLoginUser } from '$lib/auth/staff';
-import { carBayService } from '$lib/server/services/car_bay.service';
+import { devLoginUser } from '$lib/server/auth/staff';
+import { carBayService } from '$lib/server/services/car-bay.service';
 import { classService } from '$lib/server/services/class.service';
 import { settingsService } from '$lib/server/services/settings.service';
 import { NEW_MEMBER_ONBOARDING, squareService } from '$lib/server/services/square.service';
 import { runInBackground } from '$lib/server/utils/background';
-import { scheduleDaily } from '$lib/server/utils/daily_schedule';
-import { SPACE_ZONE } from '$lib/space';
+import { scheduleDaily } from '$lib/server/utils/daily-schedule';
+import { SPACE_ZONE } from '$lib/utils/space';
 import { type Handle, type ServerInit } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
-import { handle as authenticationHandle } from './lib/auth/auth';
+import { handle as authenticationHandle } from '$lib/server/auth/auth';
 
 const BOOKING_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const NIGHTLY_SYNC_HOUR = 3;

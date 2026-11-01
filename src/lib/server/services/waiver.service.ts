@@ -1,4 +1,4 @@
-import { WAIVER_SOURCE } from '$lib/member_enums';
+import { WAIVER_SOURCE } from '$lib/utils/member-enums';
 import type { SearchWaiversDto, SubmitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
 import { BaseService } from '$lib/server/services/base.service';
 

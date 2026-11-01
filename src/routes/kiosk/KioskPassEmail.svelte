@@ -6,7 +6,7 @@
   import { enhanceForm } from '$lib/frontend/form-submit';
   import { requestPassEmailForm } from '$lib/remotes/endpoints/onboarding.remote';
   import { toast } from 'svelte-sonner';
-  import type { KioskSession } from './kiosk-manager.svelte';
+  import type { KioskSession } from './kiosk-session.svelte';
 
   interface Props {
     kiosk: KioskSession;

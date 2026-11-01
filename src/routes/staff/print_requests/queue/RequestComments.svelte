@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { parseFileExtensions } from '$lib/utils/print_request';
+  import { parseFileExtensions } from '$lib/utils/print-request';
   import { page } from '$app/state';
   import { Button } from '$lib/components/ui/button';
   import { Spinner } from '$lib/components/ui/spinner';
@@ -10,7 +10,7 @@
   import {
     addPrintRequestCommentForm,
     getPrintRequestComments,
-  } from '$lib/remotes/endpoints/print_request.remote';
+  } from '$lib/remotes/endpoints/print-request.remote';
   import { getPrintRequestSettings } from '$lib/remotes/endpoints/settings.remote';
   import DownloadIcon from '@lucide/svelte/icons/download';
   import MonitorUpIcon from '@lucide/svelte/icons/monitor-up';

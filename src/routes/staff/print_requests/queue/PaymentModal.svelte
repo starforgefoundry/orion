@@ -8,9 +8,9 @@
   import ModalForm from '$lib/frontend/components/ModalForm.svelte';
   import PaymentBreakdown from '$lib/frontend/components/PaymentBreakdown.svelte';
   import { enhanceWithToast } from '$lib/frontend/form-submit';
-  import type { PrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
-  import { getPricingInfo, upsertPaymentForm } from '$lib/remotes/endpoints/print_payment.remote';
-  import { printBill } from '$lib/utils/print_pricing';
+  import type { PrintRequestDto } from '$lib/remotes/dtos/print-request.dto';
+  import { getPricingInfo, upsertPaymentForm } from '$lib/remotes/endpoints/print-payment.remote';
+  import { printBill } from '$lib/utils/print-pricing';
   import DollarSignIcon from '@lucide/svelte/icons/dollar-sign';
 
   interface Props {

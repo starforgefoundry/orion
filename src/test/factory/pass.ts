@@ -1,11 +1,11 @@
-import { PASS_KIND } from '$lib/member_enums';
+import { PASS_KIND } from '$lib/utils/member-enums';
 import type {
   CarBayPass,
   ClassPass,
   DayPassTicket,
   MembershipPass,
 } from '$lib/server/repositories/pass.repository';
-import { carBayBooking } from './car_bay';
+import { carBayBooking } from './car-bay';
 import { classBooking, classCatalog, classInstance } from './class';
 import { dayPass, member } from './member';
 

@@ -1,5 +1,5 @@
 import type { StatusDisplay } from '$lib/frontend/components/StatusBadge.svelte';
-import type { PrintRequestStatus } from '$lib/utils/print_request';
+import type { PrintRequestStatus } from '$lib/utils/print-request';
 import BanIcon from '@lucide/svelte/icons/ban';
 import ListTodoIcon from '@lucide/svelte/icons/list-todo';
 import PackageCheckIcon from '@lucide/svelte/icons/package-check';

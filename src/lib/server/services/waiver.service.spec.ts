@@ -1,4 +1,4 @@
-import { WAIVER_SOURCE } from '$lib/member_enums';
+import { WAIVER_SOURCE } from '$lib/utils/member-enums';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { beforeEach, describe, expect, it } from 'vitest';

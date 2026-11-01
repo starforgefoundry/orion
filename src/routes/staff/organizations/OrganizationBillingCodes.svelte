@@ -6,7 +6,7 @@
   import {
     getBillingCodesForOrganization,
     updateBillingCode,
-  } from '$lib/remotes/endpoints/billing_code.remote';
+  } from '$lib/remotes/endpoints/billing-code.remote';
   import ArchiveIcon from '@lucide/svelte/icons/archive';
 
   const COLUMN_COUNT = 3;

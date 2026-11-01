@@ -1,7 +1,7 @@
 <script lang="ts" module>
   import { DATE_FORMAT } from '$lib/frontend/format';
   import type { Tone } from '$lib/frontend/components/StatusBadge.svelte';
-  import type { CarBayBookingView, CarBayOverrunInvoiceView } from '$lib/remotes/dtos/car_bay.dto';
+  import type { CarBayBookingView, CarBayOverrunInvoiceView } from '$lib/remotes/dtos/car-bay.dto';
 
   type Badge = { label: string; tone: Tone };
 
@@ -31,14 +31,14 @@
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { submitWithToast } from '$lib/frontend/form-submit';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
-  import { getCarBayBookingDetail, markCarBayNoShow } from '$lib/remotes/endpoints/car_bay.remote';
+  import { getCarBayBookingDetail, markCarBayNoShow } from '$lib/remotes/endpoints/car-bay.remote';
   import {
     CAR_BAY_STATUS,
     CAR_BAY_TIER_NAMES,
     formatDollars,
     formatPeriod,
     toPeriod,
-  } from '$lib/utils/car_bay';
+  } from '$lib/utils/car-bay';
   import BanIcon from '@lucide/svelte/icons/ban';
   import CarIcon from '@lucide/svelte/icons/car';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';

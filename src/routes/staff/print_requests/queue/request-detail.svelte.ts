@@ -6,7 +6,7 @@ import {
   getPrintRequestComments,
   getPrintRequestDownloadUrl,
   updatePrintRequestDiscount,
-} from '$lib/remotes/endpoints/print_request.remote';
+} from '$lib/remotes/endpoints/print-request.remote';
 import { PAYMENT_STATUS } from '$lib/utils/billing';
 import { toast } from 'svelte-sonner';
 import CustomerEditModal from './CustomerEditModal.svelte';

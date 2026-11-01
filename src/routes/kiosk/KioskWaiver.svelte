@@ -9,7 +9,7 @@
   import { enhanceForm } from '$lib/frontend/form-submit';
   import { kioskWaiverForm } from '$lib/remotes/endpoints/kiosk.remote';
   import { toast } from 'svelte-sonner';
-  import type { KioskSession } from './kiosk-manager.svelte';
+  import type { KioskSession } from './kiosk-session.svelte';
 
   interface Props {
     kiosk: KioskSession;

@@ -1,13 +1,13 @@
 import { env } from '$env/dynamic/private';
 import { HTTP_STATUS } from '$lib/http';
-import type { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
-import type { EmailSender } from '$lib/server/utils/email_templates/senders';
+import type { EmailTemplateRepository } from '$lib/server/repositories/email-template.repository';
+import type { EmailSender } from '$lib/server/utils/email-templates/senders';
 import {
   renderHtmlTemplate,
   renderTemplate,
   type EmailTemplateKey,
   type Templates,
-} from '$lib/utils/email_templates';
+} from '$lib/utils/email-templates';
 import { DateTime } from 'luxon';
 
 const MAILGUN_DOMAIN = 'starforgefoundry.com';

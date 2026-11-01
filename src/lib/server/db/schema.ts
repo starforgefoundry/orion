@@ -9,7 +9,7 @@ import {
   VISIT_OUTCOME,
   VISIT_SOURCE,
   WAIVER_SOURCE,
-} from '../../member_enums';
+} from '../../utils/member-enums';
 import { DateTime } from 'luxon';
 import { luxonTimestamp } from './custom/luxon';
 import {
@@ -18,10 +18,10 @@ import {
   type BillingDiscount,
   type BillingLineItem,
 } from '../../utils/billing';
-import type { EmailTemplateKey } from '../../utils/email_templates';
-import { CAR_BAY_STATUS, CAR_BAY_TIER } from '../../utils/car_bay';
+import type { EmailTemplateKey } from '../../utils/email-templates';
+import { CAR_BAY_STATUS, CAR_BAY_TIER } from '../../utils/car-bay';
 import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '../../utils/classes';
-import { PRINT_REQUEST_STATUS } from '../../utils/print_request';
+import { PRINT_REQUEST_STATUS } from '../../utils/print-request';
 
 // A database default so rows that existed before passes were issued get a token too.
 const passTokenColumn = () =>

@@ -3,7 +3,7 @@ import {
   TARGET_EXPOSURE_COMPENSATION_EV,
   NATIVE_ZOOM,
   type NativeCameraFrame,
-} from '$lib/utils/kiosk_camera';
+} from '$lib/utils/kiosk-camera';
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { CAMERA_RETRY_MS } from './kiosk-camera.svelte';
 

@@ -1,6 +1,6 @@
-import { SPACE_ZONE } from '$lib/space';
+import { SPACE_ZONE } from '$lib/utils/space';
 import { factory } from '$test/factory';
-import { memberAccessContext, organizationAccess } from '$test/factory/member_access';
+import { memberAccessContext, organizationAccess } from '$test/factory/member-access';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

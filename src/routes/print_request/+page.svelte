@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { parseFileExtensions } from '$lib/utils/print_request';
+  import { parseFileExtensions } from '$lib/utils/print-request';
   import * as Alert from '$lib/components/ui/alert';
   import { Button } from '$lib/components/ui/button';
   import * as Field from '$lib/components/ui/field';
@@ -15,7 +15,7 @@
   import NumberStepper from '$lib/frontend/components/form/NumberStepper.svelte';
   import TextArea from '$lib/frontend/components/form/TextArea.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
-  import { submitPrintRequestForm } from '$lib/remotes/endpoints/print_request.remote';
+  import { submitPrintRequestForm } from '$lib/remotes/endpoints/print-request.remote';
   import { getPublicPrintRequestForm } from '$lib/remotes/endpoints/settings.remote';
   import { cn } from '$lib/frontend/cn';
   import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';

@@ -1,4 +1,4 @@
-import { SPACE_ZONE } from '$lib/space';
+import { SPACE_ZONE } from '$lib/utils/space';
 import { DateTime } from 'luxon';
 import { describe, expect, it } from 'vitest';
 import { classEndsAt, classHasStarted, classStartsAt, weeklyDates } from './classes';

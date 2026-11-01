@@ -1,6 +1,6 @@
 <script lang="ts">
   import Section from '$lib/frontend/components/Section.svelte';
-  import { SPACE_EMAIL } from '$lib/space';
+  import { SPACE_EMAIL } from '$lib/utils/space';
 </script>
 
 <Section title="Car Bay Bookings Are Closed">

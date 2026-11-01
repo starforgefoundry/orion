@@ -12,7 +12,7 @@
   import Modal from '$lib/frontend/components/Modal.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import type { EmailTemplate } from '$lib/server/db/schema';
-  import { variableToken } from '$lib/utils/email_templates';
+  import { variableToken } from '$lib/utils/email-templates';
   import MailIcon from '@lucide/svelte/icons/mail';
   import { EmailTemplateEditor, TEMPLATE_FIELD } from './email-template-editor.svelte';
 

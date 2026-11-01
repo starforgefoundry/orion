@@ -1,5 +1,5 @@
 import { command, query } from '$app/server';
-import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
+import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
 import { NEW_MEMBER_ONBOARDING, squareService } from '$lib/server/services/square.service';
 
 export const getSquareLocations = query(

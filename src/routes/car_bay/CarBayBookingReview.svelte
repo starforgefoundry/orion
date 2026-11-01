@@ -2,7 +2,7 @@
   import type { CarBayBookingForm } from '$lib/frontend/car-bay-booking-form.svelte';
   import InfoRow from '$lib/frontend/components/InfoRow.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
-  import { CAR_BAY_TIER_NAMES, formatDollars, formatPeriod } from '$lib/utils/car_bay';
+  import { CAR_BAY_TIER_NAMES, formatDollars, formatPeriod } from '$lib/utils/car-bay';
 
   interface Props {
     form: CarBayBookingForm;

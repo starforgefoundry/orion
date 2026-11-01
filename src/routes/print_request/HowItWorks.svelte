@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { SPACE_EMAIL } from '$lib/space';
+  import { SPACE_EMAIL } from '$lib/utils/space';
 
   const PRINTING_GUIDE_URL = 'https://wiki.starforgefoundry.com/en/3d-printers';
 

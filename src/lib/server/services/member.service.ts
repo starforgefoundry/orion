@@ -4,11 +4,11 @@ import type {
   MemberVisitsDto,
   RecentVisitsDto,
 } from '$lib/remotes/dtos/member.dto';
-import { ACCESS_BASIS, MEMBER_EMAIL_TRIGGER, VISIT_SOURCE } from '$lib/member_enums';
+import { ACCESS_BASIS, MEMBER_EMAIL_TRIGGER, VISIT_SOURCE } from '$lib/utils/member-enums';
 import { NotFoundError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
-import { resolveAccess } from '$lib/server/utils/member_access';
-import { spaceDate } from '$lib/space';
+import { resolveAccess } from '$lib/server/utils/member-access';
+import { spaceDate } from '$lib/utils/space';
 import { DateTime } from 'luxon';
 
 export const MEMBER_NOT_FOUND = 'Member not found';

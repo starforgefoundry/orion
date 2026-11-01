@@ -15,14 +15,14 @@
   import type { ModalProps } from '$lib/frontend/components/utils';
   import SquareCardField from '$lib/frontend/components/SquareCardField.svelte';
   import { SquarePayment } from '$lib/frontend/square-payment.svelte';
-  import { bookCarBay, getCarBayMembership } from '$lib/remotes/endpoints/car_bay.remote';
+  import { bookCarBay, getCarBayMembership } from '$lib/remotes/endpoints/car-bay.remote';
   import {
     formatDollars,
     type CarBayBlock,
     type CarBayRates,
     type CarBayRules,
     type CarBayTier,
-  } from '$lib/utils/car_bay';
+  } from '$lib/utils/car-bay';
   import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
   import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
   import CarIcon from '@lucide/svelte/icons/car';

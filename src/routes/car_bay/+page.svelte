@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner';
-  import { CAR_BAY_TIER, CAR_BAY_TIER_NAMES } from '$lib/utils/car_bay';
+  import { CAR_BAY_TIER, CAR_BAY_TIER_NAMES } from '$lib/utils/car-bay';
   import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
   import ClosedNotice from './ClosedNotice.svelte';
   import ContactLine from './ContactLine.svelte';

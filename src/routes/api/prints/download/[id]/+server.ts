@@ -1,6 +1,6 @@
 import { HTTP_STATUS } from '$lib/http';
-import { printFilesService } from '$lib/server/services/print_files.service';
-import { verifySignedUrl } from '$lib/server/utils/signed_url';
+import { printFilesService } from '$lib/server/services/print-files.service';
+import { verifySignedUrl } from '$lib/server/utils/signed-url';
 import { error, type RequestHandler } from '@sveltejs/kit';
 import { Readable } from 'node:stream';
 

@@ -11,7 +11,7 @@
   import { cn } from '$lib/frontend/cn';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
-  import { SPACE_ZONE } from '$lib/space';
+  import { SPACE_ZONE } from '$lib/utils/space';
   import type { Snippet } from 'svelte';
 
   interface Props {

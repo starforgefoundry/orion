@@ -1,5 +1,5 @@
 import { HTTP_STATUS } from '$lib/http';
-import { verifySignedUrl } from '$lib/server/utils/signed_url';
+import { verifySignedUrl } from '$lib/server/utils/signed-url';
 import { InvalidStorageKeyError, openFile, requiresSignature } from '$lib/server/utils/storage';
 import { error, type RequestHandler } from '@sveltejs/kit';
 import { posix } from 'node:path';

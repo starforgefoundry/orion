@@ -2,8 +2,8 @@
   import { Button } from '$lib/components/ui/button';
   import { Spinner } from '$lib/components/ui/spinner';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
-  import { getEmailTemplates } from '$lib/remotes/endpoints/email_template.remote';
-  import { EMAIL_TEMPLATE_DEFINITIONS, type EmailTemplateGroup } from '$lib/utils/email_templates';
+  import { getEmailTemplates } from '$lib/remotes/endpoints/email-template.remote';
+  import { EMAIL_TEMPLATE_DEFINITIONS, type EmailTemplateGroup } from '$lib/utils/email-templates';
   import PencilIcon from '@lucide/svelte/icons/pencil';
   import EmailTemplateModal from './EmailTemplateModal.svelte';
   import SettingsSection from './SettingsSection.svelte';
