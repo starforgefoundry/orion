@@ -18,29 +18,11 @@ export const getOrganizations = query(
   }),
 );
 
-export const getOrganizationById = query(
-  v.object({ id: v.string() }),
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-    return await organizationService.getOrganizationById(dto.id);
-  }),
-);
-
 export const getOrganizationDetail = query(
   v.object({ id: v.string() }),
   exposeUserErrors(async (dto) => {
     verifyAuth();
     return await organizationService.getOrganizationDetail(dto.id);
-  }),
-);
-
-export const createOrganization = command(
-  createOrganizationDto,
-  exposeUserErrors(async (data) => {
-    verifyAuth();
-    const organization = await organizationService.createOrganization(data);
-    await getOrganizations().refresh();
-    return organization;
   }),
 );
 

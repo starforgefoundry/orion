@@ -1,63 +1,13 @@
-import { BambuddyRepository } from '$lib/server/repositories/bambuddy.repository';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { BillingCodeRepository } from '$lib/server/repositories/billing_code.repository';
-import { CarBayRepository } from '$lib/server/repositories/car_bay.repository';
-import { ClassRepository } from '$lib/server/repositories/class.repository';
-import { DayPassRepository } from '$lib/server/repositories/day_pass.repository';
-import { DiscordRepository } from '$lib/server/repositories/discord.repository';
-import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
-import { GoogleCalendarRepository } from '$lib/server/repositories/google_calendar.repository';
-import { InventoryRepository } from '$lib/server/repositories/inventory.repository';
-import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
-import { MemberRepository } from '$lib/server/repositories/member.repository';
-import { MemberEmailRepository } from '$lib/server/repositories/member_email.repository';
-import { MemberNotificationRepository } from '$lib/server/repositories/member_notification.repository';
-import { MemberSubscriptionRepository } from '$lib/server/repositories/member_subscription.repository';
-import { OrganizationRepository } from '$lib/server/repositories/organization.repository';
-import { OrganizationMemberRepository } from '$lib/server/repositories/organization_member.repository';
-import { PassRepository } from '$lib/server/repositories/pass.repository';
-import { PaymentRepository } from '$lib/server/repositories/payment.repository';
-import { PrintFilesRepository } from '$lib/server/repositories/print_files.repository';
-import { PrintMaterialsRepository } from '$lib/server/repositories/print_materials.repository';
-import { PrintRequestRepository } from '$lib/server/repositories/print_request.repository';
-import { PrintRequestCommentRepository } from '$lib/server/repositories/print_request_comment.repository';
-import { SettingsRepository, type SettingsMap } from '$lib/server/repositories/settings.repository';
-import { SquareRepository } from '$lib/server/repositories/square.repository';
-import { VisitRepository } from '$lib/server/repositories/visit.repository';
-import { WaiverRepository } from '$lib/server/repositories/waiver.repository';
-import type { BaseService, ServiceRepositories } from '$lib/server/services/base.service';
+import type { SettingsMap, SettingsRepository } from '$lib/server/repositories/settings.repository';
+import {
+  REPOSITORIES,
+  type BaseService,
+  type ServiceRepositories,
+} from '$lib/server/services/base.service';
 import { vi, type Mocked } from 'vitest';
 
 type Constructor<T> = abstract new (...args: never[]) => T;
-
-const REPOSITORIES: { [K in keyof ServiceRepositories]: Constructor<ServiceRepositories[K]> } = {
-  bambuddyRepository: BambuddyRepository,
-  billingCodeRepository: BillingCodeRepository,
-  carBayRepository: CarBayRepository,
-  classRepository: ClassRepository,
-  dayPassRepository: DayPassRepository,
-  discordRepository: DiscordRepository,
-  emailTemplateRepository: EmailTemplateRepository,
-  googleCalendarRepository: GoogleCalendarRepository,
-  inventoryRepository: InventoryRepository,
-  mailgunRepository: MailgunRepository,
-  memberEmailRepository: MemberEmailRepository,
-  memberNotificationRepository: MemberNotificationRepository,
-  memberRepository: MemberRepository,
-  memberSubscriptionRepository: MemberSubscriptionRepository,
-  organizationMemberRepository: OrganizationMemberRepository,
-  organizationRepository: OrganizationRepository,
-  passRepository: PassRepository,
-  paymentRepository: PaymentRepository,
-  printFilesRepository: PrintFilesRepository,
-  printMaterialsRepository: PrintMaterialsRepository,
-  printRequestCommentRepository: PrintRequestCommentRepository,
-  printRequestRepository: PrintRequestRepository,
-  settingsRepository: SettingsRepository,
-  squareRepository: SquareRepository,
-  visitRepository: VisitRepository,
-  waiverRepository: WaiverRepository,
-};
 
 export type ServiceMocks = { [K in keyof ServiceRepositories]: Mocked<ServiceRepositories[K]> };
 

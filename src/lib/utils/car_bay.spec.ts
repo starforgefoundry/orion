@@ -2,7 +2,6 @@ import { lineItemsTotal } from '$lib/utils/billing';
 import { DateTime } from 'luxon';
 import { describe, expect, it } from 'vitest';
 import {
-  CAR_BAY_ZONE,
   CarBayRuleError,
   CarBayRules,
   DEFAULT_CAR_BAY_POLICY,
@@ -10,6 +9,7 @@ import {
   bookingLineItems,
   overrunLineItems,
 } from './car_bay';
+import { SPACE_ZONE } from '$lib/space';
 
 // 2026-10-12 is a Monday.
 const MONDAY = '2026-10-12';
@@ -18,7 +18,7 @@ const SATURDAY = '2026-10-17';
 const SUNDAY = '2026-10-18';
 
 function at(iso: string) {
-  return DateTime.fromISO(iso, { zone: CAR_BAY_ZONE });
+  return DateTime.fromISO(iso, { zone: SPACE_ZONE });
 }
 
 const SUNDAY_BEFORE = at('2026-10-11T09:00');

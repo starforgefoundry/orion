@@ -6,10 +6,6 @@ import { Readable } from 'node:stream';
 const DOWNLOAD_ROUTE = '/api/prints/download';
 
 export class PrintFilesService extends BaseService {
-  async getByRequestId(printRequestId: string) {
-    return await this.printFilesRepository.getByPrintRequestId(printRequestId);
-  }
-
   getDownloadUrl(printRequestId: string) {
     return signUrl(`${DOWNLOAD_ROUTE}/${encodeURIComponent(printRequestId)}`);
   }

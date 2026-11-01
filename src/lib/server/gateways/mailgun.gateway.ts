@@ -1,7 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { HTTP_STATUS } from '$lib/http';
-import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
+import type { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
 import type { EmailSender } from '$lib/server/utils/email_templates/senders';
 import {
   renderHtmlTemplate,
@@ -14,13 +13,9 @@ import { DateTime } from 'luxon';
 const MAILGUN_DOMAIN = 'starforgefoundry.com';
 const MAILGUN_MESSAGES_URL = `https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`;
 
-export class MailgunRepository extends BaseRepository {
-  private emailTemplateRepository: EmailTemplateRepository;
-
-  constructor(emailTemplateRepository?: EmailTemplateRepository) {
-    super();
-    this.emailTemplateRepository = emailTemplateRepository ?? new EmailTemplateRepository();
-  }
+/** Sends the stored email templates through Mailgun. */
+export class MailgunGateway {
+  constructor(private readonly emailTemplateRepository: EmailTemplateRepository) {}
 
   async sendTemplate<T extends EmailTemplateKey>(
     to: string,

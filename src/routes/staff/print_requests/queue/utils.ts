@@ -1,6 +1,6 @@
 import type { StatusDisplay } from '$lib/frontend/components/StatusIndicator.svelte';
 import type { Tone } from '$lib/frontend/components/StatusBadge.svelte';
-import type { PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
+import type { PrintRequestStatus } from '$lib/utils/print_request';
 import type { Payment } from '$lib/server/db/schema';
 import BanIcon from '@lucide/svelte/icons/ban';
 import CircleCheckIcon from '@lucide/svelte/icons/circle-check';

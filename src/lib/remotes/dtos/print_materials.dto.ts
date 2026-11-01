@@ -5,15 +5,6 @@ export const TAG_ID_LENGTH = 8;
 /** Printed on the empty slot card. Scanning it in a slot's position clears that AMS slot. */
 export const EMPTY_SLOT_TAG_ID = 'EMPTY---';
 
-export const printMaterialDto = v.object({
-  id: v.string(),
-  name: v.string(),
-  available: v.boolean(),
-  archived: v.boolean(),
-});
-
-export type PrintMaterialDto = v.InferInput<typeof printMaterialDto>;
-
 const colorHex = v.pipe(v.string(), v.regex(/^#[0-9A-Fa-f]{6}$/, 'Enter a color like #RRGGBB'));
 
 export const createPrintMaterialDto = v.object({

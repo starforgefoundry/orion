@@ -5,7 +5,6 @@ export function enumValues<T extends Record<string, string>>(values: T) {
 }
 
 export const WAIVER_SOURCE = { WEB: 'web', KIOSK: 'kiosk' } as const;
-export type WaiverSource = EnumValue<typeof WAIVER_SOURCE>;
 
 export const SUBSCRIPTION_STATUS = {
   PENDING: 'pending',
@@ -17,7 +16,6 @@ export const SUBSCRIPTION_STATUS = {
 export type SubscriptionStatus = EnumValue<typeof SUBSCRIPTION_STATUS>;
 
 export const VISIT_SOURCE = { KIOSK: 'kiosk', STAFF: 'staff' } as const;
-export type VisitSource = EnumValue<typeof VISIT_SOURCE>;
 
 export const ACCESS_BASIS = {
   SUBSCRIPTION: 'subscription',
@@ -48,7 +46,6 @@ export const VISIT_OUTCOME = {
   DENIED_NO_WAIVER: 'denied_no_waiver',
   DENIED_NO_ACCESS: 'denied_no_access',
 } as const;
-export type VisitOutcome = EnumValue<typeof VISIT_OUTCOME>;
 
 export const MEMBER_EMAIL_TYPE = {
   ONBOARDING: 'onboarding',
@@ -65,3 +62,19 @@ export const MEMBER_EMAIL_TRIGGER = {
   SELF_SERVICE: 'self_service',
 } as const;
 export type MemberEmailTrigger = EnumValue<typeof MEMBER_EMAIL_TRIGGER>;
+
+export const WAIVER_FILTER = { SIGNED: 'signed', MISSING: 'missing' } as const;
+export type WaiverFilter = EnumValue<typeof WAIVER_FILTER>;
+
+export const ONBOARDING_FILTER = { SENT: 'sent', NOT_SENT: 'not_sent' } as const;
+export type OnboardingFilter = EnumValue<typeof ONBOARDING_FILTER>;
+
+export const MEMBER_SORT = {
+  NAME: 'name',
+  EMAIL: 'email',
+  ONBOARDING_SENT: 'onboarding_sent',
+} as const;
+export type MemberSort = EnumValue<typeof MEMBER_SORT>;
+
+export const SORT_DIRECTION = { ASC: 'asc', DESC: 'desc' } as const;
+export type SortDirection = EnumValue<typeof SORT_DIRECTION>;

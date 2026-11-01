@@ -1,8 +1,7 @@
-import type { CreateOrganizationDto } from '$lib/remotes/dtos/organization.dto';
-import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
 import { schema, type Organization } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
+import { PaymentRepository, type NewPayment } from '$lib/server/repositories/payment.repository';
+import { PAYMENT_TYPE } from '$lib/utils/billing';
 import { and, eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 
@@ -11,9 +10,9 @@ export type OrganizationUpdates = Partial<
 >;
 
 export class OrganizationRepository extends BaseRepository {
-  async create(dto: CreateOrganizationDto) {
-    const [organization] = await this.db.insert(schema.organization).values(dto).returning();
-    return organization;
+  async create(organization: Pick<Organization, 'name' | 'email'>) {
+    const [created] = await this.db.insert(schema.organization).values(organization).returning();
+    return created;
   }
 
   async getAll() {
@@ -101,31 +100,15 @@ export class OrganizationRepository extends BaseRepository {
     }));
   }
 
-  async createCharge(dto: CreateOrgChargeDto, organization: Organization) {
-    const [payment] = await this.db
-      .insert(schema.payment)
-      .values({
-        type: PAYMENT_TYPE.ORG_CHARGE,
-        total: dto.amount,
-        status: PAYMENT_STATUS.PAID,
-        organizationId: dto.organizationId,
-        customerName: organization.name,
-        customerEmail: organization.email,
-        lineItems: [{ name: dto.description, quantity: 1, unitAmount: dto.amount }],
-        issuedDate: DateTime.now(),
-        paymentDate: DateTime.now(),
-      })
-      .returning();
-
-    const [charge] = await this.db
-      .insert(schema.organizationCharge)
-      .values({
-        organizationId: dto.organizationId,
-        description: dto.description,
-        creationDate: DateTime.now(),
-        paymentId: payment.id,
-      })
-      .returning();
-    return charge;
+  /** Stores the charge and the payment that bills it together. */
+  async createCharge(organizationId: string, description: string, payment: NewPayment) {
+    return await this.db.transaction(async (tx) => {
+      const saved = await new PaymentRepository(tx).save({ ...payment, organizationId });
+      const [charge] = await tx
+        .insert(schema.organizationCharge)
+        .values({ organizationId, description, creationDate: DateTime.now(), paymentId: saved.id })
+        .returning();
+      return charge;
+    });
   }
 }

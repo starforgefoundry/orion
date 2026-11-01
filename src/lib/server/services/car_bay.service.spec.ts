@@ -1,15 +1,16 @@
 import type { CarBayBooking, Payment } from '$lib/server/db/schema';
 import type { CarBayBookingWithPayment } from '$lib/server/repositories/car_bay.repository';
-import { PaymentDeclinedError, type NewPayment } from '$lib/server/repositories/payment.repository';
+import { PaymentDeclinedError } from '$lib/server/gateways/payment.gateway';
+import type { NewPayment } from '$lib/server/repositories/payment.repository';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import {
-  CAR_BAY_ZONE,
   CarBayRuleError,
   CarBaySlotTakenError,
   DEFAULT_CAR_BAY_POLICY,
   DEFAULT_CAR_BAY_RATES,
   type CarBayPolicy,
 } from '$lib/utils/car_bay';
+import { SPACE_ZONE } from '$lib/space';
 import { factory } from '$test/factory';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
@@ -18,7 +19,7 @@ import { CarBayService } from './car_bay.service';
 
 // 2026-10-12 is a Monday.
 const MONDAY = '2026-10-12';
-const NOW = DateTime.fromISO(`${MONDAY}T09:00`, { zone: CAR_BAY_ZONE });
+const NOW = DateTime.fromISO(`${MONDAY}T09:00`, { zone: SPACE_ZONE });
 const STAFF_EMAIL = 'staff@starforgefoundry.com';
 
 const CUSTOMER = {
@@ -33,7 +34,7 @@ const CUSTOMER_MEMBER = factory.member({ name: 'Jane Doe', email: 'jane@example.
 const QUICK_JOB = { tier: 'quick_job', date: MONDAY, startHour: 16 } as const;
 
 function at(iso: string) {
-  return DateTime.fromISO(iso, { zone: CAR_BAY_ZONE });
+  return DateTime.fromISO(iso, { zone: SPACE_ZONE });
 }
 
 function storedPayment(overrides: Partial<Payment> = {}) {
@@ -78,7 +79,6 @@ function savedPayment(payment: NewPayment, id?: string) {
     total: payment.bill.total,
     lineItems: payment.bill.lineItems,
     discounts: payment.bill.discounts,
-    paymentUrl: payment.paymentUrl ?? null,
   });
 }
 
@@ -110,7 +110,7 @@ describe(CarBayService.name, () => {
     mocks.carBayRepository.create.mockImplementation(async (data) =>
       bookingRow(data as Partial<CarBayBooking>),
     );
-    mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
+    mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
   }
 
   beforeEach(() => {
@@ -125,10 +125,10 @@ describe(CarBayService.name, () => {
       stubOpenSlot();
       stubCreateBooking();
       mocks.memberRepository.hasMembership.mockResolvedValue(true);
-      mocks.paymentRepository.authorize.mockImplementation(async (payment) =>
+      mocks.paymentGateway.authorize.mockImplementation(async (payment) =>
         storedPayment({ status: PAYMENT_STATUS.PENDING, total: payment.bill.total }),
       );
-      mocks.paymentRepository.capture.mockImplementation(async (payment) => ({
+      mocks.paymentGateway.capture.mockImplementation(async (payment) => ({
         ...payment,
         status: PAYMENT_STATUS.PAID,
       }));
@@ -137,7 +137,7 @@ describe(CarBayService.name, () => {
     it('authorizes the card, holds the bay, then captures the payment', async () => {
       await sut.book(dto, NOW);
 
-      expect(mocks.paymentRepository.authorize).toHaveBeenCalledWith(
+      expect(mocks.paymentGateway.authorize).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'car_bay_booking',
           customer: { name: 'Jane Doe', email: 'jane@example.com' },
@@ -148,11 +148,11 @@ describe(CarBayService.name, () => {
       expect(mocks.carBayRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ paymentId: 'payment-1' }),
       );
-      expect(mocks.paymentRepository.capture).toHaveBeenCalledWith(
+      expect(mocks.paymentGateway.capture).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'payment-1' }),
       );
       expect(mocks.carBayRepository.create.mock.invocationCallOrder[0]).toBeLessThan(
-        mocks.paymentRepository.capture.mock.invocationCallOrder[0],
+        mocks.paymentGateway.capture.mock.invocationCallOrder[0],
       );
     });
 
@@ -160,7 +160,7 @@ describe(CarBayService.name, () => {
       stubCarBaySettings(DEFAULT_CAR_BAY_POLICY, false);
 
       await expect(sut.book(dto, NOW)).rejects.toThrow(CarBayRuleError);
-      expect(mocks.paymentRepository.authorize).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.authorize).not.toHaveBeenCalled();
     });
 
     it('charges the non-member rate when the customer has no membership', async () => {
@@ -168,7 +168,7 @@ describe(CarBayService.name, () => {
 
       await sut.book(dto, NOW);
 
-      expect(mocks.paymentRepository.authorize).toHaveBeenCalledWith(
+      expect(mocks.paymentGateway.authorize).toHaveBeenCalledWith(
         expect.objectContaining({ bill: expect.objectContaining({ total: 1800 }) }),
         'cnon:card',
       );
@@ -191,17 +191,17 @@ describe(CarBayService.name, () => {
 
     it('voids the authorization when another checkout took the slot first', async () => {
       mocks.carBayRepository.create.mockRejectedValue(new CarBaySlotTakenError());
-      mocks.paymentRepository.void.mockResolvedValue(storedPayment());
+      mocks.paymentGateway.void.mockResolvedValue(storedPayment());
 
       await expect(sut.book(dto, NOW)).rejects.toThrow(CarBaySlotTakenError);
-      expect(mocks.paymentRepository.void).toHaveBeenCalledWith(
+      expect(mocks.paymentGateway.void).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'payment-1' }),
       );
-      expect(mocks.paymentRepository.capture).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.capture).not.toHaveBeenCalled();
     });
 
     it('releases the bay when the capture fails', async () => {
-      mocks.paymentRepository.capture.mockRejectedValue(new PaymentDeclinedError());
+      mocks.paymentGateway.capture.mockRejectedValue(new PaymentDeclinedError());
       mocks.carBayRepository.update.mockResolvedValue(bookingRow({ status: 'canceled' }));
 
       await expect(sut.book(dto, NOW)).rejects.toThrow(PaymentDeclinedError);
@@ -211,7 +211,7 @@ describe(CarBayService.name, () => {
     });
 
     it('turns a declined card into a readable error', async () => {
-      mocks.paymentRepository.authorize.mockRejectedValue(new PaymentDeclinedError());
+      mocks.paymentGateway.authorize.mockRejectedValue(new PaymentDeclinedError());
 
       await expect(sut.book(dto, NOW)).rejects.toThrow('Payment failed');
       await expect(sut.book(dto, NOW)).rejects.toThrow(PaymentDeclinedError);
@@ -222,7 +222,7 @@ describe(CarBayService.name, () => {
       mocks.carBayRepository.getConfirmedInRange.mockResolvedValue([storedBooking()]);
 
       await expect(sut.book(dto, NOW)).rejects.toThrow(CarBaySlotTakenError);
-      expect(mocks.paymentRepository.authorize).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.authorize).not.toHaveBeenCalled();
     });
 
     it('checks the 30 minute buffer when looking for conflicts', async () => {
@@ -236,7 +236,7 @@ describe(CarBayService.name, () => {
       mocks.carBayRepository.hasConfirmedForCustomer.mockResolvedValue(true);
 
       await expect(sut.book(dto, NOW)).rejects.toThrow('one Quick Job');
-      expect(mocks.paymentRepository.authorize).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.authorize).not.toHaveBeenCalled();
     });
 
     it('rejects public bookings more than 7 days out', async () => {
@@ -262,7 +262,7 @@ describe(CarBayService.name, () => {
       const booking = await sut.book(dto, NOW);
 
       await vi.waitFor(() =>
-        expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
+        expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
           'jane@example.com',
           expect.anything(),
           'car_bay_booking',
@@ -296,7 +296,7 @@ describe(CarBayService.name, () => {
     it('books for free without charging Square', async () => {
       await sut.staffBook({ request: QUICK_JOB, ...CUSTOMER }, STAFF_EMAIL, NOW);
 
-      expect(mocks.paymentRepository.authorize).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.authorize).not.toHaveBeenCalled();
       expect(mocks.carBayRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ createdByEmail: STAFF_EMAIL }),
       );
@@ -366,13 +366,13 @@ describe(CarBayService.name, () => {
     beforeEach(() => {
       mocks.carBayRepository.getByToken.mockResolvedValue(storedBooking());
       mocks.carBayRepository.update.mockResolvedValue(bookingRow({ status: 'canceled' }));
-      mocks.paymentRepository.refund.mockResolvedValue(true);
+      mocks.paymentGateway.refund.mockResolvedValue(true);
     });
 
     it('refunds in full 12 or more hours before the start', async () => {
       const result = await sut.cancelByToken('token-1', at(`${MONDAY}T04:00`));
 
-      expect(mocks.paymentRepository.refund).toHaveBeenCalledWith(
+      expect(mocks.paymentGateway.refund).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'payment-1' }),
       );
       expect(mocks.carBayRepository.update).toHaveBeenCalledWith('booking-1', {
@@ -384,7 +384,7 @@ describe(CarBayService.name, () => {
     it('cancels without a refund inside 12 hours', async () => {
       const result = await sut.cancelByToken('token-1', at(`${MONDAY}T10:00`));
 
-      expect(mocks.paymentRepository.refund).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.refund).not.toHaveBeenCalled();
       expect(mocks.carBayRepository.update).toHaveBeenCalledWith('booking-1', {
         status: 'canceled',
       });
@@ -402,15 +402,15 @@ describe(CarBayService.name, () => {
     beforeEach(() => {
       mocks.carBayRepository.getById.mockResolvedValue(storedBooking());
       mocks.carBayRepository.update.mockResolvedValue(bookingRow({ status: 'canceled' }));
-      mocks.paymentRepository.refund.mockResolvedValue(true);
+      mocks.paymentGateway.refund.mockResolvedValue(true);
     });
 
     it('refunds only when staff ask for it', async () => {
       await sut.staffCancel({ bookingId: 'booking-1', refund: false });
-      expect(mocks.paymentRepository.refund).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.refund).not.toHaveBeenCalled();
 
       await sut.staffCancel({ bookingId: 'booking-1', refund: true });
-      expect(mocks.paymentRepository.refund).toHaveBeenCalledWith(
+      expect(mocks.paymentGateway.refund).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'payment-1' }),
       );
     });
@@ -422,7 +422,7 @@ describe(CarBayService.name, () => {
 
       const result = await sut.staffCancel({ bookingId: 'booking-1', refund: true });
 
-      expect(mocks.paymentRepository.refund).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.refund).not.toHaveBeenCalled();
       expect(result.refunded).toBe(false);
     });
   });
@@ -437,7 +437,7 @@ describe(CarBayService.name, () => {
       expect(mocks.carBayRepository.update).toHaveBeenCalledWith('booking-1', {
         status: 'no_show',
       });
-      expect(mocks.paymentRepository.refund).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.refund).not.toHaveBeenCalled();
     });
   });
 
@@ -450,7 +450,7 @@ describe(CarBayService.name, () => {
       mocks.carBayRepository.createOverrun.mockImplementation(async (bookingId, paymentId) =>
         factory.carBayOverrun({ bookingId, paymentId }),
       );
-      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
     });
 
     it('asks the customer to pay at the booking membership rate', async () => {
@@ -467,11 +467,10 @@ describe(CarBayService.name, () => {
           status: 'pending',
           total: 4000,
           lineItems: [expect.objectContaining({ quantity: 2 })],
-          paymentUrl: `https://orion.example.com/pay/${payment.id}`,
         }),
       );
       expect(mocks.carBayRepository.createOverrun).toHaveBeenCalledWith('booking-1', payment.id);
-      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         expect.anything(),
         'car_bay_overrun',
@@ -494,7 +493,7 @@ describe(CarBayService.name, () => {
 
   describe('sendDueReminders', () => {
     beforeEach(() => {
-      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
       mocks.carBayRepository.update.mockImplementation(async (id, updates) =>
         bookingRow({ id, ...(updates as Partial<CarBayBooking>) }),
       );
@@ -506,7 +505,7 @@ describe(CarBayService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         expect.anything(),
         'car_bay_reminder',
@@ -525,7 +524,7 @@ describe(CarBayService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledTimes(1);
+      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledTimes(1);
       expect(mocks.carBayRepository.update).toHaveBeenCalledWith('early', {
         reminderSentDate: NOW,
       });

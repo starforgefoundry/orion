@@ -1,9 +1,9 @@
 import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
 import { automock } from '$test/utils';
 import { describe, expect, it, vi } from 'vitest';
-import { MailgunRepository, retryAfter } from './mailgun.repository';
+import { MailgunGateway, retryAfter } from './mailgun.gateway';
 
-describe('MailgunRepository.sendTemplate', () => {
+describe('MailgunGateway.sendTemplate', () => {
   function setup(template?: { subject: string; body: string }) {
     const templates = automock(EmailTemplateRepository);
     templates.get.mockResolvedValue(
@@ -11,7 +11,7 @@ describe('MailgunRepository.sendTemplate', () => {
     );
     const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response());
     vi.stubGlobal('fetch', fetch);
-    return { fetch, repository: new MailgunRepository(templates) };
+    return { fetch, repository: new MailgunGateway(templates) };
   }
 
   const VARIABLES = { projectName: 'Robot Arm', paymentNote: 'Paid.', statusURL: 'https://x' };

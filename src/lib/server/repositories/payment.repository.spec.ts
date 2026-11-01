@@ -1,22 +1,13 @@
 import type { Database } from '$lib/server/db';
 import { schema } from '$lib/server/db/schema';
-import { SettingsRepository } from '$lib/server/repositories/settings.repository';
-import { SquareRepository } from '$lib/server/repositories/square.repository';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
-import { factory } from '$test/factory';
-import { automock, stubSettings } from '$test/utils';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, type Mocked } from 'vitest';
-import {
-  PaymentDeclinedError,
-  PaymentRepository,
-  PaymentStateError,
-  type NewPayment,
-} from './payment.repository';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { PaymentRepository, PaymentStateError, type NewPayment } from './payment.repository';
 
 const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../db/migrations');
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -45,7 +36,6 @@ describe.skipIf(!TEST_DATABASE_URL)(PaymentRepository.name, () => {
   url.pathname = `/${DATABASE_NAME}`;
   let sql: postgres.Sql;
   let db: Database;
-  let square: Mocked<SquareRepository>;
   let repository: PaymentRepository;
 
   beforeAll(async () => {
@@ -64,20 +54,7 @@ describe.skipIf(!TEST_DATABASE_URL)(PaymentRepository.name, () => {
 
   beforeEach(async () => {
     await db.delete(schema.payment);
-    square = automock(SquareRepository);
-    square.upsertCustomer.mockResolvedValue(factory.squareCustomer({ id: 'customer-1' }));
-    square.createOrder.mockResolvedValue(factory.squareOrder({ id: 'order-1' }));
-    square.createPayment.mockImplementation(async ({ autocomplete }) => ({
-      id: 'square-payment-1',
-      status: autocomplete ? 'COMPLETED' : 'APPROVED',
-    }));
-    square.completePayment.mockResolvedValue(undefined);
-    square.cancelPayment.mockResolvedValue(undefined);
-    square.refundPayment.mockResolvedValue(undefined);
-    square.cancelInvoice.mockResolvedValue(undefined);
-    const settings = automock(SettingsRepository);
-    stubSettings(settings, { printRequestSquare: { locationId: 'location-1' } });
-    repository = new PaymentRepository(db, undefined, square, settings);
+    repository = new PaymentRepository(db);
   });
 
   describe('save', () => {
@@ -134,157 +111,6 @@ describe.skipIf(!TEST_DATABASE_URL)(PaymentRepository.name, () => {
     });
   });
 
-  describe('pay', () => {
-    it('charges the card for an order that matches the bill', async () => {
-      const saved = await repository.save(NEW_PAYMENT);
-
-      const paid = await repository.pay(saved, 'card-token');
-
-      expect(square.createOrder.mock.calls[0][0].order).toMatchObject({
-        locationId: 'location-1',
-        customerId: 'customer-1',
-        referenceId: saved.id,
-        lineItems: [
-          {
-            name: '3D Print Material',
-            note: 'PLA',
-            quantity: '1',
-            basePriceMoney: { amount: 700n },
-          },
-          { name: 'Additional Build Plate', quantity: '2', basePriceMoney: { amount: 250n } },
-        ],
-        discounts: [
-          { name: 'Member Discount (10%)', type: 'FIXED_AMOUNT', amountMoney: { amount: 120n } },
-        ],
-      });
-      expect(square.createPayment.mock.calls[0][0]).toMatchObject({
-        sourceId: 'card-token',
-        amountMoney: { amount: 1080n },
-        orderId: 'order-1',
-        autocomplete: true,
-      });
-      expect(paid).toMatchObject({
-        status: PAYMENT_STATUS.PAID,
-        squareOrderId: 'order-1',
-        squarePaymentId: 'square-payment-1',
-      });
-    });
-
-    it('reports a declined card without marking the bill paid', async () => {
-      const saved = await repository.save(NEW_PAYMENT);
-      square.createPayment.mockRejectedValue(new Error('CARD_DECLINED'));
-
-      await expect(repository.pay(saved, 'card-token')).rejects.toThrow(PaymentDeclinedError);
-      expect((await repository.getById(saved.id)).status).toBe(PAYMENT_STATUS.PENDING);
-    });
-
-    it('refuses a bill whose line items do not add up to its total', async () => {
-      const saved = await repository.save({ ...NEW_PAYMENT, bill: { ...BILL, total: 999 } });
-
-      await expect(repository.pay(saved, 'card-token')).rejects.toThrow('do not add up');
-      expect(square.createPayment).not.toHaveBeenCalled();
-    });
-
-    it('refuses a bill that is not waiting to be paid', async () => {
-      const saved = await repository.save({ ...NEW_PAYMENT, status: PAYMENT_STATUS.QUOTE });
-
-      await expect(repository.pay(saved, 'card-token')).rejects.toThrow('not waiting');
-    });
-
-    it('charges only once when the customer pays twice at the same time', async () => {
-      const saved = await repository.save(NEW_PAYMENT);
-
-      const results = await Promise.allSettled([
-        repository.pay(saved, 'card-token-1'),
-        repository.pay(saved, 'card-token-2'),
-      ]);
-
-      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-      expect(square.createPayment).toHaveBeenCalledOnce();
-      expect((await repository.getById(saved.id)).status).toBe(PAYMENT_STATUS.PAID);
-    });
-
-    it('charges the bill as stored, not a copy the caller read earlier', async () => {
-      const stale = await repository.save(NEW_PAYMENT);
-      await repository.save(
-        {
-          ...NEW_PAYMENT,
-          bill: {
-            lineItems: [{ name: 'Repriced', quantity: 1, unitAmount: 500 }],
-            discounts: [],
-            total: 500,
-          },
-        },
-        stale.id,
-      );
-
-      const paid = await repository.pay(stale, 'card-token');
-
-      expect(square.createPayment.mock.calls[0][0].amountMoney?.amount).toBe(500n);
-      expect(paid?.total).toBe(500);
-    });
-
-    it('lets the customer try again after a declined card', async () => {
-      const saved = await repository.save(NEW_PAYMENT);
-      square.createPayment.mockRejectedValueOnce(new Error('CARD_DECLINED'));
-
-      await expect(repository.pay(saved, 'bad-card')).rejects.toThrow(PaymentDeclinedError);
-      expect((await repository.pay(saved, 'good-card'))?.status).toBe(PAYMENT_STATUS.PAID);
-    });
-  });
-
-  describe('authorize and capture', () => {
-    it('holds the card, then takes the money on capture', async () => {
-      const held = await repository.authorize(NEW_PAYMENT, 'card-token');
-
-      expect(square.createPayment.mock.calls[0][0].autocomplete).toBe(false);
-      expect(held.status).toBe(PAYMENT_STATUS.PENDING);
-
-      const captured = await repository.capture(held);
-
-      expect(square.completePayment).toHaveBeenCalledWith('square-payment-1');
-      expect(captured.status).toBe(PAYMENT_STATUS.PAID);
-    });
-
-    it('cancels the payment when the card is declined', async () => {
-      square.createPayment.mockResolvedValue({ id: 'square-payment-1', status: 'FAILED' });
-
-      await expect(repository.authorize(NEW_PAYMENT, 'card-token')).rejects.toThrow(
-        PaymentDeclinedError,
-      );
-      const [stored] = await db.select().from(schema.payment);
-      expect(stored.status).toBe(PAYMENT_STATUS.CANCELED);
-    });
-
-    it('voids the hold when capture fails', async () => {
-      const held = await repository.authorize(NEW_PAYMENT, 'card-token');
-      square.completePayment.mockRejectedValue(new Error('expired'));
-
-      await expect(repository.capture(held)).rejects.toThrow(PaymentDeclinedError);
-      expect(square.cancelPayment).toHaveBeenCalledWith('square-payment-1');
-      expect((await repository.getById(held.id)).status).toBe(PAYMENT_STATUS.CANCELED);
-    });
-  });
-
-  describe('refund', () => {
-    it('refunds the full amount and marks the payment refunded', async () => {
-      const paid = await repository.capture(await repository.authorize(NEW_PAYMENT, 'card-token'));
-
-      expect(await repository.refund(paid)).toBe(true);
-      expect(square.refundPayment).toHaveBeenCalledWith('square-payment-1', 1080);
-      expect(await repository.getById(paid.id)).toMatchObject({
-        status: PAYMENT_STATUS.REFUNDED,
-      });
-    });
-
-    it('does nothing for a payment that was never paid', async () => {
-      const pending = await repository.save(NEW_PAYMENT);
-
-      expect(await repository.refund(pending)).toBe(false);
-      expect(square.refundPayment).not.toHaveBeenCalled();
-    });
-  });
-
   describe('approveQuote', () => {
     it('only approves a quote once', async () => {
       const quote = await repository.save({ ...NEW_PAYMENT, status: PAYMENT_STATUS.QUOTE });
@@ -294,15 +120,40 @@ describe.skipIf(!TEST_DATABASE_URL)(PaymentRepository.name, () => {
     });
   });
 
-  describe('cancel', () => {
-    it('cancels the Square invoice of a payment made before Orion billing', async () => {
+  describe('transition', () => {
+    it('moves a payment out of a status only once when two callers race', async () => {
       const saved = await repository.save(NEW_PAYMENT);
-      const legacy = await repository.update(saved.id, { squareInvoiceId: 'invoice-1' });
+      const claim = () =>
+        repository.transition(saved.id, PAYMENT_STATUS.PENDING, {
+          status: PAYMENT_STATUS.PROCESSING,
+        });
 
-      await repository.cancel(legacy);
+      const results = await Promise.all([claim(), claim()]);
 
-      expect(square.cancelInvoice).toHaveBeenCalledWith('invoice-1');
-      expect((await repository.getById(saved.id)).status).toBe(PAYMENT_STATUS.CANCELED);
+      expect(results.filter(Boolean)).toHaveLength(1);
+      expect((await repository.getById(saved.id)).status).toBe(PAYMENT_STATUS.PROCESSING);
+    });
+
+    it('returns the stored row, not a copy the caller read earlier', async () => {
+      const stale = await repository.save(NEW_PAYMENT);
+      await repository.save({ ...NEW_PAYMENT, bill: { ...BILL, total: 500 } }, stale.id);
+
+      const claimed = await repository.transition(stale.id, PAYMENT_STATUS.PENDING, {
+        status: PAYMENT_STATUS.PROCESSING,
+      });
+
+      expect(claimed?.total).toBe(500);
+    });
+  });
+
+  describe('markPaid', () => {
+    it('marks a pending payment paid with a payment date', async () => {
+      const saved = await repository.save(NEW_PAYMENT);
+
+      const paid = await repository.markPaid(saved.id);
+
+      expect(paid?.status).toBe(PAYMENT_STATUS.PAID);
+      expect(paid?.paymentDate).not.toBeNull();
     });
   });
 });

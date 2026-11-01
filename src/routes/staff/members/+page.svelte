@@ -9,8 +9,8 @@
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { enumValues, ACCESS_BASIS } from '$lib/member_enums';
-  import { MEMBER_SORT, ONBOARDING_FILTER } from '$lib/remotes/dtos/member.dto';
-  import type { MemberSort } from '$lib/remotes/dtos/member.dto';
+  import { MEMBER_SORT, ONBOARDING_FILTER } from '$lib/member_enums';
+  import type { MemberSort } from '$lib/member_enums';
   import MailIcon from '@lucide/svelte/icons/mail';
   import SearchIcon from '@lucide/svelte/icons/search';
   import XIcon from '@lucide/svelte/icons/x';

@@ -7,14 +7,14 @@ import type {
 import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
 import { NotFoundError, UserError } from '$lib/errors';
 import { MEMBER_EMAIL_TRIGGER } from '$lib/member_enums';
-import type { Member } from '$lib/server/db/schema';
-import { MailgunRateLimitError } from '$lib/server/repositories/mailgun.repository';
+import type { Member, Payment } from '$lib/server/db/schema';
+import { MailgunRateLimitError } from '$lib/server/gateways/mailgun.gateway';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
-import { SPACE_ZONE } from '$lib/server/utils/member_access';
+import { accessEndOfDay } from '$lib/server/utils/member_access';
 import { parseMemberLines, type ParsedMemberLine } from '$lib/server/utils/member_lines';
 import { SENDERS } from '$lib/server/utils/email_templates/senders';
-import { payUrl } from '$lib/server/utils/payment_links';
+import { paymentLink, payUrl } from '$lib/server/utils/payment_links';
 import {
   buildBill,
   centsToDollars,
@@ -22,9 +22,11 @@ import {
   PAYMENT_TYPE,
   type PaymentStatus,
 } from '$lib/utils/billing';
-import { DateTime } from 'luxon';
 
 export const ORGANIZATION_NOT_FOUND = 'Organization not found';
+export const ORGANIZATION_CHARGE_TYPE = { PRINT: 'print', CHARGE: 'charge' } as const;
+/** Staff charges are billed as soon as they are added. */
+const CHARGED_STATUS = 'charged';
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
 const BALANCE_LINE_ITEM_NAME = 'Organization Balance Payment';
 const OWED_STATUSES = new Set<PaymentStatus>([
@@ -35,18 +37,17 @@ const OWED_STATUSES = new Set<PaymentStatus>([
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Access lasts through the whole chosen day in the space's time zone. */
-export function accessEndOfDay(date: string | null) {
-  return date === null ? null : DateTime.fromISO(date, { zone: SPACE_ZONE }).endOf('day');
+/** Balance payments pay down what the organization owes. */
+export function outstandingBalance(payments: Pick<Payment, 'type' | 'status' | 'total'>[]) {
+  return payments.reduce((owed, payment) => {
+    if (payment.type === PAYMENT_TYPE.BALANCE) return owed - payment.total;
+    return OWED_STATUSES.has(payment.status) ? owed + payment.total : owed;
+  }, 0);
 }
 
 export class OrganizationService extends BaseService {
   async getOrganizations() {
     return await this.organizationRepository.getAll();
-  }
-
-  async getOrganizationById(id: string) {
-    return await this.organizationRepository.getById(id);
   }
 
   async getOrganizationDetail(id: string) {
@@ -63,32 +64,26 @@ export class OrganizationService extends BaseService {
         this.organizationRepository.getBalancePayments(id),
       ]);
 
-    // Convert print requests to charges
     const printCharges = printRequests.map((req) => ({
       id: req.id,
       description: `Print Request - ${req.projectName}`,
-      date: req.submissionDate.toISO()!,
+      date: req.submissionDate,
       amount: req.payment?.total ?? 0,
       status: req.status,
-      type: 'print' as const,
+      type: ORGANIZATION_CHARGE_TYPE.PRINT,
     }));
-
-    // Convert organization charges
     const orgCharges = organizationCharges.map((charge) => ({
       id: charge.id,
       description: charge.description,
-      date: charge.creationDate.toISO()!,
+      date: charge.creationDate,
       amount: charge.payment.total,
-      status: 'charged',
-      type: 'charge' as const,
+      status: CHARGED_STATUS,
+      type: ORGANIZATION_CHARGE_TYPE.CHARGE,
     }));
 
-    // Merge and sort by date (newest first)
-    const allCharges = [...printCharges, ...orgCharges].sort((a, b) => {
-      const dateA = DateTime.fromISO(a.date);
-      const dateB = DateTime.fromISO(b.date);
-      return dateB.toMillis() - dateA.toMillis();
-    });
+    const allCharges = [...printCharges, ...orgCharges]
+      .sort((a, b) => b.date.toMillis() - a.date.toMillis())
+      .map((charge) => ({ ...charge, date: charge.date.toISO()! }));
 
     return {
       id: organization.id,
@@ -98,7 +93,10 @@ export class OrganizationService extends BaseService {
       accessEndDate: organization.accessEndDate,
       outstandingBalance,
       charges: allCharges,
-      balancePayments,
+      balancePayments: balancePayments.map((payment) => ({
+        ...payment,
+        paymentUrl: paymentLink(payment),
+      })),
     };
   }
 
@@ -150,7 +148,7 @@ export class OrganizationService extends BaseService {
   }
 
   /** Bulk adds can exceed Mailgun's send limit, so wait out the limit instead of dropping emails. */
-  async sendOrganizationOnboardings(members: Member[]) {
+  private async sendOrganizationOnboardings(members: Member[]) {
     for (const member of members) {
       try {
         await this.sendOrganizationOnboarding(member, MAX_RATE_LIMIT_ATTEMPTS);
@@ -162,7 +160,7 @@ export class OrganizationService extends BaseService {
 
   private async sendOrganizationOnboarding(member: Member, attemptsLeft: number): Promise<void> {
     try {
-      await this.memberNotificationRepository.sendOnboarding(
+      await this.memberNotificationGateway.sendOnboarding(
         member,
         MEMBER_EMAIL_TRIGGER.ORGANIZATION,
       );
@@ -177,20 +175,8 @@ export class OrganizationService extends BaseService {
     await this.organizationRepository.archive(id);
   }
 
-  async getOutstandingBalance(organizationId: string) {
-    const allPayments = await this.organizationRepository.getPayments(organizationId);
-
-    let totalOwed = 0;
-
-    for (const row of allPayments) {
-      if (row.type === PAYMENT_TYPE.BALANCE) {
-        totalOwed -= row.total;
-      } else if (OWED_STATUSES.has(row.status)) {
-        totalOwed += row.total;
-      }
-    }
-
-    return totalOwed;
+  private async getOutstandingBalance(organizationId: string) {
+    return outstandingBalance(await this.organizationRepository.getPayments(organizationId));
   }
 
   async chargeBalance(dto: ChargeOrganizationBalanceDto) {
@@ -205,22 +191,17 @@ export class OrganizationService extends BaseService {
       throw new UserError('No outstanding balance to charge');
     }
 
-    const id = crypto.randomUUID();
-    const payment = await this.paymentRepository.save(
-      {
-        type: PAYMENT_TYPE.BALANCE,
-        status: PAYMENT_STATUS.PENDING,
-        customer: { name: organization.name, email: organization.email },
-        bill: buildBill([
-          { name: BALANCE_LINE_ITEM_NAME, quantity: 1, unitAmount: outstandingBalance },
-        ]),
-        organizationId: organization.id,
-        paymentUrl: payUrl({ id }),
-      },
-      id,
-    );
+    const payment = await this.paymentRepository.save({
+      type: PAYMENT_TYPE.BALANCE,
+      status: PAYMENT_STATUS.PENDING,
+      customer: { name: organization.name, email: organization.email },
+      bill: buildBill([
+        { name: BALANCE_LINE_ITEM_NAME, quantity: 1, unitAmount: outstandingBalance },
+      ]),
+      organizationId: organization.id,
+    });
 
-    await this.mailgunRepository.sendTemplate(
+    await this.mailgunGateway.sendTemplate(
       organization.email,
       SENDERS.foundry,
       'organization_balance',
@@ -237,7 +218,12 @@ export class OrganizationService extends BaseService {
   async createCharge(dto: CreateOrgChargeDto) {
     const organization = await this.organizationRepository.getById(dto.organizationId);
     if (!organization) throw new NotFoundError(ORGANIZATION_NOT_FOUND);
-    return await this.organizationRepository.createCharge(dto, organization);
+    return await this.organizationRepository.createCharge(organization.id, dto.description, {
+      type: PAYMENT_TYPE.ORG_CHARGE,
+      status: PAYMENT_STATUS.PAID,
+      customer: { name: organization.name, email: organization.email },
+      bill: buildBill([{ name: dto.description, quantity: 1, unitAmount: dto.amount }]),
+    });
   }
 }
 

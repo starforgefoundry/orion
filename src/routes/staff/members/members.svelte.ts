@@ -8,7 +8,7 @@ import {
   type OnboardingFilter,
   type SortDirection,
   type WaiverFilter,
-} from '$lib/remotes/dtos/member.dto';
+} from '$lib/member_enums';
 import { searchMembers, sendMemberOnboardings } from '$lib/remotes/endpoints/member.remote';
 import { SvelteSet } from 'svelte/reactivity';
 import { toast } from 'svelte-sonner';

@@ -130,15 +130,6 @@ export const updatePartQuantity = command(
   }),
 );
 
-export const getPrintRequestFiles = query(
-  v.string(),
-  exposeUserErrors(async (printRequestId: string) => {
-    verifyAuth();
-
-    return await printFilesService.getByRequestId(printRequestId);
-  }),
-);
-
 export const getPrintRequestDownloadUrl = query(
   v.string(),
   exposeUserErrors(async (printRequestId: string) => {

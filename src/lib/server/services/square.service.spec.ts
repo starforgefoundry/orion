@@ -4,14 +4,14 @@ import { catalogDiscount, squareCustomer, squareOrder } from '$test/factory/squa
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
 import type { CatalogObject, Location, Payment, Subscription } from 'square';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SquareService } from './square.service';
+import { NEW_MEMBER_ONBOARDING, SquareService } from './square.service';
 
 function webhookLog(id = 'evt'): SquareWebhookLog {
   return { id, payload: {} };
 }
 
 function invoiceWebhook(type: string, invoiceId: string) {
-  return { type, data: { id: invoiceId } };
+  return { type, event_id: `evt-${invoiceId}`, data: { id: invoiceId } };
 }
 
 describe(SquareService.name, () => {
@@ -170,16 +170,6 @@ describe(SquareService.name, () => {
       expect(result).toEqual({ success: true });
     });
 
-    it('should handle webhook with missing data', async () => {
-      const webhookData = { type: 'invoice.payment_made', data: {} };
-
-      const result = await sut.processWebhook(webhookData);
-
-      expect(mocks.squareRepository.logWebhook).toHaveBeenCalledWith(webhookData);
-      expect(mocks.paymentRepository.updateInvoiceStatus).toHaveBeenCalledWith(undefined, 'paid');
-      expect(result).toEqual({ success: true });
-    });
-
     it('should handle multiple webhook events in sequence', async () => {
       await sut.processWebhook(invoiceWebhook('invoice.payment_made', 'inv-1'));
       await sut.processWebhook(invoiceWebhook('invoice.canceled', 'inv-2'));
@@ -197,12 +187,20 @@ describe(SquareService.name, () => {
       );
     });
 
-    it('should handle errors in webhook processing', async () => {
+    it('forgets a webhook that fails so the retry is processed', async () => {
       mocks.paymentRepository.updateInvoiceStatus.mockRejectedValue(new Error('Update failed'));
+      mocks.squareRepository.forgetWebhook.mockResolvedValue();
 
       await expect(
         sut.processWebhook(invoiceWebhook('invoice.payment_made', 'inv-error')),
       ).rejects.toThrow('Update failed');
+      expect(mocks.squareRepository.forgetWebhook).toHaveBeenCalledWith('evt-inv-error');
+    });
+
+    it('remembers a webhook that was processed', async () => {
+      await sut.processWebhook(invoiceWebhook('invoice.payment_made', 'inv-ok'));
+
+      expect(mocks.squareRepository.forgetWebhook).not.toHaveBeenCalled();
     });
   });
 
@@ -232,8 +230,8 @@ describe(SquareService.name, () => {
       mocks.memberSubscriptionRepository.listIds.mockResolvedValue([]);
       mocks.dayPassRepository.existsForOrder.mockResolvedValue(false);
       mocks.dayPassRepository.createForOrder.mockResolvedValue([]);
-      mocks.memberNotificationRepository.sendOnboarding.mockResolvedValue();
-      mocks.memberNotificationRepository.sendDayPass.mockResolvedValue();
+      mocks.memberNotificationGateway.sendOnboarding.mockResolvedValue();
+      mocks.memberNotificationGateway.sendDayPass.mockResolvedValue();
       mocks.squareRepository.logWebhook.mockResolvedValue(webhookLog());
       mocks.squareRepository.getSubscription.mockResolvedValue(subscription);
       mocks.squareRepository.getCustomer.mockResolvedValue(customer);
@@ -271,7 +269,7 @@ describe(SquareService.name, () => {
           chargedThroughDate: '2026-11-01',
           canceledDate: null,
         });
-        expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+        expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(
           member,
           'subscription',
         );
@@ -290,7 +288,7 @@ describe(SquareService.name, () => {
         expect(mocks.memberSubscriptionRepository.upsert).toHaveBeenCalledWith(
           expect.objectContaining({ status: 'canceled', canceledDate: '2026-10-20' }),
         );
-        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+        expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
       });
 
       it('does not onboard a newly seen canceled subscription', async () => {
@@ -301,7 +299,7 @@ describe(SquareService.name, () => {
 
         await sut.processWebhook(subscriptionWebhook());
 
-        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+        expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
       });
 
       it('skips customers without an email', async () => {
@@ -338,9 +336,7 @@ describe(SquareService.name, () => {
 
       it('does not fail the webhook when onboarding fails', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
-        mocks.memberNotificationRepository.sendOnboarding.mockRejectedValue(
-          new Error('Mailgun down'),
-        );
+        mocks.memberNotificationGateway.sendOnboarding.mockRejectedValue(new Error('Mailgun down'));
 
         await expect(sut.processWebhook(subscriptionWebhook())).resolves.toEqual({
           success: true,
@@ -360,11 +356,11 @@ describe(SquareService.name, () => {
           .mockResolvedValueOnce({ created: true })
           .mockResolvedValueOnce({ created: false });
 
-        const result = await sut.syncSubscriptions({ onboardNewMembers: false });
+        const result = await sut.syncSubscriptions(NEW_MEMBER_ONBOARDING.SKIP);
 
         expect(result).toEqual({ total: 3, created: 1, updated: 1, skipped: 1 });
         expect(mocks.memberSubscriptionRepository.upsert).toHaveBeenCalledTimes(2);
-        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+        expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
       });
 
       it('refreshes known subscriptions that are no longer active and ignores unknown ones', async () => {
@@ -375,7 +371,7 @@ describe(SquareService.name, () => {
         mocks.memberSubscriptionRepository.listIds.mockResolvedValue(['known-canceled']);
         mocks.memberSubscriptionRepository.upsert.mockResolvedValue({ created: false });
 
-        const result = await sut.syncSubscriptions({ onboardNewMembers: false });
+        const result = await sut.syncSubscriptions(NEW_MEMBER_ONBOARDING.SKIP);
 
         expect(result).toEqual({ total: 1, created: 0, updated: 1, skipped: 0 });
         expect(mocks.memberSubscriptionRepository.upsert).toHaveBeenCalledWith(
@@ -386,9 +382,9 @@ describe(SquareService.name, () => {
       it('onboards subscribers whose webhook was missed when asked to', async () => {
         mocks.squareRepository.listSubscriptions.mockResolvedValue([subscription]);
 
-        await sut.syncSubscriptions({ onboardNewMembers: true });
+        await sut.syncSubscriptions(NEW_MEMBER_ONBOARDING.SEND);
 
-        expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+        expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(
           member,
           'subscription',
         );
@@ -442,22 +438,22 @@ describe(SquareService.name, () => {
           member.id,
           'cust-1',
         );
-        expect(mocks.memberNotificationRepository.sendDayPass).toHaveBeenCalledTimes(2);
-        expect(mocks.memberNotificationRepository.sendDayPass).toHaveBeenCalledWith(
+        expect(mocks.memberNotificationGateway.sendDayPass).toHaveBeenCalledTimes(2);
+        expect(mocks.memberNotificationGateway.sendDayPass).toHaveBeenCalledWith(
           member,
           expect.objectContaining({ id: 'order-1:1' }),
         );
-        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+        expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
       });
 
       it('still sends the other passes when one email fails', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
-        mocks.memberNotificationRepository.sendDayPass.mockRejectedValueOnce(
+        mocks.memberNotificationGateway.sendDayPass.mockRejectedValueOnce(
           new Error('Mailgun down'),
         );
 
         await expect(sut.processWebhook(paymentWebhook)).resolves.toEqual({ success: true });
-        expect(mocks.memberNotificationRepository.sendDayPass).toHaveBeenCalledTimes(2);
+        expect(mocks.memberNotificationGateway.sendDayPass).toHaveBeenCalledTimes(2);
       });
 
       it('keeps an existing member name', async () => {
@@ -485,7 +481,7 @@ describe(SquareService.name, () => {
 
         await sut.processWebhook(paymentWebhook);
 
-        expect(mocks.memberNotificationRepository.sendDayPass).not.toHaveBeenCalled();
+        expect(mocks.memberNotificationGateway.sendDayPass).not.toHaveBeenCalled();
       });
 
       it('ignores payments that are not completed', async () => {
@@ -550,7 +546,7 @@ describe(SquareService.name, () => {
         await sut.processWebhook(paymentWebhook);
 
         expect(mocks.dayPassRepository.createForOrder).not.toHaveBeenCalled();
-        expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+        expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
       });
     });
   });

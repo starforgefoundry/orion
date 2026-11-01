@@ -1,5 +1,5 @@
 import { signIn } from '$lib/auth/auth';
-import { KIOSK_DEVICE_COOKIE, KIOSK_PATH } from '$lib/remotes/dtos/kiosk.dto';
+import { KIOSK_DEVICE_COOKIE, KIOSK_PATH } from '$lib/utils/kiosk_pairing';
 import { kioskService } from '$lib/server/services/kiosk.service';
 import { redirect } from '@sveltejs/kit';
 import type { Actions, RequestEvent } from './$types';

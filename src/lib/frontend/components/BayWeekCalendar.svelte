@@ -23,13 +23,8 @@
   generics="B extends { id: string; startAt: string; endAt: string; blockedUntil: string }"
 >
   import { cn } from '$lib/frontend/cn';
-  import {
-    CAR_BAY_ZONE,
-    formatHour,
-    toBlock,
-    toPeriod,
-    type CarBayRules,
-  } from '$lib/utils/car_bay';
+  import { formatHour, toBlock, toPeriod, type CarBayRules } from '$lib/utils/car_bay';
+  import { SPACE_ZONE } from '$lib/space';
   import { DateTime } from 'luxon';
   import type { Snippet } from 'svelte';
 
@@ -65,7 +60,7 @@
     Array.from({ length: rules.latestCloseHour - firstHour }, (_, i) => firstHour + i),
   );
   const columnHeight = $derived(rowHours.length * HOUR_HEIGHT_PX);
-  const now = DateTime.now().setZone(CAR_BAY_ZONE);
+  const now = DateTime.now().setZone(SPACE_ZONE);
   const todayStr = now.toISODate()!;
 
   function isPastDay(date: string) {

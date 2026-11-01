@@ -16,38 +16,17 @@ describe(PrintMaterialsService.name, () => {
   });
 
   describe('getMaterials', () => {
-    it('should return all materials when no filter is provided', async () => {
+    it('should return every material that is not archived', async () => {
       const materials = [factory.printMaterial(), factory.printMaterial({ name: 'ABS' })];
-      mocks.printMaterialsRepository.get.mockResolvedValue(materials);
+      mocks.printMaterialsRepository.getActive.mockResolvedValue(materials);
 
       const result = await sut.getMaterials();
 
-      expect(mocks.printMaterialsRepository.get).toHaveBeenCalledWith(undefined);
-      expect(result).toEqual(materials);
-    });
-
-    it('should return only available materials when filter is true', async () => {
-      const materials = [factory.printMaterial({ available: true })];
-      mocks.printMaterialsRepository.get.mockResolvedValue(materials);
-
-      const result = await sut.getMaterials(true);
-
-      expect(mocks.printMaterialsRepository.get).toHaveBeenCalledWith(true);
-      expect(result).toEqual(materials);
-    });
-
-    it('should return unavailable materials when filter is false', async () => {
-      const materials = [factory.printMaterial({ name: 'Nylon', available: false })];
-      mocks.printMaterialsRepository.get.mockResolvedValue(materials);
-
-      const result = await sut.getMaterials(false);
-
-      expect(mocks.printMaterialsRepository.get).toHaveBeenCalledWith(false);
       expect(result).toEqual(materials);
     });
 
     it('should return empty array when no materials exist', async () => {
-      mocks.printMaterialsRepository.get.mockResolvedValue([]);
+      mocks.printMaterialsRepository.getActive.mockResolvedValue([]);
 
       const result = await sut.getMaterials();
 
@@ -130,21 +109,28 @@ describe(PrintMaterialsService.name, () => {
         serverUrl: 'http://bambuddy',
         apiKey: 'key',
       });
-      mocks.bambuddyRepository.listPrinters.mockResolvedValue([
-        { id: 7, name: 'SF 01', model: 'X1C', is_active: true },
-      ]);
+      mocks.bambuddyRepository.findPrinterByLabel.mockResolvedValue({
+        id: 7,
+        name: 'SF 01',
+        model: 'X1C',
+        is_active: true,
+      });
       mocks.bambuddyRepository.listAmsSlots.mockResolvedValue([
         { amsId: 0, trayId: 0 },
         { amsId: 0, trayId: 1 },
       ]);
       mocks.bambuddyRepository.configureAmsSlot.mockResolvedValue(undefined);
       mocks.bambuddyRepository.resetAmsSlot.mockResolvedValue(undefined);
-      mocks.printMaterialsRepository.get.mockResolvedValue([
+      mocks.printMaterialsRepository.getActive.mockResolvedValue([
         factory.printMaterial({ name: 'PLA', tagId: 'A1B2C3D4', filamentId: 'GFA00' }),
       ]);
 
       await sut.updateAMS('SF-01', { filaments: ['EMPTY---', 'A1B2C3D4'] });
 
+      expect(mocks.bambuddyRepository.findPrinterByLabel).toHaveBeenCalledWith(
+        expect.anything(),
+        'SF-01',
+      );
       expect(mocks.bambuddyRepository.resetAmsSlot).toHaveBeenCalledExactlyOnceWith(
         expect.anything(),
         7,
@@ -161,7 +147,7 @@ describe(PrintMaterialsService.name, () => {
 
   describe('edge cases', () => {
     it('should handle repository errors in getMaterials', async () => {
-      mocks.printMaterialsRepository.get.mockRejectedValue(new Error('Database error'));
+      mocks.printMaterialsRepository.getActive.mockRejectedValue(new Error('Database error'));
 
       await expect(sut.getMaterials()).rejects.toThrow('Database error');
     });

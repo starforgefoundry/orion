@@ -21,12 +21,3 @@ export const upsertInventoryItemDto = v.object({
 });
 
 export type UpsertInventoryItemDto = v.InferInput<typeof upsertInventoryItemDto>;
-
-export const purchaseListItemDto = v.object({
-  id: v.string(),
-  inventoryItemId: v.string(),
-  addedDate: v.string(),
-  inventoryItem: v.optional(inventoryItemDto),
-});
-
-export type PurchaseListItemDto = v.InferInput<typeof purchaseListItemDto>;

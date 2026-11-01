@@ -19,14 +19,6 @@ export const getBillingCodesForOrganization = query(
   }),
 );
 
-export const getBillingCodeById = query(
-  v.object({ id: v.string() }),
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-    return await billingCodeService.getBillingCodeById(dto.id);
-  }),
-);
-
 async function refreshCodes(organizationId: string | null) {
   await Promise.all([
     getBillingCodes().refresh(),
@@ -52,15 +44,5 @@ export const updateBillingCode = command(
     const code = await billingCodeService.updateBillingCode(id, updates);
     await refreshCodes(code.organizationId);
     return code;
-  }),
-);
-
-export const deleteBillingCode = command(
-  v.object({ id: v.string() }),
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-    const code = await billingCodeService.getBillingCodeById(dto.id);
-    await billingCodeService.deleteBillingCode(dto.id);
-    await refreshCodes(code.organizationId);
   }),
 );

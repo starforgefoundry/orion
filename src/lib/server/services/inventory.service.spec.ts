@@ -36,25 +36,6 @@ describe(InventoryService.name, () => {
     });
   });
 
-  describe('getItemById', () => {
-    it('should return an inventory item by id', async () => {
-      const item = factory.inventoryItem();
-      mocks.inventoryRepository.getById.mockResolvedValue(item);
-
-      const result = await sut.getItemById(item.id);
-
-      expect(mocks.inventoryRepository.getById).toHaveBeenCalledWith(item.id);
-      expect(result).toEqual(item);
-    });
-
-    it('should throw error when item not found', async () => {
-      mocks.inventoryRepository.getById.mockResolvedValue(undefined as never);
-
-      await expect(sut.getItemById('non-existent')).rejects.toThrow('Inventory item not found');
-      expect(mocks.inventoryRepository.getById).toHaveBeenCalledWith('non-existent');
-    });
-  });
-
   describe('upsertItem', () => {
     it('should create a new inventory item', async () => {
       const dto: UpsertInventoryItemDto = {
@@ -195,29 +176,6 @@ describe(InventoryService.name, () => {
       await sut.removeFromPurchaseList('item-1');
 
       expect(mocks.inventoryRepository.removeFromPurchaseList).toHaveBeenCalledWith('item-1');
-    });
-  });
-
-  describe('uploadInventoryImage', () => {
-    it('should upload an image and return the URL', async () => {
-      const imageUrl = 'https://s3.example.com/inventory/item-1/uuid-123.jpg';
-      const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-      mocks.inventoryRepository.uploadImage.mockResolvedValue(imageUrl);
-
-      const result = await sut.uploadInventoryImage('item-1', file);
-
-      expect(mocks.inventoryRepository.uploadImage).toHaveBeenCalledWith('item-1', file);
-      expect(result).toEqual({ imageUrl });
-    });
-  });
-
-  describe('deleteInventoryImage', () => {
-    it('should delete an inventory image', async () => {
-      mocks.inventoryRepository.deleteImage.mockResolvedValue();
-
-      await sut.deleteInventoryImage('item-1');
-
-      expect(mocks.inventoryRepository.deleteImage).toHaveBeenCalledWith('item-1');
     });
   });
 });

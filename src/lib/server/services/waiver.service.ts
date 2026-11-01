@@ -1,15 +1,12 @@
+import { WAIVER_SOURCE } from '$lib/member_enums';
 import type { SearchWaiversDto, SubmitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
 import { BaseService } from '$lib/server/services/base.service';
 
 export class WaiverService extends BaseService {
   async submitWaiver(dto: SubmitWaiverDto) {
     const member = await this.memberRepository.upsertByEmail(dto.name, dto.email);
-    const waiver = await this.waiverRepository.submit(dto, member.id);
-
-    return {
-      status: 'success',
-      waiverId: waiver.id,
-    };
+    const waiver = await this.waiverRepository.submit(dto, member.id, WAIVER_SOURCE.WEB);
+    return { waiverId: waiver.id };
   }
 
   async getWaivers(dto: SearchWaiversDto) {

@@ -14,12 +14,12 @@
     CAR_BAY_STATUS,
     CAR_BAY_TIER,
     CAR_BAY_TIER_NAMES,
-    CAR_BAY_ZONE,
     CarBayRules,
     consecutiveDates,
     formatPeriod,
     toPeriod,
   } from '$lib/utils/car_bay';
+  import { SPACE_ZONE } from '$lib/space';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
   import PlusIcon from '@lucide/svelte/icons/plus';
@@ -30,7 +30,7 @@
   const DAYS_IN_WEEK = 7;
   const STAFF = { enforceHorizon: false };
 
-  const today = DateTime.now().setZone(CAR_BAY_ZONE).startOf('day');
+  const today = DateTime.now().setZone(SPACE_ZONE).startOf('day');
 
   let weekStart = $state(today.startOf('week'));
 

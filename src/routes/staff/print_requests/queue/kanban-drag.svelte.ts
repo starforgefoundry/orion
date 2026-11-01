@@ -1,4 +1,4 @@
-import type { PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
+import type { PrintRequestStatus } from '$lib/utils/print_request';
 import type { Attachment } from 'svelte/attachments';
 
 const LONG_PRESS_MS = 300;

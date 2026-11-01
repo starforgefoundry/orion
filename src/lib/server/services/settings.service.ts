@@ -16,7 +16,7 @@ export class SettingsService extends BaseService {
   async getPublicPrintRequestForm(): Promise<PublicPrintRequestFormDto> {
     const [settings, materials] = await Promise.all([
       this.settingsRepository.getSetting('printRequest'),
-      this.printMaterialsRepository.get(true),
+      this.printMaterialsRepository.getAvailable(),
     ]);
 
     return {

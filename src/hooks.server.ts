@@ -4,10 +4,10 @@ import type { User } from '$lib/server/db/schema';
 import { carBayService } from '$lib/server/services/car_bay.service';
 import { classService } from '$lib/server/services/class.service';
 import { settingsService } from '$lib/server/services/settings.service';
-import { squareService } from '$lib/server/services/square.service';
+import { NEW_MEMBER_ONBOARDING, squareService } from '$lib/server/services/square.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { scheduleDaily } from '$lib/server/utils/daily_schedule';
-import { SPACE_ZONE } from '$lib/server/utils/member_access';
+import { SPACE_ZONE } from '$lib/space';
 import { type Handle, type ServerInit } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { handle as authenticationHandle } from './lib/auth/auth';
@@ -43,7 +43,7 @@ export const init: ServerInit = () => {
   scheduleDaily(NIGHTLY_SYNC_HOUR, SPACE_ZONE, 'nightly Square subscription sync', async () => {
     console.log(
       'Nightly Square subscription sync:',
-      await squareService.syncSubscriptions({ onboardNewMembers: true }),
+      await squareService.syncSubscriptions(NEW_MEMBER_ONBOARDING.SEND),
     );
   });
 };

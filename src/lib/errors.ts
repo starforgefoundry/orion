@@ -1,4 +1,5 @@
-import { HTTP_STATUS } from '$lib/http';
+// Relative imports: the database schema and seed script load this file outside SvelteKit.
+import { HTTP_STATUS } from './http.ts';
 
 /** An error whose message is safe to show the person who caused it. */
 export class UserError extends Error {

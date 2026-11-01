@@ -1,5 +1,4 @@
 import { verifySignedUrl } from '$lib/server/utils/signed_url';
-import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import JSZip from 'jszip';
 import type { ReadStream } from 'node:fs';
@@ -26,68 +25,6 @@ describe(PrintFilesService.name, () => {
 
   beforeEach(() => {
     ({ sut, mocks } = newTestService(PrintFilesService));
-  });
-
-  describe('getByRequestId', () => {
-    it('should call repository with correct print request ID', async () => {
-      const files = [
-        factory.printRequestFile({ printRequestId: 'request-123', quantity: 2 }),
-        factory.printRequestFile({ printRequestId: 'request-123', quantity: 1 }),
-      ];
-      mocks.printFilesRepository.getByPrintRequestId.mockResolvedValue(files);
-
-      const result = await sut.getByRequestId('request-123');
-
-      expect(mocks.printFilesRepository.getByPrintRequestId).toHaveBeenCalledWith('request-123');
-      expect(mocks.printFilesRepository.getByPrintRequestId).toHaveBeenCalledTimes(1);
-      expect(result).toEqual(files);
-    });
-
-    it('should return empty array when no files exist for request', async () => {
-      mocks.printFilesRepository.getByPrintRequestId.mockResolvedValue([]);
-
-      const result = await sut.getByRequestId('request-456');
-
-      expect(mocks.printFilesRepository.getByPrintRequestId).toHaveBeenCalledWith('request-456');
-      expect(result).toEqual([]);
-    });
-
-    it('should handle different request IDs correctly', async () => {
-      const files1 = [factory.printRequestFile({ printRequestId: 'request-111' })];
-      const files2 = [factory.printRequestFile({ printRequestId: 'request-222' })];
-      mocks.printFilesRepository.getByPrintRequestId
-        .mockResolvedValueOnce(files1)
-        .mockResolvedValueOnce(files2);
-
-      const result1 = await sut.getByRequestId('request-111');
-      const result2 = await sut.getByRequestId('request-222');
-
-      expect(mocks.printFilesRepository.getByPrintRequestId).toHaveBeenNthCalledWith(
-        1,
-        'request-111',
-      );
-      expect(mocks.printFilesRepository.getByPrintRequestId).toHaveBeenNthCalledWith(
-        2,
-        'request-222',
-      );
-      expect(result1).toEqual(files1);
-      expect(result2).toEqual(files2);
-    });
-
-    it('should return multiple files with different quantities', async () => {
-      mocks.printFilesRepository.getByPrintRequestId.mockResolvedValue([
-        factory.printRequestFile({ quantity: 5 }),
-        factory.printRequestFile({ quantity: 1 }),
-        factory.printRequestFile({ quantity: 3 }),
-      ]);
-
-      const result = await sut.getByRequestId('request-789');
-
-      expect(result).toHaveLength(3);
-      expect(result[0].quantity).toBe(5);
-      expect(result[1].quantity).toBe(1);
-      expect(result[2].quantity).toBe(3);
-    });
   });
 
   describe('getDownloadUrl', () => {

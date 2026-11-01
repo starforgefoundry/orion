@@ -1,25 +1,21 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import {
+  ACCESS_BASIS,
+  MEMBER_EMAIL_TYPE,
   MEMBER_SORT,
   ONBOARDING_FILTER,
   SORT_DIRECTION,
-  WAIVER_FILTER,
-  type MemberSearchFilter,
-  type OnboardingFilter,
-  type WaiverFilter,
-} from '$lib/remotes/dtos/member.dto';
-import {
-  ACCESS_BASIS,
-  MEMBER_EMAIL_TYPE,
   SUBSCRIPTION_STATUS,
+  WAIVER_FILTER,
   type AccessBasis,
+  type MemberSort,
+  type OnboardingFilter,
+  type SortDirection,
+  type WaiverFilter,
 } from '$lib/member_enums';
-import {
-  hasMembership,
-  spaceDate,
-  type MemberAccessContext,
-} from '$lib/server/utils/member_access';
+import { hasMembership, type MemberAccessContext } from '$lib/server/utils/member_access';
+import { spaceDate } from '$lib/space';
 import {
   and,
   asc,
@@ -44,6 +40,18 @@ export type CustomerDetails = {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+};
+
+/** An empty filter list leaves that filter off. */
+export type MemberSearchFilter = {
+  query: string;
+  access: AccessBasis[];
+  waiver: WaiverFilter[];
+  onboarding: OnboardingFilter[];
+  sort: MemberSort;
+  direction: SortDirection;
+  page: number;
+  pageSize: number;
 };
 
 export function normalizeEmail(email: string) {

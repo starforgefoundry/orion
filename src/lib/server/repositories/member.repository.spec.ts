@@ -2,17 +2,15 @@ import {
   ACCESS_BASIS,
   MEMBER_EMAIL_TRIGGER,
   MEMBER_EMAIL_TYPE,
-  enumValues,
-} from '$lib/member_enums';
-import {
   MEMBER_SORT,
   ONBOARDING_FILTER,
   SORT_DIRECTION,
-  type MemberSearchFilter,
-} from '$lib/remotes/dtos/member.dto';
+  enumValues,
+} from '$lib/member_enums';
 import type { Database } from '$lib/server/db';
 import { schema } from '$lib/server/db/schema';
-import { resolveAccess, spaceDate } from '$lib/server/utils/member_access';
+import { resolveAccess } from '$lib/server/utils/member_access';
+import { spaceDate } from '$lib/space';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { DateTime } from 'luxon';
@@ -20,7 +18,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MemberRepository } from './member.repository';
+import { MemberRepository, type MemberSearchFilter } from './member.repository';
 
 const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../db/migrations');
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;

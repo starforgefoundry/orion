@@ -1,6 +1,7 @@
 import { command, form, getRequestEvent, query } from '$app/server';
 import { HTTP_STATUS } from '$lib/http';
-import { KIOSK_DEVICE_COOKIE, kioskCheckInDto, kioskWaiverDto } from '$lib/remotes/dtos/kiosk.dto';
+import { kioskCheckInDto, kioskWaiverDto } from '$lib/remotes/dtos/kiosk.dto';
+import { KIOSK_DEVICE_COOKIE } from '$lib/utils/kiosk_pairing';
 import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
 import { kioskService } from '$lib/server/services/kiosk.service';
 import { error } from '@sveltejs/kit';

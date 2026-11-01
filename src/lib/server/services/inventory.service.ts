@@ -1,19 +1,10 @@
 import type { UpsertInventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
-import { NotFoundError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
 
 export class InventoryService extends BaseService {
   async getItems() {
     const items = await this.inventoryRepository.getAll();
     return items;
-  }
-
-  async getItemById(id: string) {
-    const item = await this.inventoryRepository.getById(id);
-    if (!item) {
-      throw new NotFoundError('Inventory item not found');
-    }
-    return item;
   }
 
   async upsertItem(dto: UpsertInventoryItemDto) {
@@ -42,15 +33,6 @@ export class InventoryService extends BaseService {
 
   async removeFromPurchaseList(inventoryItemId: string) {
     await this.inventoryRepository.removeFromPurchaseList(inventoryItemId);
-  }
-
-  async uploadInventoryImage(id: string, image: File) {
-    const imageUrl = await this.inventoryRepository.uploadImage(id, image);
-    return { imageUrl };
-  }
-
-  async deleteInventoryImage(id: string) {
-    await this.inventoryRepository.deleteImage(id);
   }
 }
 

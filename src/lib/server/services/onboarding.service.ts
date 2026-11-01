@@ -56,7 +56,7 @@ export class OnboardingService extends BaseService {
     const lastOnboarding = emails.find((sent) => sent.type === MEMBER_EMAIL_TYPE.ONBOARDING);
     if (lastOnboarding && now.diff(lastOnboarding.sentDate) < PASS_EMAIL_COOLDOWN) return;
 
-    await this.memberNotificationRepository.sendOnboarding(
+    await this.memberNotificationGateway.sendOnboarding(
       context.member,
       MEMBER_EMAIL_TRIGGER.SELF_SERVICE,
     );

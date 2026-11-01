@@ -1,13 +1,24 @@
-import type {
-  SearchPrintRequestsDto,
-  SubmitPrintRequestDto,
-} from '$lib/remotes/dtos/print_request.dto';
 import { schema, type PrintRequest } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
+import { PRINT_REQUEST_STATUS } from '$lib/utils/print_request';
 import { count, desc, eq, ilike, or } from 'drizzle-orm';
 
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 25;
+
+export type NewPrintRequest = {
+  customer: { name: string; email: string };
+  projectName: string;
+  specialRequests?: string;
+  isQuote?: boolean;
+  material: string;
+  billingCode?: string;
+};
+
+export type PrintRequestSearch = { query: string; page?: number; pageSize?: number };
+
 export class PrintRequestRepository extends BaseRepository {
-  async submit(dto: SubmitPrintRequestDto) {
+  async submit(dto: NewPrintRequest) {
     const [printRequest] = await this.db
       .insert(schema.printRequest)
       .values({
@@ -16,7 +27,7 @@ export class PrintRequestRepository extends BaseRepository {
         projectName: dto.projectName,
         specialRequests: dto.specialRequests ?? '',
         isQuote: dto.isQuote,
-        status: 'in_queue',
+        status: PRINT_REQUEST_STATUS.IN_QUEUE,
         material: dto.material,
         billingCode: dto.billingCode ?? null,
       })
@@ -40,7 +51,9 @@ export class PrintRequestRepository extends BaseRepository {
     }));
   }
 
-  async search(dto: SearchPrintRequestsDto) {
+  async search(dto: PrintRequestSearch) {
+    const pageSize = dto.pageSize ?? DEFAULT_PAGE_SIZE;
+    const currentPage = dto.page ?? DEFAULT_PAGE;
     const whereClause =
       dto.query.trim() !== ''
         ? or(
@@ -69,8 +82,8 @@ export class PrintRequestRepository extends BaseRepository {
       .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
       .where(whereClause)
       .orderBy(desc(schema.printRequest.submissionDate))
-      .limit(dto.pageSize ?? 25)
-      .offset(((dto.page ?? 1) - 1) * (dto.pageSize ?? 25))
+      .limit(pageSize)
+      .offset((currentPage - 1) * pageSize)
       .execute();
 
     const data = results.map(({ print_request, print_material, payment }) => ({
@@ -79,8 +92,6 @@ export class PrintRequestRepository extends BaseRepository {
       payment: payment,
     }));
 
-    const pageSize = dto.pageSize ?? 25;
-    const currentPage = dto.page ?? 1;
     const totalPages = Math.ceil(total / pageSize);
 
     return {

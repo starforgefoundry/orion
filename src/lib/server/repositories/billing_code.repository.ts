@@ -1,17 +1,19 @@
-import type {
-  CreateBillingCodeDto,
-  UpdateBillingCodeDto,
-} from '$lib/remotes/dtos/billing_code.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, sql, type InferInsertModel, type SQL } from 'drizzle-orm';
+
+type BillingCodeColumns = InferInsertModel<typeof schema.billingCode>;
+export type NewBillingCode = Pick<BillingCodeColumns, 'code' | 'description' | 'organizationId'>;
+export type BillingCodeUpdates = Partial<
+  Pick<BillingCodeColumns, 'code' | 'description' | 'archived'>
+>;
 
 function matchesCode(code: string) {
   return eq(sql`upper(${schema.billingCode.code})`, code.toUpperCase());
 }
 
 export class BillingCodeRepository extends BaseRepository {
-  async create(dto: CreateBillingCodeDto) {
+  async create(dto: NewBillingCode) {
     const [billingCode] = await this.db.insert(schema.billingCode).values(dto).returning();
     return billingCode;
   }
@@ -41,11 +43,6 @@ export class BillingCodeRepository extends BaseRepository {
     );
   }
 
-  async getById(id: string) {
-    const [code] = await this.selectWithOrganization(eq(schema.billingCode.id, id));
-    return code;
-  }
-
   async getByCode(code: string) {
     const [billingCode] = await this.selectWithOrganization(
       and(matchesCode(code), eq(schema.billingCode.archived, false)),
@@ -58,7 +55,7 @@ export class BillingCodeRepository extends BaseRepository {
     return billingCode;
   }
 
-  async update(id: string, updates: Omit<UpdateBillingCodeDto, 'id'>) {
+  async update(id: string, updates: BillingCodeUpdates) {
     const [billingCode] = await this.db
       .update(schema.billingCode)
       .set(updates)
@@ -66,10 +63,6 @@ export class BillingCodeRepository extends BaseRepository {
       .returning();
 
     return billingCode;
-  }
-
-  async delete(id: string) {
-    await this.db.delete(schema.billingCode).where(eq(schema.billingCode.id, id));
   }
 
   async archive(id: string) {

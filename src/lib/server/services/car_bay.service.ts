@@ -18,7 +18,7 @@ import { SENDERS } from '$lib/server/utils/email_templates/senders';
 import { forEachSettled, runInBackground } from '$lib/server/utils/background';
 import { carBayBookingUrl, passLinks } from '$lib/server/utils/member_links';
 import { bookWithPayment } from '$lib/server/utils/paid_booking';
-import { payUrl } from '$lib/server/utils/payment_links';
+import { paymentLink, payUrl } from '$lib/server/utils/payment_links';
 import {
   amountPaid,
   buildBill,
@@ -27,19 +27,21 @@ import {
   PAYMENT_TYPE,
 } from '$lib/utils/billing';
 import {
+  CAR_BAY_BOOKER,
   CAR_BAY_STATUS,
   CAR_BAY_TIER,
   CAR_BAY_TIER_NAMES,
-  CAR_BAY_ZONE,
   CarBayRuleError,
   CarBayRules,
   CarBaySlotTakenError,
   bookingLineItems,
   formatPeriod,
   overrunLineItems,
+  type CarBayBooker,
   type CarBayPolicy,
   type CarBayRequest,
 } from '$lib/utils/car_bay';
+import { SPACE_ZONE } from '$lib/space';
 import { dueForReminder } from '$lib/utils/reminders';
 import { DateTime, Duration } from 'luxon';
 
@@ -73,7 +75,7 @@ export class CarBayService extends BaseService {
   }
   async getPublicSchedule(now: DateTime = DateTime.now()): Promise<PublicCarBaySchedule> {
     const rules = await this.rules();
-    const from = now.setZone(CAR_BAY_ZONE).startOf('day');
+    const from = now.setZone(SPACE_ZONE).startOf('day');
     const to = from.plus({ days: rules.policy.publicHorizonDays + 1 });
     const [bookings, closures] = await Promise.all([
       this.carBayRepository.getConfirmedInRange(from, to),
@@ -97,8 +99,8 @@ export class CarBayService extends BaseService {
   }
 
   async getStaffSchedule(fromDate: string, toDate: string): Promise<CarBayStaffSchedule> {
-    const from = DateTime.fromISO(fromDate, { zone: CAR_BAY_ZONE }).startOf('day');
-    const to = DateTime.fromISO(toDate, { zone: CAR_BAY_ZONE }).endOf('day');
+    const from = DateTime.fromISO(fromDate, { zone: SPACE_ZONE }).startOf('day');
+    const to = DateTime.fromISO(toDate, { zone: SPACE_ZONE }).endOf('day');
     const [bookings, closures] = await Promise.all([
       this.carBayRepository.getAllInRange(from, to),
       this.carBayRepository.getClosuresInRange(from, to),
@@ -125,7 +127,7 @@ export class CarBayService extends BaseService {
         id: payment.id,
         status: payment.status,
         total: payment.total,
-        paymentUrl: payment.paymentUrl,
+        paymentUrl: paymentLink(payment),
         issuedDate: payment.issuedDate.toISO()!,
       })),
     };
@@ -158,9 +160,9 @@ export class CarBayService extends BaseService {
     request: CarBayRequest,
     customerEmail: string,
     now: DateTime,
-    options: { enforceHorizon: boolean },
+    booker: CarBayBooker,
   ) {
-    const period = rules.resolvePeriod(request, now, options);
+    const period = rules.resolvePeriod(request, now, booker);
 
     if (request.tier === CAR_BAY_TIER.QUICK_JOB) {
       const day = period.startAt.startOf('day');
@@ -221,9 +223,13 @@ export class CarBayService extends BaseService {
     if (!isOpen) throw new CarBayRuleError(BOOKINGS_CLOSED_MESSAGE);
 
     const rules = await this.rules();
-    const period = await this.validateRequest(rules, dto.request, dto.customerEmail, now, {
-      enforceHorizon: true,
-    });
+    const period = await this.validateRequest(
+      rules,
+      dto.request,
+      dto.customerEmail,
+      now,
+      CAR_BAY_BOOKER.CUSTOMER,
+    );
 
     const [rates, isMember] = await Promise.all([
       this.settingsRepository.getSetting('carBayRates'),
@@ -231,7 +237,7 @@ export class CarBayService extends BaseService {
     ]);
 
     const { booking, payment } = await bookWithPayment(
-      this.paymentRepository,
+      this.paymentGateway,
       {
         type: PAYMENT_TYPE.CAR_BAY_BOOKING,
         status: PAYMENT_STATUS.PENDING,
@@ -265,9 +271,13 @@ export class CarBayService extends BaseService {
 
   async staffBook(dto: StaffBookCarBayDto, staffEmail: string, now: DateTime = DateTime.now()) {
     const rules = await this.rules();
-    const period = await this.validateRequest(rules, dto.request, dto.customerEmail, now, {
-      enforceHorizon: false,
-    });
+    const period = await this.validateRequest(
+      rules,
+      dto.request,
+      dto.customerEmail,
+      now,
+      CAR_BAY_BOOKER.STAFF,
+    );
 
     const booking = await this.carBayRepository.create({
       tier: dto.request.tier,
@@ -289,7 +299,7 @@ export class CarBayService extends BaseService {
 
   private async refund(booking: CarBayBookingWithPayment) {
     if (!booking.payment) return false;
-    return await this.paymentRepository.refund(booking.payment);
+    return await this.paymentGateway.refund(booking.payment);
   }
 
   private requireConfirmed(booking: CarBayBookingWithPayment | null): CarBayBookingWithPayment {
@@ -329,26 +339,21 @@ export class CarBayService extends BaseService {
 
     const rates = await this.settingsRepository.getSetting('carBayRates');
     const bookingEndDate = booking.endAt.toISODate()!;
-    const paymentId = crypto.randomUUID();
-    const payment = await this.paymentRepository.save(
-      {
-        type: PAYMENT_TYPE.CAR_BAY_OVERRUN,
-        status: PAYMENT_STATUS.PENDING,
-        customer: { name: booking.customerName, email: booking.customerEmail },
-        bill: buildBill(overrunLineItems(dto.overrun, bookingEndDate, rates, booking.isMember)),
-        paymentUrl: payUrl({ id: paymentId }),
-      },
-      paymentId,
-    );
+    const payment = await this.paymentRepository.save({
+      type: PAYMENT_TYPE.CAR_BAY_OVERRUN,
+      status: PAYMENT_STATUS.PENDING,
+      customer: { name: booking.customerName, email: booking.customerEmail },
+      bill: buildBill(overrunLineItems(dto.overrun, bookingEndDate, rates, booking.isMember)),
+    });
     await this.carBayRepository.createOverrun(booking.id, payment.id);
 
-    await this.mailgunRepository.sendTemplate(
+    await this.mailgunGateway.sendTemplate(
       booking.customerEmail,
       SENDERS.carBay,
       'car_bay_overrun',
       {
         customerName: booking.customerName,
-        bookingEndDate: booking.endAt.setZone(CAR_BAY_ZONE).toFormat('MMMM d'),
+        bookingEndDate: booking.endAt.setZone(SPACE_ZONE).toFormat('MMMM d'),
         total: centsToDollars(payment.total),
         paymentUrl: payUrl(payment),
       },
@@ -368,7 +373,7 @@ export class CarBayService extends BaseService {
     await forEachSettled(
       due,
       async (booking) => {
-        await this.mailgunRepository.sendTemplate(
+        await this.mailgunGateway.sendTemplate(
           booking.customerEmail,
           SENDERS.carBay,
           'car_bay_reminder',
@@ -386,12 +391,12 @@ export class CarBayService extends BaseService {
     );
   }
 
-  async sendConfirmationEmail(
+  private async sendConfirmationEmail(
     booking: CarBayBooking,
     payment: Payment | null,
     policy: CarBayPolicy,
   ) {
-    await this.mailgunRepository.sendTemplate(
+    await this.mailgunGateway.sendTemplate(
       booking.customerEmail,
       SENDERS.carBay,
       'car_bay_booking',

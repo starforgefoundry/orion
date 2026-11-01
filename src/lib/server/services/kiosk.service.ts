@@ -10,8 +10,6 @@ import {
 import {
   KIOSK_CHECK_IN_STATUS,
   KIOSK_DENIAL_REASON,
-  KIOSK_PAIR_PATH,
-  KIOSK_PAIR_TOKEN_PARAM,
   type AdmittedBasis,
   type KioskCheckInResult,
   type KioskDenialReason,
@@ -21,14 +19,12 @@ import {
 import type { DayPass, Member } from '$lib/server/db/schema';
 import type { BookingPass, IssuedPass } from '$lib/server/repositories/pass.repository';
 import { BaseService } from '$lib/server/services/base.service';
-import {
-  resolveAccess,
-  spaceDate,
-  type MemberAccessContext,
-} from '$lib/server/utils/member_access';
+import { resolveAccess, type MemberAccessContext } from '$lib/server/utils/member_access';
+import { spaceDate } from '$lib/space';
 import { passTokenFromScan } from '$lib/server/utils/member_links';
 import { CAR_BAY_STATUS, CAR_BAY_TIER_NAMES } from '$lib/utils/car_bay';
 import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '$lib/utils/classes';
+import { kioskPairPath } from '$lib/utils/kiosk_pairing';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { DateTime } from 'luxon';
 
@@ -102,22 +98,17 @@ function digest(value: string) {
   return createHash('sha256').update(value).digest();
 }
 
-function pairingPath(deviceToken: string) {
-  const params = new URLSearchParams({ [KIOSK_PAIR_TOKEN_PARAM]: deviceToken });
-  return `${KIOSK_PAIR_PATH}?${params}`;
-}
-
 export class KioskService extends BaseService {
   async getPairing(): Promise<KioskPairingDto> {
     const { deviceToken } = await this.settingsRepository.getSetting('kiosk');
-    return { pairingPath: deviceToken ? pairingPath(deviceToken) : null };
+    return { pairingPath: deviceToken ? kioskPairPath(deviceToken) : null };
   }
 
   /** Issues a new device token, which signs out every previously paired kiosk. */
   async rotateDeviceToken(): Promise<KioskPairingDto> {
     const deviceToken = randomBytes(DEVICE_TOKEN_BYTES).toString('base64url');
     await this.settingsRepository.setSetting('kiosk', { deviceToken });
-    return { pairingPath: pairingPath(deviceToken) };
+    return { pairingPath: kioskPairPath(deviceToken) };
   }
 
   async isPairedDevice(candidate: string | undefined) {

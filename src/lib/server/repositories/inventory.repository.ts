@@ -1,10 +1,14 @@
-import type { UpsertInventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
 import { schema } from '$lib/server/db/schema';
 import { NotFoundError } from '$lib/errors';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { fileUrl, saveFile } from '$lib/server/utils/storage';
-import { eq } from 'drizzle-orm';
+import { fileUrl } from '$lib/server/utils/storage';
+import { eq, type InferInsertModel } from 'drizzle-orm';
 import { DateTime } from 'luxon';
+
+/** An empty id creates a new item. */
+export type InventoryItemInput = Omit<InferInsertModel<typeof schema.inventoryItem>, 'id'> & {
+  id?: string;
+};
 
 export class InventoryRepository extends BaseRepository {
   async getAll() {
@@ -12,15 +16,7 @@ export class InventoryRepository extends BaseRepository {
     return items.map((item) => ({ ...item, imageUrl: fileUrl(item.imageUrl) }));
   }
 
-  async getById(id: string) {
-    const [item] = await this.db
-      .select()
-      .from(schema.inventoryItem)
-      .where(eq(schema.inventoryItem.id, id));
-    return item && { ...item, imageUrl: fileUrl(item.imageUrl) };
-  }
-
-  async upsert(dto: UpsertInventoryItemDto) {
+  async upsert(dto: InventoryItemInput) {
     const [item] = await this.db
       .insert(schema.inventoryItem)
       .values({
@@ -109,33 +105,5 @@ export class InventoryRepository extends BaseRepository {
     await this.db
       .delete(schema.purchaseList)
       .where(eq(schema.purchaseList.inventoryItemId, inventoryItemId));
-  }
-
-  async isPurchaseListed(inventoryItemId: string) {
-    const [item] = await this.db
-      .select()
-      .from(schema.purchaseList)
-      .where(eq(schema.purchaseList.inventoryItemId, inventoryItemId));
-
-    return !!item;
-  }
-
-  async uploadImage(id: string, image: File) {
-    const uploadId = crypto.randomUUID();
-    const key = await saveFile(image, `inventory/${id}/${uploadId}`);
-
-    await this.db
-      .update(schema.inventoryItem)
-      .set({ imageUrl: key })
-      .where(eq(schema.inventoryItem.id, id));
-
-    return fileUrl(key);
-  }
-
-  async deleteImage(id: string) {
-    await this.db
-      .update(schema.inventoryItem)
-      .set({ imageUrl: null })
-      .where(eq(schema.inventoryItem.id, id));
   }
 }

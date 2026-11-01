@@ -4,9 +4,8 @@ import {
   type MemberEmailTrigger,
 } from '$lib/member_enums';
 import type { DayPass, Member } from '$lib/server/db/schema';
-import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
-import { MemberEmailRepository } from '$lib/server/repositories/member_email.repository';
+import type { MailgunGateway } from '$lib/server/gateways/mailgun.gateway';
+import type { MemberEmailRepository } from '$lib/server/repositories/member_email.repository';
 import { SENDERS } from '$lib/server/utils/email_templates/senders';
 import { onboardingUrl, passLinks } from '$lib/server/utils/member_links';
 import type { EmailTemplateKey } from '$lib/utils/email_templates';
@@ -33,21 +32,15 @@ const ONBOARDING_INTRO: Record<MemberEmailTrigger, string> = {
   [MEMBER_EMAIL_TRIGGER.SELF_SERVICE]: 'Here is the member pass link you asked for.',
 };
 
-export class MemberNotificationRepository extends BaseRepository {
-  private mailgunRepository: MailgunRepository;
-  private memberEmailRepository: MemberEmailRepository;
-
+/** Emails members their passes and records each send. */
+export class MemberNotificationGateway {
   constructor(
-    mailgunRepository?: MailgunRepository,
-    memberEmailRepository?: MemberEmailRepository,
-  ) {
-    super();
-    this.mailgunRepository = mailgunRepository ?? new MailgunRepository();
-    this.memberEmailRepository = memberEmailRepository ?? new MemberEmailRepository();
-  }
+    private readonly mailgunGateway: MailgunGateway,
+    private readonly memberEmailRepository: MemberEmailRepository,
+  ) {}
 
   async sendOnboarding(member: Member, trigger: MemberEmailTrigger): Promise<void> {
-    await this.mailgunRepository.sendTemplate(
+    await this.mailgunGateway.sendTemplate(
       member.email,
       SENDERS.members,
       ONBOARDING_TEMPLATE[trigger],
@@ -61,7 +54,7 @@ export class MemberNotificationRepository extends BaseRepository {
   }
 
   async sendDayPass(member: Member, dayPass: DayPass): Promise<void> {
-    await this.mailgunRepository.sendTemplate(member.email, SENDERS.members, DAY_PASS_TEMPLATE, {
+    await this.mailgunGateway.sendTemplate(member.email, SENDERS.members, DAY_PASS_TEMPLATE, {
       memberName: member.name,
       ...passLinks(dayPass),
     });

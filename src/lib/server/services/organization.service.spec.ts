@@ -1,12 +1,16 @@
 import type { Payment } from '$lib/server/db/schema';
-import { MailgunRateLimitError } from '$lib/server/repositories/mailgun.repository';
-import { SPACE_ZONE } from '$lib/server/utils/member_access';
+import { MailgunRateLimitError } from '$lib/server/gateways/mailgun.gateway';
+import { SPACE_ZONE } from '$lib/space';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ORGANIZATION_NOT_FOUND, OrganizationService } from './organization.service';
+import {
+  ORGANIZATION_NOT_FOUND,
+  OrganizationService,
+  outstandingBalance,
+} from './organization.service';
 
 const PAY_URL = 'https://orion.example.com/pay';
 
@@ -39,26 +43,6 @@ describe(OrganizationService.name, () => {
       const result = await sut.getOrganizations();
 
       expect(result).toEqual([]);
-    });
-  });
-
-  describe('getOrganizationById', () => {
-    it('should return organization by id', async () => {
-      const organization = factory.organization();
-      mocks.organizationRepository.getById.mockResolvedValue(organization);
-
-      const result = await sut.getOrganizationById(organization.id);
-
-      expect(mocks.organizationRepository.getById).toHaveBeenCalledWith(organization.id);
-      expect(result).toEqual(organization);
-    });
-
-    it('should return null when organization not found', async () => {
-      mocks.organizationRepository.getById.mockResolvedValue(null as never);
-
-      const result = await sut.getOrganizationById('nonexistent');
-
-      expect(result).toBeNull();
     });
   });
 
@@ -107,7 +91,28 @@ describe(OrganizationService.name, () => {
       expect(result.charges).toHaveLength(3);
       expect(result.charges.some((c) => c.type === 'print')).toBe(true);
       expect(result.charges.some((c) => c.type === 'charge')).toBe(true);
-      expect(result.balancePayments).toEqual([balancePayment]);
+      expect(result.balancePayments).toEqual([
+        { ...balancePayment, paymentUrl: `${PAY_URL}/${balancePayment.id}` },
+      ]);
+    });
+
+    it('links a balance payment from before Orion billing to its Square invoice', async () => {
+      const legacy = factory.payment({
+        type: PAYMENT_TYPE.BALANCE,
+        squareInvoiceId: 'invoice-1',
+        paymentUrl: 'https://squareup.com/pay-invoice/invoice-1',
+      });
+      mocks.organizationRepository.getById.mockResolvedValue(factory.organization());
+      mocks.organizationRepository.getPayments.mockResolvedValue([]);
+      mocks.organizationRepository.getPrintRequests.mockResolvedValue([]);
+      mocks.organizationRepository.getCharges.mockResolvedValue([]);
+      mocks.organizationRepository.getBalancePayments.mockResolvedValue([legacy]);
+
+      const result = await sut.getOrganizationDetail('org-1');
+
+      expect(result.balancePayments[0].paymentUrl).toBe(
+        'https://squareup.com/pay-invoice/invoice-1',
+      );
     });
 
     it('should throw error when organization not found', async () => {
@@ -213,85 +218,70 @@ describe(OrganizationService.name, () => {
     });
   });
 
-  describe('getOutstandingBalance', () => {
+  describe(outstandingBalance.name, () => {
     it('should calculate outstanding balance correctly with paid print requests', async () => {
-      mocks.organizationRepository.getPayments.mockResolvedValue([
+      const result = outstandingBalance([
         payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
         payment(3000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
       ]);
 
-      const result = await sut.getOutstandingBalance('org-123');
-
-      expect(mocks.organizationRepository.getPayments).toHaveBeenCalledWith('org-123');
       expect(result).toBe(8000);
     });
 
     it('should subtract balance payments from outstanding balance', async () => {
-      mocks.organizationRepository.getPayments.mockResolvedValue([
+      const result = outstandingBalance([
         payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
         payment(3000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
         payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
       ]);
 
-      const result = await sut.getOutstandingBalance('org-123');
-
       expect(result).toBe(6000);
     });
 
     it('should only count non quote or canceled payments', async () => {
-      mocks.organizationRepository.getPayments.mockResolvedValue([
+      const result = outstandingBalance([
         payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
         payment(3000, PAYMENT_STATUS.PENDING, PAYMENT_TYPE.PRINT_REQUEST),
         payment(4000, PAYMENT_STATUS.QUOTE, PAYMENT_TYPE.PRINT_REQUEST),
         payment(2000, PAYMENT_STATUS.CANCELED, PAYMENT_TYPE.PRINT_REQUEST),
       ]);
 
-      const result = await sut.getOutstandingBalance('org-123');
-
       expect(result).toBe(8000);
     });
 
     it('should return 0 when no payments exist', async () => {
-      mocks.organizationRepository.getPayments.mockResolvedValue([]);
-
-      const result = await sut.getOutstandingBalance('org-empty');
+      const result = outstandingBalance([]);
 
       expect(result).toBe(0);
     });
 
     it('should return negative balance when balance payments exceed print payments', async () => {
-      mocks.organizationRepository.getPayments.mockResolvedValue([
+      const result = outstandingBalance([
         payment(1000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
         payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
       ]);
-
-      const result = await sut.getOutstandingBalance('org-overpaid');
 
       expect(result).toBe(-1000);
     });
 
     it('should handle multiple balance payments', async () => {
-      mocks.organizationRepository.getPayments.mockResolvedValue([
+      const result = outstandingBalance([
         payment(10000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
         payment(3000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
         payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
         payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
       ]);
 
-      const result = await sut.getOutstandingBalance('org-multi');
-
       expect(result).toBe(10000);
     });
 
     it('should include organization charges in outstanding balance', async () => {
-      mocks.organizationRepository.getPayments.mockResolvedValue([
+      const result = outstandingBalance([
         payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
         payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
         payment(1500, PAYMENT_STATUS.PAID, PAYMENT_TYPE.ORG_CHARGE),
         payment(500, PAYMENT_STATUS.PAID, PAYMENT_TYPE.ORG_CHARGE),
       ]);
-
-      const result = await sut.getOutstandingBalance('org-123');
 
       expect(result).toBe(5000);
     });
@@ -306,16 +296,17 @@ describe(OrganizationService.name, () => {
         payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
         payment(3000, PAYMENT_STATUS.PENDING, PAYMENT_TYPE.PRINT_REQUEST),
       ]);
-      mocks.paymentRepository.save.mockImplementation(async (data, id) =>
-        factory.payment({ id, total: data.bill.total, paymentUrl: data.paymentUrl }),
+      mocks.paymentRepository.save.mockImplementation(async (data) =>
+        factory.payment({ id: 'balance-1', total: data.bill.total }),
       );
-      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
     });
 
     it('saves a pending balance payment and emails the organization a pay link', async () => {
       const result = await sut.chargeBalance({ organizationId: organization.id });
 
-      const [saved, id] = mocks.paymentRepository.save.mock.calls[0];
+      const [saved] = mocks.paymentRepository.save.mock.calls[0];
+      const id = 'balance-1';
       expect(saved).toEqual({
         type: PAYMENT_TYPE.BALANCE,
         status: PAYMENT_STATUS.PENDING,
@@ -325,9 +316,8 @@ describe(OrganizationService.name, () => {
           total: 8000,
         }),
         organizationId: organization.id,
-        paymentUrl: `${PAY_URL}/${id}`,
       });
-      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
         'charge@org.com',
         expect.anything(),
         'organization_balance',
@@ -358,7 +348,7 @@ describe(OrganizationService.name, () => {
         'No outstanding balance to charge',
       );
       expect(mocks.paymentRepository.save).not.toHaveBeenCalled();
-      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
     });
   });
 
@@ -373,7 +363,19 @@ describe(OrganizationService.name, () => {
 
       await sut.createCharge(dto);
 
-      expect(mocks.organizationRepository.createCharge).toHaveBeenCalledWith(dto, organization);
+      expect(mocks.organizationRepository.createCharge).toHaveBeenCalledWith(
+        organization.id,
+        'Laser time',
+        {
+          type: PAYMENT_TYPE.ORG_CHARGE,
+          status: PAYMENT_STATUS.PAID,
+          customer: { name: organization.name, email: organization.email },
+          bill: expect.objectContaining({
+            lineItems: [{ name: 'Laser time', quantity: 1, unitAmount: 2500 }],
+            total: 2500,
+          }),
+        },
+      );
     });
 
     it('throws when the organization does not exist', async () => {
@@ -396,7 +398,7 @@ describe(OrganizationService.name, () => {
       mocks.organizationMemberRepository.add.mockImplementation(async (organizationId, memberId) =>
         factory.organizationMember({ id: `membership-${memberId}`, organizationId, memberId }),
       );
-      mocks.memberNotificationRepository.sendOnboarding.mockResolvedValue(undefined);
+      mocks.memberNotificationGateway.sendOnboarding.mockResolvedValue(undefined);
     });
 
     it('adds each parsed member and sends onboarding', async () => {
@@ -411,7 +413,7 @@ describe(OrganizationService.name, () => {
         'id-ada@example.com',
       );
       await vi.waitFor(() =>
-        expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+        expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(
           expect.objectContaining({ id: 'id-grace@example.com' }),
           'organization',
         ),
@@ -431,7 +433,7 @@ describe(OrganizationService.name, () => {
         lines: 'Ada <ada@example.com>',
       });
 
-      expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
       expect(result.alreadyMembers).toHaveLength(1);
       expect(result.added).toEqual([]);
     });
@@ -448,7 +450,7 @@ describe(OrganizationService.name, () => {
 
     it('keeps the membership when the onboarding email fails', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
-      mocks.memberNotificationRepository.sendOnboarding.mockRejectedValue(new Error('mailgun'));
+      mocks.memberNotificationGateway.sendOnboarding.mockRejectedValue(new Error('mailgun'));
 
       const result = await sut.addOrganizationMembers({
         organizationId: organization.id,
@@ -466,44 +468,40 @@ describe(OrganizationService.name, () => {
       ).rejects.toThrow(ORGANIZATION_NOT_FOUND);
       expect(mocks.memberRepository.upsertByEmail).not.toHaveBeenCalled();
     });
-  });
 
-  describe('sendOrganizationOnboardings', () => {
-    const ada = factory.member({ id: 'ada', email: 'ada@example.com' });
-    const grace = factory.member({ id: 'grace', email: 'grace@example.com' });
+    describe('onboarding emails', () => {
+      const lines = 'Ada <ada@example.com>\nGrace <grace@example.com>';
 
-    beforeEach(() => {
-      mocks.memberNotificationRepository.sendOnboarding.mockResolvedValue(undefined);
-    });
+      function sentEmails() {
+        return mocks.memberNotificationGateway.sendOnboarding.mock.calls.map(
+          ([member]) => member.email,
+        );
+      }
 
-    function sentMemberIds() {
-      return mocks.memberNotificationRepository.sendOnboarding.mock.calls.map(
-        ([member]) => member.id,
-      );
-    }
+      it('waits out the Mailgun rate limit and resends', async () => {
+        vi.useFakeTimers();
+        mocks.memberNotificationGateway.sendOnboarding.mockRejectedValueOnce(
+          new MailgunRateLimitError('limit', DateTime.now().plus({ minutes: 2 })),
+        );
 
-    it('waits out the Mailgun rate limit and resends', async () => {
-      vi.useFakeTimers();
-      mocks.memberNotificationRepository.sendOnboarding.mockRejectedValueOnce(
-        new MailgunRateLimitError('limit', DateTime.now().plus({ minutes: 2 })),
-      );
+        await sut.addOrganizationMembers({ organizationId: organization.id, lines });
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledTimes(1);
 
-      const sending = sut.sendOrganizationOnboardings([ada, grace]);
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(sentEmails()).toEqual(['ada@example.com', 'ada@example.com', 'grace@example.com']);
+      });
 
-      await vi.advanceTimersByTimeAsync(60_000);
-      await sending;
-      expect(sentMemberIds()).toEqual(['ada', 'ada', 'grace']);
-    });
+      it('moves on to the next member after a non rate limit failure', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        mocks.memberNotificationGateway.sendOnboarding.mockRejectedValueOnce(new Error('mailgun'));
 
-    it('moves on to the next member after a non rate limit failure', async () => {
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-      mocks.memberNotificationRepository.sendOnboarding.mockRejectedValueOnce(new Error('mailgun'));
+        await sut.addOrganizationMembers({ organizationId: organization.id, lines });
 
-      await sut.sendOrganizationOnboardings([ada, grace]);
-
-      expect(sentMemberIds()).toEqual(['ada', 'grace']);
+        await vi.waitFor(() =>
+          expect(sentEmails()).toEqual(['ada@example.com', 'grace@example.com']),
+        );
+      });
     });
   });
 

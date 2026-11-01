@@ -11,14 +11,6 @@ export const getInventoryItems = query(
   }),
 );
 
-export const getInventoryItemById = query(
-  v.object({ id: v.string() }),
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-    return await inventoryService.getItemById(dto.id);
-  }),
-);
-
 export const upsertInventoryItem = form(
   upsertInventoryItemDto,
   exposeUserErrors(async (data) => {

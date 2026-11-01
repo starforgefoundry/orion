@@ -6,10 +6,9 @@ import type {
   Organization,
   OrganizationMember,
 } from '$lib/server/db/schema';
-import { SPACE_ZONE } from '$lib/space';
+import { SPACE_ZONE, spaceDate } from '$lib/space';
 import { DateTime } from 'luxon';
 
-export { SPACE_ZONE };
 export type { AccessBasis };
 
 export type MemberAccessContext = {
@@ -26,8 +25,9 @@ export type MemberAccess = {
   dayPassToUse?: DayPass;
 };
 
-export function spaceDate(now: DateTime) {
-  return now.setZone(SPACE_ZONE).toISODate()!;
+/** Access lasts through the whole chosen day in the space's time zone. */
+export function accessEndOfDay(date: string | null) {
+  return date === null ? null : DateTime.fromISO(date, { zone: SPACE_ZONE }).endOf('day');
 }
 
 function hasActiveSubscription(subscriptions: MemberSubscription[]) {

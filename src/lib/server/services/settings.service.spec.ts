@@ -105,7 +105,7 @@ describe(SettingsService.name, () => {
           discordWebhookUrl: 'https://discord.com/api/webhooks/secret',
         }),
       );
-      mocks.printMaterialsRepository.get.mockResolvedValue([
+      mocks.printMaterialsRepository.getAvailable.mockResolvedValue([
         factory.printMaterial({ id: 'material-1', name: 'PLA', tagId: 'A1B2C3D4' }),
       ]);
     });
@@ -126,7 +126,7 @@ describe(SettingsService.name, () => {
     it('should only list materials marked available', async () => {
       await sut.getPublicPrintRequestForm();
 
-      expect(mocks.printMaterialsRepository.get).toHaveBeenCalledWith(true);
+      expect(mocks.printMaterialsRepository.getAvailable).toHaveBeenCalled();
     });
   });
 

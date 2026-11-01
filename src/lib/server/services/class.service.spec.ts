@@ -6,7 +6,7 @@ import type {
   User,
 } from '$lib/server/db/schema';
 import { UserError } from '$lib/errors';
-import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
+import { PaymentDeclinedError } from '$lib/server/gateways/payment.gateway';
 import { SPACE_ZONE } from '$lib/space';
 import { PAYMENT_STATUS } from '$lib/utils/billing';
 import { factory } from '$test/factory';
@@ -49,26 +49,24 @@ describe(ClassService.name, () => {
     mocks.googleCalendarRepository.isConfigured.mockReturnValue(false);
   });
 
-  describe('createCatalog', () => {
+  describe('upsertCatalog', () => {
     it('should create a catalog entry', async () => {
       const dto = { name: 'Welding Class', description: 'Intro class', price: 5000 };
       const expected = factory.classCatalog(dto);
       mocks.classRepository.createCatalog.mockResolvedValue(expected);
 
-      const result = await sut.createCatalog(dto);
+      const result = await sut.upsertCatalog(dto);
 
       expect(mocks.classRepository.createCatalog).toHaveBeenCalledWith(dto);
       expect(result).toEqual(expected);
     });
-  });
 
-  describe('updateCatalog', () => {
     it('should update a catalog by id', async () => {
       const dto = { id: 'cat-1', name: 'Pottery 201', description: 'Advanced', price: 7500 };
       const expected = factory.classCatalog(dto);
       mocks.classRepository.updateCatalog.mockResolvedValue(expected);
 
-      const result = await sut.updateCatalog(dto);
+      const result = await sut.upsertCatalog(dto);
 
       expect(mocks.classRepository.updateCatalog).toHaveBeenCalledWith('cat-1', {
         name: 'Pottery 201',
@@ -76,6 +74,21 @@ describe(ClassService.name, () => {
         price: 7500,
       });
       expect(result).toEqual(expected);
+    });
+
+    it('should upload the photo and store its link on the catalog', async () => {
+      const photo = new File(['data'], 'photo.jpg');
+      const created = factory.classCatalog({ id: 'cat-1' });
+      mocks.classRepository.createCatalog.mockResolvedValue(created);
+      mocks.classRepository.uploadClassPhoto.mockResolvedValue('https://s3/photo.jpg');
+      mocks.classRepository.updateCatalog.mockResolvedValue(created);
+
+      await sut.upsertCatalog({ name: 'Welding', description: 'Intro', price: 0, photo });
+
+      expect(mocks.classRepository.uploadClassPhoto).toHaveBeenCalledWith('cat-1', photo);
+      expect(mocks.classRepository.updateCatalog).toHaveBeenCalledWith('cat-1', {
+        photoUrl: 'https://s3/photo.jpg',
+      });
     });
   });
 
@@ -107,45 +120,45 @@ describe(ClassService.name, () => {
   describe('getActiveCatalogsWithInstances', () => {
     it('should return active catalogs with future instances and booking counts', async () => {
       const catalog = factory.classCatalog({ name: 'Pottery' });
-      mocks.classRepository.getAllCatalogs.mockResolvedValue([catalog]);
-      mocks.classRepository.getInstancesForCatalog.mockResolvedValue([
-        { ...factory.classInstance({ classId: catalog.id, date: '2099-12-01' }), teacher: null },
-        { ...factory.classInstance({ classId: catalog.id, date: '2099-12-08' }), teacher: null },
+      const other = factory.classCatalog({ name: 'Welding' });
+      mocks.classRepository.getAllCatalogs.mockResolvedValue([catalog, other]);
+      mocks.classRepository.getScheduledInstances.mockResolvedValue([
+        {
+          ...factory.classInstance({ id: 'a', classId: catalog.id, date: '2099-12-01' }),
+          teacher: null,
+        },
+        {
+          ...factory.classInstance({ id: 'b', classId: catalog.id, date: '2099-12-08' }),
+          teacher: null,
+        },
+        {
+          ...factory.classInstance({ id: 'c', classId: other.id, date: '2099-12-08' }),
+          teacher: null,
+        },
       ]);
-      mocks.classRepository.getConfirmedBookingCount.mockResolvedValue(3);
+      mocks.classRepository.getConfirmedSeatCounts.mockResolvedValue(new Map([['a', 3]]));
 
       const result = await sut.getActiveCatalogsWithInstances();
 
-      expect(result).toHaveLength(1);
-      expect(result[0].instances).toHaveLength(2);
-      expect(result[0].instances[0].confirmedCount).toBe(3);
+      expect(mocks.classRepository.getConfirmedSeatCounts).toHaveBeenCalledOnce();
+      expect(result).toHaveLength(2);
+      expect(result[0].instances.map((i) => [i.id, i.confirmedCount])).toEqual([
+        ['a', 3],
+        ['b', 0],
+      ]);
+      expect(result[1].instances.map((i) => i.id)).toEqual(['c']);
     });
 
     it('should exclude catalogs with no future instances', async () => {
       mocks.classRepository.getAllCatalogs.mockResolvedValue([factory.classCatalog()]);
-      mocks.classRepository.getInstancesForCatalog.mockResolvedValue([
+      mocks.classRepository.getScheduledInstances.mockResolvedValue([
         { ...factory.classInstance({ date: '2000-01-01' }), teacher: null },
       ]);
+      mocks.classRepository.getConfirmedSeatCounts.mockResolvedValue(new Map());
 
       const result = await sut.getActiveCatalogsWithInstances();
 
       expect(result).toHaveLength(0);
-    });
-  });
-
-  describe('uploadClassPhoto', () => {
-    it('should upload photo and update catalog', async () => {
-      const file = new File(['data'], 'photo.jpg');
-      mocks.classRepository.uploadClassPhoto.mockResolvedValue('https://s3/photo.jpg');
-      mocks.classRepository.updateCatalog.mockResolvedValue(factory.classCatalog());
-
-      const result = await sut.uploadClassPhoto('cat-1', file);
-
-      expect(mocks.classRepository.uploadClassPhoto).toHaveBeenCalledWith('cat-1', file);
-      expect(mocks.classRepository.updateCatalog).toHaveBeenCalledWith('cat-1', {
-        photoUrl: 'https://s3/photo.jpg',
-      });
-      expect(result).toBe('https://s3/photo.jpg');
     });
   });
 
@@ -218,16 +231,6 @@ describe(ClassService.name, () => {
     });
   });
 
-  describe('updateInstance', () => {
-    it('should update instance with only defined fields', async () => {
-      mocks.classRepository.updateInstance.mockResolvedValue(factory.classInstance());
-
-      await sut.updateInstance({ id: 'inst-1', seats: 12, teacherEmail: undefined });
-
-      expect(mocks.classRepository.updateInstance).toHaveBeenCalledWith('inst-1', { seats: 12 });
-    });
-  });
-
   describe('cancelInstance', () => {
     it('should cancel a single instance and refund bookings', async () => {
       const payment = paidPayment(5000);
@@ -238,15 +241,15 @@ describe(ClassService.name, () => {
         bookingWithPayment({ id: 'book-1' }, payment),
         bookingWithPayment({ id: 'book-2' }, null),
       ]);
-      mocks.paymentRepository.refund.mockResolvedValue(true);
+      mocks.paymentGateway.refund.mockResolvedValue(true);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
       mocks.classRepository.updateInstance.mockResolvedValue(factory.classInstance());
 
       const result = await sut.cancelInstance({ instanceId: 'inst-1', mode: 'single' });
 
       expect(result.canceledCount).toBe(1);
-      expect(mocks.paymentRepository.refund).toHaveBeenCalledTimes(1);
-      expect(mocks.paymentRepository.refund).toHaveBeenCalledWith(payment);
+      expect(mocks.paymentGateway.refund).toHaveBeenCalledTimes(1);
+      expect(mocks.paymentGateway.refund).toHaveBeenCalledWith(payment);
       expect(mocks.classRepository.updateBooking).toHaveBeenCalledTimes(2);
       expect(mocks.classRepository.updateInstance).toHaveBeenCalledWith('inst-1', {
         status: 'canceled',
@@ -285,7 +288,7 @@ describe(ClassService.name, () => {
       mocks.classRepository.getConfirmedBookingsForInstance.mockResolvedValue([
         bookingWithPayment({ id: 'book-1' }, paidPayment(5000)),
       ]);
-      mocks.paymentRepository.refund.mockRejectedValue(new Error('Square error'));
+      mocks.paymentGateway.refund.mockRejectedValue(new Error('Square error'));
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
       mocks.classRepository.updateInstance.mockResolvedValue(factory.classInstance());
 
@@ -304,18 +307,44 @@ describe(ClassService.name, () => {
   describe('getAllInstances', () => {
     it('should return instances with confirmed counts', async () => {
       mocks.classRepository.getAllInstances.mockResolvedValue([
-        instanceDetail({}, null),
-        instanceDetail({}, null),
+        instanceDetail({ id: 'a' }, null),
+        instanceDetail({ id: 'b' }, null),
       ]);
-      mocks.classRepository.getConfirmedBookingCount
-        .mockResolvedValueOnce(2)
-        .mockResolvedValueOnce(5);
+      mocks.classRepository.getConfirmedSeatCounts.mockResolvedValue(
+        new Map([
+          ['a', 2],
+          ['b', 5],
+        ]),
+      );
 
       const result = await sut.getAllInstances();
 
       expect(result).toHaveLength(2);
       expect(result[0].confirmedCount).toBe(2);
       expect(result[1].confirmedCount).toBe(5);
+    });
+  });
+
+  describe('getInstancesForCatalog', () => {
+    it('leaves out the teacher email and calendar ids', async () => {
+      const teacher = { name: 'Teacher', picture: 'pic.jpg' };
+      mocks.classRepository.getScheduledInstances.mockResolvedValue([
+        {
+          ...factory.classInstance({
+            id: 'a',
+            teacherEmail: 'teacher@example.com',
+            googleEventId: 'event-1',
+          }),
+          teacher,
+        },
+      ]);
+      mocks.classRepository.getConfirmedSeatCounts.mockResolvedValue(new Map([['a', 4]]));
+
+      const [instance] = await sut.getInstancesForCatalog('cat-1');
+
+      expect(instance).toMatchObject({ id: 'a', teacher, confirmedCount: 4 });
+      expect(instance).not.toHaveProperty('teacherEmail');
+      expect(instance).not.toHaveProperty('googleEventId');
     });
   });
 
@@ -343,7 +372,7 @@ describe(ClassService.name, () => {
   describe('getStaffUsers', () => {
     it('should delegate to repository', async () => {
       const users = [factory.user({ email: 'a@test.com' })];
-      mocks.classRepository.getStaffUsers.mockResolvedValue(users);
+      mocks.userRepository.getAll.mockResolvedValue(users);
 
       const result = await sut.getStaffUsers();
 
@@ -383,8 +412,8 @@ describe(ClassService.name, () => {
       mocks.classRepository.getConfirmedBookingCount.mockResolvedValue(0);
       stubSettings(mocks.settingsRepository, { classSettings: { discordWebhookUrl: '' } });
       mocks.discordRepository.notify.mockResolvedValue(undefined);
-      mocks.paymentRepository.authorize.mockResolvedValue(authorized);
-      mocks.paymentRepository.capture.mockResolvedValue(paidPayment(5000));
+      mocks.paymentGateway.authorize.mockResolvedValue(authorized);
+      mocks.paymentGateway.capture.mockResolvedValue(paidPayment(5000));
       mocks.memberRepository.customerColumns.mockImplementation(async (customer) => ({
         memberId: member.id,
         customerName: customer.customerName,
@@ -392,7 +421,7 @@ describe(ClassService.name, () => {
         customerPhone: customer.customerPhone,
       }));
       mocks.classRepository.createBooking.mockResolvedValue(booking);
-      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
       mocks.classRepository.getBookingById.mockResolvedValue(
         bookingDetail(
           { ...booking, customerName: dto.customerName, customerEmail: dto.customerEmail },
@@ -407,7 +436,7 @@ describe(ClassService.name, () => {
       const result = await sut.bookClass(dto);
 
       expect(result).toEqual(booking);
-      expect(mocks.paymentRepository.authorize).toHaveBeenCalledWith(
+      expect(mocks.paymentGateway.authorize).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'class_booking',
           customer: { name: 'Jane Doe', email: 'jane@test.com' },
@@ -429,7 +458,7 @@ describe(ClassService.name, () => {
         status: 'confirmed',
         quantity: 1,
       });
-      expect(mocks.paymentRepository.capture).toHaveBeenCalledWith(authorized);
+      expect(mocks.paymentGateway.capture).toHaveBeenCalledWith(authorized);
     });
 
     it('should throw when instance not found', async () => {
@@ -461,14 +490,14 @@ describe(ClassService.name, () => {
     });
 
     it('should throw when the card is declined', async () => {
-      mocks.paymentRepository.authorize.mockRejectedValue(new PaymentDeclinedError());
+      mocks.paymentGateway.authorize.mockRejectedValue(new PaymentDeclinedError());
 
       await expect(sut.bookClass(dto)).rejects.toThrow('Payment failed');
       expect(mocks.classRepository.createBooking).not.toHaveBeenCalled();
     });
 
     it('should cancel the booking when the capture fails', async () => {
-      mocks.paymentRepository.capture.mockRejectedValue(new PaymentDeclinedError());
+      mocks.paymentGateway.capture.mockRejectedValue(new PaymentDeclinedError());
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
       await expect(sut.bookClass(dto)).rejects.toThrow('Payment failed');
@@ -482,7 +511,7 @@ describe(ClassService.name, () => {
         .mockResolvedValueOnce(0)
         .mockResolvedValueOnce(11);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
-      mocks.paymentRepository.void.mockResolvedValue(
+      mocks.paymentGateway.void.mockResolvedValue(
         factory.payment({ ...authorized, status: PAYMENT_STATUS.CANCELED }),
       );
 
@@ -490,8 +519,8 @@ describe(ClassService.name, () => {
       expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
         status: 'canceled',
       });
-      expect(mocks.paymentRepository.void).toHaveBeenCalledWith(authorized);
-      expect(mocks.paymentRepository.capture).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.void).toHaveBeenCalledWith(authorized);
+      expect(mocks.paymentGateway.capture).not.toHaveBeenCalled();
     });
   });
 
@@ -501,13 +530,13 @@ describe(ClassService.name, () => {
       mocks.classRepository.getBookingByToken.mockResolvedValue(
         bookingDetail({ id: 'book-1', status: 'confirmed' }, payment),
       );
-      mocks.paymentRepository.refund.mockResolvedValue(true);
+      mocks.paymentGateway.refund.mockResolvedValue(true);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
       const result = await sut.cancelBooking({ bookingToken: 'tok-abc' });
 
       expect(result).toEqual({ success: true });
-      expect(mocks.paymentRepository.refund).toHaveBeenCalledWith(payment);
+      expect(mocks.paymentGateway.refund).toHaveBeenCalledWith(payment);
       expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
         status: 'canceled',
       });
@@ -521,24 +550,23 @@ describe(ClassService.name, () => {
 
       await sut.cancelBooking({ bookingToken: 'tok-abc' });
 
-      expect(mocks.paymentRepository.refund).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.refund).not.toHaveBeenCalled();
       expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
         status: 'canceled',
       });
     });
 
     it('rejects customer cancellation once the class has started', async () => {
-      const started = factory.classInstance({
-        date: DateTime.now().minus({ days: 1 }).toISODate()!,
-      });
+      const instance = factory.classInstance({ date: '2026-10-16', startTime: '10:00' });
+      const justAfterStart = DateTime.fromISO('2026-10-16T10:01', { zone: SPACE_ZONE });
       mocks.classRepository.getBookingByToken.mockResolvedValue(
-        bookingDetail({ status: 'confirmed' }, paidPayment(5000), started),
+        bookingDetail({ status: 'confirmed' }, paidPayment(5000), instance),
       );
 
-      await expect(sut.cancelBooking({ bookingToken: 'tok-abc' })).rejects.toThrow(
+      await expect(sut.cancelBooking({ bookingToken: 'tok-abc' }, justAfterStart)).rejects.toThrow(
         'already started',
       );
-      expect(mocks.paymentRepository.refund).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.refund).not.toHaveBeenCalled();
       expect(mocks.classRepository.updateBooking).not.toHaveBeenCalled();
     });
 
@@ -567,13 +595,13 @@ describe(ClassService.name, () => {
       mocks.classRepository.getBookingById.mockResolvedValue(
         bookingDetail({ id: 'book-1', status: 'confirmed' }, payment),
       );
-      mocks.paymentRepository.refund.mockResolvedValue(true);
+      mocks.paymentGateway.refund.mockResolvedValue(true);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
       const result = await sut.cancelBookingStaff({ bookingId: 'book-1' });
 
       expect(result).toEqual({ success: true });
-      expect(mocks.paymentRepository.refund).toHaveBeenCalledWith(payment);
+      expect(mocks.paymentGateway.refund).toHaveBeenCalledWith(payment);
     });
 
     it('lets staff cancel a class that already started', async () => {
@@ -664,8 +692,8 @@ describe(ClassService.name, () => {
         instanceId: TARGET_ID,
         reminderSentDate: null,
       });
-      expect(mocks.paymentRepository.authorize).not.toHaveBeenCalled();
-      expect(mocks.paymentRepository.refund).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.authorize).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.refund).not.toHaveBeenCalled();
     });
 
     it('should throw when booking not found', async () => {
@@ -692,7 +720,7 @@ describe(ClassService.name, () => {
       stubBooking();
       mocks.classRepository.getInstanceById.mockResolvedValue(null);
 
-      await expect(sut.rescheduleBooking(dto)).rejects.toThrow('Class session not found');
+      await expect(sut.rescheduleBooking(dto)).rejects.toThrow('Class not found');
     });
 
     it('should throw when target belongs to another class', async () => {
@@ -715,9 +743,7 @@ describe(ClassService.name, () => {
       stubBooking();
       stubTarget({ date: DateTime.now().minus({ days: 1 }).toISODate()! });
 
-      await expect(sut.rescheduleBooking(dto)).rejects.toThrow(
-        'Cannot move a booking to a class in the past',
-      );
+      await expect(sut.rescheduleBooking(dto)).rejects.toThrow('Cannot book a class in the past');
     });
 
     it('should throw when customer is already booked in the target session', async () => {
@@ -747,94 +773,82 @@ describe(ClassService.name, () => {
       stubTarget();
       stubCounts(8, 11);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
-      const sendEmail = vi.spyOn(sut, 'sendBookingConfirmationEmail');
-
       await expect(sut.rescheduleBooking(dto)).rejects.toThrow('This class is fully booked');
       expect(mocks.classRepository.updateBooking).toHaveBeenLastCalledWith('book-1', {
         instanceId: SOURCE_ID,
         reminderSentDate,
       });
-      expect(sendEmail).not.toHaveBeenCalled();
+      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
     });
 
     describe('confirmation email', () => {
       beforeEach(() => {
-        stubBooking();
+        mocks.classRepository.getBookingById.mockResolvedValue(
+          bookingDetail(
+            {
+              id: 'book-1',
+              instanceId: SOURCE_ID,
+              customerName: 'Jane Doe',
+              customerEmail: 'jane@test.com',
+              bookingToken: 'tok-abc',
+              passToken: 'pass-abc',
+              quantity: 1,
+            },
+            paidPayment(5000),
+            factory.classInstance({
+              id: SOURCE_ID,
+              classId: CLASS_ID,
+              date: '2099-12-01',
+              startTime: '10:00',
+              durationMinutes: 60,
+            }),
+            factory.classCatalog({ name: 'Welding Class' }),
+          ),
+        );
         stubTarget();
         stubCounts(0, 2);
         mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
       });
 
       it('should resend the confirmation for the moved booking', async () => {
-        const sendEmail = vi.spyOn(sut, 'sendBookingConfirmationEmail').mockResolvedValue();
+        mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
 
         await sut.rescheduleBooking(dto);
 
-        expect(sendEmail).toHaveBeenCalledExactlyOnceWith('book-1');
+        await vi.waitFor(() =>
+          expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledExactlyOnceWith(
+            'jane@test.com',
+            {
+              from: 'Starforge Classes <classes@starforgefoundry.com>',
+              replyTo: 'classes@starforgefoundry.com',
+            },
+            'class_booking',
+            expect.objectContaining({
+              customerName: 'Jane Doe',
+              className: 'Welding Class',
+              quantity: '1',
+              amountPaid: '50.00',
+              bookingUrl: 'https://orion.example.com/classes/booking/tok-abc',
+              passUrl: 'https://orion.example.com/pass/pass-abc',
+              passQrImageUrl: 'https://orion.example.com/api/pass/pass-abc/qr',
+            }),
+          ),
+        );
       });
 
       it('should keep the move when the email fails', async () => {
-        const sendEmail = vi
-          .spyOn(sut, 'sendBookingConfirmationEmail')
-          .mockRejectedValue(new Error('Mailgun down'));
+        mocks.mailgunGateway.sendTemplate.mockRejectedValue(new Error('Mailgun down'));
 
         await expect(sut.rescheduleBooking(dto)).resolves.toMatchObject({
           previousInstanceId: SOURCE_ID,
         });
 
-        expect(sendEmail).toHaveBeenCalledExactlyOnceWith('book-1');
+        await vi.waitFor(() => expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalled());
         expect(mocks.classRepository.updateBooking).toHaveBeenCalledExactlyOnceWith('book-1', {
           instanceId: TARGET_ID,
           reminderSentDate: null,
         });
       });
-    });
-  });
-
-  describe('sendBookingConfirmationEmail', () => {
-    it('should send a confirmation email with correct data', async () => {
-      mocks.classRepository.getBookingById.mockResolvedValue(
-        bookingDetail(
-          {
-            id: 'book-1',
-            customerName: 'Jane Doe',
-            customerEmail: 'jane@test.com',
-            bookingToken: 'tok-abc',
-            passToken: 'pass-abc',
-            quantity: 1,
-          },
-          paidPayment(5000),
-          factory.classInstance({ date: '2099-12-01', startTime: '10:00', durationMinutes: 60 }),
-          factory.classCatalog({ name: 'Welding Class' }),
-        ),
-      );
-      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
-
-      await sut.sendBookingConfirmationEmail('book-1');
-
-      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
-        'jane@test.com',
-        {
-          from: 'Starforge Classes <classes@starforgefoundry.com>',
-          replyTo: 'classes@starforgefoundry.com',
-        },
-        'class_booking',
-        expect.objectContaining({
-          customerName: 'Jane Doe',
-          className: 'Welding Class',
-          quantity: '1',
-          amountPaid: '50.00',
-          bookingUrl: 'https://orion.example.com/classes/booking/tok-abc',
-          passUrl: 'https://orion.example.com/pass/pass-abc',
-          passQrImageUrl: 'https://orion.example.com/api/pass/pass-abc/qr',
-        }),
-      );
-    });
-
-    it('should throw when booking not found', async () => {
-      mocks.classRepository.getBookingById.mockResolvedValue(null);
-
-      await expect(sut.sendBookingConfirmationEmail('bad-id')).rejects.toThrow('Booking not found');
     });
   });
 
@@ -859,7 +873,7 @@ describe(ClassService.name, () => {
     }
 
     beforeEach(() => {
-      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
     });
 
@@ -881,7 +895,7 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledExactlyOnceWith(
+      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledExactlyOnceWith(
         'customer@example.com',
         {
           from: 'Starforge Classes <classes@starforgefoundry.com>',
@@ -909,7 +923,7 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
     });
 
     it('skips bookings made inside the reminder window', async () => {
@@ -919,7 +933,7 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
     });
 
     it('keeps going when one reminder fails', async () => {
@@ -927,7 +941,7 @@ describe(ClassService.name, () => {
         candidate(NOW.plus({ hours: 20 }), NOW.minus({ days: 3 }), 'fails'),
         candidate(NOW.plus({ hours: 21 }), NOW.minus({ days: 3 }), 'sends'),
       ]);
-      mocks.mailgunRepository.sendTemplate.mockRejectedValueOnce(new Error('mailgun down'));
+      mocks.mailgunGateway.sendTemplate.mockRejectedValueOnce(new Error('mailgun down'));
 
       await sut.sendDueReminders(NOW);
 
@@ -941,13 +955,119 @@ describe(ClassService.name, () => {
     });
   });
 
-  describe('getTeacherCalendarLink', () => {
+  describe('getCalendarLinkFor', () => {
     it('returns null when the Google service account is not configured', async () => {
-      const result = await sut.getTeacherCalendarLink(
-        factory.user({ email: 'teacher@test.com', googleCalendarId: null }),
-      );
+      expect(await sut.getCalendarLinkFor('teacher@test.com')).toBeNull();
+    });
 
-      expect(result).toBeNull();
+    it('returns null for someone who is not a staff user', async () => {
+      mocks.googleCalendarRepository.isConfigured.mockReturnValue(true);
+      mocks.userRepository.getByEmail.mockResolvedValue(undefined as never);
+
+      expect(await sut.getCalendarLinkFor('stranger@test.com')).toBeNull();
+    });
+
+    it('links the calendar the teacher already has', async () => {
+      mocks.googleCalendarRepository.isConfigured.mockReturnValue(true);
+      mocks.userRepository.getByEmail.mockResolvedValue(
+        factory.user({ email: 'teacher@test.com', googleCalendarId: 'cal-1' }),
+      );
+      mocks.googleCalendarRepository.buildAddCalendarUrl.mockReturnValue('https://cal/cal-1');
+
+      expect(await sut.getCalendarLinkFor('teacher@test.com')).toBe('https://cal/cal-1');
+      expect(mocks.googleCalendarRepository.createCalendar).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('calendar sync', () => {
+    const TEACHER = 'teacher@test.com';
+    const instance = factory.classInstance({
+      id: 'inst-1',
+      date: '2099-06-15',
+      startTime: '14:00',
+      durationMinutes: 90,
+      seats: 8,
+    });
+    const catalog = factory.classCatalog({ name: 'Welding' });
+    const dto = {
+      classId: instance.classId,
+      teacherEmail: TEACHER,
+      date: instance.date,
+      startTime: instance.startTime,
+      durationMinutes: instance.durationMinutes,
+      seats: instance.seats,
+    };
+
+    function stubInstance(googleCalendarId: string | null, googleEventId: string | null = null) {
+      return {
+        ...instance,
+        googleEventId,
+        catalog,
+        teacher: factory.user({ email: TEACHER, googleCalendarId }),
+      };
+    }
+
+    beforeEach(() => {
+      mocks.googleCalendarRepository.isConfigured.mockReturnValue(true);
+      mocks.classRepository.createInstance.mockResolvedValue(instance);
+      mocks.classRepository.getConfirmedBookingsForInstance.mockResolvedValue([
+        bookingWithPayment({ customerName: 'Ada', customerPhone: '555', quantity: 2 }),
+      ]);
+      mocks.classRepository.setGoogleEventId.mockResolvedValue();
+      mocks.googleCalendarRepository.createEvent.mockResolvedValue('event-1');
+    });
+
+    it('adds an event for a booked class to the teacher calendar', async () => {
+      mocks.classRepository.getInstanceById.mockResolvedValue(stubInstance('cal-1'));
+
+      await sut.createInstance(dto);
+
+      await vi.waitFor(() =>
+        expect(mocks.classRepository.setGoogleEventId).toHaveBeenCalledWith('inst-1', 'event-1'),
+      );
+      expect(mocks.googleCalendarRepository.createEvent).toHaveBeenCalledWith('cal-1', {
+        summary: 'Welding (2 booked)',
+        description: [
+          'Class: Welding',
+          'Number of attendees: 2/8',
+          '',
+          'Attendees:',
+          '- Ada (x2) (555)',
+        ].join('\n'),
+        startDateTime: '2099-06-15T14:00:00-05:00',
+        endDateTime: '2099-06-15T15:30:00-05:00',
+        timeZone: SPACE_ZONE,
+      });
+    });
+
+    it('creates the teacher calendar on first sync without duplicating the event', async () => {
+      mocks.classRepository.getInstanceById
+        .mockResolvedValueOnce(stubInstance(null))
+        .mockResolvedValue(stubInstance('cal-new'));
+      mocks.googleCalendarRepository.createCalendar.mockResolvedValue('cal-new');
+      mocks.userRepository.setGoogleCalendarId.mockResolvedValue();
+      mocks.classRepository.getScheduledInstanceIdsForTeacher.mockResolvedValue(['inst-1']);
+
+      await sut.createInstance(dto);
+
+      await vi.waitFor(() =>
+        expect(mocks.classRepository.setGoogleEventId).toHaveBeenCalledWith('inst-1', 'event-1'),
+      );
+      expect(mocks.userRepository.setGoogleCalendarId).toHaveBeenCalledWith(TEACHER, 'cal-new');
+      expect(mocks.googleCalendarRepository.createEvent).toHaveBeenCalledOnce();
+    });
+
+    it('removes the event once the class has no bookings', async () => {
+      mocks.classRepository.getInstanceById.mockResolvedValue(stubInstance('cal-1', 'event-1'));
+      mocks.classRepository.getConfirmedBookingsForInstance.mockResolvedValue([]);
+      mocks.googleCalendarRepository.deleteEvent.mockResolvedValue();
+
+      await sut.createInstance(dto);
+
+      await vi.waitFor(() =>
+        expect(mocks.classRepository.setGoogleEventId).toHaveBeenCalledWith('inst-1', null),
+      );
+      expect(mocks.googleCalendarRepository.deleteEvent).toHaveBeenCalledWith('cal-1', 'event-1');
     });
   });
 });

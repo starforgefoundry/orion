@@ -13,7 +13,7 @@
   import StatusIndicator from '$lib/frontend/components/StatusIndicator.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
-  import type { PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
+  import type { PrintRequestStatus } from '$lib/utils/print_request';
   import {
     getPrintRequestById,
     getPrintRequestComments,

@@ -1,4 +1,5 @@
-import type { PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
+// Relative imports: the database schema and seed script load this file outside SvelteKit.
+import type { EnumValue } from '../member_enums.ts';
 
 export const PRINT_REQUEST_STATUS = {
   IN_QUEUE: 'in_queue',
@@ -6,7 +7,8 @@ export const PRINT_REQUEST_STATUS = {
   DONE: 'done',
   PICKED_UP: 'picked_up',
   CANCELED: 'canceled',
-} as const satisfies Record<string, PrintRequestStatus>;
+} as const;
+export type PrintRequestStatus = EnumValue<typeof PRINT_REQUEST_STATUS>;
 
 export const BYTES_PER_MB = 1024 * 1024;
 export const MAX_PRINT_REQUEST_FILES = 50;

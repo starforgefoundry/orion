@@ -1,8 +1,5 @@
-import {
-  PaymentDeclinedError,
-  PaymentRepository,
-  type NewPayment,
-} from '$lib/server/repositories/payment.repository';
+import { PaymentDeclinedError, PaymentGateway } from '$lib/server/gateways/payment.gateway';
+import type { NewPayment } from '$lib/server/repositories/payment.repository';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { factory } from '$test/factory';
 import { automock } from '$test/utils';
@@ -22,11 +19,11 @@ describe(bookWithPayment.name, () => {
   const captured = factory.payment({ ...authorized, status: PAYMENT_STATUS.PAID });
   const booking = { id: 'booking-1' };
 
-  let payments: Mocked<PaymentRepository>;
+  let payments: Mocked<PaymentGateway>;
   let steps: Mocked<PaidBookingSteps<typeof booking>>;
 
   beforeEach(() => {
-    payments = automock(PaymentRepository);
+    payments = automock(PaymentGateway);
     payments.authorize.mockResolvedValue(authorized);
     payments.capture.mockResolvedValue(captured);
     payments.void.mockResolvedValue(authorized);

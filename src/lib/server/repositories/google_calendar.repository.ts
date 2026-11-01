@@ -1,10 +1,15 @@
 import { env } from '$env/dynamic/private';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { signGoogleJwt } from '$lib/server/utils/google_auth';
+import { DateTime, Duration } from 'luxon';
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 const SCOPE = 'https://www.googleapis.com/auth/calendar';
+/** Google accepts signed assertions that live up to an hour. */
+const ASSERTION_LIFETIME = Duration.fromObject({ hours: 1 });
+/** Fetch a new token a little early so one never expires mid-request. */
+const TOKEN_REFRESH_MARGIN = Duration.fromObject({ seconds: 30 });
 
 export interface GoogleCalendarEventInput {
   summary: string;
@@ -16,7 +21,7 @@ export interface GoogleCalendarEventInput {
 
 interface TokenCache {
   token: string;
-  expiresAt: number;
+  expiresAt: DateTime;
 }
 
 let tokenCache: TokenCache | null = null;
@@ -40,8 +45,8 @@ export class GoogleCalendarRepository extends BaseRepository {
   }
 
   private async getAccessToken(): Promise<string> {
-    const now = Math.floor(Date.now() / 1000);
-    if (tokenCache && tokenCache.expiresAt - 30 > now) {
+    const now = DateTime.now();
+    if (tokenCache && tokenCache.expiresAt.minus(TOKEN_REFRESH_MARGIN) > now) {
       return tokenCache.token;
     }
 
@@ -49,8 +54,8 @@ export class GoogleCalendarRepository extends BaseRepository {
       iss: this.serviceAccountEmail,
       scope: SCOPE,
       aud: GOOGLE_TOKEN_URL,
-      iat: now,
-      exp: now + 3600,
+      iat: now.toUnixInteger(),
+      exp: now.plus(ASSERTION_LIFETIME).toUnixInteger(),
     };
 
     const jwt = signGoogleJwt(claims, this.privateKeyPem);
@@ -72,7 +77,7 @@ export class GoogleCalendarRepository extends BaseRepository {
     const body = (await res.json()) as { access_token: string; expires_in: number };
     tokenCache = {
       token: body.access_token,
-      expiresAt: now + body.expires_in,
+      expiresAt: now.plus({ seconds: body.expires_in }),
     };
     return body.access_token;
   }
@@ -112,7 +117,7 @@ export class GoogleCalendarRepository extends BaseRepository {
     return body.id;
   }
 
-  async makeCalendarPublic(calendarId: string): Promise<void> {
+  private async makeCalendarPublic(calendarId: string): Promise<void> {
     const res = await this.apiRequest(`/calendars/${encodeURIComponent(calendarId)}/acl`, {
       method: 'POST',
       body: JSON.stringify({

@@ -1,4 +1,6 @@
 import type { Payment, PrintMaterial, PrintRequest, PrintRequestFile } from '$lib/server/db/schema';
+import { enumValues } from '$lib/member_enums';
+import { PRINT_REQUEST_STATUS } from '$lib/utils/print_request';
 import * as v from 'valibot';
 
 export const printRequestFileDto = v.object({
@@ -45,13 +47,7 @@ export const updatePrintRequestDiscountDto = v.object({
 export type UpdatePrintRequestDiscountDto = v.InferInput<typeof updatePrintRequestDiscountDto>;
 
 export const updatePrintRequestStatusDto = v.object({
-  status: v.union([
-    v.literal('in_queue'),
-    v.literal('printing'),
-    v.literal('done'),
-    v.literal('picked_up'),
-    v.literal('canceled'),
-  ]),
+  status: v.picklist(enumValues(PRINT_REQUEST_STATUS)),
 });
 
 export type UpdatePrintRequestStatusDto = v.InferInput<typeof updatePrintRequestStatusDto>;
@@ -111,5 +107,3 @@ export type PrintRequestDto = Omit<PrintRequest, 'material'> & {
   material: PrintMaterial;
   files: PrintRequestFile[];
 };
-
-export type PrintRequestStatus = PrintRequestDto['status'];

@@ -1,11 +1,12 @@
-import type { PrintRequestFileDto } from '$lib/remotes/dtos/print_request.dto';
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { fileUrl, openFile, saveFile } from '$lib/server/utils/storage';
 import { eq } from 'drizzle-orm';
 
+export type UploadedPrintFile = { file: File; filename: string; quantity: number };
+
 export class PrintFilesRepository extends BaseRepository {
-  async uploadFiles(printRequestId: string, files: Array<PrintRequestFileDto>) {
+  async uploadFiles(printRequestId: string, files: UploadedPrintFile[]) {
     if (files.length === 0) return;
 
     const fileUploads = [];
@@ -30,15 +31,6 @@ export class PrintFilesRepository extends BaseRepository {
       .select()
       .from(schema.printRequestFile)
       .where(eq(schema.printRequestFile.printRequestId, id));
-
-    return files.map((file) => ({ ...file, fileUrl: fileUrl(file.fileUrl) }));
-  }
-
-  async getByPrintRequestId(printRequestId: string) {
-    const files = await this.db
-      .select()
-      .from(schema.printRequestFile)
-      .where(eq(schema.printRequestFile.printRequestId, printRequestId));
 
     return files.map((file) => ({ ...file, fileUrl: fileUrl(file.fileUrl) }));
   }

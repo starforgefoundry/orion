@@ -1,17 +1,25 @@
-import type { SubmitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
 import { schema, type Waiver } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { fileUrl, saveFile } from '$lib/server/utils/storage';
+import { spaceDate } from '$lib/space';
 import { asc, count, desc, eq, ilike, or } from 'drizzle-orm';
+import { DateTime } from 'luxon';
+
+export type NewWaiver = Pick<Waiver, 'name' | 'email' | 'isAdult'> & { signature: File };
+
+/** Named by the signer and the day they signed at the space. */
+export function signatureKey(name: string, waiverId: string, signedAt: DateTime) {
+  const sanitizedName = name.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `waivers/${sanitizedName}_${spaceDate(signedAt)}_${waiverId}`;
+}
 
 export class WaiverRepository extends BaseRepository {
-  async submit(dto: SubmitWaiverDto, memberId: string, source: Waiver['source'] = 'web') {
+  async submit(dto: NewWaiver, memberId: string, source: Waiver['source']) {
     const waiverId = crypto.randomUUID();
-    const sanitizedName = dto.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const dateStr = new Date().toISOString().split('T')[0];
-    const filename = `waivers/${sanitizedName}_${dateStr}_${waiverId}`;
-
-    const signatureUrl = await saveFile(dto.signature, filename);
+    const signatureUrl = await saveFile(
+      dto.signature,
+      signatureKey(dto.name, waiverId, DateTime.now()),
+    );
 
     const [waiver] = await this.db
       .insert(schema.waiver)

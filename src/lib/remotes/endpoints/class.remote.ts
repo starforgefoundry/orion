@@ -10,7 +10,6 @@ import {
   generateInstancesDto,
   manualBookClassDto,
   rescheduleBookingDto,
-  updateInstanceDto,
   upsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
 import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
@@ -38,19 +37,7 @@ export const upsertCatalogForm = form(
   upsertCatalogDto,
   exposeUserErrors(async (dto) => {
     verifyAuth();
-    const { photo, id, ...fields } = dto;
-
-    let result;
-    if (id) {
-      result = await classService.updateCatalog({ id, ...fields });
-    } else {
-      result = await classService.createCatalog(fields);
-    }
-
-    if (photo) {
-      await classService.uploadClassPhoto(result.id, photo);
-    }
-
+    const result = await classService.upsertCatalog(dto);
     await getCatalogs().refresh();
     return result;
   }),
@@ -89,17 +76,6 @@ export const createInstance = command(
     verifyAuth();
     const result = await classService.createInstance(dto);
     await getAllInstances().refresh();
-    return result;
-  }),
-);
-
-export const updateInstance = command(
-  updateInstanceDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-    const result = await classService.updateInstance(dto);
-    await getAllInstances().refresh();
-    await getInstanceDetail(dto.id).refresh();
     return result;
   }),
 );
@@ -157,10 +133,7 @@ export const getStaffUsers = query(
 export const getMyCalendarLink = query(
   exposeUserErrors(async () => {
     const authUser = verifyAuth();
-    const users = await classService.getStaffUsers();
-    const teacher = users.find((u) => u.email === authUser.email);
-    if (!teacher) return null;
-    return await classService.getTeacherCalendarLink(teacher);
+    return await classService.getCalendarLinkFor(authUser.email);
   }),
 );
 

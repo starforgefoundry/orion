@@ -1,9 +1,9 @@
-import { MailgunRepository } from '$lib/server/repositories/mailgun.repository';
+import { MailgunGateway } from '$lib/server/gateways/mailgun.gateway';
 import { MemberEmailRepository } from '$lib/server/repositories/member_email.repository';
 import { factory } from '$test/factory';
 import { automock } from '$test/utils';
 import { describe, expect, it } from 'vitest';
-import { MemberNotificationRepository } from './member_notification.repository';
+import { MemberNotificationGateway } from './member_notification.gateway';
 
 const MEMBER = factory.member({
   id: 'member-1',
@@ -13,15 +13,15 @@ const MEMBER = factory.member({
 });
 
 function setup() {
-  const mailgun = automock(MailgunRepository);
+  const mailgun = automock(MailgunGateway);
   const memberEmail = automock(MemberEmailRepository);
   mailgun.sendTemplate.mockResolvedValue(undefined as never);
   memberEmail.log.mockResolvedValue(factory.memberEmail());
-  const repository = new MemberNotificationRepository(mailgun, memberEmail);
+  const repository = new MemberNotificationGateway(mailgun, memberEmail);
   return { mailgun, memberEmail, repository };
 }
 
-describe('MemberNotificationRepository.sendOnboarding', () => {
+describe('MemberNotificationGateway.sendOnboarding', () => {
   it('emails the onboarding link and logs the send', async () => {
     const { mailgun, memberEmail, repository } = setup();
 
@@ -68,7 +68,7 @@ describe('MemberNotificationRepository.sendOnboarding', () => {
   });
 });
 
-describe('MemberNotificationRepository.sendDayPass', () => {
+describe('MemberNotificationGateway.sendDayPass', () => {
   it('emails the day pass QR code and logs the send', async () => {
     const { mailgun, memberEmail, repository } = setup();
 

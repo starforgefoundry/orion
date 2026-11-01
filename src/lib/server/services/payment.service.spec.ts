@@ -24,7 +24,7 @@ describe(PaymentService.name, () => {
   beforeEach(() => {
     ({ sut, mocks } = newTestService(PaymentService));
     mocks.paymentRepository.getById.mockResolvedValue(storedPayment());
-    mocks.paymentRepository.pay.mockImplementation(async (payment) => ({
+    mocks.paymentGateway.pay.mockImplementation(async (payment) => ({
       ...payment,
       status: PAYMENT_STATUS.PAID,
     }));
@@ -73,6 +73,6 @@ describe(PaymentService.name, () => {
     await expect(sut.pay({ id: PAYMENT_ID, sourceId: 'card-token' })).rejects.toThrow(
       PaymentStateError,
     );
-    expect(mocks.paymentRepository.pay).not.toHaveBeenCalled();
+    expect(mocks.paymentGateway.pay).not.toHaveBeenCalled();
   });
 });

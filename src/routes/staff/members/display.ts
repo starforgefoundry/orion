@@ -1,5 +1,5 @@
 import type { Tone } from '$lib/frontend/components/StatusBadge.svelte';
-import type { OnboardingFilter, WaiverFilter } from '$lib/remotes/dtos/member.dto';
+import type { OnboardingFilter, WaiverFilter } from '$lib/member_enums';
 import type { MemberEmail, MemberSubscription, Visit } from '$lib/server/db/schema';
 import { DateTime } from 'luxon';
 

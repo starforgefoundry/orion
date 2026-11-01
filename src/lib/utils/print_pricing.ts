@@ -1,4 +1,5 @@
-import { buildBill, type Bill, type BillingLineItem } from '$lib/utils/billing';
+// Relative imports: the database schema and seed script load this file outside SvelteKit.
+import { buildBill, type Bill, type BillingLineItem } from './billing.ts';
 
 const MATERIAL_LINE_ITEM = '3D Print Material';
 

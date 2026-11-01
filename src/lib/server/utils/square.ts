@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import type { MemberSubscription } from '$lib/server/db/schema';
 import type { BillingDiscount, BillingLineItem } from '$lib/utils/billing';
-import type { Customer, Order, SubscriptionStatus } from 'square';
+import { WebhooksHelper, type Customer, type Order, type SubscriptionStatus } from 'square';
 
 const SQUARE_PRODUCTION_API_URL = 'https://connect.squareup.com';
 const SQUARE_SANDBOX_API_URL = 'https://connect.squareupsandbox.com';
@@ -10,6 +10,8 @@ const SQUARE_SANDBOX_WEB_SDK_URL = 'https://sandbox.web.squarecdn.com/v1/square.
 const SQUARE_WEBHOOK_PATH = '/api/square/webhook';
 
 export const SQUARE_CURRENCY = 'USD';
+
+export const SQUARE_PAYMENT_STATUS = { APPROVED: 'APPROVED', COMPLETED: 'COMPLETED' } as const;
 
 export function squareApiUrl() {
   return env.SQUARE_URL || SQUARE_PRODUCTION_API_URL;
@@ -26,18 +28,20 @@ export function squareWebhookUrl() {
   return `${env.FRONTEND_URL}${SQUARE_WEBHOOK_PATH}`;
 }
 
-export type SquareWebhook<T> = {
-  merchant_id: string;
-  location_id: string;
-  type: string;
-  event_id: string;
-  created_at: string;
-  data: {
-    type: string;
-    id: string;
-    object: T;
-  };
-};
+export const SQUARE_SIGNATURE_HEADER = 'x-square-hmacsha256-signature';
+
+/** The parts of a Square webhook notification Orion reads. */
+export type SquareWebhook = { event_id: string; type: string; data: { id: string } };
+
+export async function isSquareSignatureValid(body: string, signature: string | null) {
+  if (!signature) return false;
+  return await WebhooksHelper.verifySignature({
+    requestBody: body,
+    signatureHeader: signature,
+    signatureKey: env.SQUARE_WEBHOOK_SIGNATURE_KEY!,
+    notificationUrl: squareWebhookUrl(),
+  });
+}
 
 const SUBSCRIPTION_STATUS_MAP: Record<SubscriptionStatus, MemberSubscription['status']> = {
   PENDING: 'pending',

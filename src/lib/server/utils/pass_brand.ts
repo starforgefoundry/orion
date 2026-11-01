@@ -1,5 +1,5 @@
 import type { Member } from '$lib/server/db/schema';
-import { SPACE_ZONE } from '$lib/server/utils/member_access';
+import { SPACE_ZONE } from '$lib/space';
 
 type Rgb = [number, number, number];
 

@@ -64,7 +64,7 @@ describe(PrintPaymentService.name, () => {
     mocks.printRequestRepository.update.mockResolvedValue([]);
     mocks.billingCodeRepository.getByCode.mockResolvedValue(undefined as never);
     mocks.memberRepository.hasMembership.mockResolvedValue(false);
-    mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
+    mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
     mocks.squareRepository.cancelInvoice.mockResolvedValue(undefined as never);
     mocks.paymentRepository.save.mockImplementation(async (data, id) =>
       factory.payment({
@@ -81,7 +81,7 @@ describe(PrintPaymentService.name, () => {
       ...quote,
       status: PAYMENT_STATUS.PENDING,
     }));
-    mocks.paymentRepository.pay.mockImplementation(async (pending) => ({
+    mocks.paymentGateway.pay.mockImplementation(async (pending) => ({
       ...pending,
       status: PAYMENT_STATUS.PAID,
     }));
@@ -105,7 +105,6 @@ describe(PrintPaymentService.name, () => {
         type: PAYMENT_TYPE.PRINT_REQUEST,
         status: PAYMENT_STATUS.PENDING,
         customer: { name: 'Jane Doe', email: 'jane@example.com' },
-        paymentUrl: STATUS_URL,
         bill: {
           lineItems: [
             { name: '3D Print Material', description: 'PLA', quantity: 1, unitAmount: 700 },
@@ -125,7 +124,7 @@ describe(PrintPaymentService.name, () => {
     it('emails the customer a link to pay', async () => {
       await sut.upsertPayment(dto);
 
-      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         expect.objectContaining({ replyTo: PRINT_EMAIL }),
         'print_payment',
@@ -155,7 +154,7 @@ describe(PrintPaymentService.name, () => {
       await sut.upsertPayment(dto);
 
       expect(savedPayment().status).toBe(PAYMENT_STATUS.QUOTE);
-      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         expect.anything(),
         'print_quote',
@@ -183,16 +182,15 @@ describe(PrintPaymentService.name, () => {
 
       expect(savedPayment()).toMatchObject({
         organizationId: ORGANIZATION.id,
-        paymentUrl: null,
         bill: { discounts: [], total: 1200 },
       });
-      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
     });
 
     it('does not ask for a card when nothing is owed', async () => {
       await sut.upsertPayment({ ...dto, materialCost: 0, buildPlates: 1 });
 
-      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
     });
 
     it('cancels the Square invoice of a payment made before Orion billing', async () => {
@@ -262,7 +260,7 @@ describe(PrintPaymentService.name, () => {
       mocks.printRequestRepository.getById.mockResolvedValue(
         printRequest({ isQuote: true, payment: payment({ status: PAYMENT_STATUS.QUOTE }) }),
       );
-      mocks.paymentRepository.cancel.mockResolvedValue(undefined as never);
+      mocks.paymentGateway.cancel.mockResolvedValue(undefined as never);
       mocks.discordRepository.notify.mockResolvedValue(undefined as never);
     });
 
@@ -288,7 +286,7 @@ describe(PrintPaymentService.name, () => {
     it('cancels the request and its quote when the customer declines', async () => {
       await sut.respondToQuote({ id: REQUEST_ID, approve: false });
 
-      expect(mocks.paymentRepository.cancel).toHaveBeenCalledWith(
+      expect(mocks.paymentGateway.cancel).toHaveBeenCalledWith(
         expect.objectContaining({ id: PAYMENT_ID }),
       );
       expect(mocks.printRequestRepository.update).toHaveBeenCalledWith(REQUEST_ID, {
@@ -315,7 +313,7 @@ describe(PrintPaymentService.name, () => {
 
       await sut.payPrintRequest({ id: REQUEST_ID, sourceId: 'cnon:ok' });
 
-      expect(mocks.paymentRepository.pay).toHaveBeenCalledWith(
+      expect(mocks.paymentGateway.pay).toHaveBeenCalledWith(
         expect.objectContaining({ id: PAYMENT_ID }),
         'cnon:ok',
       );
@@ -332,7 +330,7 @@ describe(PrintPaymentService.name, () => {
       await expect(sut.payPrintRequest({ id: REQUEST_ID, sourceId: 'cnon:ok' })).rejects.toThrow(
         PrintPaymentError,
       );
-      expect(mocks.paymentRepository.pay).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.pay).not.toHaveBeenCalled();
     });
   });
 });

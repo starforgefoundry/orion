@@ -1,12 +1,12 @@
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
-import type { PrintRequestDto, PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
+import type { PrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
 import {
   getPrintRequestById,
   getPrintRequests,
   sendPickupNotification,
   updatePrintRequestStatus,
 } from '$lib/remotes/endpoints/print_request.remote';
-import { PRINT_REQUEST_STATUS } from '$lib/utils/print_request';
+import { PRINT_REQUEST_STATUS, type PrintRequestStatus } from '$lib/utils/print_request';
 import { toast } from 'svelte-sonner';
 
 export const STATUS = PRINT_REQUEST_STATUS;

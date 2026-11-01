@@ -2,7 +2,7 @@ import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { fileUrl, saveFile } from '$lib/server/utils/storage';
 import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '$lib/utils/classes';
-import { and, eq, gte, isNull, lte, sum, type InferInsertModel } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte, sum, type InferInsertModel } from 'drizzle-orm';
 
 function withPhotoUrl<T extends { photoUrl: string | null }>(catalog: T): T {
   return { ...catalog, photoUrl: fileUrl(catalog.photoUrl) };
@@ -34,11 +34,6 @@ export class ClassRepository extends BaseRepository {
   }
 
   async getAllCatalogs() {
-    const catalogs = await this.db.select().from(schema.classCatalog);
-    return catalogs.map(withPhotoUrl);
-  }
-
-  async getActiveCatalogs() {
     const catalogs = await this.db.select().from(schema.classCatalog);
     return catalogs.map(withPhotoUrl);
   }
@@ -92,12 +87,10 @@ export class ClassRepository extends BaseRepository {
   }
 
   /**
-   * Returns scheduled instances for a catalog alongside only the non-sensitive
-   * teacher fields (name + picture). Intended for public-facing endpoints —
-   * staff-only queries should use `getAllInstances` which returns the full
-   * user row.
+   * Scheduled instances, of one catalog when given, with only the teacher's public fields.
+   * Staff queries should use `getAllInstances`, which returns the full user row.
    */
-  async getInstancesForCatalog(classId: string) {
+  async getScheduledInstances(classId?: string) {
     const results = await this.db
       .select({
         instance: schema.classInstance,
@@ -107,8 +100,8 @@ export class ClassRepository extends BaseRepository {
       .from(schema.classInstance)
       .where(
         and(
-          eq(schema.classInstance.classId, classId),
-          eq(schema.classInstance.status, 'scheduled'),
+          classId === undefined ? undefined : eq(schema.classInstance.classId, classId),
+          eq(schema.classInstance.status, CLASS_INSTANCE_STATUS.SCHEDULED),
         ),
       )
       .leftJoin(schema.user, eq(schema.classInstance.teacherEmail, schema.user.email));
@@ -144,7 +137,7 @@ export class ClassRepository extends BaseRepository {
         and(
           eq(schema.classInstance.recurrenceGroupId, recurrenceGroupId),
           gte(schema.classInstance.date, fromDate),
-          eq(schema.classInstance.status, 'scheduled'),
+          eq(schema.classInstance.status, CLASS_INSTANCE_STATUS.SCHEDULED),
         ),
       );
   }
@@ -221,7 +214,7 @@ export class ClassRepository extends BaseRepository {
     const rows = await this.selectBookingsWithPayment().where(
       and(
         eq(schema.classBooking.instanceId, instanceId),
-        eq(schema.classBooking.status, 'confirmed'),
+        eq(schema.classBooking.status, CLASS_BOOKING_STATUS.CONFIRMED),
       ),
     );
     return rows.map(({ booking, payment }) => ({ ...booking, payment }));
@@ -249,6 +242,26 @@ export class ClassRepository extends BaseRepository {
       );
   }
 
+  /** Confirmed seats per instance id; instances with no bookings are left out. */
+  async getConfirmedSeatCounts(instanceIds: string[]): Promise<Map<string, number>> {
+    if (instanceIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .select({
+        instanceId: schema.classBooking.instanceId,
+        total: sum(schema.classBooking.quantity),
+      })
+      .from(schema.classBooking)
+      .where(
+        and(
+          inArray(schema.classBooking.instanceId, instanceIds),
+          eq(schema.classBooking.status, CLASS_BOOKING_STATUS.CONFIRMED),
+        ),
+      )
+      .groupBy(schema.classBooking.instanceId);
+    return new Map(rows.map((row) => [row.instanceId, Number(row.total ?? 0)]));
+  }
+
   async getConfirmedBookingCount(instanceId: string): Promise<number> {
     const [result] = await this.db
       .select({ total: sum(schema.classBooking.quantity) })
@@ -256,20 +269,13 @@ export class ClassRepository extends BaseRepository {
       .where(
         and(
           eq(schema.classBooking.instanceId, instanceId),
-          eq(schema.classBooking.status, 'confirmed'),
+          eq(schema.classBooking.status, CLASS_BOOKING_STATUS.CONFIRMED),
         ),
       );
     return Number(result?.total ?? 0);
   }
 
   // ── Teacher / Google Calendar ──
-
-  async setGoogleCalendarId(email: string, calendarId: string) {
-    await this.db
-      .update(schema.user)
-      .set({ googleCalendarId: calendarId })
-      .where(eq(schema.user.email, email));
-  }
 
   async setGoogleEventId(instanceId: string, eventId: string | null) {
     await this.db
@@ -285,15 +291,11 @@ export class ClassRepository extends BaseRepository {
       .where(
         and(
           eq(schema.classInstance.teacherEmail, teacherEmail),
-          eq(schema.classInstance.status, 'scheduled'),
+          eq(schema.classInstance.status, CLASS_INSTANCE_STATUS.SCHEDULED),
         ),
       );
     return rows.map((r) => r.id);
   }
 
   // ── Staff ──
-
-  async getStaffUsers() {
-    return await this.db.select().from(schema.user);
-  }
 }

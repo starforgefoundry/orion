@@ -1,6 +1,5 @@
 import type { BillingCode, Organization } from '$lib/server/db/schema';
 import {
-  BILLING_CODE_NOT_FOUND,
   BillingCodeService,
   BillingCodeTakenError,
 } from '$lib/server/services/billing_code.service';
@@ -48,31 +47,11 @@ describe(BillingCodeService.name, () => {
   });
 
   it('reports no organization name for a code whose organization is gone', async () => {
-    mocks.billingCodeRepository.getById.mockResolvedValue(codeRow({ organizationId: null }, null));
+    mocks.billingCodeRepository.getAll.mockResolvedValue([codeRow({ organizationId: null }, null)]);
 
-    const code = await sut.getBillingCodeById('code-1');
+    const [code] = await sut.getBillingCodes();
 
     expect(code.organizationName).toBeNull();
-  });
-
-  it('throws when a code id does not exist', async () => {
-    mocks.billingCodeRepository.getById.mockResolvedValue(undefined as never);
-
-    await expect(sut.getBillingCodeById('missing')).rejects.toThrow(BILLING_CODE_NOT_FOUND);
-  });
-
-  it('looks a code up by its text', async () => {
-    mocks.billingCodeRepository.getByCode.mockResolvedValue(codeRow());
-
-    expect(await sut.getBillingCodeByCode('engclub')).toEqual(
-      expect.objectContaining({ code: 'ENGCLUB', organizationName: 'Engineering Club' }),
-    );
-  });
-
-  it('returns null for an unknown code', async () => {
-    mocks.billingCodeRepository.getByCode.mockResolvedValue(undefined as never);
-
-    expect(await sut.getBillingCodeByCode('NOPE')).toBeNull();
   });
 
   it('creates a code for an organization', async () => {
@@ -119,13 +98,5 @@ describe(BillingCodeService.name, () => {
 
     expect(mocks.billingCodeRepository.update).toHaveBeenCalledWith('code-1', { archived: true });
     expect(updated.archived).toBe(true);
-  });
-
-  it('deletes a code', async () => {
-    mocks.billingCodeRepository.delete.mockResolvedValue();
-
-    await sut.deleteBillingCode('code-1');
-
-    expect(mocks.billingCodeRepository.delete).toHaveBeenCalledWith('code-1');
   });
 });

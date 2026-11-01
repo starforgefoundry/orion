@@ -39,7 +39,7 @@ describe(PrintRequestService.name, () => {
       mocks.printRequestRepository.getById.mockResolvedValue(
         factory.printRequestDetail({ id: printRequest.id }),
       );
-      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined);
+      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined);
       stubSettings(mocks.settingsRepository, printRequestSettings(''));
     }
 
@@ -69,7 +69,7 @@ describe(PrintRequestService.name, () => {
         printRequest.id,
         dto.files,
       );
-      expect(result).toEqual({ status: 'success', printRequestId: printRequest.id });
+      expect(result).toEqual({ printRequestId: printRequest.id });
     });
 
     it('should handle quote requests correctly', async () => {
@@ -130,7 +130,25 @@ describe(PrintRequestService.name, () => {
     });
   });
 
-  describe('sendDiscordNotification', () => {
+  describe('discord notification on submit', () => {
+    const dto: SubmitPrintRequestDto = {
+      customer: { name: 'John Doe', email: 'john@example.com' },
+      projectName: 'Test Project',
+      material: 'mat-1',
+      files: [{ file: new File(['data'], 'part.stl'), filename: 'part.stl', quantity: 1 }],
+    };
+
+    function stubSubmission(request: PrintRequestDetail) {
+      mocks.printRequestRepository.submit.mockResolvedValue(
+        factory.printRequest({ id: request.id }),
+      );
+      mocks.printFilesRepository.uploadFiles.mockResolvedValue(undefined);
+      mocks.printRequestRepository.getById.mockResolvedValue(request);
+      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined);
+      stubSettings(mocks.settingsRepository, printRequestSettings(WEBHOOK_URL));
+      mocks.discordRepository.notify.mockResolvedValue(undefined);
+    }
+
     it('should send Discord webhook notification with correct data', async () => {
       const request = factory.printRequestDetail({
         customerName: 'John Doe',
@@ -138,64 +156,52 @@ describe(PrintRequestService.name, () => {
         projectName: 'Test Project',
         specialRequests: 'Handle with care',
       });
-      mocks.printRequestRepository.getById.mockResolvedValue(request);
-      stubSettings(mocks.settingsRepository, printRequestSettings(WEBHOOK_URL));
-      mocks.discordRepository.notify.mockResolvedValue(undefined);
+      stubSubmission(request);
 
-      await sut.sendDiscordNotification(request.id);
+      await sut.submitPrintRequest(dto);
 
-      expect(mocks.printRequestRepository.getById).toHaveBeenCalledWith(request.id);
-      expect(mocks.settingsRepository.getSetting).toHaveBeenCalledWith('printRequest');
-      expect(mocks.discordRepository.notify).toHaveBeenCalledWith(
-        WEBHOOK_URL,
-        expect.objectContaining({
-          content: expect.stringContaining(
-            `(https://orion.example.com/staff/print_requests/queue?id=${request.id})`,
-          ),
-          embeds: expect.arrayContaining([
-            expect.objectContaining({
-              title: '🖨️ New Print Request Submitted',
-              fields: expect.arrayContaining([
-                expect.objectContaining({ name: 'Project Name', value: 'Test Project' }),
-                expect.objectContaining({ name: 'Customer', value: 'John Doe' }),
-                expect.objectContaining({ name: 'Email', value: 'john@example.com' }),
-                expect.objectContaining({ name: 'Special Requests', value: 'Handle with care' }),
-              ]),
-            }),
-          ]),
-        }),
+      await vi.waitFor(() =>
+        expect(mocks.discordRepository.notify).toHaveBeenCalledWith(
+          WEBHOOK_URL,
+          expect.objectContaining({
+            content: expect.stringContaining(
+              `(https://orion.example.com/staff/print_requests/queue?id=${request.id})`,
+            ),
+            embeds: expect.arrayContaining([
+              expect.objectContaining({
+                title: '🖨️ New Print Request Submitted',
+                fields: expect.arrayContaining([
+                  expect.objectContaining({ name: 'Project Name', value: 'Test Project' }),
+                  expect.objectContaining({ name: 'Customer', value: 'John Doe' }),
+                  expect.objectContaining({ name: 'Email', value: 'john@example.com' }),
+                  expect.objectContaining({ name: 'Special Requests', value: 'Handle with care' }),
+                ]),
+              }),
+            ]),
+          }),
+        ),
       );
     });
 
     it('should not include special requests field when empty', async () => {
-      const request = factory.printRequestDetail({ specialRequests: '' });
-      mocks.printRequestRepository.getById.mockResolvedValue(request);
-      stubSettings(mocks.settingsRepository, printRequestSettings(WEBHOOK_URL));
-      mocks.discordRepository.notify.mockResolvedValue(undefined);
+      stubSubmission(factory.printRequestDetail({ specialRequests: '' }));
 
-      await sut.sendDiscordNotification(request.id);
+      await sut.submitPrintRequest(dto);
 
-      expect(mocks.discordRepository.notify).toHaveBeenCalledWith(
-        WEBHOOK_URL,
-        expect.objectContaining({
-          embeds: expect.arrayContaining([
-            expect.objectContaining({
-              fields: expect.not.arrayContaining([
-                expect.objectContaining({ name: 'Special Requests' }),
-              ]),
-            }),
-          ]),
-        }),
+      await vi.waitFor(() =>
+        expect(mocks.discordRepository.notify).toHaveBeenCalledWith(
+          WEBHOOK_URL,
+          expect.objectContaining({
+            embeds: expect.arrayContaining([
+              expect.objectContaining({
+                fields: expect.not.arrayContaining([
+                  expect.objectContaining({ name: 'Special Requests' }),
+                ]),
+              }),
+            ]),
+          }),
+        ),
       );
-    });
-
-    it('should throw error when request not found', async () => {
-      mocks.printRequestRepository.getById.mockResolvedValue(undefined);
-
-      await expect(sut.sendDiscordNotification('nonexistent')).rejects.toThrow(
-        'Print request not found',
-      );
-      expect(mocks.discordRepository.notify).not.toHaveBeenCalled();
     });
   });
 
@@ -259,52 +265,6 @@ describe(PrintRequestService.name, () => {
 
       expect(mocks.printRequestRepository.update).toHaveBeenCalledWith('request-789', updates);
       expect(result).toEqual(updated);
-    });
-  });
-
-  describe('getFilesByRequestId', () => {
-    it('should call repository with correct print request ID', async () => {
-      const files = [
-        factory.printRequestFile({ printRequestId: 'request-123', quantity: 2 }),
-        factory.printRequestFile({ printRequestId: 'request-123', quantity: 1 }),
-      ];
-      mocks.printFilesRepository.getByPrintRequestId.mockResolvedValue(files);
-
-      const result = await sut.getFilesByRequestId('request-123');
-
-      expect(mocks.printFilesRepository.getByPrintRequestId).toHaveBeenCalledWith('request-123');
-      expect(result).toEqual(files);
-    });
-
-    it('should return empty array when no files exist for request', async () => {
-      mocks.printFilesRepository.getByPrintRequestId.mockResolvedValue([]);
-
-      const result = await sut.getFilesByRequestId('request-456');
-
-      expect(mocks.printFilesRepository.getByPrintRequestId).toHaveBeenCalledWith('request-456');
-      expect(result).toEqual([]);
-    });
-
-    it('should handle different request IDs correctly', async () => {
-      const files1 = [factory.printRequestFile({ printRequestId: 'request-111' })];
-      const files2 = [factory.printRequestFile({ printRequestId: 'request-222' })];
-      mocks.printFilesRepository.getByPrintRequestId
-        .mockResolvedValueOnce(files1)
-        .mockResolvedValueOnce(files2);
-
-      const result1 = await sut.getFilesByRequestId('request-111');
-      const result2 = await sut.getFilesByRequestId('request-222');
-
-      expect(mocks.printFilesRepository.getByPrintRequestId).toHaveBeenNthCalledWith(
-        1,
-        'request-111',
-      );
-      expect(mocks.printFilesRepository.getByPrintRequestId).toHaveBeenNthCalledWith(
-        2,
-        'request-222',
-      );
-      expect(result1).toEqual(files1);
-      expect(result2).toEqual(files2);
     });
   });
 
@@ -396,12 +356,12 @@ describe(PrintRequestService.name, () => {
         projectName: 'Completed Project',
       });
       mocks.printRequestRepository.getById.mockResolvedValue(request);
-      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined);
+      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined);
 
       await sut.sendPickupNotification(request.id);
 
       expect(mocks.printRequestRepository.getById).toHaveBeenCalledWith(request.id);
-      expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
         'customer@example.com',
         expect.objectContaining({ from: expect.stringContaining('Starforge 3D Prints') }),
         'print_pickup',
@@ -423,11 +383,11 @@ describe(PrintRequestService.name, () => {
       const updated = [factory.printRequest({ id: request.id })];
       mocks.printRequestRepository.getById.mockResolvedValue(request);
       mocks.printRequestRepository.update.mockResolvedValue(updated);
-      mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined);
+      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined);
       if (payment) {
         mocks.paymentRepository.getById.mockResolvedValue(payment);
         mocks.paymentRepository.markPaid.mockResolvedValue(payment);
-        mocks.paymentRepository.cancel.mockResolvedValue(payment);
+        mocks.paymentGateway.cancel.mockResolvedValue(payment);
       }
       return updated;
     }
@@ -495,7 +455,7 @@ describe(PrintRequestService.name, () => {
       const result = await sut.updatePrintRequestStatus(request.id, { status: 'canceled' });
 
       expect(mocks.paymentRepository.getById).toHaveBeenCalledWith(payment.id);
-      expect(mocks.paymentRepository.cancel).toHaveBeenCalledWith(payment);
+      expect(mocks.paymentGateway.cancel).toHaveBeenCalledWith(payment);
       expect(result).toEqual(updated);
     });
 
@@ -506,7 +466,7 @@ describe(PrintRequestService.name, () => {
       await sut.updatePrintRequestStatus(request.id, { status: 'canceled' });
 
       expect(mocks.paymentRepository.getById).not.toHaveBeenCalled();
-      expect(mocks.paymentRepository.cancel).not.toHaveBeenCalled();
+      expect(mocks.paymentGateway.cancel).not.toHaveBeenCalled();
     });
 
     it('should update status without setting completion date for other statuses', async () => {
@@ -531,7 +491,7 @@ describe(PrintRequestService.name, () => {
       await sut.updatePrintRequestStatus(request.id, { status: 'done' });
 
       await vi.waitFor(() =>
-        expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
+        expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
           request.email,
           expect.anything(),
           'print_pickup',
@@ -551,7 +511,7 @@ describe(PrintRequestService.name, () => {
         status: 'done',
       });
       expect(mocks.paymentRepository.markPaid).not.toHaveBeenCalled();
-      expect(mocks.mailgunRepository.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
     });
   });
 });

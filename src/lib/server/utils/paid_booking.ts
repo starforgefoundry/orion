@@ -1,5 +1,6 @@
 import type { Payment } from '$lib/server/db/schema';
-import type { NewPayment, PaymentRepository } from '$lib/server/repositories/payment.repository';
+import type { PaymentGateway } from '$lib/server/gateways/payment.gateway';
+import type { NewPayment } from '$lib/server/repositories/payment.repository';
 
 export type PaidBookingSteps<Booking> = {
   create: (authorized: Payment) => Promise<Booking>;
@@ -11,7 +12,7 @@ export type PaidBookingSteps<Booking> = {
  * when the booking can't be created, and the booking is canceled when the money can't be taken.
  */
 export async function bookWithPayment<Booking>(
-  payments: Pick<PaymentRepository, 'authorize' | 'void' | 'capture'>,
+  payments: Pick<PaymentGateway, 'authorize' | 'void' | 'capture'>,
   payment: NewPayment,
   sourceId: string,
   steps: PaidBookingSteps<Booking>,

@@ -7,6 +7,7 @@ function connect() {
 }
 
 export type Database = ReturnType<typeof connect>;
+export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 // Vite re-runs this module on every hot reload, so a module-level cache would open a new pool each time.
 const cache = globalThis as typeof globalThis & { orionDB?: Database };

@@ -7,7 +7,8 @@ import type {
 import { ACCESS_BASIS, MEMBER_EMAIL_TRIGGER, VISIT_SOURCE } from '$lib/member_enums';
 import { NotFoundError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
-import { resolveAccess, spaceDate } from '$lib/server/utils/member_access';
+import { resolveAccess } from '$lib/server/utils/member_access';
+import { spaceDate } from '$lib/space';
 import { DateTime } from 'luxon';
 
 export const MEMBER_NOT_FOUND = 'Member not found';
@@ -84,7 +85,7 @@ export class MemberService extends BaseService {
   async resendOnboarding(memberId: string) {
     const member = await this.memberRepository.getById(memberId);
     if (!member) throw new NotFoundError(MEMBER_NOT_FOUND);
-    await this.memberNotificationRepository.sendOnboarding(member, MEMBER_EMAIL_TRIGGER.MANUAL);
+    await this.memberNotificationGateway.sendOnboarding(member, MEMBER_EMAIL_TRIGGER.MANUAL);
   }
 
   /** One failed email does not stop the rest; failures come back by member name. */
@@ -92,7 +93,7 @@ export class MemberService extends BaseService {
     const members = await this.memberRepository.getByIds(memberIds);
     const results = await Promise.allSettled(
       members.map((member) =>
-        this.memberNotificationRepository.sendOnboarding(member, MEMBER_EMAIL_TRIGGER.MANUAL),
+        this.memberNotificationGateway.sendOnboarding(member, MEMBER_EMAIL_TRIGGER.MANUAL),
       ),
     );
     const failed = members.filter((_, index) => results[index].status === 'rejected');

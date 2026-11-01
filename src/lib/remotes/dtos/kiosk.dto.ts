@@ -2,11 +2,6 @@ import { submitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
 import { VISIT_BASIS, type EnumValue, type VisitBasis } from '$lib/member_enums';
 import * as v from 'valibot';
 
-export const KIOSK_PATH = '/kiosk';
-export const KIOSK_PAIR_PATH = '/kiosk/pair';
-export const KIOSK_PAIR_TOKEN_PARAM = 'token';
-export const KIOSK_DEVICE_COOKIE = 'kiosk_device';
-
 export const KIOSK_CHECK_IN_STATUS = {
   UNKNOWN_PASS: 'unknown_pass',
   NEEDS_WAIVER: 'needs_waiver',

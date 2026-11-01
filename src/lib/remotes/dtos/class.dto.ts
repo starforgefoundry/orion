@@ -1,4 +1,6 @@
-import type { ClassCatalog, ClassInstance, User } from '$lib/server/db/schema';
+import type { ClassInstance, User } from '$lib/server/db/schema';
+import { enumValues } from '$lib/member_enums';
+import { CANCEL_INSTANCE_MODE } from '$lib/utils/classes';
 import * as v from 'valibot';
 
 // ── Catalog ──
@@ -39,20 +41,9 @@ export const createInstanceDto = v.object({
 
 export type CreateInstanceDto = v.InferInput<typeof createInstanceDto>;
 
-export const updateInstanceDto = v.object({
-  id: v.string(),
-  teacherEmail: v.optional(v.pipe(v.string(), v.email())),
-  date: v.optional(v.string()),
-  startTime: v.optional(v.string()),
-  durationMinutes: v.optional(v.pipe(v.number(), v.minValue(1))),
-  seats: v.optional(v.pipe(v.number(), v.minValue(1))),
-});
-
-export type UpdateInstanceDto = v.InferInput<typeof updateInstanceDto>;
-
 export const cancelInstanceDto = v.object({
   instanceId: v.string(),
-  mode: v.picklist(['single', 'this_and_future']),
+  mode: v.picklist(enumValues(CANCEL_INSTANCE_MODE)),
 });
 
 export type CancelInstanceDto = v.InferInput<typeof cancelInstanceDto>;
@@ -108,17 +99,10 @@ export type ManualBookClassDto = v.InferInput<typeof manualBookClassDto>;
  */
 export type PublicTeacher = Pick<User, 'name' | 'picture'>;
 
-export type ClassInstanceWithDetails = ClassInstance & {
-  teacher: User | null;
-  catalog: ClassCatalog | null;
-  confirmedCount: number;
-};
-
-export type PublicClassInstance = ClassInstance & {
+export type PublicClassInstance = Pick<
+  ClassInstance,
+  'id' | 'classId' | 'date' | 'startTime' | 'durationMinutes' | 'seats' | 'status'
+> & {
   teacher: PublicTeacher | null;
   confirmedCount: number;
-};
-
-export type ClassCatalogWithInstances = ClassCatalog & {
-  instances: PublicClassInstance[];
 };

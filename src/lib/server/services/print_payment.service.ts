@@ -6,6 +6,7 @@ import type {
   UpdatePrintRequestDiscountDto,
 } from '$lib/remotes/dtos/print_request.dto';
 import { NotFoundError } from '$lib/errors';
+import type { Payment } from '$lib/server/db/schema';
 import { DISCORD_COLOR } from '$lib/server/repositories/discord.repository';
 import { PaymentError } from '$lib/server/repositories/payment.repository';
 import { BaseService } from '$lib/server/services/base.service';
@@ -28,11 +29,23 @@ const ACTIVE_STATUSES = new Set<PaymentStatus>([PAYMENT_STATUS.QUOTE, PAYMENT_ST
 
 export class PrintPaymentError extends PaymentError {}
 
-export class PrintPaymentService extends BaseService {
-  async getById(id: string) {
-    return await this.paymentRepository.getById(id);
+function requireEditable(existing: Payment | null) {
+  if (existing?.status === PAYMENT_STATUS.PAID) {
+    throw new PrintPaymentError('Payment has already been paid');
   }
+  if (existing && !ACTIVE_STATUSES.has(existing.status)) {
+    throw new PrintPaymentError('This payment can no longer be changed');
+  }
+  return existing;
+}
 
+/** A quote stays a quote until the customer answers it. */
+function billStatus(request: Pick<PrintRequestDto, 'isQuote'>, existing: Payment | null) {
+  const awaitingQuote = !existing || existing.status === PAYMENT_STATUS.QUOTE;
+  return request.isQuote && awaitingQuote ? PAYMENT_STATUS.QUOTE : PAYMENT_STATUS.PENDING;
+}
+
+export class PrintPaymentService extends BaseService {
   private async organizationFor(billingCode: string | null | undefined) {
     if (!billingCode) return undefined;
     const code = await this.billingCodeRepository.getByCode(billingCode);
@@ -57,14 +70,31 @@ export class PrintPaymentService extends BaseService {
   }
 
   private async savePayment(request: PrintRequestDto, materialCost: number, buildPlates: number) {
-    const existing = request.payment;
-    if (existing?.status === PAYMENT_STATUS.PAID) {
-      throw new PrintPaymentError('Payment has already been paid');
-    }
-    if (existing && !ACTIVE_STATUSES.has(existing.status)) {
-      throw new PrintPaymentError('This payment can no longer be changed');
-    }
+    const existing = requireEditable(request.payment);
+    const { bill, organization } = await this.priceRequest(request, materialCost, buildPlates);
+    await this.cancelLegacyInvoice(existing);
 
+    const payment = await this.paymentRepository.save(
+      {
+        type: PAYMENT_TYPE.PRINT_REQUEST,
+        status: billStatus(request, existing),
+        customer: { name: request.customerName, email: request.email },
+        bill,
+        organizationId: organization?.id,
+      },
+      existing?.id,
+    );
+    await this.printRequestRepository.update(request.id, {
+      paymentId: payment.id,
+      materialCost,
+      buildplateCount: buildPlates,
+    });
+
+    await this.emailBill(request, payment, organization !== undefined);
+    return payment;
+  }
+
+  private async priceRequest(request: PrintRequestDto, materialCost: number, buildPlates: number) {
     const [pricing, isMember, organization] = await Promise.all([
       this.settingsRepository.getSetting('printPricing'),
       this.memberRepository.hasMembership(request.email, DateTime.now()),
@@ -80,43 +110,31 @@ export class PrintPaymentService extends BaseService {
       },
       pricing,
     );
+    return { bill, organization };
+  }
 
-    const awaitingQuote = !existing || existing.status === PAYMENT_STATUS.QUOTE;
-    const status = request.isQuote && awaitingQuote ? PAYMENT_STATUS.QUOTE : PAYMENT_STATUS.PENDING;
-
-    if (existing?.squareInvoiceId && ACTIVE_STATUSES.has(existing.status)) {
+  /** Bills from before Orion billing were sent as Square invoices, which must not stay payable. */
+  private async cancelLegacyInvoice(existing: Payment | null) {
+    if (existing?.squareInvoiceId) {
       await this.squareRepository.cancelInvoice(existing.squareInvoiceId);
     }
+  }
 
-    const payment = await this.paymentRepository.save(
-      {
-        type: PAYMENT_TYPE.PRINT_REQUEST,
-        status,
-        customer: { name: request.customerName, email: request.email },
-        bill,
-        organizationId: organization?.id,
-        paymentUrl: organization ? null : printRequestStatusUrl(request.id),
-      },
-      existing?.id,
-    );
-
-    await this.printRequestRepository.update(request.id, {
-      paymentId: payment.id,
-      materialCost,
-      buildplateCount: buildPlates,
-    });
-
+  /** Organizations are billed for their balance, so only individuals get a payment email. */
+  private async emailBill(
+    request: PrintRequestDto,
+    payment: Payment,
+    billedToOrganization: boolean,
+  ) {
     if (payment.status === PAYMENT_STATUS.QUOTE) {
       await this.sendQuoteEmail(request, payment.total);
-    } else if (payment.status === PAYMENT_STATUS.PENDING && !organization) {
+    } else if (payment.status === PAYMENT_STATUS.PENDING && !billedToOrganization) {
       await this.sendPaymentEmail(request, payment.total);
     }
-
-    return payment;
   }
 
   private async sendQuoteEmail(request: PrintRequestDto, total: number) {
-    await this.mailgunRepository.sendTemplate(request.email, SENDERS.print, 'print_quote', {
+    await this.mailgunGateway.sendTemplate(request.email, SENDERS.print, 'print_quote', {
       customerName: request.customerName,
       projectName: request.projectName,
       quotePrice: centsToDollars(total),
@@ -125,7 +143,7 @@ export class PrintPaymentService extends BaseService {
   }
 
   private async sendPaymentEmail(request: PrintRequestDto, total: number) {
-    await this.mailgunRepository.sendTemplate(request.email, SENDERS.print, 'print_payment', {
+    await this.mailgunGateway.sendTemplate(request.email, SENDERS.print, 'print_payment', {
       customerName: request.customerName,
       projectName: request.projectName,
       total: centsToDollars(total),
@@ -168,7 +186,7 @@ export class PrintPaymentService extends BaseService {
     const { request, payment } = await this.requireQuote(dto.id);
 
     if (!dto.approve) {
-      await this.paymentRepository.cancel(payment);
+      await this.paymentGateway.cancel(payment);
       await this.printRequestRepository.update(request.id, {
         status: PRINT_REQUEST_STATUS.CANCELED,
         completionDate: DateTime.now(),
@@ -216,7 +234,7 @@ export class PrintPaymentService extends BaseService {
       throw new PrintPaymentError('This print request cannot be paid here');
     }
 
-    return await this.paymentRepository.pay(payment, dto.sourceId);
+    return await this.paymentGateway.pay(payment, dto.sourceId);
   }
 }
 

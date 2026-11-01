@@ -28,9 +28,17 @@ function filamentName(vendor: string, material: string) {
   return `${VENDOR_ALIASES[vendor] ?? vendor} ${material}`;
 }
 
+/** A slot scanned with the empty slot card. */
+const EMPTY_SLOT = null;
+type ScannedSlot = PrintMaterial | typeof EMPTY_SLOT;
+
+function isRecognized(slot: ScannedSlot | undefined): slot is ScannedSlot {
+  return slot !== undefined;
+}
+
 export class PrintMaterialsService extends BaseService {
-  async getMaterials(available?: boolean) {
-    return await this.printMaterialsRepository.get(available);
+  async getMaterials() {
+    return await this.printMaterialsRepository.getActive();
   }
 
   async createMaterial(data: CreatePrintMaterialDto) {
@@ -137,29 +145,24 @@ export class PrintMaterialsService extends BaseService {
 
   async updateAMS(printerId: string, updates: { filaments: string[] }) {
     const config = await this.bambuddyConfig();
-
-    const printers = await this.bambuddyRepository.listPrinters(config);
-    const printerPostfix = printerId.split('SF-')[1];
-    const printer = printers.find((p) => p.name.replace(/ /g, '').includes(printerPostfix));
-
+    const printer = await this.bambuddyRepository.findPrinterByLabel(config, printerId);
     if (!printer) {
       throw new NotFoundError(`Printer with ID ${printerId} not found on the Bambuddy server`);
     }
 
     const materials = await this.getMaterials();
-    // null marks an empty slot card
     const scanned = updates.filaments.map((tagId) =>
-      tagId === EMPTY_SLOT_TAG_ID ? null : materials.find((material) => material.tagId === tagId),
+      tagId === EMPTY_SLOT_TAG_ID
+        ? EMPTY_SLOT
+        : materials.find((material) => material.tagId === tagId),
     );
-
-    if (scanned.includes(undefined)) {
+    if (!scanned.every(isRecognized)) {
       throw new UserError('One or more scanned tags do not match a print material');
     }
 
-    const unlinked = (scanned as (PrintMaterial | null)[]).filter(
-      (material) => material && !material.filamentId,
-    ) as PrintMaterial[];
-
+    const unlinked = scanned.filter(
+      (slot): slot is PrintMaterial => slot !== EMPTY_SLOT && !slot.filamentId,
+    );
     if (unlinked.length > 0) {
       throw new UserError(`No filament is linked to ${unlinked.map((m) => m.name).join(', ')}`);
     }
@@ -172,8 +175,8 @@ export class PrintMaterialsService extends BaseService {
       );
     }
 
-    for (const [index, material] of (scanned as (PrintMaterial | null)[]).entries()) {
-      if (!material) {
+    for (const [index, material] of scanned.entries()) {
+      if (material === EMPTY_SLOT) {
         await this.bambuddyRepository.resetAmsSlot(config, printer.id, slots[index]);
         continue;
       }

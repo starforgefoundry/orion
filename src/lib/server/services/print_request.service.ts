@@ -40,10 +40,7 @@ export class PrintRequestService extends BaseService {
     runInBackground(this.sendDiscordNotification(printRequest.id), 'send print request discord');
     runInBackground(this.sendSubmittedEmail(printRequest.id), 'send print request submitted email');
 
-    return {
-      status: 'success',
-      printRequestId: printRequest.id,
-    };
+    return { printRequestId: printRequest.id };
   }
 
   async getPrintRequests() {
@@ -89,17 +86,13 @@ export class PrintRequestService extends BaseService {
       updates.completionDate = DateTime.now();
 
       if (payment) {
-        await this.paymentRepository.cancel(payment);
+        await this.paymentGateway.cancel(payment);
       }
     }
 
     const updated = await this.printRequestRepository.update(id, updates);
 
     return updated;
-  }
-
-  async getFilesByRequestId(printRequestId: string) {
-    return await this.printFilesRepository.getByPrintRequestId(printRequestId);
   }
 
   async updatePartQuantity(dto: UpdatePartQuantityDto) {
@@ -112,20 +105,20 @@ export class PrintRequestService extends BaseService {
       throw new NotFoundError('Print request not found');
     }
 
-    await this.mailgunRepository.sendTemplate(request.email, SENDERS.print, 'print_pickup', {
+    await this.mailgunGateway.sendTemplate(request.email, SENDERS.print, 'print_pickup', {
       projectName: request.projectName,
       paymentNote: pickupPaymentNote(request.payment),
       statusURL: printRequestStatusUrl(request.id),
     });
   }
 
-  async sendSubmittedEmail(printRequestId: string) {
+  private async sendSubmittedEmail(printRequestId: string) {
     const request = await this.printRequestRepository.getById(printRequestId);
     if (!request) {
       throw new Error('Print request not found');
     }
 
-    await this.mailgunRepository.sendTemplate(request.email, SENDERS.print, 'print_submitted', {
+    await this.mailgunGateway.sendTemplate(request.email, SENDERS.print, 'print_submitted', {
       customerName: request.customerName,
       projectName: request.projectName,
       statusURL: printRequestStatusUrl(request.id),
@@ -159,7 +152,7 @@ export class PrintRequestService extends BaseService {
     };
   }
 
-  async sendDiscordNotification(printRequestId: string) {
+  private async sendDiscordNotification(printRequestId: string) {
     const request = await this.printRequestRepository.getById(printRequestId);
     if (!request) {
       throw new Error('Print request not found');

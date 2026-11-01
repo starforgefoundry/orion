@@ -1,4 +1,3 @@
-import type { Waiver } from '$lib/server/db/schema';
 import * as v from 'valibot';
 
 export const submitWaiverDto = v.object({
@@ -20,5 +19,3 @@ export const searchWaiversDto = v.object({
 });
 
 export type SearchWaiversDto = v.InferInput<typeof searchWaiversDto>;
-
-export type WaiverDto = Waiver;

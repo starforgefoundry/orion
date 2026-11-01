@@ -33,7 +33,7 @@ describe(OnboardingService.name, () => {
     mocks.memberRepository.getAccessContextByEmail.mockResolvedValue(ACTIVE_CONTEXT);
     mocks.waiverRepository.submit.mockResolvedValue(factory.waiver({ memberId: MEMBER.id }));
     mocks.memberEmailRepository.listByMember.mockResolvedValue([]);
-    mocks.memberNotificationRepository.sendOnboarding.mockResolvedValue(undefined);
+    mocks.memberNotificationGateway.sendOnboarding.mockResolvedValue(undefined);
   });
 
   describe('getOnboarding', () => {
@@ -98,7 +98,7 @@ describe(OnboardingService.name, () => {
     it('sends onboarding to a member with access', async () => {
       await sut.requestOnboardingEmail('sam@example.com');
 
-      expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+      expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(
         MEMBER,
         'self_service',
       );
@@ -109,7 +109,7 @@ describe(OnboardingService.name, () => {
 
       await sut.requestOnboardingEmail('nobody@example.com');
 
-      expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
     });
 
     it('sends nothing to a member without access', async () => {
@@ -120,7 +120,7 @@ describe(OnboardingService.name, () => {
 
       await sut.requestOnboardingEmail('sam@example.com');
 
-      expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
     });
 
     it('sends onboarding to an organization member whose organization grants no access', async () => {
@@ -132,7 +132,7 @@ describe(OnboardingService.name, () => {
 
       await sut.requestOnboardingEmail('sam@example.com');
 
-      expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
+      expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(
         MEMBER,
         'self_service',
       );
@@ -148,7 +148,7 @@ describe(OnboardingService.name, () => {
 
       await sut.requestOnboardingEmail('sam@example.com');
 
-      expect(mocks.memberNotificationRepository.sendOnboarding).not.toHaveBeenCalled();
+      expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
     });
 
     it('sends again once the cooldown has passed', async () => {
@@ -161,7 +161,7 @@ describe(OnboardingService.name, () => {
 
       await sut.requestOnboardingEmail('sam@example.com');
 
-      expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalled();
+      expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalled();
     });
   });
 });

@@ -1,6 +1,7 @@
 import { schema, type SquareWebhookLog } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { SQUARE_CURRENCY, type SquareWebhook } from '$lib/server/utils/square';
+import { eq } from 'drizzle-orm';
 import type {
   CreateOrderRequest,
   CreatePaymentRequest,
@@ -217,16 +218,18 @@ export class SquareRepository extends BaseRepository {
     return undefined;
   }
 
-  async logWebhook(webhookData: SquareWebhook<any>) {
+  /** Returns nothing when the event was already logged. */
+  async logWebhook(webhook: SquareWebhook) {
     const [log] = await this.db
       .insert(schema.squareWebhookLog)
-      .values({
-        id: webhookData.event_id,
-        payload: webhookData,
-      })
+      .values({ id: webhook.event_id, payload: webhook })
       .onConflictDoNothing()
       .returning();
 
     return log as SquareWebhookLog | undefined;
+  }
+
+  async forgetWebhook(eventId: string) {
+    await this.db.delete(schema.squareWebhookLog).where(eq(schema.squareWebhookLog.id, eventId));
   }
 }

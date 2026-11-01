@@ -1,5 +1,5 @@
 import { NotFoundError } from '$lib/errors';
-import { MEMBER_SORT, SORT_DIRECTION } from '$lib/remotes/dtos/member.dto';
+import { MEMBER_SORT, SORT_DIRECTION } from '$lib/member_enums';
 import { factory } from '$test/factory';
 import { memberAccessContext, organizationAccess } from '$test/factory/member_access';
 import { newTestService, type ServiceMocks } from '$test/utils';
@@ -180,14 +180,11 @@ describe(MemberService.name, () => {
   describe('resendOnboarding', () => {
     it('sends onboarding with the manual trigger', async () => {
       mocks.memberRepository.getById.mockResolvedValue(member);
-      mocks.memberNotificationRepository.sendOnboarding.mockResolvedValue(undefined);
+      mocks.memberNotificationGateway.sendOnboarding.mockResolvedValue(undefined);
 
       await sut.resendOnboarding(member.id);
 
-      expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
-        member,
-        'manual',
-      );
+      expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(member, 'manual');
     });
 
     it('throws when the member does not exist', async () => {
@@ -201,16 +198,13 @@ describe(MemberService.name, () => {
     it('keeps sending after one email fails and reports who failed', async () => {
       const other = factory.member({ name: 'Grace' });
       mocks.memberRepository.getByIds.mockResolvedValue([member, other]);
-      mocks.memberNotificationRepository.sendOnboarding
+      mocks.memberNotificationGateway.sendOnboarding
         .mockRejectedValueOnce(new Error('mailgun down'))
         .mockResolvedValueOnce(undefined);
 
       const result = await sut.sendOnboardings([member.id, other.id]);
 
-      expect(mocks.memberNotificationRepository.sendOnboarding).toHaveBeenCalledWith(
-        other,
-        'manual',
-      );
+      expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(other, 'manual');
       expect(result).toEqual({ sent: ['Grace'], failed: ['Ada'] });
     });
   });

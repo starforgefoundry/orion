@@ -19,6 +19,9 @@ import {
   type BillingLineItem,
 } from '../../utils/billing';
 import type { EmailTemplateKey } from '../../utils/email_templates';
+import { CAR_BAY_STATUS, CAR_BAY_TIER } from '../../utils/car_bay';
+import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '../../utils/classes';
+import { PRINT_REQUEST_STATUS } from '../../utils/print_request';
 
 // A database default so rows that existed before passes were issued get a token too.
 const passTokenColumn = () =>
@@ -52,7 +55,7 @@ export const printRequest = pgTable('print_request', {
   projectName: text('project_name').notNull(),
 
   status: text('status', {
-    enum: ['in_queue', 'printing', 'done', 'picked_up', 'canceled'],
+    enum: enumValues(PRINT_REQUEST_STATUS),
   }).notNull(),
 
   isQuote: boolean('is_quote').notNull().default(false),
@@ -494,9 +497,9 @@ export const classInstance = pgTable(
     startTime: text('start_time').notNull(), // HH:mm
     durationMinutes: integer('duration_minutes').notNull(),
     seats: integer('seats').notNull(),
-    status: text('status', { enum: ['scheduled', 'canceled'] })
+    status: text('status', { enum: enumValues(CLASS_INSTANCE_STATUS) })
       .notNull()
-      .default('scheduled'),
+      .default(CLASS_INSTANCE_STATUS.SCHEDULED),
     recurrenceGroupId: text('recurrence_group_id'),
     createdDate: luxonTimestamp('created_date')
       .notNull()
@@ -526,7 +529,7 @@ export const classBooking = pgTable(
     customerEmail: text('customer_email').notNull(),
     customerPhone: text('customer_phone').notNull(),
     paymentId: text('payment_id').references(() => payment.id),
-    status: text('status', { enum: ['confirmed', 'canceled'] }).notNull(),
+    status: text('status', { enum: enumValues(CLASS_BOOKING_STATUS) }).notNull(),
     bookingToken: text('booking_token')
       .notNull()
       .$defaultFn(() => crypto.randomUUID()),
@@ -554,8 +557,8 @@ export const carBayBooking = pgTable(
       .notNull()
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    tier: text('tier', { enum: ['quick_job', 'hourly', 'full_day'] }).notNull(),
-    status: text('status', { enum: ['confirmed', 'canceled', 'no_show'] }).notNull(),
+    tier: text('tier', { enum: enumValues(CAR_BAY_TIER) }).notNull(),
+    status: text('status', { enum: enumValues(CAR_BAY_STATUS) }).notNull(),
     startAt: luxonTimestamp('start_at').notNull(),
     endAt: luxonTimestamp('end_at').notNull(),
     blockedUntil: luxonTimestamp('blocked_until').notNull(),

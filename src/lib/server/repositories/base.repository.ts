@@ -1,18 +1,19 @@
 import { env } from '$env/dynamic/private';
-import { getDB, type Database } from '$lib/server/db';
+import { getDB, type Database, type Transaction } from '$lib/server/db';
 import { squareApiUrl } from '$lib/server/utils/square';
 import { SquareClient } from 'square';
 
 export class BaseRepository {
-  private _db?: Database;
+  private _db?: Database | Transaction;
   private _square?: SquareClient;
 
-  constructor(db?: Database, square?: SquareClient) {
+  /** Pass a transaction to run this repository's queries inside it. */
+  constructor(db?: Database | Transaction, square?: SquareClient) {
     this._db = db;
     this._square = square;
   }
 
-  protected get db(): Database {
+  protected get db(): Database | Transaction {
     if (!this._db) {
       this._db = getDB();
     }

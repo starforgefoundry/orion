@@ -1,8 +1,9 @@
-import { UserError } from '$lib/errors';
-import { CENTS_PER_DOLLAR, type BillingLineItem } from '$lib/utils/billing';
+// Relative imports: the database schema and seed script load this file outside SvelteKit.
+import { UserError } from '../errors.ts';
+import { SPACE_ZONE, spaceDate } from '../space.ts';
+import { CENTS_PER_DOLLAR, type BillingLineItem } from './billing.ts';
 import { DateTime } from 'luxon';
 
-export const CAR_BAY_ZONE = 'America/Chicago';
 export const CAR_BAY_EMAIL = 'carbay@starforgefoundry.com';
 
 const WEEKEND_DAYS = [6, 7];
@@ -26,6 +27,14 @@ export const CAR_BAY_STATUS = {
   CANCELED: 'canceled',
   NO_SHOW: 'no_show',
 } as const;
+
+/** Customers can only book within the booking horizon; staff can book any date. */
+export const CAR_BAY_BOOKER = {
+  CUSTOMER: { enforceHorizon: true },
+  STAFF: { enforceHorizon: false },
+} as const;
+export type CarBayBooker = (typeof CAR_BAY_BOOKER)[keyof typeof CAR_BAY_BOOKER];
+type BookingOptions = { enforceHorizon: boolean };
 
 export const CAR_BAY_OVERRUN = {
   HOURLY: 'hourly',
@@ -114,7 +123,7 @@ export class CarBaySlotTakenError extends CarBayRuleError {
 }
 
 function day(date: string) {
-  const parsed = DateTime.fromISO(date, { zone: CAR_BAY_ZONE });
+  const parsed = DateTime.fromISO(date, { zone: SPACE_ZONE });
   if (!parsed.isValid) throw new CarBayRuleError('Invalid date');
   return parsed.startOf('day');
 }
@@ -127,26 +136,26 @@ export function consecutiveDates(date: string, days: number) {
   return Array.from({ length: days }, (_, i) => day(date).plus({ days: i }).toISODate()!);
 }
 
-export function todayInZone(now: DateTime) {
-  return now.setZone(CAR_BAY_ZONE).toISODate()!;
-}
-
 export function toPeriod(booking: { startAt: string; endAt: string }): CarBayPeriod {
   return {
-    startAt: DateTime.fromISO(booking.startAt, { zone: CAR_BAY_ZONE }),
-    endAt: DateTime.fromISO(booking.endAt, { zone: CAR_BAY_ZONE }),
+    startAt: DateTime.fromISO(booking.startAt, { zone: SPACE_ZONE }),
+    endAt: DateTime.fromISO(booking.endAt, { zone: SPACE_ZONE }),
   };
 }
 
 export function toBlock(entry: { startAt: string; blockedUntil: string }): CarBayBlock {
   return {
-    startAt: DateTime.fromISO(entry.startAt, { zone: CAR_BAY_ZONE }),
-    blockedUntil: DateTime.fromISO(entry.blockedUntil, { zone: CAR_BAY_ZONE }),
+    startAt: DateTime.fromISO(entry.startAt, { zone: SPACE_ZONE }),
+    blockedUntil: DateTime.fromISO(entry.blockedUntil, { zone: SPACE_ZONE }),
   };
 }
 
 export class CarBayRules {
-  constructor(readonly policy: CarBayPolicy) {}
+  readonly policy: CarBayPolicy;
+
+  constructor(policy: CarBayPolicy) {
+    this.policy = policy;
+  }
 
   get earliestOpenHour() {
     return Math.min(this.policy.weekdayOpenHour, this.policy.weekendOpenHour);
@@ -212,11 +221,7 @@ export class CarBayRules {
     };
   }
 
-  resolvePeriod(
-    request: CarBayRequest,
-    now: DateTime,
-    options: { enforceHorizon: boolean },
-  ): CarBayPeriod {
+  resolvePeriod(request: CarBayRequest, now: DateTime, options: BookingOptions): CarBayPeriod {
     const period = this.#periodFor(request);
     const lastDate =
       request.tier === CAR_BAY_TIER.FULL_DAY
@@ -236,7 +241,7 @@ export class CarBayRules {
     }
 
     const horizon = this.policy.publicHorizonDays;
-    const lastBookableDay = day(todayInZone(now)).plus({ days: horizon });
+    const lastBookableDay = day(spaceDate(now)).plus({ days: horizon });
     if (options.enforceHorizon && period.endAt.startOf('day') > lastBookableDay) {
       throw new CarBayRuleError(`Bookings can be made up to ${horizon} days in advance`);
     }
@@ -278,7 +283,7 @@ export class CarBayRules {
     request: CarBayRequest,
     existing: CarBayBlock[],
     now: DateTime,
-    options: { enforceHorizon: boolean },
+    options: BookingOptions,
   ) {
     return this.#fitsWithoutRuleError(() => {
       const period = this.resolvePeriod(request, now, options);
@@ -430,8 +435,8 @@ export function overrunLineItems(
 }
 
 export function formatPeriod({ startAt, endAt }: CarBayPeriod) {
-  const start = startAt.setZone(CAR_BAY_ZONE);
-  const end = endAt.setZone(CAR_BAY_ZONE);
+  const start = startAt.setZone(SPACE_ZONE);
+  const end = endAt.setZone(SPACE_ZONE);
 
   if (start.hasSame(end, 'day')) {
     return `${start.toFormat('EEEE, MMMM d')}, ${start.toFormat('h:mm a')} – ${end.toFormat('h:mm a')}`;

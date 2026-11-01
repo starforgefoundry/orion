@@ -48,6 +48,15 @@ type PrinterStatus = {
   ams: { id: number; tray: { id: number }[] }[] | null;
 };
 
+/** Printer labels read "SF-" and then the printer's Bambuddy name without spaces. */
+const PRINTER_LABEL_PREFIX = 'SF-';
+
+export function printerForLabel(printers: BambuddyPrinter[], label: string) {
+  const [, nameWithoutSpaces] = label.split(PRINTER_LABEL_PREFIX);
+  if (!nameWithoutSpaces) return undefined;
+  return printers.find((printer) => printer.name.replace(/ /g, '').includes(nameWithoutSpaces));
+}
+
 async function readErrorMessage(response: Response, fallback: string) {
   const body = await response.text();
 
@@ -66,6 +75,10 @@ export class BambuddyRepository extends BaseRepository {
 
   async listPrinters(config: BambuddyConfig): Promise<BambuddyPrinter[]> {
     return (await this._request(config, 'api/v1/printers/')) as BambuddyPrinter[];
+  }
+
+  async findPrinterByLabel(config: BambuddyConfig, label: string) {
+    return printerForLabel(await this.listPrinters(config), label);
   }
 
   async listAmsSlots(config: BambuddyConfig, printerId: number): Promise<BambuddyAmsSlot[]> {

@@ -54,7 +54,7 @@ export class PaymentService extends BaseService {
       throw new PaymentStateError('This payment cannot be paid online');
     }
 
-    return toCheckout(await this.paymentRepository.pay(payment, dto.sourceId));
+    return toCheckout(await this.paymentGateway.pay(payment, dto.sourceId));
   }
 }
 

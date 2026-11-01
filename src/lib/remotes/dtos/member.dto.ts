@@ -1,21 +1,12 @@
-import { ACCESS_BASIS, enumValues } from '$lib/member_enums';
+import {
+  ACCESS_BASIS,
+  enumValues,
+  MEMBER_SORT,
+  ONBOARDING_FILTER,
+  SORT_DIRECTION,
+  WAIVER_FILTER,
+} from '$lib/member_enums';
 import * as v from 'valibot';
-
-export const WAIVER_FILTER = { SIGNED: 'signed', MISSING: 'missing' } as const;
-export type WaiverFilter = (typeof WAIVER_FILTER)[keyof typeof WAIVER_FILTER];
-
-export const ONBOARDING_FILTER = { SENT: 'sent', NOT_SENT: 'not_sent' } as const;
-export type OnboardingFilter = (typeof ONBOARDING_FILTER)[keyof typeof ONBOARDING_FILTER];
-
-export const MEMBER_SORT = {
-  NAME: 'name',
-  EMAIL: 'email',
-  ONBOARDING_SENT: 'onboarding_sent',
-} as const;
-export type MemberSort = (typeof MEMBER_SORT)[keyof typeof MEMBER_SORT];
-
-export const SORT_DIRECTION = { ASC: 'asc', DESC: 'desc' } as const;
-export type SortDirection = (typeof SORT_DIRECTION)[keyof typeof SORT_DIRECTION];
 
 export const MEMBER_PAGE_SIZE = 25;
 export const VISIT_PAGE_SIZE = 25;
@@ -39,7 +30,6 @@ export const searchMembersDto = v.object({
   pageSize: pageSize(MEMBER_PAGE_SIZE),
 });
 
-export type SearchMembersDto = v.InferInput<typeof searchMembersDto>;
 export type MemberSearchFilter = v.InferOutput<typeof searchMembersDto>;
 
 export const memberVisitsDto = v.object({

@@ -1,28 +1,39 @@
 import {
   MEMBER_EMAIL_TRIGGER,
   SUBSCRIPTION_STATUS,
+  type EnumValue,
   type MemberEmailTrigger,
 } from '$lib/member_enums';
 import type { Member, MemberSubscription } from '$lib/server/db/schema';
 import { BaseService } from '$lib/server/services/base.service';
-import { spaceDate } from '$lib/server/utils/member_access';
+import { spaceDate } from '$lib/space';
 import {
   customerDisplayName,
   dayPassQuantity,
   memberSubscriptionStatus,
+  SQUARE_PAYMENT_STATUS,
+  type SquareWebhook,
 } from '$lib/server/utils/square';
+import { PAYMENT_STATUS } from '$lib/utils/billing';
 import { DateTime } from 'luxon';
 import type { Order, Payment, Subscription } from 'square';
 
-const SUBSCRIPTION_EVENTS = new Set(['subscription.created', 'subscription.updated']);
-const PAYMENT_UPDATED_EVENT = 'payment.updated';
-const PAYMENT_COMPLETED_STATUS = 'COMPLETED';
+const SQUARE_EVENT = {
+  INVOICE_PAYMENT_MADE: 'invoice.payment_made',
+  INVOICE_CANCELED: 'invoice.canceled',
+  SUBSCRIPTION_CREATED: 'subscription.created',
+  SUBSCRIPTION_UPDATED: 'subscription.updated',
+  PAYMENT_UPDATED: 'payment.updated',
+} as const;
+type SquareEvent = EnumValue<typeof SQUARE_EVENT>;
+
 const SQUARE_ACTIVE_STATUS = 'ACTIVE';
 const ONBOARDING_SUBSCRIPTION_STATUSES = new Set<MemberSubscription['status']>([
   SUBSCRIPTION_STATUS.ACTIVE,
   SUBSCRIPTION_STATUS.PENDING,
 ]);
 const FALLBACK_PLAN_NAME = 'Membership';
+const DUPLICATE_WEBHOOK_MESSAGE = 'Already received and processed webhook event';
 
 export const SUBSCRIPTION_SYNC_RESULT = {
   CREATED: 'created',
@@ -33,9 +44,29 @@ export const SUBSCRIPTION_SYNC_RESULT = {
 export type SubscriptionSyncResult =
   (typeof SUBSCRIPTION_SYNC_RESULT)[keyof typeof SUBSCRIPTION_SYNC_RESULT];
 
+/** Whether members created by a subscription sync get the welcome email. */
+export const NEW_MEMBER_ONBOARDING = { SEND: 'send', SKIP: 'skip' } as const;
+export type NewMemberOnboarding = EnumValue<typeof NEW_MEMBER_ONBOARDING>;
+
 type Buyer = { email: string; name?: string; customerId?: string };
 
+function isHandled(type: string): type is SquareEvent {
+  return (Object.values(SQUARE_EVENT) as string[]).includes(type);
+}
+
 export class SquareService extends BaseService {
+  private readonly webhookHandlers: Record<SquareEvent, (id: string) => Promise<unknown>> = {
+    [SQUARE_EVENT.INVOICE_PAYMENT_MADE]: (invoiceId) =>
+      this.paymentRepository.updateInvoiceStatus(invoiceId, PAYMENT_STATUS.PAID),
+    [SQUARE_EVENT.INVOICE_CANCELED]: (invoiceId) =>
+      this.paymentRepository.updateInvoiceStatus(invoiceId, PAYMENT_STATUS.CANCELED),
+    [SQUARE_EVENT.SUBSCRIPTION_CREATED]: (subscriptionId) =>
+      this.syncSubscriptionById(subscriptionId),
+    [SQUARE_EVENT.SUBSCRIPTION_UPDATED]: (subscriptionId) =>
+      this.syncSubscriptionById(subscriptionId),
+    [SQUARE_EVENT.PAYMENT_UPDATED]: (paymentId) => this.recordDayPasses(paymentId),
+  };
+
   async getLocations() {
     return await this.squareRepository.getLocations();
   }
@@ -44,43 +75,38 @@ export class SquareService extends BaseService {
     return await this.squareRepository.getCatalog();
   }
 
-  async processWebhook(webhookData: any) {
-    const log = await this.squareRepository.logWebhook(webhookData);
+  /** A webhook that fails is forgotten so Square's retry of it is processed. */
+  async processWebhook(webhook: SquareWebhook) {
+    const log = await this.squareRepository.logWebhook(webhook);
     if (!log) {
-      console.log('Already received and processed webhook event:', webhookData);
-      return { success: true, message: 'Already received and processed webhook event' };
+      console.log('Already received and processed webhook event:', webhook);
+      return { success: true, message: DUPLICATE_WEBHOOK_MESSAGE };
     }
 
-    // Process different webhook event types
-    if (webhookData.type === 'invoice.payment_made') {
-      const invoiceId = webhookData.data.id;
-      await this.paymentRepository.updateInvoiceStatus(invoiceId, 'paid');
-    }
-
-    if (webhookData.type === 'invoice.canceled') {
-      const invoiceId = webhookData.data.id;
-      await this.paymentRepository.updateInvoiceStatus(invoiceId, 'canceled');
-    }
-
-    if (SUBSCRIPTION_EVENTS.has(webhookData.type)) {
-      const subscription = await this.squareRepository.getSubscription(webhookData.data.id);
-      if (subscription) {
-        await this.syncSubscription(subscription, true);
+    if (isHandled(webhook.type)) {
+      try {
+        await this.webhookHandlers[webhook.type](webhook.data.id);
+      } catch (error) {
+        await this.squareRepository.forgetWebhook(webhook.event_id);
+        throw error;
       }
     }
 
-    if (webhookData.type === PAYMENT_UPDATED_EVENT) {
-      await this.recordDayPasses(webhookData.data.id);
-    }
-
     return { success: true };
+  }
+
+  private async syncSubscriptionById(subscriptionId: string) {
+    const subscription = await this.squareRepository.getSubscription(subscriptionId);
+    if (subscription) {
+      await this.syncSubscription(subscription, NEW_MEMBER_ONBOARDING.SEND);
+    }
   }
 
   /**
    * Imports active Square subscriptions and refreshes every one already stored, so a lost
    * webhook is corrected. The first import of existing subscribers should not email them.
    */
-  async syncSubscriptions({ onboardNewMembers }: { onboardNewMembers: boolean }) {
+  async syncSubscriptions(onboarding: NewMemberOnboarding) {
     const [subscriptions, knownIds] = await Promise.all([
       this.squareRepository.listSubscriptions(),
       this.memberSubscriptionRepository.listIds(),
@@ -93,7 +119,7 @@ export class SquareService extends BaseService {
 
     const results: SubscriptionSyncResult[] = [];
     for (const subscription of toSync) {
-      results.push(await this.syncSubscription(subscription, onboardNewMembers));
+      results.push(await this.syncSubscription(subscription, onboarding));
     }
 
     const countOf = (result: SubscriptionSyncResult) => results.filter((r) => r === result).length;
@@ -107,7 +133,7 @@ export class SquareService extends BaseService {
 
   private async syncSubscription(
     subscription: Subscription,
-    sendOnboarding: boolean,
+    onboarding: NewMemberOnboarding,
   ): Promise<SubscriptionSyncResult> {
     const customer = subscription.customerId
       ? await this.squareRepository.getCustomer(subscription.customerId)
@@ -146,7 +172,8 @@ export class SquareService extends BaseService {
       canceledDate: subscription.canceledDate ?? null,
     });
 
-    if (created && sendOnboarding && ONBOARDING_SUBSCRIPTION_STATUSES.has(status)) {
+    const onboard = onboarding === NEW_MEMBER_ONBOARDING.SEND;
+    if (created && onboard && ONBOARDING_SUBSCRIPTION_STATUSES.has(status)) {
       await this.sendOnboarding(member, MEMBER_EMAIL_TRIGGER.SUBSCRIPTION);
     }
 
@@ -158,7 +185,7 @@ export class SquareService extends BaseService {
     if (dayPassItemVariationIds.length === 0) return;
 
     const payment = await this.squareRepository.getPayment(paymentId);
-    if (payment?.status !== PAYMENT_COMPLETED_STATUS || !payment.orderId) return;
+    if (payment?.status !== SQUARE_PAYMENT_STATUS.COMPLETED || !payment.orderId) return;
     if (await this.dayPassRepository.existsForOrder(payment.orderId)) return;
 
     const order = await this.squareRepository.getOrderById(payment.orderId);
@@ -190,7 +217,7 @@ export class SquareService extends BaseService {
     );
     for (const dayPass of created) {
       try {
-        await this.memberNotificationRepository.sendDayPass(member, dayPass);
+        await this.memberNotificationGateway.sendDayPass(member, dayPass);
       } catch (error) {
         console.error(`Failed to send day pass ${dayPass.id} to member ${member.id}:`, error);
       }
@@ -224,7 +251,7 @@ export class SquareService extends BaseService {
 
   private async sendOnboarding(member: Member, trigger: MemberEmailTrigger) {
     try {
-      await this.memberNotificationRepository.sendOnboarding(member, trigger);
+      await this.memberNotificationGateway.sendOnboarding(member, trigger);
     } catch (error) {
       console.error(`Failed to send ${trigger} onboarding email to member ${member.id}:`, error);
     }

@@ -4,13 +4,13 @@ import type {
   Organization,
   OrganizationMember,
 } from '$lib/server/db/schema';
+import { SPACE_ZONE } from '$lib/space';
 import { DateTime } from 'luxon';
 import { describe, expect, it } from 'vitest';
 import {
   belongsToOrganization,
   hasMembership,
   resolveAccess,
-  SPACE_ZONE,
   type MemberAccessContext,
 } from './member_access';
 

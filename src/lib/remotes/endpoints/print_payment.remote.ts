@@ -5,14 +5,6 @@ import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
 import { printPaymentService } from '$lib/server/services/print_payment.service';
 import * as v from 'valibot';
 
-export const getPayment = query(
-  v.string(),
-  exposeUserErrors(async (id) => {
-    verifyAuth();
-    return await printPaymentService.getById(id);
-  }),
-);
-
 export const getPricingInfo = query(
   v.object({
     customerEmail: v.pipe(v.string(), v.email()),
@@ -31,7 +23,6 @@ export const upsertPaymentForm = form(
 
     const response = await printPaymentService.upsertPayment(dto);
 
-    await getPayment(response.id).refresh();
     await getPrintRequests().refresh();
     await getPrintRequestById(dto.requestId).refresh();
 

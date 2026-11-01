@@ -2,13 +2,13 @@
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import { cn } from '$lib/frontend/cn';
   import {
-    CAR_BAY_ZONE,
     formatDollars,
     isWeekend,
     type CarBayBlock,
     type CarBayRates,
     type CarBayRules,
   } from '$lib/utils/car_bay';
+  import { SPACE_ZONE } from '$lib/space';
   import { DateTime } from 'luxon';
 
   interface Props {
@@ -22,7 +22,7 @@
 
   let { rules, rates, days, blocks, isDayOpen, onDayClick }: Props = $props();
 
-  const todayStr = DateTime.now().setZone(CAR_BAY_ZONE).toISODate();
+  const todayStr = DateTime.now().setZone(SPACE_ZONE).toISODate();
 
   function hoursLabel(date: string) {
     const { open, close } = rules.openWindow(date);

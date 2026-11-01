@@ -3,10 +3,9 @@ import type {
   UpdateBillingCodeDto,
 } from '$lib/remotes/dtos/billing_code.dto';
 import type { BillingCode, Organization } from '$lib/server/db/schema';
-import { ConflictError, NotFoundError } from '$lib/errors';
+import { ConflictError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
 
-export const BILLING_CODE_NOT_FOUND = 'Billing code not found';
 export class BillingCodeTakenError extends ConflictError {}
 
 type BillingCodeRow = { billingCode: BillingCode; organization: Organization | null };
@@ -34,19 +33,6 @@ export class BillingCodeService extends BaseService {
     return codes.map(withOrganizationName);
   }
 
-  async getBillingCodeById(id: string) {
-    const code = await this.billingCodeRepository.getById(id);
-    if (!code) {
-      throw new NotFoundError(BILLING_CODE_NOT_FOUND);
-    }
-    return withOrganizationName(code);
-  }
-
-  async getBillingCodeByCode(code: string) {
-    const billingCode = await this.billingCodeRepository.getByCode(code);
-    return billingCode ? withOrganizationName(billingCode) : null;
-  }
-
   async createBillingCode(data: CreateBillingCodeDto) {
     const existing = await this.billingCodeRepository.getByCodeIncludingArchived(data.code);
     if (existing) {
@@ -57,10 +43,6 @@ export class BillingCodeService extends BaseService {
 
   async updateBillingCode(id: string, updates: Omit<UpdateBillingCodeDto, 'id'>) {
     return await this.billingCodeRepository.update(id, updates);
-  }
-
-  async deleteBillingCode(id: string) {
-    await this.billingCodeRepository.delete(id);
   }
 }
 

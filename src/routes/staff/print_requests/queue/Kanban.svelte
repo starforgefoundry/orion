@@ -7,7 +7,7 @@
   import StatusIndicator from '$lib/frontend/components/StatusIndicator.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { pollQuery } from '$lib/frontend/poll-query.svelte';
-  import type { PrintRequestStatus } from '$lib/remotes/dtos/print_request.dto';
+  import type { PrintRequestStatus } from '$lib/utils/print_request';
   import { getPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
   import EllipsisVerticalIcon from '@lucide/svelte/icons/ellipsis-vertical';
   import MailIcon from '@lucide/svelte/icons/mail';
