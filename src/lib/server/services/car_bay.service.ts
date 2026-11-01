@@ -1,4 +1,3 @@
-import { env } from '$env/dynamic/private';
 import type {
   BookCarBayDto,
   CarBayBookingDetail,
@@ -14,11 +13,11 @@ import type {
 } from '$lib/remotes/dtos/car_bay.dto';
 import type { CarBayBooking, CarBayClosure, Payment } from '$lib/server/db/schema';
 import type { CarBayBookingWithPayment } from '$lib/server/repositories/car_bay.repository';
-import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
 import { BaseService } from '$lib/server/services/base.service';
-import { runInBackground } from '$lib/server/utils/background';
-import { hasMembership } from '$lib/server/utils/member_access';
-import { passLinks } from '$lib/server/utils/member_links';
+import { SENDERS } from '$lib/server/utils/email_templates/senders';
+import { forEachSettled, runInBackground } from '$lib/server/utils/background';
+import { carBayBookingUrl, passLinks } from '$lib/server/utils/member_links';
+import { bookWithPayment } from '$lib/server/utils/paid_booking';
 import { payUrl } from '$lib/server/utils/payment_links';
 import {
   amountPaid,
@@ -28,7 +27,6 @@ import {
   PAYMENT_TYPE,
 } from '$lib/utils/billing';
 import {
-  CAR_BAY_EMAIL,
   CAR_BAY_STATUS,
   CAR_BAY_TIER,
   CAR_BAY_TIER_NAMES,
@@ -42,16 +40,11 @@ import {
   type CarBayPolicy,
   type CarBayRequest,
 } from '$lib/utils/car_bay';
-import { DateTime } from 'luxon';
+import { dueForReminder } from '$lib/utils/reminders';
+import { DateTime, Duration } from 'luxon';
 
-const CAR_BAY_SENDER = `Starforge Car Bay <${CAR_BAY_EMAIL}>`;
 const CLOSED_MESSAGE = 'The bay is closed at that time. Please pick another time.';
 const BOOKINGS_CLOSED_MESSAGE = 'The car bay is not taking bookings right now.';
-
-type CustomerDetails = Pick<
-  StaffBookCarBayDto,
-  'customerName' | 'customerEmail' | 'customerPhone' | 'isMember'
->;
 
 function toView(booking: CarBayBooking, payment: Payment | null): CarBayBookingView {
   const { startAt, endAt, blockedUntil, createdDate, reminderSentDate, ...rest } = booking;
@@ -63,13 +56,6 @@ function toView(booking: CarBayBooking, payment: Payment | null): CarBayBookingV
     createdDate: createdDate.toISO()!,
     amountPaid: amountPaid(payment),
   };
-}
-
-function toPaymentError(error: unknown): never {
-  if (error instanceof PaymentDeclinedError) {
-    throw new CarBayRuleError(error.message, { cause: error });
-  }
-  throw error;
 }
 
 function toClosureView(closure: CarBayClosure): CarBayClosureView {
@@ -227,8 +213,7 @@ export class CarBayService extends BaseService {
   }
 
   async isMember(customerEmail: string) {
-    const context = await this.memberRepository.getAccessContextByEmail(customerEmail);
-    return context !== undefined && hasMembership(context, DateTime.now());
+    return await this.memberRepository.hasMembership(customerEmail, DateTime.now());
   }
 
   async book(dto: BookCarBayDto, now: DateTime = DateTime.now()) {
@@ -245,41 +230,31 @@ export class CarBayService extends BaseService {
       this.isMember(dto.customerEmail),
     ]);
 
-    const authorized = await this.paymentRepository
-      .authorize(
-        {
-          type: PAYMENT_TYPE.CAR_BAY_BOOKING,
-          status: PAYMENT_STATUS.PENDING,
-          customer: { name: dto.customerName, email: dto.customerEmail },
-          bill: buildBill(bookingLineItems(dto.request, rates, isMember)),
-        },
-        dto.sourceId,
-      )
-      .catch(toPaymentError);
-
-    let booking: CarBayBooking;
-    try {
-      booking = await this.carBayRepository.create({
-        tier: dto.request.tier,
-        status: CAR_BAY_STATUS.CONFIRMED,
-        startAt: period.startAt,
-        endAt: period.endAt,
-        blockedUntil: rules.blockedUntil(period.endAt),
-        ...(await this.customerColumns({ ...dto, isMember })),
-        paymentId: authorized.id,
-      });
-    } catch (error) {
-      await this.paymentRepository.void(authorized);
-      throw error;
-    }
-
-    let payment: Payment;
-    try {
-      payment = await this.paymentRepository.capture(authorized);
-    } catch (error) {
-      await this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.CANCELED });
-      toPaymentError(error);
-    }
+    const { booking, payment } = await bookWithPayment(
+      this.paymentRepository,
+      {
+        type: PAYMENT_TYPE.CAR_BAY_BOOKING,
+        status: PAYMENT_STATUS.PENDING,
+        customer: { name: dto.customerName, email: dto.customerEmail },
+        bill: buildBill(bookingLineItems(dto.request, rates, isMember)),
+      },
+      dto.sourceId,
+      {
+        create: async (authorized) =>
+          await this.carBayRepository.create({
+            tier: dto.request.tier,
+            status: CAR_BAY_STATUS.CONFIRMED,
+            startAt: period.startAt,
+            endAt: period.endAt,
+            blockedUntil: rules.blockedUntil(period.endAt),
+            ...(await this.memberRepository.customerColumns(dto)),
+            isMember,
+            paymentId: authorized.id,
+          }),
+        cancel: (booking) =>
+          this.carBayRepository.update(booking.id, { status: CAR_BAY_STATUS.CANCELED }),
+      },
+    );
 
     runInBackground(
       this.sendConfirmationEmail(booking, payment, rules.policy),
@@ -300,7 +275,8 @@ export class CarBayService extends BaseService {
       startAt: period.startAt,
       endAt: period.endAt,
       blockedUntil: rules.blockedUntil(period.endAt),
-      ...(await this.customerColumns(dto)),
+      ...(await this.memberRepository.customerColumns(dto)),
+      isMember: dto.isMember,
       createdByEmail: staffEmail,
     });
 
@@ -309,17 +285,6 @@ export class CarBayService extends BaseService {
       'send car bay booking email',
     );
     return toView(booking, null);
-  }
-
-  private async customerColumns(dto: CustomerDetails) {
-    const member = await this.memberRepository.upsertByEmail(dto.customerName, dto.customerEmail);
-    return {
-      memberId: member.id,
-      isMember: dto.isMember,
-      customerName: dto.customerName,
-      customerEmail: dto.customerEmail,
-      customerPhone: dto.customerPhone,
-    };
   }
 
   private async refund(booking: CarBayBookingWithPayment) {
@@ -379,8 +344,7 @@ export class CarBayService extends BaseService {
 
     await this.mailgunRepository.sendTemplate(
       booking.customerEmail,
-      CAR_BAY_SENDER,
-      CAR_BAY_EMAIL,
+      SENDERS.carBay,
       'car_bay_overrun',
       {
         customerName: booking.customerName,
@@ -395,35 +359,31 @@ export class CarBayService extends BaseService {
 
   async sendDueReminders(now: DateTime = DateTime.now()) {
     const rules = await this.rules();
-    const candidates = await this.carBayRepository.getReminderCandidates(
-      now,
-      now.plus({ hours: rules.policy.reminderLeadHours }),
+    const lead = Duration.fromObject({ hours: rules.policy.reminderLeadHours });
+    const candidates = await this.carBayRepository.getReminderCandidates(now, now.plus(lead));
+    const due = candidates.filter((booking) =>
+      dueForReminder({ startsAt: booking.startAt, bookedAt: booking.createdDate }, now, lead),
     );
 
-    for (const booking of candidates.filter((b) => rules.needsReminder(b.createdDate, b.startAt))) {
-      try {
+    await forEachSettled(
+      due,
+      async (booking) => {
         await this.mailgunRepository.sendTemplate(
           booking.customerEmail,
-          CAR_BAY_SENDER,
-          CAR_BAY_EMAIL,
+          SENDERS.carBay,
           'car_bay_reminder',
           {
             customerName: booking.customerName,
             tierName: CAR_BAY_TIER_NAMES[booking.tier],
             bookingWhen: formatPeriod(booking),
-            bookingUrl: this.bookingUrl(booking),
+            bookingUrl: carBayBookingUrl(booking),
             ...passLinks(booking),
           },
         );
         await this.carBayRepository.update(booking.id, { reminderSentDate: now });
-      } catch (error) {
-        console.error(`Failed to send car bay reminder for booking ${booking.id}:`, error);
-      }
-    }
-  }
-
-  private bookingUrl(booking: CarBayBooking) {
-    return `${env.FRONTEND_URL}/car_bay/booking/${booking.bookingToken}`;
+      },
+      (booking) => `send car bay reminder for booking ${booking.id}`,
+    );
   }
 
   async sendConfirmationEmail(
@@ -433,8 +393,7 @@ export class CarBayService extends BaseService {
   ) {
     await this.mailgunRepository.sendTemplate(
       booking.customerEmail,
-      CAR_BAY_SENDER,
-      CAR_BAY_EMAIL,
+      SENDERS.carBay,
       'car_bay_booking',
       {
         customerName: booking.customerName,
@@ -443,7 +402,7 @@ export class CarBayService extends BaseService {
         amountPaid: centsToDollars(amountPaid(payment)),
         refundCutoffHours: policy.refundCutoffHours.toString(),
         storageDays: policy.storageDays.toString(),
-        bookingUrl: this.bookingUrl(booking),
+        bookingUrl: carBayBookingUrl(booking),
         ...passLinks(booking),
       },
     );

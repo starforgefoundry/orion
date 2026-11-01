@@ -1,3 +1,4 @@
+import { HTTP_STATUS } from '$lib/http';
 import { verifySignedUrl } from '$lib/server/utils/signed_url';
 import { InvalidStorageKeyError, openFile, requiresSignature } from '$lib/server/utils/storage';
 import { error, type RequestHandler } from '@sveltejs/kit';
@@ -21,7 +22,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
   const signed = requiresSignature(key);
 
   if (signed && !verifySignedUrl(url)) {
-    error(403, 'This link is invalid or has expired');
+    error(HTTP_STATUS.FORBIDDEN, 'This link is invalid or has expired');
   }
 
   try {
@@ -39,8 +40,8 @@ export const GET: RequestHandler = async ({ params, url }) => {
       },
     });
   } catch (e) {
-    if (e instanceof InvalidStorageKeyError) error(400, 'Invalid file path');
-    if (isMissingFile(e)) error(404, 'File not found');
+    if (e instanceof InvalidStorageKeyError) error(HTTP_STATUS.BAD_REQUEST, 'Invalid file path');
+    if (isMissingFile(e)) error(HTTP_STATUS.NOT_FOUND, 'File not found');
     throw e;
   }
 };

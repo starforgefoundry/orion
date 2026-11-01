@@ -29,8 +29,12 @@ export class SettingsService extends BaseService {
     };
   }
 
-  async getPrintRequestSettings(): Promise<SettingsMap['printRequest']> {
-    return await this.settingsRepository.getSetting('printRequest');
+  async get<K extends keyof SettingsMap>(key: K) {
+    return await this.settingsRepository.getSetting(key);
+  }
+
+  async set<K extends keyof SettingsMap>(key: K, value: SettingsMap[K]) {
+    return await this.settingsRepository.setSetting(key, value);
   }
 
   async setPrintRequestSettings(value: SettingsMap['printRequest']) {
@@ -107,66 +111,6 @@ export class SettingsService extends BaseService {
       memberDiscountPercent: Number(discount?.discountData?.percentage ?? 0),
       additionalBuildPlatePrice: Number(buildPlate?.itemVariationData?.priceMoney?.amount ?? 0),
     });
-  }
-
-  async getPrintPricing() {
-    return await this.settingsRepository.getSetting('printPricing');
-  }
-
-  async setPrintPricing(value: SettingsMap['printPricing']) {
-    return await this.settingsRepository.setSetting('printPricing', value);
-  }
-
-  async getPrintRequestSquareSettings() {
-    return await this.settingsRepository.getSetting('printRequestSquare');
-  }
-
-  async setPrintRequestSquareSettings(value: SettingsMap['printRequestSquare']) {
-    const setting = await this.settingsRepository.setSetting('printRequestSquare', value);
-
-    return setting;
-  }
-
-  async getClassSettings() {
-    return await this.settingsRepository.getSetting('classSettings');
-  }
-
-  async setClassSettings(value: SettingsMap['classSettings']) {
-    const setting = await this.settingsRepository.setSetting('classSettings', value);
-
-    return setting;
-  }
-
-  async getCarBayRates() {
-    return await this.settingsRepository.getSetting('carBayRates');
-  }
-
-  async setCarBayRates(value: SettingsMap['carBayRates']) {
-    return await this.settingsRepository.setSetting('carBayRates', value);
-  }
-
-  async getCarBayPolicy() {
-    return await this.settingsRepository.getSetting('carBayPolicy');
-  }
-
-  async setCarBayPolicy(value: SettingsMap['carBayPolicy']) {
-    return await this.settingsRepository.setSetting('carBayPolicy', value);
-  }
-
-  async getCarBayAvailability() {
-    return await this.settingsRepository.getSetting('carBayAvailability');
-  }
-
-  async setCarBayAvailability(value: SettingsMap['carBayAvailability']) {
-    return await this.settingsRepository.setSetting('carBayAvailability', value);
-  }
-
-  async getMemberSquareSettings() {
-    return await this.settingsRepository.getSetting('memberSquare');
-  }
-
-  async setMemberSquareSettings(value: SettingsMap['memberSquare']) {
-    return await this.settingsRepository.setSetting('memberSquare', value);
   }
 }
 

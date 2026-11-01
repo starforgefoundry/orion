@@ -63,7 +63,7 @@ describe(PrintPaymentService.name, () => {
     mocks.printRequestRepository.getById.mockResolvedValue(printRequest());
     mocks.printRequestRepository.update.mockResolvedValue([]);
     mocks.billingCodeRepository.getByCode.mockResolvedValue(undefined as never);
-    mocks.memberRepository.getAccessContextByEmail.mockResolvedValue(undefined);
+    mocks.memberRepository.hasMembership.mockResolvedValue(false);
     mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
     mocks.squareRepository.cancelInvoice.mockResolvedValue(undefined as never);
     mocks.paymentRepository.save.mockImplementation(async (data, id) =>
@@ -88,9 +88,7 @@ describe(PrintPaymentService.name, () => {
   });
 
   function mockMember() {
-    mocks.memberRepository.getAccessContextByEmail.mockResolvedValue(
-      factory.memberAccessContext({ subscriptions: [factory.memberSubscription()] }),
-    );
+    mocks.memberRepository.hasMembership.mockResolvedValue(true);
   }
 
   function savedPayment() {
@@ -129,8 +127,7 @@ describe(PrintPaymentService.name, () => {
 
       expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
-        expect.any(String),
-        PRINT_EMAIL,
+        expect.objectContaining({ replyTo: PRINT_EMAIL }),
         'print_payment',
         {
           customerName: 'Jane Doe',
@@ -160,8 +157,7 @@ describe(PrintPaymentService.name, () => {
       expect(savedPayment().status).toBe(PAYMENT_STATUS.QUOTE);
       expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
-        expect.any(String),
-        expect.any(String),
+        expect.anything(),
         'print_quote',
         expect.objectContaining({ quotePrice: '12.00', quoteURL: STATUS_URL }),
       );
@@ -267,7 +263,7 @@ describe(PrintPaymentService.name, () => {
         printRequest({ isQuote: true, payment: payment({ status: PAYMENT_STATUS.QUOTE }) }),
       );
       mocks.paymentRepository.cancel.mockResolvedValue(undefined as never);
-      mocks.discordRepository.sendWebhookNotification.mockResolvedValue(undefined as never);
+      mocks.discordRepository.notify.mockResolvedValue(undefined as never);
     });
 
     it('approves the quote so the customer can pay', async () => {
@@ -275,7 +271,7 @@ describe(PrintPaymentService.name, () => {
 
       expect(approved?.status).toBe(PAYMENT_STATUS.PENDING);
       await vi.waitFor(() =>
-        expect(mocks.discordRepository.sendWebhookNotification).toHaveBeenCalledWith(
+        expect(mocks.discordRepository.notify).toHaveBeenCalledWith(
           WEBHOOK_URL,
           expect.objectContaining({
             content: expect.stringContaining(`/staff/print_requests/queue?id=${REQUEST_ID}`),

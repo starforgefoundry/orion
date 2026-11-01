@@ -1,6 +1,8 @@
 import { env } from '$env/dynamic/private';
+import { HTTP_STATUS } from '$lib/http';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
+import type { EmailSender } from '$lib/server/utils/email_templates/senders';
 import {
   renderHtmlTemplate,
   renderTemplate,
@@ -8,6 +10,9 @@ import {
   type Templates,
 } from '$lib/utils/email_templates';
 import { DateTime } from 'luxon';
+
+const MAILGUN_DOMAIN = 'starforgefoundry.com';
+const MAILGUN_MESSAGES_URL = `https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`;
 
 export class MailgunRepository extends BaseRepository {
   private emailTemplateRepository: EmailTemplateRepository;
@@ -19,8 +24,7 @@ export class MailgunRepository extends BaseRepository {
 
   async sendTemplate<T extends EmailTemplateKey>(
     to: string,
-    from: string,
-    replyTo: string,
+    sender: EmailSender,
     template: T,
     variables: Templates[T],
   ) {
@@ -30,14 +34,14 @@ export class MailgunRepository extends BaseRepository {
     }
 
     const body = new URLSearchParams({
-      from,
+      from: sender.from,
       to,
-      'h:Reply-To': replyTo,
+      'h:Reply-To': sender.replyTo,
       subject: renderTemplate(content.subject, variables),
       html: renderHtmlTemplate(content.body, variables),
     });
 
-    const response = await fetch('https://api.mailgun.net/v3/starforgefoundry.com/messages', {
+    const response = await fetch(MAILGUN_MESSAGES_URL, {
       method: 'POST',
       headers: {
         Authorization: 'Basic ' + btoa(`api:${env.MAILGUN_API_KEY}`),
@@ -49,14 +53,13 @@ export class MailgunRepository extends BaseRepository {
     if (response.ok) return;
 
     const reason = await errorReason(response);
-    if (response.status === HTTP_TOO_MANY_REQUESTS) {
+    if (response.status === HTTP_STATUS.TOO_MANY_REQUESTS) {
       throw new MailgunRateLimitError(reason, retryAfter(reason));
     }
     throw new Error(`Failed to send email via Mailgun: ${reason}`);
   }
 }
 
-const HTTP_TOO_MANY_REQUESTS = 429;
 const DEFAULT_RATE_LIMIT_WAIT = { minutes: 1 };
 const RETRY_AFTER_PATTERN = /try again after (.+)$/;
 

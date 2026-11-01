@@ -9,8 +9,6 @@ import type { PrintRequestDetail } from '$test/factory/print_request';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$app/server', () => ({ getRequestEvent: vi.fn() }));
-
 const WEBHOOK_URL = 'https://discord.com/api/webhooks/test';
 
 function printRequestSettings(discordWebhookUrl: string) {
@@ -142,16 +140,18 @@ describe(PrintRequestService.name, () => {
       });
       mocks.printRequestRepository.getById.mockResolvedValue(request);
       stubSettings(mocks.settingsRepository, printRequestSettings(WEBHOOK_URL));
-      mocks.discordRepository.sendWebhookNotification.mockResolvedValue(undefined);
+      mocks.discordRepository.notify.mockResolvedValue(undefined);
 
       await sut.sendDiscordNotification(request.id);
 
       expect(mocks.printRequestRepository.getById).toHaveBeenCalledWith(request.id);
       expect(mocks.settingsRepository.getSetting).toHaveBeenCalledWith('printRequest');
-      expect(mocks.discordRepository.sendWebhookNotification).toHaveBeenCalledWith(
+      expect(mocks.discordRepository.notify).toHaveBeenCalledWith(
         WEBHOOK_URL,
         expect.objectContaining({
-          content: expect.stringContaining('new print request'),
+          content: expect.stringContaining(
+            `(https://orion.example.com/staff/print_requests/queue?id=${request.id})`,
+          ),
           embeds: expect.arrayContaining([
             expect.objectContaining({
               title: '🖨️ New Print Request Submitted',
@@ -171,11 +171,11 @@ describe(PrintRequestService.name, () => {
       const request = factory.printRequestDetail({ specialRequests: '' });
       mocks.printRequestRepository.getById.mockResolvedValue(request);
       stubSettings(mocks.settingsRepository, printRequestSettings(WEBHOOK_URL));
-      mocks.discordRepository.sendWebhookNotification.mockResolvedValue(undefined);
+      mocks.discordRepository.notify.mockResolvedValue(undefined);
 
       await sut.sendDiscordNotification(request.id);
 
-      expect(mocks.discordRepository.sendWebhookNotification).toHaveBeenCalledWith(
+      expect(mocks.discordRepository.notify).toHaveBeenCalledWith(
         WEBHOOK_URL,
         expect.objectContaining({
           embeds: expect.arrayContaining([
@@ -189,23 +189,13 @@ describe(PrintRequestService.name, () => {
       );
     });
 
-    it('should return early when webhook URL is not configured', async () => {
-      const request = factory.printRequestDetail();
-      mocks.printRequestRepository.getById.mockResolvedValue(request);
-      stubSettings(mocks.settingsRepository, printRequestSettings(''));
-
-      await sut.sendDiscordNotification(request.id);
-
-      expect(mocks.discordRepository.sendWebhookNotification).not.toHaveBeenCalled();
-    });
-
     it('should throw error when request not found', async () => {
       mocks.printRequestRepository.getById.mockResolvedValue(undefined);
 
       await expect(sut.sendDiscordNotification('nonexistent')).rejects.toThrow(
         'Print request not found',
       );
-      expect(mocks.discordRepository.sendWebhookNotification).not.toHaveBeenCalled();
+      expect(mocks.discordRepository.notify).not.toHaveBeenCalled();
     });
   });
 
@@ -413,8 +403,7 @@ describe(PrintRequestService.name, () => {
       expect(mocks.printRequestRepository.getById).toHaveBeenCalledWith(request.id);
       expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'customer@example.com',
-        expect.stringContaining('Starforge 3D Prints'),
-        expect.any(String),
+        expect.objectContaining({ from: expect.stringContaining('Starforge 3D Prints') }),
         'print_pickup',
         expect.objectContaining({ projectName: 'Completed Project' }),
       );
@@ -544,8 +533,7 @@ describe(PrintRequestService.name, () => {
       await vi.waitFor(() =>
         expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
           request.email,
-          expect.any(String),
-          expect.any(String),
+          expect.anything(),
           'print_pickup',
           expect.objectContaining({ projectName: 'Pickup Project' }),
         ),

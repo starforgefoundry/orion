@@ -1,10 +1,9 @@
 import { command, form, getRequestEvent, query } from '$app/server';
+import { HTTP_STATUS } from '$lib/http';
 import { KIOSK_DEVICE_COOKIE, kioskCheckInDto, kioskWaiverDto } from '$lib/remotes/dtos/kiosk.dto';
-import { verifyAuth } from '$lib/remotes/utils';
+import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
 import { kioskService } from '$lib/server/services/kiosk.service';
 import { error } from '@sveltejs/kit';
-
-const UNAUTHORIZED = 401;
 
 function isPairedDevice() {
   const { cookies } = getRequestEvent();
@@ -12,29 +11,41 @@ function isPairedDevice() {
 }
 
 async function verifyKiosk() {
-  if (!(await isPairedDevice())) error(UNAUTHORIZED, 'This kiosk is not paired');
+  if (!(await isPairedDevice())) error(HTTP_STATUS.UNAUTHORIZED, 'This kiosk is not paired');
 }
 
-export const getKioskStatus = query(async () => ({ paired: await isPairedDevice() }));
+export const getKioskStatus = query(
+  exposeUserErrors(async () => ({ paired: await isPairedDevice() })),
+);
 
-export const checkInKiosk = command(kioskCheckInDto, async (scanned) => {
-  await verifyKiosk();
-  return await kioskService.checkIn(scanned);
-});
+export const checkInKiosk = command(
+  kioskCheckInDto,
+  exposeUserErrors(async (scanned) => {
+    await verifyKiosk();
+    return await kioskService.checkIn(scanned);
+  }),
+);
 
-export const kioskWaiverForm = form(kioskWaiverDto, async (dto) => {
-  await verifyKiosk();
-  return await kioskService.submitWaiver(dto);
-});
+export const kioskWaiverForm = form(
+  kioskWaiverDto,
+  exposeUserErrors(async (dto) => {
+    await verifyKiosk();
+    return await kioskService.submitWaiver(dto);
+  }),
+);
 
-export const getKioskPairing = query(() => {
-  verifyAuth();
-  return kioskService.getPairing();
-});
+export const getKioskPairing = query(
+  exposeUserErrors(() => {
+    verifyAuth();
+    return kioskService.getPairing();
+  }),
+);
 
-export const rotateKioskToken = command(async () => {
-  verifyAuth();
-  const pairing = await kioskService.rotateDeviceToken();
-  getKioskPairing().set(pairing);
-  return pairing;
-});
+export const rotateKioskToken = command(
+  exposeUserErrors(async () => {
+    verifyAuth();
+    const pairing = await kioskService.rotateDeviceToken();
+    getKioskPairing().set(pairing);
+    return pairing;
+  }),
+);

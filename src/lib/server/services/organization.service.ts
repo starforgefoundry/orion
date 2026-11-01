@@ -5,6 +5,7 @@ import type {
   UpdateOrganizationDto,
 } from '$lib/remotes/dtos/organization.dto';
 import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization_charges.dto';
+import { NotFoundError, UserError } from '$lib/errors';
 import { MEMBER_EMAIL_TRIGGER } from '$lib/member_enums';
 import type { Member } from '$lib/server/db/schema';
 import { MailgunRateLimitError } from '$lib/server/repositories/mailgun.repository';
@@ -12,7 +13,7 @@ import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { SPACE_ZONE } from '$lib/server/utils/member_access';
 import { parseMemberLines, type ParsedMemberLine } from '$lib/server/utils/member_lines';
-import { foundrySender } from '$lib/server/utils/email_templates/senders';
+import { SENDERS } from '$lib/server/utils/email_templates/senders';
 import { payUrl } from '$lib/server/utils/payment_links';
 import {
   buildBill,
@@ -21,7 +22,6 @@ import {
   PAYMENT_TYPE,
   type PaymentStatus,
 } from '$lib/utils/billing';
-import { env as publicEnv } from '$env/dynamic/public';
 import { DateTime } from 'luxon';
 
 export const ORGANIZATION_NOT_FOUND = 'Organization not found';
@@ -52,7 +52,7 @@ export class OrganizationService extends BaseService {
   async getOrganizationDetail(id: string) {
     const organization = await this.organizationRepository.getById(id);
     if (!organization) {
-      throw new Error('Organization not found');
+      throw new NotFoundError(ORGANIZATION_NOT_FOUND);
     }
 
     const [outstandingBalance, printRequests, organizationCharges, balancePayments] =
@@ -125,7 +125,7 @@ export class OrganizationService extends BaseService {
   /** Members already in the organization are skipped and not emailed again. */
   async addOrganizationMembers(dto: AddOrganizationMembersDto) {
     const organization = await this.organizationRepository.getById(dto.organizationId);
-    if (!organization) throw new Error(ORGANIZATION_NOT_FOUND);
+    if (!organization) throw new NotFoundError(ORGANIZATION_NOT_FOUND);
 
     const { members, errors } = parseMemberLines(dto.lines);
     const added: ParsedMemberLine[] = [];
@@ -196,13 +196,13 @@ export class OrganizationService extends BaseService {
   async chargeBalance(dto: ChargeOrganizationBalanceDto) {
     const organization = await this.organizationRepository.getById(dto.organizationId);
     if (!organization) {
-      throw new Error('Organization not found');
+      throw new NotFoundError(ORGANIZATION_NOT_FOUND);
     }
 
     const outstandingBalance = await this.getOutstandingBalance(dto.organizationId);
 
     if (outstandingBalance <= 0) {
-      throw new Error('No outstanding balance to charge');
+      throw new UserError('No outstanding balance to charge');
     }
 
     const id = crypto.randomUUID();
@@ -222,8 +222,7 @@ export class OrganizationService extends BaseService {
 
     await this.mailgunRepository.sendTemplate(
       organization.email,
-      foundrySender(),
-      publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
+      SENDERS.foundry,
       'organization_balance',
       {
         organizationName: organization.name,
@@ -237,7 +236,7 @@ export class OrganizationService extends BaseService {
 
   async createCharge(dto: CreateOrgChargeDto) {
     const organization = await this.organizationRepository.getById(dto.organizationId);
-    if (!organization) throw new Error(ORGANIZATION_NOT_FOUND);
+    if (!organization) throw new NotFoundError(ORGANIZATION_NOT_FOUND);
     return await this.organizationRepository.createCharge(dto, organization);
   }
 }

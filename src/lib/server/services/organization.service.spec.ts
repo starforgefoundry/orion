@@ -329,8 +329,7 @@ describe(OrganizationService.name, () => {
       });
       expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'charge@org.com',
-        expect.any(String),
-        expect.any(String),
+        expect.anything(),
         'organization_balance',
         expect.objectContaining({
           organizationName: 'Charge Org',

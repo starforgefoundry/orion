@@ -5,6 +5,7 @@ import {
   type SetMaterialSetupDto,
   type UpdatePrintMaterialDto,
 } from '$lib/remotes/dtos/print_materials.dto';
+import { ConflictError, NotFoundError, UserError } from '$lib/errors';
 import type { PrintMaterial } from '$lib/server/db/schema';
 import type {
   BambuddyColor,
@@ -47,7 +48,7 @@ export class PrintMaterialsService extends BaseService {
    */
   async setSetup({ id, tagId, filament }: SetMaterialSetupDto) {
     if (tagId === EMPTY_SLOT_TAG_ID) {
-      throw new Error(`${EMPTY_SLOT_TAG_ID} is reserved for the empty slot card`);
+      throw new UserError(`${EMPTY_SLOT_TAG_ID} is reserved for the empty slot card`);
     }
 
     if (tagId) {
@@ -55,7 +56,7 @@ export class PrintMaterialsService extends BaseService {
         (material) => material.tagId === tagId && material.id !== id,
       );
 
-      if (clash) throw new Error(`${clash.name} already uses tag ID ${tagId}`);
+      if (clash) throw new ConflictError(`${clash.name} already uses tag ID ${tagId}`);
     }
 
     return await this.printMaterialsRepository.update(id, {
@@ -81,7 +82,7 @@ export class PrintMaterialsService extends BaseService {
       .find((entry) => entry.vendor === vendor)
       ?.materials.find((entry) => entry.material === materialType)?.filamentId;
 
-    if (!filamentId) throw new Error(`Bambuddy has no ${vendor} ${materialType}`);
+    if (!filamentId) throw new UserError(`Bambuddy has no ${vendor} ${materialType}`);
 
     return { filamentId, vendor, materialType, colorName, colorHex };
   }
@@ -142,7 +143,7 @@ export class PrintMaterialsService extends BaseService {
     const printer = printers.find((p) => p.name.replace(/ /g, '').includes(printerPostfix));
 
     if (!printer) {
-      throw new Error(`Printer with ID ${printerId} not found on the Bambuddy server`);
+      throw new NotFoundError(`Printer with ID ${printerId} not found on the Bambuddy server`);
     }
 
     const materials = await this.getMaterials();
@@ -152,7 +153,7 @@ export class PrintMaterialsService extends BaseService {
     );
 
     if (scanned.includes(undefined)) {
-      throw new Error('One or more scanned tags do not match a print material');
+      throw new UserError('One or more scanned tags do not match a print material');
     }
 
     const unlinked = (scanned as (PrintMaterial | null)[]).filter(
@@ -160,13 +161,13 @@ export class PrintMaterialsService extends BaseService {
     ) as PrintMaterial[];
 
     if (unlinked.length > 0) {
-      throw new Error(`No filament is linked to ${unlinked.map((m) => m.name).join(', ')}`);
+      throw new UserError(`No filament is linked to ${unlinked.map((m) => m.name).join(', ')}`);
     }
 
     const slots = await this.bambuddyRepository.listAmsSlots(config, printer.id);
 
     if (slots.length < scanned.length) {
-      throw new Error(
+      throw new UserError(
         `${printer.name} has ${slots.length} AMS slots but ${scanned.length} filaments were scanned`,
       );
     }
@@ -190,7 +191,7 @@ export class PrintMaterialsService extends BaseService {
     const config = await this.settingsRepository.getSetting('bambuddy');
 
     if (!config.serverUrl || !config.apiKey) {
-      throw new Error('Bambuddy server URL or API key not set in settings');
+      throw new UserError('Bambuddy server URL or API key not set in settings');
     }
 
     return config;

@@ -3,7 +3,7 @@
   import { Spinner } from '$lib/components/ui/spinner';
   import { errorDescription } from '$lib/frontend/form-submit';
   import { squareCard, type SquareCard } from '$lib/frontend/square-card';
-  import { getSquareConfig } from '$lib/remotes/endpoints/class.remote';
+  import { getCheckoutConfig } from '$lib/remotes/endpoints/payment.remote';
   import { formatCents } from '$lib/utils/billing';
   import CreditCardIcon from '@lucide/svelte/icons/credit-card';
   import { toast } from 'svelte-sonner';
@@ -18,7 +18,7 @@
 
   let { total, onPay }: Props = $props();
 
-  const squareConfig = $derived(getSquareConfig().current);
+  const squareConfig = $derived(getCheckoutConfig().current);
 
   let card = $state<SquareCard>();
   let paying = $state(false);

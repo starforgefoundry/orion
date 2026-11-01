@@ -1,4 +1,3 @@
-import { env as publicEnv } from '$env/dynamic/public';
 import type { PayPaymentDto } from '$lib/remotes/dtos/payment.dto';
 import type { CreatePaymentDto } from '$lib/remotes/dtos/print_payment.dto';
 import type {
@@ -6,15 +5,17 @@ import type {
   RespondToQuoteDto,
   UpdatePrintRequestDiscountDto,
 } from '$lib/remotes/dtos/print_request.dto';
+import { NotFoundError } from '$lib/errors';
+import { DISCORD_COLOR } from '$lib/server/repositories/discord.repository';
 import { PaymentError } from '$lib/server/repositories/payment.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
-import { printSender } from '$lib/server/utils/email_templates/senders';
-import { hasMembership } from '$lib/server/utils/member_access';
+import { SENDERS } from '$lib/server/utils/email_templates/senders';
 import { printQueueUrl, printRequestStatusUrl } from '$lib/server/utils/payment_links';
 import {
   centsToDollars,
   formatCents,
+  isPayableOnline,
   PAYMENT_STATUS,
   PAYMENT_TYPE,
   type PaymentStatus,
@@ -23,7 +24,6 @@ import { printBill } from '$lib/utils/print_pricing';
 import { PRINT_REQUEST_STATUS } from '$lib/utils/print_request';
 import { DateTime } from 'luxon';
 
-const DISCORD_SUCCESS_COLOR = 0x57f287;
 const ACTIVE_STATUSES = new Set<PaymentStatus>([PAYMENT_STATUS.QUOTE, PAYMENT_STATUS.PENDING]);
 
 export class PrintPaymentError extends PaymentError {}
@@ -31,11 +31,6 @@ export class PrintPaymentError extends PaymentError {}
 export class PrintPaymentService extends BaseService {
   async getById(id: string) {
     return await this.paymentRepository.getById(id);
-  }
-
-  private async isMember(email: string) {
-    const context = await this.memberRepository.getAccessContextByEmail(email);
-    return context !== undefined && hasMembership(context, DateTime.now());
   }
 
   private async organizationFor(billingCode: string | null | undefined) {
@@ -47,7 +42,7 @@ export class PrintPaymentService extends BaseService {
   async getPricingInfo(customerEmail: string, billingCode?: string) {
     const [pricing, isMember, organization] = await Promise.all([
       this.settingsRepository.getSetting('printPricing'),
-      this.isMember(customerEmail),
+      this.memberRepository.hasMembership(customerEmail, DateTime.now()),
       this.organizationFor(billingCode),
     ]);
 
@@ -56,7 +51,7 @@ export class PrintPaymentService extends BaseService {
 
   async upsertPayment(dto: CreatePaymentDto) {
     const request = await this.printRequestRepository.getById(dto.requestId);
-    if (!request) throw new Error('Print request not found');
+    if (!request) throw new NotFoundError('Print request not found');
 
     return await this.savePayment(request, dto.materialCost, dto.buildPlates);
   }
@@ -64,15 +59,15 @@ export class PrintPaymentService extends BaseService {
   private async savePayment(request: PrintRequestDto, materialCost: number, buildPlates: number) {
     const existing = request.payment;
     if (existing?.status === PAYMENT_STATUS.PAID) {
-      throw new Error('Payment has already been paid');
+      throw new PrintPaymentError('Payment has already been paid');
     }
     if (existing && !ACTIVE_STATUSES.has(existing.status)) {
-      throw new Error('This payment can no longer be changed');
+      throw new PrintPaymentError('This payment can no longer be changed');
     }
 
     const [pricing, isMember, organization] = await Promise.all([
       this.settingsRepository.getSetting('printPricing'),
-      this.isMember(request.email),
+      this.memberRepository.hasMembership(request.email, DateTime.now()),
       this.organizationFor(request.billingCode),
     ]);
     const bill = printBill(
@@ -121,43 +116,31 @@ export class PrintPaymentService extends BaseService {
   }
 
   private async sendQuoteEmail(request: PrintRequestDto, total: number) {
-    await this.mailgunRepository.sendTemplate(
-      request.email,
-      printSender(),
-      publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
-      'print_quote',
-      {
-        customerName: request.customerName,
-        projectName: request.projectName,
-        quotePrice: centsToDollars(total),
-        quoteURL: printRequestStatusUrl(request.id),
-      },
-    );
+    await this.mailgunRepository.sendTemplate(request.email, SENDERS.print, 'print_quote', {
+      customerName: request.customerName,
+      projectName: request.projectName,
+      quotePrice: centsToDollars(total),
+      quoteURL: printRequestStatusUrl(request.id),
+    });
   }
 
   private async sendPaymentEmail(request: PrintRequestDto, total: number) {
-    await this.mailgunRepository.sendTemplate(
-      request.email,
-      printSender(),
-      publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
-      'print_payment',
-      {
-        customerName: request.customerName,
-        projectName: request.projectName,
-        total: centsToDollars(total),
-        paymentURL: printRequestStatusUrl(request.id),
-      },
-    );
+    await this.mailgunRepository.sendTemplate(request.email, SENDERS.print, 'print_payment', {
+      customerName: request.customerName,
+      projectName: request.projectName,
+      total: centsToDollars(total),
+      paymentURL: printRequestStatusUrl(request.id),
+    });
   }
 
   /** Changing the group code moves who pays, so any unpaid bill is rebuilt and resent. */
   async updatePrintRequestDiscount(id: string, dto: UpdatePrintRequestDiscountDto) {
     const request = await this.printRequestRepository.getById(id);
-    if (!request) throw new Error('Print request not found');
+    if (!request) throw new NotFoundError('Print request not found');
 
     const newCode = dto.billingCode?.trim() || '';
     if (newCode !== '' && !(await this.billingCodeRepository.getByCode(newCode))) {
-      throw new Error('Group code not found');
+      throw new NotFoundError('Group code not found');
     }
 
     await this.printRequestRepository.update(id, { billingCode: newCode || null });
@@ -174,7 +157,7 @@ export class PrintPaymentService extends BaseService {
 
   private async requireQuote(id: string) {
     const request = await this.printRequestRepository.getById(id);
-    if (!request) throw new Error('Print request not found');
+    if (!request) throw new NotFoundError('Print request not found');
     if (request.payment?.status !== PAYMENT_STATUS.QUOTE || !request.isQuote) {
       throw new PrintPaymentError('This quote has already been answered');
     }
@@ -206,17 +189,12 @@ export class PrintPaymentService extends BaseService {
 
   private async sendQuoteApprovedNotification(request: PrintRequestDto, total: number) {
     const { discordWebhookUrl } = await this.settingsRepository.getSetting('printRequest');
-    if (!discordWebhookUrl) {
-      console.warn('Discord webhook URL not configured for print requests');
-      return;
-    }
-
-    await this.discordRepository.sendWebhookNotification(discordWebhookUrl, {
+    await this.discordRepository.notify(discordWebhookUrl, {
       content: `A quote has been approved! [View in Print Queue](${printQueueUrl(request.id)})`,
       embeds: [
         {
           title: '✅ Quote Approved',
-          color: DISCORD_SUCCESS_COLOR,
+          color: DISCORD_COLOR.GREEN,
           fields: [
             { name: 'Project Name', value: request.projectName, inline: true },
             { name: 'Customer', value: request.customerName, inline: true },
@@ -234,7 +212,7 @@ export class PrintPaymentService extends BaseService {
     if (!payment || payment.status !== PAYMENT_STATUS.PENDING) {
       throw new PrintPaymentError('This print request has nothing to pay');
     }
-    if (payment.organizationId || payment.squareInvoiceId) {
+    if (!isPayableOnline(payment)) {
       throw new PrintPaymentError('This print request cannot be paid here');
     }
 

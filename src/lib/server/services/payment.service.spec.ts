@@ -2,8 +2,8 @@ import type { Payment } from '$lib/server/db/schema';
 import { PaymentStateError } from '$lib/server/repositories/payment.repository';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { factory } from '$test/factory';
-import { newTestService, type ServiceMocks } from '$test/utils';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PaymentService } from './payment.service';
 
 const PAYMENT_ID = 'payment-1';
@@ -28,6 +28,19 @@ describe(PaymentService.name, () => {
       ...payment,
       status: PAYMENT_STATUS.PAID,
     }));
+  });
+
+  it('gives the checkout the Square location payments are taken at', async () => {
+    vi.stubEnv('SQUARE_APPLICATION_ID', 'sq-app');
+    stubSettings(mocks.settingsRepository, { printRequestSquare: { locationId: 'loc-1' } });
+
+    const config = await sut.getCheckoutConfig();
+
+    expect(config).toEqual({
+      applicationId: 'sq-app',
+      locationId: 'loc-1',
+      webSdkUrl: expect.stringContaining('square'),
+    });
   });
 
   it('charges the card for an unpaid bill', async () => {

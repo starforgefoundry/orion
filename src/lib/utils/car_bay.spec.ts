@@ -382,15 +382,6 @@ describe('isRefundable', () => {
   });
 });
 
-describe('needsReminder', () => {
-  const startAt = at(`${MONDAY}T16:00`);
-
-  it('only reminds bookings made more than 24 hours ahead', () => {
-    expect(rules.needsReminder(at('2026-10-11T15:00'), startAt)).toBe(true);
-    expect(rules.needsReminder(at('2026-10-11T17:00'), startAt)).toBe(false);
-  });
-});
-
 describe('clipToDay', () => {
   it('splits a multi-day booking into each day of the window', () => {
     const block = rules.bookingBlock({

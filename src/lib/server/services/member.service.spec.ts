@@ -1,3 +1,4 @@
+import { NotFoundError } from '$lib/errors';
 import { MEMBER_SORT, SORT_DIRECTION } from '$lib/remotes/dtos/member.dto';
 import { factory } from '$test/factory';
 import { memberAccessContext, organizationAccess } from '$test/factory/member_access';
@@ -67,6 +68,7 @@ describe(MemberService.name, () => {
       mocks.memberRepository.getAccessContext.mockResolvedValue(undefined);
 
       await expect(sut.getMemberDetail('missing')).rejects.toThrow(MEMBER_NOT_FOUND);
+      await expect(sut.getMemberDetail('missing')).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('hides organizations the member was removed from', async () => {
@@ -214,8 +216,12 @@ describe(MemberService.name, () => {
   });
 
   describe('checkIn', () => {
+    const SPACE_DATE = expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/);
+
     beforeEach(() => {
-      mocks.visitRepository.create.mockResolvedValue(factory.visit({ memberId: member.id }));
+      mocks.visitRepository.recordAdmission.mockResolvedValue(
+        factory.visit({ memberId: member.id }),
+      );
     });
 
     it('admits a member without access and records basis none', async () => {
@@ -225,29 +231,24 @@ describe(MemberService.name, () => {
 
       await sut.checkIn(member.id);
 
-      expect(mocks.visitRepository.create).toHaveBeenCalledWith({
-        memberId: member.id,
-        source: 'staff',
-        accessBasis: 'none',
-        outcome: 'admitted',
-      });
-      expect(mocks.dayPassRepository.markUsed).not.toHaveBeenCalled();
+      expect(mocks.visitRepository.recordAdmission).toHaveBeenCalledWith(
+        { memberId: member.id, source: 'staff', accessBasis: 'none' },
+        undefined,
+        SPACE_DATE,
+      );
     });
 
     it('uses up an unused day pass when that is the access basis', async () => {
       mocks.memberRepository.getAccessContext.mockResolvedValue(
         memberAccessContext({ member, dayPasses: [unusedPass] }),
       );
-      mocks.dayPassRepository.markUsed.mockResolvedValue(undefined);
 
       await sut.checkIn(member.id);
 
-      expect(mocks.dayPassRepository.markUsed).toHaveBeenCalledWith(
-        unusedPass.id,
-        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-      );
-      expect(mocks.visitRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ accessBasis: 'day_pass', outcome: 'admitted' }),
+      expect(mocks.visitRepository.recordAdmission).toHaveBeenCalledWith(
+        expect.objectContaining({ accessBasis: 'day_pass' }),
+        unusedPass,
+        SPACE_DATE,
       );
     });
 
@@ -255,7 +256,7 @@ describe(MemberService.name, () => {
       mocks.memberRepository.getAccessContext.mockResolvedValue(undefined);
 
       await expect(sut.checkIn('missing')).rejects.toThrow(MEMBER_NOT_FOUND);
-      expect(mocks.visitRepository.create).not.toHaveBeenCalled();
+      expect(mocks.visitRepository.recordAdmission).not.toHaveBeenCalled();
     });
   });
 });

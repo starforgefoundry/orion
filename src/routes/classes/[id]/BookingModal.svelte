@@ -10,7 +10,8 @@
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { formatTime } from '$lib/frontend/utils';
   import { squareCard, type SquareCard } from '$lib/frontend/square-card';
-  import { bookClass, bookClassForm, getSquareConfig } from '$lib/remotes/endpoints/class.remote';
+  import { bookClass, bookClassForm } from '$lib/remotes/endpoints/class.remote';
+  import { getCheckoutConfig } from '$lib/remotes/endpoints/payment.remote';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
   import CheckIcon from '@lucide/svelte/icons/check';
   import { DateTime } from 'luxon';
@@ -47,7 +48,7 @@
   let cardInstance = $state<SquareCard>();
   let squareReady = $state(false);
 
-  const squareConfigRemote = getSquareConfig();
+  const squareConfigRemote = getCheckoutConfig();
   const squareConfig = $derived(squareConfigRemote.current);
 
   const totalPrice = $derived(price * quantity);

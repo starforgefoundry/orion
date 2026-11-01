@@ -1,4 +1,5 @@
-import { schema, type Visit } from '$lib/server/db/schema';
+import { VISIT_OUTCOME } from '$lib/member_enums';
+import { schema, type DayPass, type Visit } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { count, desc, eq } from 'drizzle-orm';
 
@@ -8,6 +9,27 @@ export class VisitRepository extends BaseRepository {
   async create(visit: CreateVisit) {
     const [created] = await this.db.insert(schema.visit).values(visit).returning();
     return created;
+  }
+
+  /** Logs an admitted visit, using up the day pass it was let in on. */
+  async recordAdmission(
+    visit: Omit<CreateVisit, 'outcome'>,
+    dayPassToUse: Pick<DayPass, 'id'> | undefined,
+    today: string,
+  ) {
+    return await this.db.transaction(async (tx) => {
+      if (dayPassToUse) {
+        await tx
+          .update(schema.dayPass)
+          .set({ usedDate: today })
+          .where(eq(schema.dayPass.id, dayPassToUse.id));
+      }
+      const [created] = await tx
+        .insert(schema.visit)
+        .values({ ...visit, outcome: VISIT_OUTCOME.ADMITTED })
+        .returning();
+      return created;
+    });
   }
 
   async listByMember(memberId: string, page: number, pageSize: number) {

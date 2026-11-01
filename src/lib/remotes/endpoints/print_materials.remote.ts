@@ -5,52 +5,68 @@ import {
   updateAMSDto,
   updatePrintMaterialDto,
 } from '$lib/remotes/dtos/print_materials.dto';
-import { verifyAuth } from '$lib/remotes/utils';
+import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
 import { printMaterialsService } from '$lib/server/services/print_materials.service';
 
-export const getPrintMaterials = query(async () => {
-  verifyAuth();
-  return await printMaterialsService.getMaterials();
-});
+export const getPrintMaterials = query(
+  exposeUserErrors(async () => {
+    verifyAuth();
+    return await printMaterialsService.getMaterials();
+  }),
+);
 
-export const createPrintMaterial = command(createPrintMaterialDto, async (data) => {
-  verifyAuth();
+export const createPrintMaterial = command(
+  createPrintMaterialDto,
+  exposeUserErrors(async (data) => {
+    verifyAuth();
 
-  const material = await printMaterialsService.createMaterial(data);
-  await getPrintMaterials().refresh();
+    const material = await printMaterialsService.createMaterial(data);
+    await getPrintMaterials().refresh();
 
-  return material;
-});
+    return material;
+  }),
+);
 
-export const updatePrintMaterial = command(updatePrintMaterialDto, async (dto) => {
-  verifyAuth();
+export const updatePrintMaterial = command(
+  updatePrintMaterialDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
 
-  const { id, ...updates } = dto;
+    const { id, ...updates } = dto;
 
-  const response = await printMaterialsService.updateMaterial(id, updates);
-  await getPrintMaterials().refresh();
+    const response = await printMaterialsService.updateMaterial(id, updates);
+    await getPrintMaterials().refresh();
 
-  return response;
-});
+    return response;
+  }),
+);
 
-export const setMaterialSetup = command(setMaterialSetupDto, async (dto) => {
-  verifyAuth();
+export const setMaterialSetup = command(
+  setMaterialSetupDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
 
-  const response = await printMaterialsService.setSetup(dto);
-  await getPrintMaterials().refresh();
+    const response = await printMaterialsService.setSetup(dto);
+    await getPrintMaterials().refresh();
 
-  return response;
-});
+    return response;
+  }),
+);
 
-export const getFilamentCatalog = query(async () => {
-  verifyAuth();
-  return await printMaterialsService.getFilamentCatalog();
-});
+export const getFilamentCatalog = query(
+  exposeUserErrors(async () => {
+    verifyAuth();
+    return await printMaterialsService.getFilamentCatalog();
+  }),
+);
 
-export const updateAMSForPrinter = command(updateAMSDto, async (dto) => {
-  verifyAuth();
+export const updateAMSForPrinter = command(
+  updateAMSDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
 
-  const { printer_id, ...updates } = dto;
+    const { printer_id, ...updates } = dto;
 
-  return await printMaterialsService.updateAMS(printer_id, updates);
-});
+    return await printMaterialsService.updateAMS(printer_id, updates);
+  }),
+);

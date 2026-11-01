@@ -15,6 +15,7 @@ describe('MailgunRepository.sendTemplate', () => {
   }
 
   const VARIABLES = { projectName: 'Robot Arm', paymentNote: 'Paid.', statusURL: 'https://x' };
+  const SENDER = { from: 'Prints <prints@example.com>', replyTo: 'prints@example.com' };
 
   it('fills the stored subject and body', async () => {
     const { fetch, repository } = setup({
@@ -22,17 +23,29 @@ describe('MailgunRepository.sendTemplate', () => {
       body: '<a href="{{statusURL}}">{{projectName}}</a>',
     });
 
-    await repository.sendTemplate('a@b.com', 'from', 'reply', 'print_pickup', VARIABLES);
+    await repository.sendTemplate('a@b.com', SENDER, 'print_pickup', VARIABLES);
 
     const body = fetch.mock.calls[0][1]?.body as URLSearchParams;
     expect(body.get('subject')).toBe('Ready - Robot Arm');
     expect(body.get('html')).toBe('<a href="https://x">Robot Arm</a>');
   });
 
+  it('sends from the sender, with replies going to its address', async () => {
+    const { fetch, repository } = setup({ subject: 'Ready', body: 'Done' });
+
+    await repository.sendTemplate('a@b.com', SENDER, 'print_pickup', VARIABLES);
+
+    const [url, init] = fetch.mock.calls[0];
+    const body = init?.body as URLSearchParams;
+    expect(url).toBe('https://api.mailgun.net/v3/starforgefoundry.com/messages');
+    expect(body.get('from')).toBe('Prints <prints@example.com>');
+    expect(body.get('h:Reply-To')).toBe('prints@example.com');
+  });
+
   it('escapes customer-supplied values in the HTML body only', async () => {
     const { fetch, repository } = setup({ subject: '{{projectName}}', body: '{{projectName}}' });
 
-    await repository.sendTemplate('a@b.com', 'from', 'reply', 'print_pickup', {
+    await repository.sendTemplate('a@b.com', SENDER, 'print_pickup', {
       ...VARIABLES,
       projectName: '<b>Arm</b>',
     });
@@ -46,7 +59,7 @@ describe('MailgunRepository.sendTemplate', () => {
     const { fetch, repository } = setup();
 
     await expect(
-      repository.sendTemplate('a@b.com', 'from', 'reply', 'print_pickup', VARIABLES),
+      repository.sendTemplate('a@b.com', SENDER, 'print_pickup', VARIABLES),
     ).rejects.toThrow('Email template "print_pickup" not found');
     expect(fetch).not.toHaveBeenCalled();
   });

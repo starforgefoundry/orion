@@ -3,10 +3,11 @@ import type {
   UpdateBillingCodeDto,
 } from '$lib/remotes/dtos/billing_code.dto';
 import type { BillingCode, Organization } from '$lib/server/db/schema';
+import { ConflictError, NotFoundError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
 
 export const BILLING_CODE_NOT_FOUND = 'Billing code not found';
-export class BillingCodeTakenError extends Error {}
+export class BillingCodeTakenError extends ConflictError {}
 
 type BillingCodeRow = { billingCode: BillingCode; organization: Organization | null };
 
@@ -36,7 +37,7 @@ export class BillingCodeService extends BaseService {
   async getBillingCodeById(id: string) {
     const code = await this.billingCodeRepository.getById(id);
     if (!code) {
-      throw new Error(BILLING_CODE_NOT_FOUND);
+      throw new NotFoundError(BILLING_CODE_NOT_FOUND);
     }
     return withOrganizationName(code);
   }

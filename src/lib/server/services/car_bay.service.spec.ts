@@ -101,7 +101,12 @@ describe(CarBayService.name, () => {
   }
 
   function stubCreateBooking() {
-    mocks.memberRepository.upsertByEmail.mockResolvedValue(CUSTOMER_MEMBER);
+    mocks.memberRepository.customerColumns.mockImplementation(async (customer) => ({
+      memberId: CUSTOMER_MEMBER.id,
+      customerName: customer.customerName,
+      customerEmail: customer.customerEmail,
+      customerPhone: customer.customerPhone,
+    }));
     mocks.carBayRepository.create.mockImplementation(async (data) =>
       bookingRow(data as Partial<CarBayBooking>),
     );
@@ -119,9 +124,7 @@ describe(CarBayService.name, () => {
     beforeEach(() => {
       stubOpenSlot();
       stubCreateBooking();
-      mocks.memberRepository.getAccessContextByEmail.mockResolvedValue(
-        factory.memberAccessContext({ subscriptions: [factory.memberSubscription()] }),
-      );
+      mocks.memberRepository.hasMembership.mockResolvedValue(true);
       mocks.paymentRepository.authorize.mockImplementation(async (payment) =>
         storedPayment({ status: PAYMENT_STATUS.PENDING, total: payment.bill.total }),
       );
@@ -161,7 +164,7 @@ describe(CarBayService.name, () => {
     });
 
     it('charges the non-member rate when the customer has no membership', async () => {
-      mocks.memberRepository.getAccessContextByEmail.mockResolvedValue(undefined);
+      mocks.memberRepository.hasMembership.mockResolvedValue(false);
 
       await sut.book(dto, NOW);
 
@@ -172,12 +175,13 @@ describe(CarBayService.name, () => {
     });
 
     it('ignores a member claim the customer sends themselves', async () => {
-      mocks.memberRepository.getAccessContextByEmail.mockResolvedValue(undefined);
+      mocks.memberRepository.hasMembership.mockResolvedValue(false);
 
       const booking = await sut.book({ ...dto, isMember: true } as typeof dto, NOW);
 
-      expect(mocks.memberRepository.getAccessContextByEmail).toHaveBeenCalledWith(
+      expect(mocks.memberRepository.hasMembership).toHaveBeenCalledWith(
         'jane@example.com',
+        expect.anything(),
       );
       expect(mocks.carBayRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ isMember: false }),
@@ -200,7 +204,7 @@ describe(CarBayService.name, () => {
       mocks.paymentRepository.capture.mockRejectedValue(new PaymentDeclinedError());
       mocks.carBayRepository.update.mockResolvedValue(bookingRow({ status: 'canceled' }));
 
-      await expect(sut.book(dto, NOW)).rejects.toThrow(CarBayRuleError);
+      await expect(sut.book(dto, NOW)).rejects.toThrow(PaymentDeclinedError);
       expect(mocks.carBayRepository.update).toHaveBeenCalledWith('booking-1', {
         status: 'canceled',
       });
@@ -210,7 +214,7 @@ describe(CarBayService.name, () => {
       mocks.paymentRepository.authorize.mockRejectedValue(new PaymentDeclinedError());
 
       await expect(sut.book(dto, NOW)).rejects.toThrow('Payment failed');
-      await expect(sut.book(dto, NOW)).rejects.toThrow(CarBayRuleError);
+      await expect(sut.book(dto, NOW)).rejects.toThrow(PaymentDeclinedError);
       expect(mocks.carBayRepository.create).not.toHaveBeenCalled();
     });
 
@@ -260,8 +264,7 @@ describe(CarBayService.name, () => {
       await vi.waitFor(() =>
         expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
           'jane@example.com',
-          expect.any(String),
-          expect.any(String),
+          expect.anything(),
           'car_bay_booking',
           expect.objectContaining({
             amountPaid: '12.00',
@@ -275,9 +278,8 @@ describe(CarBayService.name, () => {
     it('links the booking to the member so the kiosk can find their waiver', async () => {
       await sut.book(dto, NOW);
 
-      expect(mocks.memberRepository.upsertByEmail).toHaveBeenCalledWith(
-        'Jane Doe',
-        'jane@example.com',
+      expect(mocks.memberRepository.customerColumns).toHaveBeenCalledWith(
+        expect.objectContaining({ customerName: 'Jane Doe', customerEmail: 'jane@example.com' }),
       );
       expect(mocks.carBayRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ memberId: CUSTOMER_MEMBER.id }),
@@ -471,8 +473,7 @@ describe(CarBayService.name, () => {
       expect(mocks.carBayRepository.createOverrun).toHaveBeenCalledWith('booking-1', payment.id);
       expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
-        expect.any(String),
-        expect.any(String),
+        expect.anything(),
         'car_bay_overrun',
         expect.objectContaining({
           total: '40.00',
@@ -507,8 +508,7 @@ describe(CarBayService.name, () => {
 
       expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
-        expect.any(String),
-        expect.any(String),
+        expect.anything(),
         'car_bay_reminder',
         expect.objectContaining({
           passUrl: `https://orion.example.com/pass/${booking.passToken}`,

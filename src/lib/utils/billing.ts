@@ -82,3 +82,19 @@ export function initialStatus(status: PaymentStatus, total: number): PaymentStat
 export function amountPaid(payment: { status: PaymentStatus; total: number } | null) {
   return payment?.status === PAYMENT_STATUS.PAID ? payment.total : 0;
 }
+
+type OnlinePayment = {
+  type: PaymentType;
+  status: PaymentStatus;
+  organizationId: string | null;
+  squareInvoiceId: string | null;
+};
+
+/** Organization charges are settled through the organization's balance, not one by one. */
+export function isPayableOnline(payment: OnlinePayment) {
+  const billedToOrganization =
+    payment.organizationId !== null && payment.type !== PAYMENT_TYPE.BALANCE;
+  return (
+    payment.status === PAYMENT_STATUS.PENDING && !payment.squareInvoiceId && !billedToOrganization
+  );
+}

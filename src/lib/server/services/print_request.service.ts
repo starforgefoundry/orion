@@ -1,5 +1,3 @@
-import { getRequestEvent } from '$app/server';
-import { env as publicEnv } from '$env/dynamic/public';
 import type {
   SearchPrintRequestsDto,
   SubmitPrintRequestDto,
@@ -8,10 +6,12 @@ import type {
   UpdatePrintRequestStatusDto,
 } from '$lib/remotes/dtos/print_request.dto';
 import type { Payment, PrintRequest } from '$lib/server/db/schema';
+import { NotFoundError, UserError } from '$lib/errors';
+import { DISCORD_COLOR } from '$lib/server/repositories/discord.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
-import { printSender } from '$lib/server/utils/email_templates/senders';
-import { printRequestStatusUrl } from '$lib/server/utils/payment_links';
+import { SENDERS } from '$lib/server/utils/email_templates/senders';
+import { printQueueUrl, printRequestStatusUrl } from '$lib/server/utils/payment_links';
 import { PAYMENT_STATUS } from '$lib/utils/billing';
 import { PRINT_REQUEST_STATUS, printSubmissionProblem } from '$lib/utils/print_request';
 import { DateTime } from 'luxon';
@@ -26,7 +26,7 @@ function pickupPaymentNote(payment: Payment | null) {
   return 'You can see your print request and its cost breakdown here:';
 }
 
-export class PrintSubmissionError extends Error {}
+export class PrintSubmissionError extends UserError {}
 
 export class PrintRequestService extends BaseService {
   async submitPrintRequest(dto: SubmitPrintRequestDto) {
@@ -109,20 +109,14 @@ export class PrintRequestService extends BaseService {
   async sendPickupNotification(printRequestId: string) {
     const request = await this.printRequestRepository.getById(printRequestId);
     if (!request) {
-      throw new Error('Print request not found');
+      throw new NotFoundError('Print request not found');
     }
 
-    await this.mailgunRepository.sendTemplate(
-      request.email,
-      printSender(),
-      publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
-      'print_pickup',
-      {
-        projectName: request.projectName,
-        paymentNote: pickupPaymentNote(request.payment),
-        statusURL: printRequestStatusUrl(request.id),
-      },
-    );
+    await this.mailgunRepository.sendTemplate(request.email, SENDERS.print, 'print_pickup', {
+      projectName: request.projectName,
+      paymentNote: pickupPaymentNote(request.payment),
+      statusURL: printRequestStatusUrl(request.id),
+    });
   }
 
   async sendSubmittedEmail(printRequestId: string) {
@@ -131,17 +125,11 @@ export class PrintRequestService extends BaseService {
       throw new Error('Print request not found');
     }
 
-    await this.mailgunRepository.sendTemplate(
-      request.email,
-      printSender(),
-      publicEnv.PUBLIC_PRINT_REQUEST_EMAIL,
-      'print_submitted',
-      {
-        customerName: request.customerName,
-        projectName: request.projectName,
-        statusURL: printRequestStatusUrl(request.id),
-      },
-    );
+    await this.mailgunRepository.sendTemplate(request.email, SENDERS.print, 'print_submitted', {
+      customerName: request.customerName,
+      projectName: request.projectName,
+      statusURL: printRequestStatusUrl(request.id),
+    });
   }
 
   async getStatus(id: string) {
@@ -177,13 +165,9 @@ export class PrintRequestService extends BaseService {
       throw new Error('Print request not found');
     }
 
-    const event = getRequestEvent();
-    const origin = event?.url?.origin || 'http://localhost:5173';
-    const printQueueUrl = `${origin}/staff/print_requests/queue?id=${printRequestId}`;
-
     const embed = {
       title: '🖨️ New Print Request Submitted',
-      color: 0x5865f2, // Discord blurple color
+      color: DISCORD_COLOR.BLURPLE,
       fields: [
         {
           name: 'Project Name',
@@ -212,15 +196,9 @@ export class PrintRequestService extends BaseService {
       });
     }
 
-    const settings = await this.settingsRepository.getSetting('printRequest');
-    const webhookUrl = settings.discordWebhookUrl;
-    if (!webhookUrl) {
-      console.warn('Discord webhook URL not configured for print requests');
-      return;
-    }
-
-    await this.discordRepository.sendWebhookNotification(webhookUrl, {
-      content: `A new print request has been submitted! [View in Print Queue](${printQueueUrl})`,
+    const { discordWebhookUrl } = await this.settingsRepository.getSetting('printRequest');
+    await this.discordRepository.notify(discordWebhookUrl, {
+      content: `A new print request has been submitted! [View in Print Queue](${printQueueUrl(printRequestId)})`,
       embeds: [embed],
     });
   }

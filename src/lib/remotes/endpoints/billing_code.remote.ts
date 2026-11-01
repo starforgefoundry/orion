@@ -1,29 +1,31 @@
 import { command, form, query } from '$app/server';
 import { createBillingCodeDto, updateBillingCodeDto } from '$lib/remotes/dtos/billing_code.dto';
-import { verifyAuth } from '$lib/remotes/utils';
-import {
-  billingCodeService,
-  BillingCodeTakenError,
-} from '$lib/server/services/billing_code.service';
-import { error } from '@sveltejs/kit';
+import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
+import { billingCodeService } from '$lib/server/services/billing_code.service';
 import * as v from 'valibot';
 
-const CONFLICT = 409;
+export const getBillingCodes = query(
+  exposeUserErrors(async () => {
+    verifyAuth();
+    return await billingCodeService.getBillingCodes();
+  }),
+);
 
-export const getBillingCodes = query(async () => {
-  verifyAuth();
-  return await billingCodeService.getBillingCodes();
-});
+export const getBillingCodesForOrganization = query(
+  v.string(),
+  exposeUserErrors(async (organizationId) => {
+    verifyAuth();
+    return await billingCodeService.getBillingCodesForOrganization(organizationId);
+  }),
+);
 
-export const getBillingCodesForOrganization = query(v.string(), async (organizationId) => {
-  verifyAuth();
-  return await billingCodeService.getBillingCodesForOrganization(organizationId);
-});
-
-export const getBillingCodeById = query(v.object({ id: v.string() }), async (dto) => {
-  verifyAuth();
-  return await billingCodeService.getBillingCodeById(dto.id);
-});
+export const getBillingCodeById = query(
+  v.object({ id: v.string() }),
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    return await billingCodeService.getBillingCodeById(dto.id);
+  }),
+);
 
 async function refreshCodes(organizationId: string | null) {
   await Promise.all([
@@ -32,29 +34,33 @@ async function refreshCodes(organizationId: string | null) {
   ]);
 }
 
-export const createBillingCode = form(createBillingCodeDto, async (data) => {
-  verifyAuth();
-  try {
+export const createBillingCode = form(
+  createBillingCodeDto,
+  exposeUserErrors(async (data) => {
+    verifyAuth();
     const code = await billingCodeService.createBillingCode(data);
     await refreshCodes(code.organizationId);
     return code;
-  } catch (cause) {
-    if (cause instanceof BillingCodeTakenError) error(CONFLICT, cause.message);
-    throw cause;
-  }
-});
+  }),
+);
 
-export const updateBillingCode = command(updateBillingCodeDto, async (dto) => {
-  verifyAuth();
-  const { id, ...updates } = dto;
-  const code = await billingCodeService.updateBillingCode(id, updates);
-  await refreshCodes(code.organizationId);
-  return code;
-});
+export const updateBillingCode = command(
+  updateBillingCodeDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const { id, ...updates } = dto;
+    const code = await billingCodeService.updateBillingCode(id, updates);
+    await refreshCodes(code.organizationId);
+    return code;
+  }),
+);
 
-export const deleteBillingCode = command(v.object({ id: v.string() }), async (dto) => {
-  verifyAuth();
-  const code = await billingCodeService.getBillingCodeById(dto.id);
-  await billingCodeService.deleteBillingCode(dto.id);
-  await refreshCodes(code.organizationId);
-});
+export const deleteBillingCode = command(
+  v.object({ id: v.string() }),
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const code = await billingCodeService.getBillingCodeById(dto.id);
+    await billingCodeService.deleteBillingCode(dto.id);
+    await refreshCodes(code.organizationId);
+  }),
+);

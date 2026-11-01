@@ -1,5 +1,6 @@
 import type { UpsertInventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
 import { schema } from '$lib/server/db/schema';
+import { NotFoundError } from '$lib/errors';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { fileUrl, saveFile } from '$lib/server/utils/storage';
 import { eq } from 'drizzle-orm';
@@ -80,7 +81,7 @@ export class InventoryRepository extends BaseRepository {
       .where(eq(schema.inventoryItem.id, inventoryItemId));
 
     if (!inventoryItem) {
-      throw new Error('Inventory item not found');
+      throw new NotFoundError('Inventory item not found');
     }
 
     try {

@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
+import { signGoogleJwt } from '$lib/server/utils/google_auth';
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
@@ -44,7 +45,6 @@ export class GoogleCalendarRepository extends BaseRepository {
       return tokenCache.token;
     }
 
-    const header = { alg: 'RS256', typ: 'JWT' };
     const claims = {
       iss: this.serviceAccountEmail,
       scope: SCOPE,
@@ -53,7 +53,7 @@ export class GoogleCalendarRepository extends BaseRepository {
       exp: now + 3600,
     };
 
-    const jwt = await this.signJwt(header, claims);
+    const jwt = signGoogleJwt(claims, this.privateKeyPem);
 
     const res = await fetch(GOOGLE_TOKEN_URL, {
       method: 'POST',
@@ -75,38 +75,6 @@ export class GoogleCalendarRepository extends BaseRepository {
       expiresAt: now + body.expires_in,
     };
     return body.access_token;
-  }
-
-  private async signJwt(header: object, claims: object): Promise<string> {
-    const encoder = new TextEncoder();
-    const encodedHeader = base64UrlEncode(encoder.encode(JSON.stringify(header)));
-    const encodedClaims = base64UrlEncode(encoder.encode(JSON.stringify(claims)));
-    const signingInput = `${encodedHeader}.${encodedClaims}`;
-
-    const privateKey = await this.importPrivateKey();
-    const signature = await crypto.subtle.sign(
-      { name: 'RSASSA-PKCS1-v1_5' },
-      privateKey,
-      encoder.encode(signingInput),
-    );
-
-    return `${signingInput}.${base64UrlEncode(new Uint8Array(signature))}`;
-  }
-
-  private async importPrivateKey(): Promise<CryptoKey> {
-    const pem = this.privateKeyPem;
-    const pemContents = pem
-      .replace(/-----BEGIN PRIVATE KEY-----/, '')
-      .replace(/-----END PRIVATE KEY-----/, '')
-      .replace(/\s+/g, '');
-    const binaryDer = base64ToArrayBuffer(pemContents);
-    return await crypto.subtle.importKey(
-      'pkcs8',
-      binaryDer,
-      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-      false,
-      ['sign'],
-    );
   }
 
   private async apiRequest(path: string, init: RequestInit = {}): Promise<Response> {
@@ -228,23 +196,6 @@ export class GoogleCalendarRepository extends BaseRepository {
   }
 }
 
-function base64UrlEncode(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
 function base64UrlEncodeString(value: string): string {
   return btoa(value).replace(/\+/g, '-').replace(/\//g, '_');
-}
-
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64);
-  const buffer = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    buffer[i] = binary.charCodeAt(i);
-  }
-  return buffer.buffer;
 }

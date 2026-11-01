@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { amountPaid, buildBill, initialStatus, lineItemsTotal, PAYMENT_STATUS } from './billing';
+import {
+  amountPaid,
+  buildBill,
+  initialStatus,
+  isPayableOnline,
+  lineItemsTotal,
+  PAYMENT_STATUS,
+  PAYMENT_TYPE,
+} from './billing';
 
 const ITEMS = [
   { name: 'Material', quantity: 1, unitAmount: 700 },
@@ -65,5 +73,32 @@ describe('amountPaid', () => {
     expect(amountPaid({ status: PAYMENT_STATUS.REFUNDED, total: 500 })).toBe(0);
     expect(amountPaid({ status: PAYMENT_STATUS.CANCELED, total: 500 })).toBe(0);
     expect(amountPaid(null)).toBe(0);
+  });
+});
+
+describe('isPayableOnline', () => {
+  const PENDING = {
+    type: PAYMENT_TYPE.PRINT_REQUEST,
+    status: PAYMENT_STATUS.PENDING,
+    organizationId: null,
+    squareInvoiceId: null,
+  };
+
+  it('accepts a pending payment the customer owes', () => {
+    expect(isPayableOnline(PENDING)).toBe(true);
+  });
+
+  it('accepts an organization paying its own balance', () => {
+    expect(isPayableOnline({ ...PENDING, type: PAYMENT_TYPE.BALANCE, organizationId: 'org' })).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ['is not pending', { status: PAYMENT_STATUS.PAID }],
+    ['was sent as a Square invoice', { squareInvoiceId: 'inv-1' }],
+    ['is billed to an organization', { organizationId: 'org' }],
+  ])('refuses a payment that %s', (_, overrides) => {
+    expect(isPayableOnline({ ...PENDING, ...overrides })).toBe(false);
   });
 });

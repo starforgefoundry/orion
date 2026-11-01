@@ -15,7 +15,11 @@ import {
   SUBSCRIPTION_STATUS,
   type AccessBasis,
 } from '$lib/member_enums';
-import { spaceDate, type MemberAccessContext } from '$lib/server/utils/member_access';
+import {
+  hasMembership,
+  spaceDate,
+  type MemberAccessContext,
+} from '$lib/server/utils/member_access';
 import {
   and,
   asc,
@@ -35,6 +39,12 @@ import {
   type SQL,
 } from 'drizzle-orm';
 import type { DateTime } from 'luxon';
+
+export type CustomerDetails = {
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+};
 
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -85,6 +95,17 @@ export class MemberRepository extends BaseRepository {
     return member;
   }
 
+  /** Links a booking to the customer's member row, so the kiosk can find their waiver. */
+  async customerColumns(customer: CustomerDetails) {
+    const member = await this.upsertByEmail(customer.customerName, customer.customerEmail);
+    return {
+      memberId: member.id,
+      customerName: customer.customerName,
+      customerEmail: customer.customerEmail,
+      customerPhone: customer.customerPhone,
+    };
+  }
+
   async setSquareCustomerId(id: string, squareCustomerId: string) {
     await this.db.update(schema.member).set({ squareCustomerId }).where(eq(schema.member.id, id));
   }
@@ -92,6 +113,11 @@ export class MemberRepository extends BaseRepository {
   async getAccessContextByEmail(email: string) {
     const member = await this.getByEmail(email);
     return member ? await this.getAccessContext(member.id) : undefined;
+  }
+
+  async hasMembership(email: string, now: DateTime) {
+    const context = await this.getAccessContextByEmail(email);
+    return context !== undefined && hasMembership(context, now);
   }
 
   async getAccessContext(memberId: string): Promise<MemberAccessContext | undefined> {

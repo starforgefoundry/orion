@@ -1,14 +1,12 @@
 import { env } from '$env/dynamic/private';
+import { signGoogleJwt } from '$lib/server/utils/google_auth';
 import { passUrl } from '$lib/server/utils/member_links';
 import { hexColor, PASS_BRAND } from '$lib/server/utils/pass_brand';
 import type { PassDetails } from '$lib/server/utils/pass_details';
-import { sign } from 'node:crypto';
 
 export const GOOGLE_WALLET_SAVE_URL = 'https://pay.google.com/gp/v/save';
 const JWT_AUDIENCE = 'google';
 const JWT_TYPE = 'savetowallet';
-const JWT_HEADER = { alg: 'RS256', typ: 'JWT' };
-const JWT_SIGNING_HASH = 'sha256';
 const PASS_LANGUAGE = 'en-US';
 const PASS_TITLE = 'Starforge Foundry';
 const PASS_BACKGROUND_COLOR = hexColor(PASS_BRAND.navy);
@@ -108,17 +106,7 @@ export function googleWalletClaims(
   };
 }
 
-function base64Url(value: string | Buffer) {
-  return Buffer.from(value).toString('base64url');
-}
-
-export function signJwt(claims: object, privateKeyPem: string) {
-  const unsigned = `${base64Url(JSON.stringify(JWT_HEADER))}.${base64Url(JSON.stringify(claims))}`;
-  const signature = sign(JWT_SIGNING_HASH, Buffer.from(unsigned), privateKeyPem);
-  return `${unsigned}.${base64Url(signature)}`;
-}
-
 export function googleWalletSaveUrl(pass: PassDetails, config: GoogleWalletConfig) {
-  const jwt = signJwt(googleWalletClaims(pass, config), config.privateKey);
+  const jwt = signGoogleJwt(googleWalletClaims(pass, config), config.privateKey);
   return `${GOOGLE_WALLET_SAVE_URL}/${jwt}`;
 }

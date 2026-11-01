@@ -1,5 +1,4 @@
-import { runInBackground } from '$lib/server/utils/background';
-import { env } from '$env/dynamic/private';
+import { forEachSettled, runInBackground } from '$lib/server/utils/background';
 import type {
   BookClassDto,
   CancelBookingDto,
@@ -19,9 +18,11 @@ import type {
   Payment,
   User,
 } from '$lib/server/db/schema';
+import { DISCORD_COLOR } from '$lib/server/repositories/discord.repository';
 import type { GoogleCalendarEventInput } from '$lib/server/repositories/google_calendar.repository';
-import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
+import { ConflictError, NotFoundError, UserError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
+import { SENDERS } from '$lib/server/utils/email_templates/senders';
 import {
   buildBill,
   amountPaid,
@@ -32,7 +33,8 @@ import {
 } from '$lib/utils/billing';
 import { SPACE_ZONE } from '$lib/space';
 import { spaceDate } from '$lib/server/utils/member_access';
-import { passLinks } from '$lib/server/utils/member_links';
+import { classBookingUrl, passLinks } from '$lib/server/utils/member_links';
+import { bookWithPayment } from '$lib/server/utils/paid_booking';
 import {
   CLASS_BOOKING_STATUS,
   CLASS_DATE_FORMAT,
@@ -41,18 +43,12 @@ import {
   classStartsAt,
   formatClassTime,
 } from '$lib/utils/classes';
+import { dueForReminder } from '$lib/utils/reminders';
 import { DateTime, Duration } from 'luxon';
 
-const PAYMENT_FAILED_MESSAGE = 'Payment failed';
 const FULLY_BOOKED_MESSAGE = 'This class is fully booked';
 const CLASS_STARTED_MESSAGE = 'This class has already started and can no longer be canceled';
-const CLASS_EMAIL = 'classes@starforgefoundry.com';
-const CLASS_SENDER = `Starforge Classes <${CLASS_EMAIL}>`;
 export const CLASS_REMINDER_LEAD = Duration.fromObject({ hours: 24 });
-
-function bookingUrl(booking: { bookingToken: string }) {
-  return `${env.FRONTEND_URL}/classes/booking/${booking.bookingToken}`;
-}
 
 function bookingEmailVariables(
   booking: Pick<ClassBooking, 'customerName' | 'quantity' | 'bookingToken' | 'passToken'>,
@@ -65,13 +61,20 @@ function bookingEmailVariables(
     classDate: classStartsAt(instance).toFormat(CLASS_DATE_FORMAT),
     classTime: formatClassTime(instance),
     quantity: booking.quantity.toString(),
-    bookingUrl: bookingUrl(booking),
+    bookingUrl: classBookingUrl(booking),
     ...passLinks(booking),
   };
 }
 
 type PaidBooking = { payment: Payment | null };
-type CustomerDetails = Pick<BookClassDto, 'customerName' | 'customerEmail' | 'customerPhone'>;
+
+function requireActive<T extends Pick<ClassBooking, 'status'>>(booking: T | null | undefined): T {
+  if (!booking) throw new NotFoundError('Booking not found');
+  if (booking.status === CLASS_BOOKING_STATUS.CANCELED) {
+    throw new UserError('Booking is already canceled');
+  }
+  return booking;
+}
 
 export class ClassService extends BaseService {
   private async refund(booking: PaidBooking) {
@@ -214,7 +217,7 @@ export class ClassService extends BaseService {
 
   async cancelInstance(dto: CancelInstanceDto) {
     const instance = await this.classRepository.getInstanceById(dto.instanceId);
-    if (!instance) throw new Error('Instance not found');
+    if (!instance) throw new NotFoundError('Instance not found');
 
     if (dto.mode === 'this_and_future' && instance.recurrenceGroupId) {
       const futureInstances = await this.classRepository.getScheduledInstancesByRecurrenceGroup(
@@ -304,73 +307,56 @@ export class ClassService extends BaseService {
 
   async bookClass(dto: BookClassDto) {
     const instance = await this.classRepository.getInstanceById(dto.instanceId);
-    if (!instance) throw new Error('Class not found');
+    if (!instance) throw new NotFoundError('Class not found');
     if (instance.status !== CLASS_INSTANCE_STATUS.SCHEDULED)
-      throw new Error('This class has been canceled');
+      throw new UserError('This class has been canceled');
 
     const catalog = instance.catalog;
-    if (!catalog) throw new Error('Class not found');
+    if (!catalog) throw new NotFoundError('Class not found');
 
-    if (classHasStarted(instance)) throw new Error('Cannot book a class in the past');
+    if (classHasStarted(instance)) throw new UserError('Cannot book a class in the past');
 
     await this.assertSeatsAvailable(instance, dto.quantity);
 
     const formattedDate = DateTime.fromISO(instance.date, { zone: SPACE_ZONE }).toFormat(
       'MMM d, yyyy',
     );
-    const authorized = await this.paymentRepository
-      .authorize(
-        {
-          type: PAYMENT_TYPE.CLASS_BOOKING,
-          status: PAYMENT_STATUS.PENDING,
-          customer: { name: dto.customerName, email: dto.customerEmail },
-          bill: buildBill([
-            {
-              name: `${catalog.name} - ${formattedDate}`,
-              quantity: dto.quantity,
-              unitAmount: catalog.price,
-            },
-          ]),
+    const cancel = (booking: ClassBooking) =>
+      this.classRepository.updateBooking(booking.id, { status: CLASS_BOOKING_STATUS.CANCELED });
+
+    const { booking } = await bookWithPayment(
+      this.paymentRepository,
+      {
+        type: PAYMENT_TYPE.CLASS_BOOKING,
+        status: PAYMENT_STATUS.PENDING,
+        customer: { name: dto.customerName, email: dto.customerEmail },
+        bill: buildBill([
+          {
+            name: `${catalog.name} - ${formattedDate}`,
+            quantity: dto.quantity,
+            unitAmount: catalog.price,
+          },
+        ]),
+      },
+      dto.sourceId,
+      {
+        create: async (authorized) => {
+          const booking = await this.classRepository.createBooking({
+            instanceId: dto.instanceId,
+            ...(await this.memberRepository.customerColumns(dto)),
+            paymentId: authorized.id,
+            status: CLASS_BOOKING_STATUS.CONFIRMED,
+            quantity: dto.quantity,
+          });
+          if (await this.isOverbooked(instance)) {
+            await cancel(booking);
+            throw new UserError(FULLY_BOOKED_MESSAGE);
+          }
+          return booking;
         },
-        dto.sourceId,
-      )
-      .catch((error) => {
-        if (error instanceof PaymentDeclinedError) {
-          throw new Error(PAYMENT_FAILED_MESSAGE, { cause: error });
-        }
-        throw error;
-      });
-
-    let booking;
-    try {
-      booking = await this.classRepository.createBooking({
-        instanceId: dto.instanceId,
-        ...(await this.customerColumns(dto)),
-        paymentId: authorized.id,
-        status: CLASS_BOOKING_STATUS.CONFIRMED,
-        quantity: dto.quantity,
-      });
-    } catch (error) {
-      await this.paymentRepository.void(authorized);
-      throw error;
-    }
-
-    if (await this.isOverbooked(instance)) {
-      await this.classRepository.updateBooking(booking.id, {
-        status: CLASS_BOOKING_STATUS.CANCELED,
-      });
-      await this.paymentRepository.void(authorized);
-      throw new Error(FULLY_BOOKED_MESSAGE);
-    }
-
-    try {
-      await this.paymentRepository.capture(authorized);
-    } catch (error) {
-      await this.classRepository.updateBooking(booking.id, {
-        status: CLASS_BOOKING_STATUS.CANCELED,
-      });
-      throw new Error(PAYMENT_FAILED_MESSAGE, { cause: error });
-    }
+        cancel,
+      },
+    );
 
     // Send confirmation email and discord notification asynchronously
     runInBackground(this.sendBookingConfirmationEmail(booking.id), 'send booking email');
@@ -394,7 +380,7 @@ export class ClassService extends BaseService {
     if (booked + quantity <= instance.seats) return;
 
     const remaining = instance.seats - booked;
-    throw new Error(
+    throw new UserError(
       remaining <= 0
         ? FULLY_BOOKED_MESSAGE
         : `Only ${remaining} spot${remaining !== 1 ? 's' : ''} remaining`,
@@ -406,16 +392,6 @@ export class ClassService extends BaseService {
     return booked > instance.seats;
   }
 
-  private async customerColumns(dto: CustomerDetails) {
-    const member = await this.memberRepository.upsertByEmail(dto.customerName, dto.customerEmail);
-    return {
-      memberId: member.id,
-      customerName: dto.customerName,
-      customerEmail: dto.customerEmail,
-      customerPhone: dto.customerPhone,
-    };
-  }
-
   async getBookingByToken(token: string) {
     const booking = await this.classRepository.getBookingByToken(token);
     if (!booking) return null;
@@ -425,16 +401,21 @@ export class ClassService extends BaseService {
   }
 
   async cancelBooking(dto: CancelBookingDto) {
-    const booking = await this.classRepository.getBookingByToken(dto.bookingToken);
-    if (!booking) throw new Error('Booking not found');
-    if (booking.status === CLASS_BOOKING_STATUS.CANCELED)
-      throw new Error('Booking is already canceled');
+    const booking = requireActive(await this.classRepository.getBookingByToken(dto.bookingToken));
     if (booking.instance && classHasStarted(booking.instance)) {
-      throw new Error(CLASS_STARTED_MESSAGE);
+      throw new UserError(CLASS_STARTED_MESSAGE);
     }
+    return await this.cancel(booking);
+  }
 
+  async cancelBookingStaff(dto: CancelBookingStaffDto) {
+    return await this.cancel(
+      requireActive(await this.classRepository.getBookingById(dto.bookingId)),
+    );
+  }
+
+  private async cancel(booking: Pick<ClassBooking, 'id' | 'instanceId'> & PaidBooking) {
     await this.refund(booking);
-
     await this.classRepository.updateBooking(booking.id, { status: CLASS_BOOKING_STATUS.CANCELED });
 
     runInBackground(
@@ -445,44 +426,27 @@ export class ClassService extends BaseService {
     return { success: true };
   }
 
-  async cancelBookingStaff(dto: CancelBookingStaffDto) {
-    const booking = await this.classRepository.getBookingById(dto.bookingId);
-    if (!booking) throw new Error('Booking not found');
-    if (booking.status === CLASS_BOOKING_STATUS.CANCELED)
-      throw new Error('Booking is already canceled');
-
-    await this.refund(booking);
-
-    await this.classRepository.updateBooking(booking.id, { status: CLASS_BOOKING_STATUS.CANCELED });
-
-    runInBackground(
-      this.syncInstanceToCalendar(booking.instanceId),
-      'sync staff-canceled booking to calendar',
-    );
-
-    return { success: true };
-  }
-
   async rescheduleBooking(dto: RescheduleBookingDto) {
     const booking = await this.classRepository.getBookingById(dto.bookingId);
-    if (!booking || !booking.instance) throw new Error('Booking not found');
+    if (!booking || !booking.instance) throw new NotFoundError('Booking not found');
     if (booking.status === CLASS_BOOKING_STATUS.CANCELED)
-      throw new Error('Booking is already canceled');
+      throw new UserError('Booking is already canceled');
     if (booking.instanceId === dto.targetInstanceId)
-      throw new Error('Booking is already in this class session');
+      throw new UserError('Booking is already in this class session');
 
     const target = await this.classRepository.getInstanceById(dto.targetInstanceId);
-    if (!target) throw new Error('Class session not found');
+    if (!target) throw new NotFoundError('Class session not found');
     if (target.classId !== booking.instance.classId)
-      throw new Error('Bookings can only move to a session of the same class');
+      throw new UserError('Bookings can only move to a session of the same class');
     if (target.status !== CLASS_INSTANCE_STATUS.SCHEDULED)
-      throw new Error('This class has been canceled');
-    if (classHasStarted(target)) throw new Error('Cannot move a booking to a class in the past');
+      throw new UserError('This class has been canceled');
+    if (classHasStarted(target))
+      throw new UserError('Cannot move a booking to a class in the past');
 
     const targetBookings = await this.classRepository.getConfirmedBookingsForInstance(target.id);
     const customerEmail = booking.customerEmail.toLowerCase();
     if (targetBookings.some((b) => b.customerEmail.toLowerCase() === customerEmail))
-      throw new Error('Customer is already booked in that session');
+      throw new ConflictError('Customer is already booked in that session');
 
     const confirmedCount = targetBookings.reduce((total, b) => total + b.quantity, 0);
     await this.assertSeatsAvailable(target, booking.quantity, confirmedCount);
@@ -497,7 +461,7 @@ export class ClassService extends BaseService {
         instanceId: booking.instanceId,
         reminderSentDate: booking.reminderSentDate,
       });
-      throw new Error(FULLY_BOOKED_MESSAGE);
+      throw new UserError(FULLY_BOOKED_MESSAGE);
     }
 
     runInBackground(
@@ -518,16 +482,16 @@ export class ClassService extends BaseService {
 
   async manualBookClass(dto: ManualBookClassDto) {
     const instance = await this.classRepository.getInstanceById(dto.instanceId);
-    if (!instance) throw new Error('Class not found');
+    if (!instance) throw new NotFoundError('Class not found');
     if (instance.status !== CLASS_INSTANCE_STATUS.SCHEDULED)
-      throw new Error('This class has been canceled');
+      throw new UserError('This class has been canceled');
 
     await this.assertSeatsAvailable(instance, dto.quantity);
 
     // Create booking with no payment
     const booking = await this.classRepository.createBooking({
       instanceId: dto.instanceId,
-      ...(await this.customerColumns(dto)),
+      ...(await this.memberRepository.customerColumns(dto)),
       status: CLASS_BOOKING_STATUS.CONFIRMED,
       quantity: dto.quantity,
     });
@@ -536,7 +500,7 @@ export class ClassService extends BaseService {
       await this.classRepository.updateBooking(booking.id, {
         status: CLASS_BOOKING_STATUS.CANCELED,
       });
-      throw new Error(FULLY_BOOKED_MESSAGE);
+      throw new UserError(FULLY_BOOKED_MESSAGE);
     }
 
     runInBackground(this.syncInstanceToCalendar(dto.instanceId), 'sync manual booking to calendar');
@@ -552,8 +516,7 @@ export class ClassService extends BaseService {
 
     await this.mailgunRepository.sendTemplate(
       booking.customerEmail,
-      CLASS_SENDER,
-      CLASS_EMAIL,
+      SENDERS.classes,
       'class_booking',
       {
         ...bookingEmailVariables(booking, booking.instance, booking.catalog),
@@ -563,37 +526,32 @@ export class ClassService extends BaseService {
     );
   }
 
-  /** Skips bookings made inside the reminder window, since their confirmation just went out. */
   async sendDueReminders(now: DateTime = DateTime.now()) {
-    const until = now.plus(CLASS_REMINDER_LEAD);
     const candidates = await this.classRepository.getReminderCandidates(
       spaceDate(now),
-      spaceDate(until),
+      spaceDate(now.plus(CLASS_REMINDER_LEAD)),
+    );
+    const due = candidates.filter(({ booking, instance }) =>
+      dueForReminder(
+        { startsAt: classStartsAt(instance), bookedAt: booking.createdDate },
+        now,
+        CLASS_REMINDER_LEAD,
+      ),
     );
 
-    const due = candidates.filter(({ booking, instance }) => {
-      const startsAt = classStartsAt(instance);
-      return (
-        startsAt > now &&
-        startsAt <= until &&
-        startsAt.diff(booking.createdDate).toMillis() > CLASS_REMINDER_LEAD.toMillis()
-      );
-    });
-
-    for (const { booking, instance, catalog } of due) {
-      try {
+    await forEachSettled(
+      due,
+      async ({ booking, instance, catalog }) => {
         await this.mailgunRepository.sendTemplate(
           booking.customerEmail,
-          CLASS_SENDER,
-          CLASS_EMAIL,
+          SENDERS.classes,
           'class_reminder',
           bookingEmailVariables(booking, instance, catalog),
         );
         await this.classRepository.updateBooking(booking.id, { reminderSentDate: now });
-      } catch (error) {
-        console.error(`Failed to send class reminder for booking ${booking.id}:`, error);
-      }
-    }
+      },
+      ({ booking }) => `send class reminder for booking ${booking.id}`,
+    );
   }
 
   async sendBookingDiscordNotification(bookingId: string) {
@@ -602,18 +560,14 @@ export class ClassService extends BaseService {
       throw new Error('Booking not found');
     }
 
-    const settings = await this.settingsRepository.getSetting('classSettings');
-    const webhookUrl = settings.discordWebhookUrl;
-    if (!webhookUrl) {
-      console.warn('Discord webhook URL not configured for class bookings');
-      return;
-    }
-
-    const confirmedCount = await this.classRepository.getConfirmedBookingCount(booking.instance.id);
+    const [{ discordWebhookUrl }, confirmedCount] = await Promise.all([
+      this.settingsRepository.getSetting('classSettings'),
+      this.classRepository.getConfirmedBookingCount(booking.instance.id),
+    ]);
 
     const embed = {
       title: '🎓 New Class Booking',
-      color: 0x57f287, // Green
+      color: DISCORD_COLOR.GREEN,
       fields: [
         {
           name: 'Class',
@@ -649,7 +603,7 @@ export class ClassService extends BaseService {
       timestamp: new Date().toISOString(),
     };
 
-    await this.discordRepository.sendWebhookNotification(webhookUrl, {
+    await this.discordRepository.notify(discordWebhookUrl, {
       embeds: [embed],
     });
   }

@@ -10,70 +10,71 @@ import {
   updatePrintRequestStatusDto,
 } from '$lib/remotes/dtos/print_request.dto';
 import { payPaymentDto } from '$lib/remotes/dtos/payment.dto';
-import { verifyAuth } from '$lib/remotes/utils';
+import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
 import { printFilesService } from '$lib/server/services/print_files.service';
-import { PaymentError } from '$lib/server/repositories/payment.repository';
 import { printPaymentService } from '$lib/server/services/print_payment.service';
-import {
-  PrintSubmissionError,
-  printRequestService,
-} from '$lib/server/services/print_request.service';
+import { printRequestService } from '$lib/server/services/print_request.service';
 import { printRequestCommentService } from '$lib/server/services/print_request_comment.service';
-import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 
-const BAD_REQUEST = 400;
+export const submitPrintRequestForm = form(
+  submitPrintRequestDto,
+  exposeUserErrors(async (dto) => {
+    await printRequestService.submitPrintRequest(dto);
+  }),
+);
 
-export const submitPrintRequestForm = form(submitPrintRequestDto, async (dto) => {
-  await asCustomerError(() => printRequestService.submitPrintRequest(dto));
-});
+export const getPrintRequests = query(
+  exposeUserErrors(async () => {
+    verifyAuth();
+    return await printRequestService.getPrintRequests();
+  }),
+);
 
-export const getPrintRequests = query(async () => {
-  verifyAuth();
-  return await printRequestService.getPrintRequests();
-});
+export const searchPrintRequests = query(
+  searchPrintRequestsDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    return await printRequestService.searchPrintRequests(dto);
+  }),
+);
 
-export const searchPrintRequests = query(searchPrintRequestsDto, async (dto) => {
-  verifyAuth();
-  return await printRequestService.searchPrintRequests(dto);
-});
+export const getPrintRequestById = query(
+  v.string(),
+  exposeUserErrors(async (id: string) => {
+    verifyAuth();
+    return await printRequestService.getPrintRequestById(id);
+  }),
+);
 
-export const getPrintRequestById = query(v.string(), async (id: string) => {
-  verifyAuth();
-  return await printRequestService.getPrintRequestById(id);
-});
+export const getPrintRequestStatus = query(
+  v.string(),
+  exposeUserErrors(async (id: string) => {
+    return await printRequestService.getStatus(id);
+  }),
+);
 
-/** Unexpected errors reach the browser as a generic message, so customer-facing ones are 400s. */
-async function asCustomerError<T>(action: () => Promise<T>) {
-  try {
-    return await action();
-  } catch (cause) {
-    if (cause instanceof PaymentError || cause instanceof PrintSubmissionError) {
-      error(BAD_REQUEST, cause.message);
-    }
-    throw cause;
-  }
-}
+export const respondToPrintRequestQuote = command(
+  respondToQuoteDto,
+  exposeUserErrors(async (dto) => {
+    const response = await printPaymentService.respondToQuote(dto);
+    await getPrintRequestStatus(dto.id).refresh();
+    return response;
+  }),
+);
 
-export const getPrintRequestStatus = query(v.string(), async (id: string) => {
-  return await printRequestService.getStatus(id);
-});
-
-export const respondToPrintRequestQuote = command(respondToQuoteDto, async (dto) => {
-  const response = await asCustomerError(() => printPaymentService.respondToQuote(dto));
-  await getPrintRequestStatus(dto.id).refresh();
-  return response;
-});
-
-export const payPrintRequest = command(payPaymentDto, async (dto) => {
-  const response = await asCustomerError(() => printPaymentService.payPrintRequest(dto));
-  await getPrintRequestStatus(dto.id).refresh();
-  return response;
-});
+export const payPrintRequest = command(
+  payPaymentDto,
+  exposeUserErrors(async (dto) => {
+    const response = await printPaymentService.payPrintRequest(dto);
+    await getPrintRequestStatus(dto.id).refresh();
+    return response;
+  }),
+);
 
 export const updatePrintRequest = command(
   v.intersect([updatePrintRequestDto, v.object({ id: v.string() })]),
-  async (dto) => {
+  exposeUserErrors(async (dto) => {
     verifyAuth();
 
     const { id, ...updates } = dto;
@@ -83,12 +84,12 @@ export const updatePrintRequest = command(
     await getPrintRequestById(id).refresh();
 
     return response;
-  },
+  }),
 );
 
 export const updatePrintRequestDiscount = command(
   v.intersect([updatePrintRequestDiscountDto, v.object({ id: v.string() })]),
-  async (dto) => {
+  exposeUserErrors(async (dto) => {
     verifyAuth();
 
     const { id, ...updates } = dto;
@@ -98,12 +99,12 @@ export const updatePrintRequestDiscount = command(
     await getPrintRequestById(id).refresh();
 
     return response;
-  },
+  }),
 );
 
 export const updatePrintRequestStatus = command(
   v.intersect([updatePrintRequestStatusDto, v.object({ id: v.string() })]),
-  async (dto) => {
+  exposeUserErrors(async (dto) => {
     verifyAuth();
 
     const { id, ...updates } = dto;
@@ -111,12 +112,12 @@ export const updatePrintRequestStatus = command(
     await getPrintRequests().refresh();
 
     return response;
-  },
+  }),
 );
 
 export const updatePartQuantity = command(
   v.intersect([v.object({ id: v.string() }), updatePartQuantityDto]),
-  async (dto) => {
+  exposeUserErrors(async (dto) => {
     verifyAuth();
 
     const { id, ...update } = dto;
@@ -126,38 +127,53 @@ export const updatePartQuantity = command(
     await getPrintRequests().refresh();
 
     return response;
-  },
+  }),
 );
 
-export const getPrintRequestFiles = query(v.string(), async (printRequestId: string) => {
-  verifyAuth();
+export const getPrintRequestFiles = query(
+  v.string(),
+  exposeUserErrors(async (printRequestId: string) => {
+    verifyAuth();
 
-  return await printFilesService.getByRequestId(printRequestId);
-});
+    return await printFilesService.getByRequestId(printRequestId);
+  }),
+);
 
-export const getPrintRequestDownloadUrl = query(v.string(), async (printRequestId: string) => {
-  verifyAuth();
+export const getPrintRequestDownloadUrl = query(
+  v.string(),
+  exposeUserErrors(async (printRequestId: string) => {
+    verifyAuth();
 
-  return printFilesService.getDownloadUrl(printRequestId);
-});
+    return printFilesService.getDownloadUrl(printRequestId);
+  }),
+);
 
-export const getPrintRequestComments = query(v.string(), async (printRequestId: string) => {
-  verifyAuth();
+export const getPrintRequestComments = query(
+  v.string(),
+  exposeUserErrors(async (printRequestId: string) => {
+    verifyAuth();
 
-  return await printRequestCommentService.getForRequest(printRequestId);
-});
+    return await printRequestCommentService.getForRequest(printRequestId);
+  }),
+);
 
-export const addPrintRequestCommentForm = form(addPrintRequestCommentDto, async (dto) => {
-  const staff = verifyAuth();
+export const addPrintRequestCommentForm = form(
+  addPrintRequestCommentDto,
+  exposeUserErrors(async (dto) => {
+    const staff = verifyAuth();
 
-  const comment = await printRequestCommentService.addComment(dto, staff.email);
-  await getPrintRequestComments(dto.printRequestId).refresh();
+    const comment = await printRequestCommentService.addComment(dto, staff.email);
+    await getPrintRequestComments(dto.printRequestId).refresh();
 
-  return comment;
-});
+    return comment;
+  }),
+);
 
-export const sendPickupNotification = command(v.string(), async (printRequestId: string) => {
-  verifyAuth();
+export const sendPickupNotification = command(
+  v.string(),
+  exposeUserErrors(async (printRequestId: string) => {
+    verifyAuth();
 
-  return await printRequestService.sendPickupNotification(printRequestId);
-});
+    return await printRequestService.sendPickupNotification(printRequestId);
+  }),
+);

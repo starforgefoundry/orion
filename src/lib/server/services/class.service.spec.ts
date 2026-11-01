@@ -5,6 +5,7 @@ import type {
   Payment,
   User,
 } from '$lib/server/db/schema';
+import { UserError } from '$lib/errors';
 import { PaymentDeclinedError } from '$lib/server/repositories/payment.repository';
 import { SPACE_ZONE } from '$lib/space';
 import { PAYMENT_STATUS } from '$lib/utils/billing';
@@ -381,9 +382,15 @@ describe(ClassService.name, () => {
       mocks.classRepository.getInstanceById.mockResolvedValue(instance);
       mocks.classRepository.getConfirmedBookingCount.mockResolvedValue(0);
       stubSettings(mocks.settingsRepository, { classSettings: { discordWebhookUrl: '' } });
+      mocks.discordRepository.notify.mockResolvedValue(undefined);
       mocks.paymentRepository.authorize.mockResolvedValue(authorized);
       mocks.paymentRepository.capture.mockResolvedValue(paidPayment(5000));
-      mocks.memberRepository.upsertByEmail.mockResolvedValue(member);
+      mocks.memberRepository.customerColumns.mockImplementation(async (customer) => ({
+        memberId: member.id,
+        customerName: customer.customerName,
+        customerEmail: customer.customerEmail,
+        customerPhone: customer.customerPhone,
+      }));
       mocks.classRepository.createBooking.mockResolvedValue(booking);
       mocks.mailgunRepository.sendTemplate.mockResolvedValue(undefined as never);
       mocks.classRepository.getBookingById.mockResolvedValue(
@@ -411,10 +418,7 @@ describe(ClassService.name, () => {
         }),
         'sq-nonce-123',
       );
-      expect(mocks.memberRepository.upsertByEmail).toHaveBeenCalledWith(
-        'Jane Doe',
-        'jane@test.com',
-      );
+      expect(mocks.memberRepository.customerColumns).toHaveBeenCalledWith(dto);
       expect(mocks.classRepository.createBooking).toHaveBeenCalledWith({
         instanceId: 'inst-1',
         memberId: member.id,
@@ -453,6 +457,7 @@ describe(ClassService.name, () => {
       mocks.classRepository.getConfirmedBookingCount.mockResolvedValue(10);
 
       await expect(sut.bookClass(dto)).rejects.toThrow('This class is fully booked');
+      await expect(sut.bookClass(dto)).rejects.toBeInstanceOf(UserError);
     });
 
     it('should throw when the card is declined', async () => {
@@ -463,7 +468,7 @@ describe(ClassService.name, () => {
     });
 
     it('should cancel the booking when the capture fails', async () => {
-      mocks.paymentRepository.capture.mockRejectedValue(new Error('capture failed'));
+      mocks.paymentRepository.capture.mockRejectedValue(new PaymentDeclinedError());
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
       await expect(sut.bookClass(dto)).rejects.toThrow('Payment failed');
@@ -569,6 +574,24 @@ describe(ClassService.name, () => {
 
       expect(result).toEqual({ success: true });
       expect(mocks.paymentRepository.refund).toHaveBeenCalledWith(payment);
+    });
+
+    it('lets staff cancel a class that already started', async () => {
+      mocks.classRepository.getBookingById.mockResolvedValue(
+        bookingDetail(
+          { id: 'book-1', status: 'confirmed' },
+          null,
+          factory.classInstance({ date: '2000-01-01' }),
+        ),
+      );
+      mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
+
+      await expect(sut.cancelBookingStaff({ bookingId: 'book-1' })).resolves.toEqual({
+        success: true,
+      });
+      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
+        status: 'canceled',
+      });
     });
 
     it('should throw when booking not found', async () => {
@@ -791,8 +814,10 @@ describe(ClassService.name, () => {
 
       expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledWith(
         'jane@test.com',
-        'Starforge Classes <classes@starforgefoundry.com>',
-        'classes@starforgefoundry.com',
+        {
+          from: 'Starforge Classes <classes@starforgefoundry.com>',
+          replyTo: 'classes@starforgefoundry.com',
+        },
         'class_booking',
         expect.objectContaining({
           customerName: 'Jane Doe',
@@ -858,8 +883,10 @@ describe(ClassService.name, () => {
 
       expect(mocks.mailgunRepository.sendTemplate).toHaveBeenCalledExactlyOnceWith(
         'customer@example.com',
-        'Starforge Classes <classes@starforgefoundry.com>',
-        'classes@starforgefoundry.com',
+        {
+          from: 'Starforge Classes <classes@starforgefoundry.com>',
+          replyTo: 'classes@starforgefoundry.com',
+        },
         'class_reminder',
         expect.objectContaining({
           className: 'Welding Class',

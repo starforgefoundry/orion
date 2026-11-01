@@ -3,6 +3,8 @@ import type { Member } from '$lib/server/db/schema';
 
 export const PASS_PATH = '/pass';
 export const ONBOARDING_PATH = '/member/onboard';
+export const CAR_BAY_BOOKING_PATH = '/car_bay/booking';
+export const CLASS_BOOKING_PATH = '/classes/booking';
 
 /** The value encoded in a pass's QR code. Phone cameras open it; the kiosk reads the token. */
 export function passUrl(pass: { passToken: string }) {
@@ -28,4 +30,12 @@ export function passTokenFromScan(scanned: string) {
 /** Uses its own token so scanning someone's QR code never reveals their email or waiver form. */
 export function onboardingUrl(member: Pick<Member, 'onboardingToken'>) {
   return `${env.FRONTEND_URL}${ONBOARDING_PATH}/${member.onboardingToken}`;
+}
+
+export function carBayBookingUrl(booking: { bookingToken: string }) {
+  return `${env.FRONTEND_URL}${CAR_BAY_BOOKING_PATH}/${booking.bookingToken}`;
+}
+
+export function classBookingUrl(booking: { bookingToken: string }) {
+  return `${env.FRONTEND_URL}${CLASS_BOOKING_PATH}/${booking.bookingToken}`;
 }

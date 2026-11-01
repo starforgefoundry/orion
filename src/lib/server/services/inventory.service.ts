@@ -1,4 +1,5 @@
 import type { UpsertInventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
+import { NotFoundError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
 
 export class InventoryService extends BaseService {
@@ -10,7 +11,7 @@ export class InventoryService extends BaseService {
   async getItemById(id: string) {
     const item = await this.inventoryRepository.getById(id);
     if (!item) {
-      throw new Error('Inventory item not found');
+      throw new NotFoundError('Inventory item not found');
     }
     return item;
   }

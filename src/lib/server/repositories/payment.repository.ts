@@ -1,3 +1,4 @@
+import { UserError } from '$lib/errors';
 import { schema, type Payment } from '$lib/server/db/schema';
 import type { Database } from '$lib/server/db';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
@@ -31,7 +32,7 @@ export type NewPayment = {
 };
 
 /** Safe to show the customer. */
-export class PaymentError extends Error {}
+export class PaymentError extends UserError {}
 
 export class PaymentDeclinedError extends PaymentError {
   constructor(options?: ErrorOptions) {

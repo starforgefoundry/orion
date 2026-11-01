@@ -29,10 +29,6 @@ export class DayPassRepository extends BaseRepository {
     return await this.db.insert(schema.dayPass).values(rows).onConflictDoNothing().returning();
   }
 
-  async markUsed(id: string, usedDate: string) {
-    await this.db.update(schema.dayPass).set({ usedDate }).where(eq(schema.dayPass.id, id));
-  }
-
   async listByMember(memberId: string) {
     return await this.db
       .select()

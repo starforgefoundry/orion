@@ -11,94 +11,118 @@ import {
   staffCancelCarBayBookingDto,
   staffCloseCarBayDto,
 } from '$lib/remotes/dtos/car_bay.dto';
-import { verifyAuth } from '$lib/remotes/utils';
+import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
 import { carBayService } from '$lib/server/services/car_bay.service';
-import { CarBayRuleError } from '$lib/utils/car_bay';
-import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
-
-const BAD_REQUEST = 400;
-
-/** Unexpected errors reach the browser as a generic message, so rule violations are sent as 400s. */
-async function withRuleErrors<T>(action: () => Promise<T>) {
-  try {
-    return await action();
-  } catch (cause) {
-    if (cause instanceof CarBayRuleError) error(BAD_REQUEST, cause.message);
-    throw cause;
-  }
-}
 
 // ── Public ──
 
-export const getCarBaySchedule = query(async () => {
-  return await carBayService.getPublicSchedule();
-});
+export const getCarBaySchedule = query(
+  exposeUserErrors(async () => {
+    return await carBayService.getPublicSchedule();
+  }),
+);
 
-export const getCarBayMembership = query(customerEmailDto, async (customerEmail) => {
-  return await carBayService.isMember(customerEmail);
-});
+export const getCarBayMembership = query(
+  customerEmailDto,
+  exposeUserErrors(async (customerEmail) => {
+    return await carBayService.isMember(customerEmail);
+  }),
+);
 
-export const bookCarBay = command(bookCarBayDto, async (dto) => {
-  const result = await withRuleErrors(() => carBayService.book(dto));
-  await getCarBaySchedule().refresh();
-  return result;
-});
+export const bookCarBay = command(
+  bookCarBayDto,
+  exposeUserErrors(async (dto) => {
+    const result = await carBayService.book(dto);
+    await getCarBaySchedule().refresh();
+    return result;
+  }),
+);
 
-export const getCarBayBookingByToken = query(v.string(), async (token) => {
-  return await carBayService.getBookingByToken(token);
-});
+export const getCarBayBookingByToken = query(
+  v.string(),
+  exposeUserErrors(async (token) => {
+    return await carBayService.getBookingByToken(token);
+  }),
+);
 
-export const cancelCarBayBooking = command(cancelCarBayBookingDto, async (dto) => {
-  const result = await withRuleErrors(() => carBayService.cancelByToken(dto.bookingToken));
-  await getCarBayBookingByToken(dto.bookingToken).refresh();
-  return result;
-});
+export const cancelCarBayBooking = command(
+  cancelCarBayBookingDto,
+  exposeUserErrors(async (dto) => {
+    const result = await carBayService.cancelByToken(dto.bookingToken);
+    await getCarBayBookingByToken(dto.bookingToken).refresh();
+    return result;
+  }),
+);
 
 // ── Staff ──
 
-export const getCarBayStaffSchedule = query(carBayRangeDto, async (dto) => {
-  verifyAuth();
-  return await carBayService.getStaffSchedule(dto.from, dto.to);
-});
+export const getCarBayStaffSchedule = query(
+  carBayRangeDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    return await carBayService.getStaffSchedule(dto.from, dto.to);
+  }),
+);
 
-export const getCarBayBookingDetail = query(v.string(), async (id) => {
-  verifyAuth();
-  return await carBayService.getBookingDetail(id);
-});
+export const getCarBayBookingDetail = query(
+  v.string(),
+  exposeUserErrors(async (id) => {
+    verifyAuth();
+    return await carBayService.getBookingDetail(id);
+  }),
+);
 
-export const staffBookCarBay = command(staffBookCarBayDto, async (dto) => {
-  const user = verifyAuth();
-  return await withRuleErrors(() => carBayService.staffBook(dto, user.email));
-});
+export const staffBookCarBay = command(
+  staffBookCarBayDto,
+  exposeUserErrors(async (dto) => {
+    const user = verifyAuth();
+    return await carBayService.staffBook(dto, user.email);
+  }),
+);
 
-export const staffCancelCarBayBooking = command(staffCancelCarBayBookingDto, async (dto) => {
-  verifyAuth();
-  const result = await withRuleErrors(() => carBayService.staffCancel(dto));
-  await getCarBayBookingDetail(dto.bookingId).refresh();
-  return result;
-});
+export const staffCancelCarBayBooking = command(
+  staffCancelCarBayBookingDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const result = await carBayService.staffCancel(dto);
+    await getCarBayBookingDetail(dto.bookingId).refresh();
+    return result;
+  }),
+);
 
-export const markCarBayNoShow = command(carBayBookingIdDto, async (dto) => {
-  verifyAuth();
-  const result = await withRuleErrors(() => carBayService.markNoShow(dto.bookingId));
-  await getCarBayBookingDetail(dto.bookingId).refresh();
-  return result;
-});
+export const markCarBayNoShow = command(
+  carBayBookingIdDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const result = await carBayService.markNoShow(dto.bookingId);
+    await getCarBayBookingDetail(dto.bookingId).refresh();
+    return result;
+  }),
+);
 
-export const sendCarBayOverrunInvoice = command(sendCarBayOverrunInvoiceDto, async (dto) => {
-  verifyAuth();
-  const result = await withRuleErrors(() => carBayService.sendOverrunInvoice(dto));
-  await getCarBayBookingDetail(dto.bookingId).refresh();
-  return result;
-});
+export const sendCarBayOverrunInvoice = command(
+  sendCarBayOverrunInvoiceDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const result = await carBayService.sendOverrunInvoice(dto);
+    await getCarBayBookingDetail(dto.bookingId).refresh();
+    return result;
+  }),
+);
 
-export const staffCloseCarBay = command(staffCloseCarBayDto, async (dto) => {
-  const user = verifyAuth();
-  return await withRuleErrors(() => carBayService.staffClose(dto, user.email));
-});
+export const staffCloseCarBay = command(
+  staffCloseCarBayDto,
+  exposeUserErrors(async (dto) => {
+    const user = verifyAuth();
+    return await carBayService.staffClose(dto, user.email);
+  }),
+);
 
-export const reopenCarBay = command(carBayClosureIdDto, async (dto) => {
-  verifyAuth();
-  return await withRuleErrors(() => carBayService.reopen(dto.closureId));
-});
+export const reopenCarBay = command(
+  carBayClosureIdDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    return await carBayService.reopen(dto.closureId);
+  }),
+);

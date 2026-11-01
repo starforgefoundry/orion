@@ -130,14 +130,29 @@ describe(SettingsService.name, () => {
     });
   });
 
-  describe('getPrintRequestSettings', () => {
-    it('should return print request settings', async () => {
-      const settings = printRequestSettings({ maxUploadMB: 100 });
+  describe('get', () => {
+    it('reads the setting stored under the key', async () => {
+      const settings = squareSettings();
       stubSetting(settings);
 
-      const result = await sut.getPrintRequestSettings();
+      const result = await sut.get('printRequestSquare');
 
-      expect(mocks.settingsRepository.getSetting).toHaveBeenCalledWith('printRequest');
+      expect(mocks.settingsRepository.getSetting).toHaveBeenCalledWith('printRequestSquare');
+      expect(result).toEqual(settings);
+    });
+  });
+
+  describe('set', () => {
+    it('saves the setting under the key', async () => {
+      const settings = squareSettings({ locationId: 'loc-new' });
+      mocks.settingsRepository.setSetting.mockResolvedValue(settings);
+
+      const result = await sut.set('printRequestSquare', settings);
+
+      expect(mocks.settingsRepository.setSetting).toHaveBeenCalledWith(
+        'printRequestSquare',
+        settings,
+      );
       expect(result).toEqual(settings);
     });
   });
@@ -238,113 +253,13 @@ describe(SettingsService.name, () => {
     });
   });
 
-  describe('getPrintRequestSquareSettings', () => {
-    it('should return print request square settings', async () => {
-      const settings = squareSettings();
-      stubSetting(settings);
-
-      const result = await sut.getPrintRequestSquareSettings();
-
-      expect(mocks.settingsRepository.getSetting).toHaveBeenCalledWith('printRequestSquare');
-      expect(result).toEqual(settings);
-    });
-
-    it('should handle null square settings', async () => {
-      mocks.settingsRepository.getSetting.mockResolvedValue(null as never);
-
-      const result = await sut.getPrintRequestSquareSettings();
-
-      expect(mocks.settingsRepository.getSetting).toHaveBeenCalledWith('printRequestSquare');
-      expect(result).toBeNull();
-    });
-
-    it('should return different settings than printRequest', async () => {
-      const printRequest = printRequestSettings();
-      const square = squareSettings();
-      mocks.settingsRepository.getSetting
-        .mockResolvedValueOnce(printRequest as StoredSetting)
-        .mockResolvedValueOnce(square as StoredSetting);
-
-      const printRequestResult = await sut.getPrintRequestSettings();
-      const squareResult = await sut.getPrintRequestSquareSettings();
-
-      expect(mocks.settingsRepository.getSetting).toHaveBeenNthCalledWith(1, 'printRequest');
-      expect(mocks.settingsRepository.getSetting).toHaveBeenNthCalledWith(2, 'printRequestSquare');
-      expect(printRequestResult).toEqual(printRequest);
-      expect(squareResult).toEqual(square);
-    });
-  });
-
-  describe('setPrintRequestSquareSettings', () => {
-    it('should update square settings', async () => {
-      const newSquareSettings = squareSettings({
-        locationId: 'loc-new',
-      });
-      const updatedSettings = { ...newSquareSettings, id: 'square-setting-123' };
-      mocks.settingsRepository.setSetting.mockResolvedValue(updatedSettings);
-
-      const result = await sut.setPrintRequestSquareSettings(newSquareSettings);
-
-      expect(mocks.settingsRepository.setSetting).toHaveBeenCalledWith(
-        'printRequestSquare',
-        newSquareSettings,
-      );
-      expect(result).toEqual(updatedSettings);
-    });
-  });
-
-  describe('setting isolation', () => {
-    it('should not mix up printRequest and printRequestSquare settings', async () => {
-      const printRequest = printRequestSettings();
-      const square = squareSettings({ locationId: 'loc-isolated' });
-      stubSetting(printRequestSettings());
-      mocks.settingsRepository.setSetting
-        .mockResolvedValueOnce(printRequest)
-        .mockResolvedValueOnce(square);
-
-      await sut.setPrintRequestSettings(printRequest);
-      await sut.setPrintRequestSquareSettings(square);
-
-      expect(mocks.settingsRepository.setSetting).toHaveBeenNthCalledWith(
-        1,
-        'printRequest',
-        printRequest,
-      );
-      expect(mocks.settingsRepository.setSetting).toHaveBeenNthCalledWith(
-        2,
-        'printRequestSquare',
-        square,
-      );
-    });
-  });
-
   describe('error handling', () => {
-    it('should handle repository errors in getPrintRequestSettings', async () => {
-      mocks.settingsRepository.getSetting.mockRejectedValue(new Error('Database error'));
-
-      await expect(sut.getPrintRequestSettings()).rejects.toThrow('Database error');
-    });
-
     it('should handle repository errors in setPrintRequestSettings', async () => {
       stubSetting(printRequestSettings());
       mocks.settingsRepository.setSetting.mockRejectedValue(new Error('Update failed'));
 
       await expect(sut.setPrintRequestSettings(printRequestSettings())).rejects.toThrow(
         'Update failed',
-      );
-    });
-
-    it('should handle repository errors in getPrintRequestSquareSettings', async () => {
-      mocks.settingsRepository.getSetting.mockRejectedValue(new Error('Connection error'));
-
-      await expect(sut.getPrintRequestSquareSettings()).rejects.toThrow('Connection error');
-    });
-
-    it('should handle repository errors in setPrintRequestSquareSettings', async () => {
-      mocks.settingsRepository.setSetting.mockRejectedValue(new Error('Save failed'));
-
-      await expect(sut.setPrintRequestSquareSettings(squareSettings())).rejects.toThrow(
-        'Save failed',
       );
     });
   });

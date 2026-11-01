@@ -66,7 +66,7 @@ describe(KioskService.name, () => {
     mocks.passRepository.getByToken.mockResolvedValue(membershipPass);
     mocks.memberRepository.getAccessContext.mockResolvedValue(context());
     mocks.visitRepository.create.mockResolvedValue(factory.visit({ memberId: member.id }));
-    mocks.dayPassRepository.markUsed.mockResolvedValue();
+    mocks.visitRepository.recordAdmission.mockResolvedValue(factory.visit({ memberId: member.id }));
     mocks.waiverRepository.submit.mockResolvedValue(factory.waiver({ memberId: member.id }));
   });
 
@@ -109,7 +109,7 @@ describe(KioskService.name, () => {
 
       await sut.checkIn(member.passToken, NOW);
 
-      expect(mocks.dayPassRepository.markUsed).not.toHaveBeenCalled();
+      expect(mocks.visitRepository.recordAdmission).not.toHaveBeenCalled();
     });
 
     it('denies members without any access', async () => {
@@ -140,13 +140,11 @@ describe(KioskService.name, () => {
         name: member.name,
         basis: 'subscription',
       });
-      expect(mocks.dayPassRepository.markUsed).not.toHaveBeenCalled();
-      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith({
-        memberId: member.id,
-        source: 'kiosk',
-        accessBasis: 'subscription',
-        outcome: 'admitted',
-      });
+      expect(mocks.visitRepository.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+        { memberId: member.id, source: 'kiosk', accessBasis: 'subscription' },
+        undefined,
+        TODAY,
+      );
     });
 
     it('uses an unused day pass for today', async () => {
@@ -160,9 +158,10 @@ describe(KioskService.name, () => {
         name: member.name,
         basis: 'day_pass',
       });
-      expect(mocks.dayPassRepository.markUsed).toHaveBeenCalledExactlyOnceWith(unused.id, TODAY);
-      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ accessBasis: 'day_pass', outcome: 'admitted' }),
+      expect(mocks.visitRepository.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ accessBasis: 'day_pass' }),
+        unused,
+        TODAY,
       );
     });
 
@@ -174,8 +173,11 @@ describe(KioskService.name, () => {
       const result = await sut.checkIn(member.passToken, NOW);
 
       expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.ADMITTED, basis: 'day_pass' });
-      expect(mocks.dayPassRepository.markUsed).not.toHaveBeenCalled();
-      expect(mocks.visitRepository.create).toHaveBeenCalledOnce();
+      expect(mocks.visitRepository.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+        expect.anything(),
+        undefined,
+        TODAY,
+      );
     });
   });
 
@@ -190,8 +192,9 @@ describe(KioskService.name, () => {
       const result = await sut.checkIn('day-token', NOW);
 
       expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.ADMITTED, basis: 'day_pass' });
-      expect(mocks.dayPassRepository.markUsed).toHaveBeenCalledExactlyOnceWith(
-        'scanned-pass',
+      expect(mocks.visitRepository.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+        expect.anything(),
+        expect.objectContaining({ id: 'scanned-pass' }),
         TODAY,
       );
     });
@@ -202,7 +205,11 @@ describe(KioskService.name, () => {
       const result = await sut.checkIn('day-token', NOW);
 
       expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.ADMITTED });
-      expect(mocks.dayPassRepository.markUsed).not.toHaveBeenCalled();
+      expect(mocks.visitRepository.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+        expect.anything(),
+        undefined,
+        TODAY,
+      );
     });
 
     it('denies a day pass used on an earlier day', async () => {
@@ -233,12 +240,11 @@ describe(KioskService.name, () => {
         basis: 'class',
         detail: 'Intro to Welding',
       });
-      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith({
-        memberId: member.id,
-        source: 'kiosk',
-        accessBasis: 'class',
-        outcome: 'admitted',
-      });
+      expect(mocks.visitRepository.recordAdmission).toHaveBeenCalledExactlyOnceWith(
+        { memberId: member.id, source: 'kiosk', accessBasis: 'class' },
+        undefined,
+        TODAY,
+      );
     });
 
     it('denies on any other day', async () => {
@@ -372,9 +378,7 @@ describe(KioskService.name, () => {
         'kiosk',
       );
       expect(result).toMatchObject({ status: KIOSK_CHECK_IN_STATUS.ADMITTED });
-      expect(mocks.visitRepository.create).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ outcome: 'admitted' }),
-      );
+      expect(mocks.visitRepository.recordAdmission).toHaveBeenCalledOnce();
     });
 
     it('signs for the booking holder when the pass is a class pass', async () => {

@@ -188,10 +188,7 @@ export class KioskService extends BaseService {
       return { status: KIOSK_CHECK_IN_STATUS.DENIED, name: member.name, reason: verdict.reason };
     }
 
-    if (verdict.dayPassToUse) {
-      await this.dayPassRepository.markUsed(verdict.dayPassToUse.id, spaceDate(now));
-    }
-    await this.visitRepository.create({ ...visit, outcome: VISIT_OUTCOME.ADMITTED });
+    await this.visitRepository.recordAdmission(visit, verdict.dayPassToUse, spaceDate(now));
     return {
       status: KIOSK_CHECK_IN_STATUS.ADMITTED,
       name: member.name,

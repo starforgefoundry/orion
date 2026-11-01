@@ -29,8 +29,10 @@ describe('MemberNotificationRepository.sendOnboarding', () => {
 
     expect(mailgun.sendTemplate).toHaveBeenCalledWith(
       'sam@example.com',
-      'Starforge Foundry <contact@starforgefoundry.com>',
-      'contact@starforgefoundry.com',
+      {
+        from: 'Starforge Foundry <contact@starforgefoundry.com>',
+        replyTo: 'contact@starforgefoundry.com',
+      },
       'member_welcome',
       {
         memberName: 'Sam <Smith>',
@@ -49,7 +51,6 @@ describe('MemberNotificationRepository.sendOnboarding', () => {
       await repository.sendOnboarding(MEMBER, trigger);
 
       expect(mailgun.sendTemplate).toHaveBeenCalledWith(
-        expect.anything(),
         expect.anything(),
         expect.anything(),
         'member_pass_setup',
@@ -75,8 +76,10 @@ describe('MemberNotificationRepository.sendDayPass', () => {
 
     expect(mailgun.sendTemplate).toHaveBeenCalledWith(
       'sam@example.com',
-      'Starforge Foundry <contact@starforgefoundry.com>',
-      'contact@starforgefoundry.com',
+      {
+        from: 'Starforge Foundry <contact@starforgefoundry.com>',
+        replyTo: 'contact@starforgefoundry.com',
+      },
       'day_pass',
       {
         memberName: 'Sam <Smith>',

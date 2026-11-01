@@ -16,7 +16,7 @@
   import { errorDescription } from '$lib/frontend/form-submit';
   import { squareCard, type SquareCard } from '$lib/frontend/square-card';
   import { bookCarBay, getCarBayMembership } from '$lib/remotes/endpoints/car_bay.remote';
-  import { getSquareConfig } from '$lib/remotes/endpoints/class.remote';
+  import { getCheckoutConfig } from '$lib/remotes/endpoints/payment.remote';
   import {
     formatDollars,
     type CarBayBlock,
@@ -68,7 +68,7 @@
     form.checkedEmail ? getCarBayMembership(form.checkedEmail) : undefined,
   );
 
-  const squareConfig = $derived(getSquareConfig().current);
+  const squareConfig = $derived(getCheckoutConfig().current);
 
   let card = $state<SquareCard>();
   let submitting = $state(false);

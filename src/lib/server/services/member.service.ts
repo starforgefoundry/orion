@@ -4,7 +4,8 @@ import type {
   MemberVisitsDto,
   RecentVisitsDto,
 } from '$lib/remotes/dtos/member.dto';
-import { ACCESS_BASIS, MEMBER_EMAIL_TRIGGER, VISIT_OUTCOME, VISIT_SOURCE } from '$lib/member_enums';
+import { ACCESS_BASIS, MEMBER_EMAIL_TRIGGER, VISIT_SOURCE } from '$lib/member_enums';
+import { NotFoundError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
 import { resolveAccess, spaceDate } from '$lib/server/utils/member_access';
 import { DateTime } from 'luxon';
@@ -34,7 +35,7 @@ export class MemberService extends BaseService {
 
   async getMemberDetail(memberId: string) {
     const context = await this.memberRepository.getAccessContext(memberId);
-    if (!context) throw new Error(MEMBER_NOT_FOUND);
+    if (!context) throw new NotFoundError(MEMBER_NOT_FOUND);
 
     const [waiver, subscriptions, dayPasses, emails] = await Promise.all([
       this.memberRepository.getLatestWaiver(memberId),
@@ -66,7 +67,7 @@ export class MemberService extends BaseService {
   async cancelSubscription(dto: CancelMemberSubscriptionDto) {
     const subscription = await this.memberSubscriptionRepository.getById(dto.subscriptionId);
     if (!subscription || subscription.memberId !== dto.memberId) {
-      throw new Error(SUBSCRIPTION_NOT_FOUND);
+      throw new NotFoundError(SUBSCRIPTION_NOT_FOUND);
     }
 
     if (dto.refund) {
@@ -82,7 +83,7 @@ export class MemberService extends BaseService {
 
   async resendOnboarding(memberId: string) {
     const member = await this.memberRepository.getById(memberId);
-    if (!member) throw new Error(MEMBER_NOT_FOUND);
+    if (!member) throw new NotFoundError(MEMBER_NOT_FOUND);
     await this.memberNotificationRepository.sendOnboarding(member, MEMBER_EMAIL_TRIGGER.MANUAL);
   }
 
@@ -104,20 +105,15 @@ export class MemberService extends BaseService {
   /** Staff override: always admits, recording whatever access the member has. */
   async checkIn(memberId: string) {
     const context = await this.memberRepository.getAccessContext(memberId);
-    if (!context) throw new Error(MEMBER_NOT_FOUND);
+    if (!context) throw new NotFoundError(MEMBER_NOT_FOUND);
 
     const now = DateTime.now();
     const access = resolveAccess(context, now);
-    if (access.dayPassToUse) {
-      await this.dayPassRepository.markUsed(access.dayPassToUse.id, spaceDate(now));
-    }
-
-    return await this.visitRepository.create({
-      memberId,
-      source: VISIT_SOURCE.STAFF,
-      accessBasis: access.basis,
-      outcome: VISIT_OUTCOME.ADMITTED,
-    });
+    return await this.visitRepository.recordAdmission(
+      { memberId, source: VISIT_SOURCE.STAFF, accessBasis: access.basis },
+      access.dayPassToUse,
+      spaceDate(now),
+    );
   }
 }
 

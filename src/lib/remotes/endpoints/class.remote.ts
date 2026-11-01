@@ -1,6 +1,6 @@
 import { command, form, query } from '$app/server';
-import { env } from '$env/dynamic/private';
 import { redirect } from '@sveltejs/kit';
+import { HTTP_STATUS } from '$lib/http';
 import {
   bookClassDto,
   cancelBookingDto,
@@ -13,153 +13,197 @@ import {
   updateInstanceDto,
   upsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
-import { verifyAuth } from '$lib/remotes/utils';
+import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
 import { classService } from '$lib/server/services/class.service';
-import { SettingsRepository } from '$lib/server/repositories/settings.repository';
-import { squareWebSdkUrl } from '$lib/server/utils/square';
+import { CLASS_BOOKING_PATH } from '$lib/server/utils/member_links';
 import * as v from 'valibot';
 
 // ── Staff: Catalog ──
 
-export const getCatalogs = query(async () => {
-  verifyAuth();
-  return await classService.getAllCatalogs();
-});
+export const getCatalogs = query(
+  exposeUserErrors(async () => {
+    verifyAuth();
+    return await classService.getAllCatalogs();
+  }),
+);
 
-export const getCatalogById = query(v.string(), async (id: string) => {
-  return await classService.getCatalogById(id);
-});
+export const getCatalogById = query(
+  v.string(),
+  exposeUserErrors(async (id: string) => {
+    return await classService.getCatalogById(id);
+  }),
+);
 
-export const upsertCatalogForm = form(upsertCatalogDto, async (dto) => {
-  verifyAuth();
-  const { photo, id, ...fields } = dto;
+export const upsertCatalogForm = form(
+  upsertCatalogDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const { photo, id, ...fields } = dto;
 
-  let result;
-  if (id) {
-    result = await classService.updateCatalog({ id, ...fields });
-  } else {
-    result = await classService.createCatalog(fields);
-  }
+    let result;
+    if (id) {
+      result = await classService.updateCatalog({ id, ...fields });
+    } else {
+      result = await classService.createCatalog(fields);
+    }
 
-  if (photo) {
-    await classService.uploadClassPhoto(result.id, photo);
-  }
+    if (photo) {
+      await classService.uploadClassPhoto(result.id, photo);
+    }
 
-  await getCatalogs().refresh();
-  return result;
-});
+    await getCatalogs().refresh();
+    return result;
+  }),
+);
 
 // ── Staff: Instance ──
 
-export const getAllInstances = query(async () => {
-  verifyAuth();
-  return await classService.getAllInstances();
-});
+export const getAllInstances = query(
+  exposeUserErrors(async () => {
+    verifyAuth();
+    return await classService.getAllInstances();
+  }),
+);
 
-export const getInstanceDetail = query(v.string(), async (instanceId: string) => {
-  verifyAuth();
-  return await classService.getInstanceDetail(instanceId);
-});
+export const getInstanceDetail = query(
+  v.string(),
+  exposeUserErrors(async (instanceId: string) => {
+    verifyAuth();
+    return await classService.getInstanceDetail(instanceId);
+  }),
+);
 
-export const generateInstances = command(generateInstancesDto, async (dto) => {
-  verifyAuth();
-  const result = await classService.generateInstances(dto);
-  await getAllInstances().refresh();
-  return result;
-});
+export const generateInstances = command(
+  generateInstancesDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const result = await classService.generateInstances(dto);
+    await getAllInstances().refresh();
+    return result;
+  }),
+);
 
-export const createInstance = command(createInstanceDto, async (dto) => {
-  verifyAuth();
-  const result = await classService.createInstance(dto);
-  await getAllInstances().refresh();
-  return result;
-});
+export const createInstance = command(
+  createInstanceDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const result = await classService.createInstance(dto);
+    await getAllInstances().refresh();
+    return result;
+  }),
+);
 
-export const updateInstance = command(updateInstanceDto, async (dto) => {
-  verifyAuth();
-  const result = await classService.updateInstance(dto);
-  await getAllInstances().refresh();
-  await getInstanceDetail(dto.id).refresh();
-  return result;
-});
+export const updateInstance = command(
+  updateInstanceDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const result = await classService.updateInstance(dto);
+    await getAllInstances().refresh();
+    await getInstanceDetail(dto.id).refresh();
+    return result;
+  }),
+);
 
-export const cancelInstance = command(cancelInstanceDto, async (dto) => {
-  verifyAuth();
-  const result = await classService.cancelInstance(dto);
-  await getAllInstances().refresh();
-  await getInstanceDetail(dto.instanceId).refresh();
-  return result;
-});
+export const cancelInstance = command(
+  cancelInstanceDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const result = await classService.cancelInstance(dto);
+    await getAllInstances().refresh();
+    await getInstanceDetail(dto.instanceId).refresh();
+    return result;
+  }),
+);
 
-export const cancelBookingStaff = command(cancelBookingStaffDto, async (dto) => {
-  verifyAuth();
-  const result = await classService.cancelBookingStaff(dto);
-  await getAllInstances().refresh();
-  return result;
-});
+export const cancelBookingStaff = command(
+  cancelBookingStaffDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const result = await classService.cancelBookingStaff(dto);
+    await getAllInstances().refresh();
+    return result;
+  }),
+);
 
-export const rescheduleBookingStaff = command(rescheduleBookingDto, async (dto) => {
-  verifyAuth();
-  const result = await classService.rescheduleBooking(dto);
-  await getAllInstances().refresh();
-  await getInstanceDetail(result.previousInstanceId).refresh();
-  await getInstanceDetail(dto.targetInstanceId).refresh();
-  return result;
-});
+export const rescheduleBookingStaff = command(
+  rescheduleBookingDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const result = await classService.rescheduleBooking(dto);
+    await getAllInstances().refresh();
+    await getInstanceDetail(result.previousInstanceId).refresh();
+    await getInstanceDetail(dto.targetInstanceId).refresh();
+    return result;
+  }),
+);
 
-export const manualBookClass = command(manualBookClassDto, async (dto) => {
-  verifyAuth();
-  const result = await classService.manualBookClass(dto);
-  await getAllInstances().refresh();
-  return result;
-});
+export const manualBookClass = command(
+  manualBookClassDto,
+  exposeUserErrors(async (dto) => {
+    verifyAuth();
+    const result = await classService.manualBookClass(dto);
+    await getAllInstances().refresh();
+    return result;
+  }),
+);
 
-export const getStaffUsers = query(async () => {
-  verifyAuth();
-  return await classService.getStaffUsers();
-});
+export const getStaffUsers = query(
+  exposeUserErrors(async () => {
+    verifyAuth();
+    return await classService.getStaffUsers();
+  }),
+);
 
-export const getMyCalendarLink = query(async () => {
-  const authUser = verifyAuth();
-  const users = await classService.getStaffUsers();
-  const teacher = users.find((u) => u.email === authUser.email);
-  if (!teacher) return null;
-  return await classService.getTeacherCalendarLink(teacher);
-});
+export const getMyCalendarLink = query(
+  exposeUserErrors(async () => {
+    const authUser = verifyAuth();
+    const users = await classService.getStaffUsers();
+    const teacher = users.find((u) => u.email === authUser.email);
+    if (!teacher) return null;
+    return await classService.getTeacherCalendarLink(teacher);
+  }),
+);
 
 // ── Public ──
 
-export const getActiveClasses = query(async () => {
-  return await classService.getActiveCatalogsWithInstances();
-});
+export const getActiveClasses = query(
+  exposeUserErrors(async () => {
+    return await classService.getActiveCatalogsWithInstances();
+  }),
+);
 
-export const getClassInstances = query(v.string(), async (classId: string) => {
-  return await classService.getInstancesForCatalog(classId);
-});
+export const getClassInstances = query(
+  v.string(),
+  exposeUserErrors(async (classId: string) => {
+    return await classService.getInstancesForCatalog(classId);
+  }),
+);
 
-export const bookClassForm = form(bookClassDto, async (dto) => {
-  const result = await classService.bookClass(dto);
-  redirect(303, `/classes/booking/${result.bookingToken}`);
-});
+export const bookClassForm = form(
+  bookClassDto,
+  exposeUserErrors(async (dto) => {
+    const result = await classService.bookClass(dto);
+    redirect(HTTP_STATUS.SEE_OTHER, `${CLASS_BOOKING_PATH}/${result.bookingToken}`);
+  }),
+);
 
-export const bookClass = command(bookClassDto, async (dto) => {
-  return await classService.bookClass(dto);
-});
+export const bookClass = command(
+  bookClassDto,
+  exposeUserErrors(async (dto) => {
+    return await classService.bookClass(dto);
+  }),
+);
 
-export const getBookingByToken = query(v.string(), async (token: string) => {
-  return await classService.getBookingByToken(token);
-});
+export const getBookingByToken = query(
+  v.string(),
+  exposeUserErrors(async (token: string) => {
+    return await classService.getBookingByToken(token);
+  }),
+);
 
-export const cancelBooking = command(cancelBookingDto, async (dto) => {
-  return await classService.cancelBooking(dto);
-});
-
-export const getSquareConfig = query(async () => {
-  const settingsRepository = new SettingsRepository();
-  const squareSettings = await settingsRepository.getSetting('printRequestSquare');
-  return {
-    applicationId: env.SQUARE_APPLICATION_ID ?? '',
-    locationId: squareSettings.locationId,
-    webSdkUrl: squareWebSdkUrl(),
-  };
-});
+export const cancelBooking = command(
+  cancelBookingDto,
+  exposeUserErrors(async (dto) => {
+    return await classService.cancelBooking(dto);
+  }),
+);

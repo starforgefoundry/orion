@@ -1,23 +1,27 @@
 import { command, query } from '$app/server';
 import { payPaymentDto } from '$lib/remotes/dtos/payment.dto';
-import { PaymentError } from '$lib/server/repositories/payment.repository';
+import { exposeUserErrors } from '$lib/remotes/utils';
 import { paymentService } from '$lib/server/services/payment.service';
-import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 
-const BAD_REQUEST = 400;
+export const getPaymentCheckout = query(
+  v.string(),
+  exposeUserErrors(async (id) => {
+    return await paymentService.getCheckout(id);
+  }),
+);
 
-export const getPaymentCheckout = query(v.string(), async (id) => {
-  return await paymentService.getCheckout(id);
-});
-
-export const payPayment = command(payPaymentDto, async (dto) => {
-  try {
+export const payPayment = command(
+  payPaymentDto,
+  exposeUserErrors(async (dto) => {
     const paid = await paymentService.pay(dto);
     await getPaymentCheckout(dto.id).refresh();
     return paid;
-  } catch (cause) {
-    if (cause instanceof PaymentError) error(BAD_REQUEST, cause.message);
-    throw cause;
-  }
-});
+  }),
+);
+
+export const getCheckoutConfig = query(
+  exposeUserErrors(async () => {
+    return await paymentService.getCheckoutConfig();
+  }),
+);

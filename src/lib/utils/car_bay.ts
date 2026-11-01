@@ -1,3 +1,4 @@
+import { UserError } from '$lib/errors';
 import { CENTS_PER_DOLLAR, type BillingLineItem } from '$lib/utils/billing';
 import { DateTime } from 'luxon';
 
@@ -104,7 +105,7 @@ export type CarBayClosureRequest = {
   endHour: number;
 };
 
-export class CarBayRuleError extends Error {}
+export class CarBayRuleError extends UserError {}
 
 export class CarBaySlotTakenError extends CarBayRuleError {
   constructor() {
@@ -319,10 +320,6 @@ export class CarBayRules {
 
   isRefundable(startAt: DateTime, now: DateTime) {
     return now <= startAt.minus({ hours: this.policy.refundCutoffHours });
-  }
-
-  needsReminder(createdAt: DateTime, startAt: DateTime) {
-    return startAt.diff(createdAt, 'hours').hours > this.policy.reminderLeadHours;
   }
 
   clipToDay(block: CarBayBlock, date: string) {

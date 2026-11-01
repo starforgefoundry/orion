@@ -192,4 +192,29 @@ describe.skipIf(!TEST_DATABASE_URL)('MemberRepository access filter', () => {
       expect(resolveAccess(batched, now)).toEqual(resolveAccess(single!, now));
     }
   });
+
+  it.each([
+    ['organization@example.com', true],
+    ['nothing@example.com', false],
+    ['nobody@example.com', false],
+  ])('says whether %s has a membership', async (email, expected) => {
+    expect(await repository.hasMembership(email, now)).toBe(expected);
+  });
+
+  it('links customer details to the existing member with that email', async () => {
+    const existing = await repository.getByEmail('nothing@example.com');
+
+    const columns = await repository.customerColumns({
+      customerName: 'Someone Else',
+      customerEmail: 'nothing@example.com',
+      customerPhone: '555-0100',
+    });
+
+    expect(columns).toEqual({
+      memberId: existing!.id,
+      customerName: 'Someone Else',
+      customerEmail: 'nothing@example.com',
+      customerPhone: '555-0100',
+    });
+  });
 });

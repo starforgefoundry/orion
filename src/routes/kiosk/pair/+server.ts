@@ -1,3 +1,4 @@
+import { HTTP_STATUS } from '$lib/http';
 import {
   KIOSK_DEVICE_COOKIE,
   KIOSK_PAIR_TOKEN_PARAM,
@@ -9,13 +10,12 @@ import type { RequestHandler } from './$types';
 
 // Browsers cap cookie lifetimes at 400 days.
 const DEVICE_COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
-const FORBIDDEN = 403;
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
   const token = url.searchParams.get(KIOSK_PAIR_TOKEN_PARAM);
   if (!token || !(await kioskService.isPairedDevice(token))) {
     error(
-      FORBIDDEN,
+      HTTP_STATUS.FORBIDDEN,
       'This pairing link is invalid or has been replaced. Generate a new one in Settings.',
     );
   }
@@ -26,5 +26,5 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
     sameSite: 'lax',
     maxAge: DEVICE_COOKIE_MAX_AGE_SECONDS,
   });
-  redirect(303, KIOSK_PATH);
+  redirect(HTTP_STATUS.SEE_OTHER, KIOSK_PATH);
 };
