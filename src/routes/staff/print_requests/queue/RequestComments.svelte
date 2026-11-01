@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { parseFileExtensions } from '$lib/utils/print_request';
   import { page } from '$app/state';
   import { Button } from '$lib/components/ui/button';
   import { Spinner } from '$lib/components/ui/spinner';
@@ -35,12 +36,7 @@
   const comments = $derived([...(getPrintRequestComments(requestId).current ?? [])].reverse());
   const settings = $derived(getPrintRequestSettings().current);
 
-  const slicerExtensions = $derived(
-    (settings?.allowedFileTypes ?? '')
-      .split(',')
-      .map((ext) => ext.trim().replace(/^\./, '').toLowerCase())
-      .filter(Boolean),
-  );
+  const slicerExtensions = $derived(parseFileExtensions(settings?.allowedFileTypes ?? ''));
 
   initForm(addPrintRequestCommentForm, () => ({ printRequestId: requestId, body: '' }));
 

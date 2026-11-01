@@ -1,12 +1,12 @@
 import { goto } from '$app/navigation';
 import type { PrintRequestFileDto } from '$lib/remotes/dtos/print_request.dto';
 import { submitPrintRequestForm } from '$lib/remotes/endpoints/print_request.remote';
+import { BYTES_PER_MB } from '$lib/utils/print_request';
 import { toast } from 'svelte-sonner';
 
 export const STEPS = { CONTACT: 'contact', PROJECT: 'project' } as const;
 export type Step = (typeof STEPS)[keyof typeof STEPS];
 
-const BYTES_PER_MB = 1024 * 1024;
 const PERCENT = 100;
 const HTTP_OK = 200;
 const SUCCESS_PATH = '/print_request/success';

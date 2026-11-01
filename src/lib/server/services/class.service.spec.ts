@@ -522,6 +522,21 @@ describe(ClassService.name, () => {
       });
     });
 
+    it('rejects customer cancellation once the class has started', async () => {
+      const started = factory.classInstance({
+        date: DateTime.now().minus({ days: 1 }).toISODate()!,
+      });
+      mocks.classRepository.getBookingByToken.mockResolvedValue(
+        bookingDetail({ status: 'confirmed' }, paidPayment(5000), started),
+      );
+
+      await expect(sut.cancelBooking({ bookingToken: 'tok-abc' })).rejects.toThrow(
+        'already started',
+      );
+      expect(mocks.paymentRepository.refund).not.toHaveBeenCalled();
+      expect(mocks.classRepository.updateBooking).not.toHaveBeenCalled();
+    });
+
     it('should throw when booking not found', async () => {
       mocks.classRepository.getBookingByToken.mockResolvedValue(null);
 

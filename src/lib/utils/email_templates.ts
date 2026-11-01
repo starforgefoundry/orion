@@ -256,8 +256,27 @@ export function variableToken(name: string) {
   return `{{${name}}}`;
 }
 
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
+}
+
 export function renderTemplate(text: string, variables: Record<string, string>) {
   return text.replace(VARIABLE_PATTERN, (token, name: string) => variables[name] ?? token);
+}
+
+export function renderHtmlTemplate(html: string, variables: Record<string, string>) {
+  const escaped = Object.fromEntries(
+    Object.entries(variables).map(([name, value]) => [name, escapeHtml(value)]),
+  );
+  return renderTemplate(html, escaped);
 }
 
 export function templateVariables(key: EmailTemplateKey) {

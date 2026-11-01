@@ -4,7 +4,7 @@ import * as v from 'valibot';
 export const printRequestFileDto = v.object({
   file: v.file(),
   filename: v.string(),
-  quantity: v.number(),
+  quantity: v.pipe(v.number(), v.integer(), v.minValue(1)),
 });
 
 export type PrintRequestFileDto = v.InferInput<typeof printRequestFileDto>;

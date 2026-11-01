@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderTemplate, unknownVariables } from './email_templates';
+import { renderHtmlTemplate, renderTemplate, unknownVariables } from './email_templates';
 
 describe('renderTemplate', () => {
   it('fills every occurrence of a variable', () => {
@@ -18,6 +18,16 @@ describe('renderTemplate', () => {
 
   it('inserts values containing $ literally', () => {
     expect(renderTemplate('Total: {{total}}', { total: "$& $1 $'" })).toBe("Total: $& $1 $'");
+  });
+});
+
+describe('renderHtmlTemplate', () => {
+  it('escapes HTML in variable values but not in the template', () => {
+    expect(
+      renderHtmlTemplate('<p>Hi {{name}}</p>', {
+        name: '<a href="https://evil.test">Sam & Co\'s</a>',
+      }),
+    ).toBe('<p>Hi &lt;a href=&quot;https://evil.test&quot;&gt;Sam &amp; Co&#39;s&lt;/a&gt;</p>');
   });
 });
 

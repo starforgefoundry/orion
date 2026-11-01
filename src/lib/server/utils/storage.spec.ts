@@ -40,6 +40,16 @@ describe('storagePath', () => {
   it('rejects keys that escape the storage directory', () => {
     expect(() => storagePath('../etc/passwd')).toThrow(InvalidStorageKeyError);
   });
+
+  it.each([
+    'inventory/../waivers/john_2025-01-01_abc',
+    './waivers/john_2025-01-01_abc',
+    'inventory//waivers',
+    '/waivers/john_2025-01-01_abc',
+    'waivers\\john_2025-01-01_abc',
+  ])('rejects non-canonical key %s that could dodge the signed prefix check', (key) => {
+    expect(() => storagePath(key)).toThrow(InvalidStorageKeyError);
+  });
 });
 
 describe('fileUrl', () => {

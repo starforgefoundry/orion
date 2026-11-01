@@ -14,7 +14,10 @@ import { verifyAuth } from '$lib/remotes/utils';
 import { printFilesService } from '$lib/server/services/print_files.service';
 import { PaymentError } from '$lib/server/repositories/payment.repository';
 import { printPaymentService } from '$lib/server/services/print_payment.service';
-import { printRequestService } from '$lib/server/services/print_request.service';
+import {
+  PrintSubmissionError,
+  printRequestService,
+} from '$lib/server/services/print_request.service';
 import { printRequestCommentService } from '$lib/server/services/print_request_comment.service';
 import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
@@ -22,7 +25,7 @@ import * as v from 'valibot';
 const BAD_REQUEST = 400;
 
 export const submitPrintRequestForm = form(submitPrintRequestDto, async (dto) => {
-  await printRequestService.submitPrintRequest(dto);
+  await asCustomerError(() => printRequestService.submitPrintRequest(dto));
 });
 
 export const getPrintRequests = query(async () => {
@@ -45,7 +48,9 @@ async function asCustomerError<T>(action: () => Promise<T>) {
   try {
     return await action();
   } catch (cause) {
-    if (cause instanceof PaymentError) error(BAD_REQUEST, cause.message);
+    if (cause instanceof PaymentError || cause instanceof PrintSubmissionError) {
+      error(BAD_REQUEST, cause.message);
+    }
     throw cause;
   }
 }

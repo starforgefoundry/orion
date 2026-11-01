@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { parseFileExtensions } from '$lib/utils/print_request';
   import * as Alert from '$lib/components/ui/alert';
   import { Button } from '$lib/components/ui/button';
   import * as Field from '$lib/components/ui/field';
@@ -57,9 +58,7 @@
     })),
   );
 
-  const supportedExtensions = $derived(
-    printRequestSettings.allowedFileTypes.split(',').map((ext) => ext.trim().replace(/^\./, '')),
-  );
+  const supportedExtensions = $derived(parseFileExtensions(printRequestSettings.allowedFileTypes));
 
   $effect(() => {
     submitPrintRequestForm.fields.files.set(manager.files);

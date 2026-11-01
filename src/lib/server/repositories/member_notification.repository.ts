@@ -34,18 +34,6 @@ const ONBOARDING_INTRO: Record<MemberEmailTrigger, string> = {
   [MEMBER_EMAIL_TRIGGER.SELF_SERVICE]: 'Here is the member pass link you asked for.',
 };
 
-const HTML_ESCAPES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-
-function escapeHtml(value: string) {
-  return value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
-}
-
 export class MemberNotificationRepository extends BaseRepository {
   private mailgunRepository: MailgunRepository;
   private memberEmailRepository: MemberEmailRepository;
@@ -66,7 +54,7 @@ export class MemberNotificationRepository extends BaseRepository {
       MEMBER_EMAIL_REPLY_TO,
       ONBOARDING_TEMPLATE[trigger],
       {
-        memberName: escapeHtml(member.name),
+        memberName: member.name,
         introMessage: ONBOARDING_INTRO[trigger],
         onboardingUrl: onboardingUrl(member),
       },
@@ -80,7 +68,7 @@ export class MemberNotificationRepository extends BaseRepository {
       MEMBER_EMAIL_FROM,
       MEMBER_EMAIL_REPLY_TO,
       DAY_PASS_TEMPLATE,
-      { memberName: escapeHtml(member.name), ...passLinks(dayPass) },
+      { memberName: member.name, ...passLinks(dayPass) },
     );
     await this.memberEmailRepository.log(
       member.id,

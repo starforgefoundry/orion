@@ -1,7 +1,12 @@
 import { env } from '$env/dynamic/private';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
-import { renderTemplate, type EmailTemplateKey, type Templates } from '$lib/utils/email_templates';
+import {
+  renderHtmlTemplate,
+  renderTemplate,
+  type EmailTemplateKey,
+  type Templates,
+} from '$lib/utils/email_templates';
 import { DateTime } from 'luxon';
 
 export class MailgunRepository extends BaseRepository {
@@ -29,7 +34,7 @@ export class MailgunRepository extends BaseRepository {
       to,
       'h:Reply-To': replyTo,
       subject: renderTemplate(content.subject, variables),
-      html: renderTemplate(content.body, variables),
+      html: renderHtmlTemplate(content.body, variables),
     });
 
     const response = await fetch('https://api.mailgun.net/v3/starforgefoundry.com/messages', {

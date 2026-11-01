@@ -4,6 +4,7 @@ import { updateEmailTemplate } from '$lib/remotes/endpoints/email_template.remot
 import type { EmailTemplate } from '$lib/server/db/schema';
 import {
   EMAIL_TEMPLATE_DEFINITIONS,
+  renderHtmlTemplate,
   renderTemplate,
   templateVariables,
   unknownVariables,
@@ -44,7 +45,7 @@ export class EmailTemplateEditor {
     const examples = Object.fromEntries(this.variables.map(({ name, example }) => [name, example]));
     return {
       subject: renderTemplate(this.subject, examples),
-      body: renderTemplate(this.body, examples),
+      body: renderHtmlTemplate(this.body, examples),
     };
   });
 

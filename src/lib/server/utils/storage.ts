@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, stat } from 'node:fs/promises';
-import { dirname, resolve, sep } from 'node:path';
+import { dirname, posix, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
@@ -17,7 +17,15 @@ function storageRoot() {
   return resolve(env.STORAGE_DIR || DEFAULT_STORAGE_DIR);
 }
 
+function isCanonicalKey(key: string) {
+  return posix.normalize(key) === key && !key.startsWith('/') && !key.includes('\\');
+}
+
 export function storagePath(key: string) {
+  if (!isCanonicalKey(key)) {
+    throw new InvalidStorageKeyError(`Invalid storage key: ${key}`);
+  }
+
   const root = storageRoot();
   const path = resolve(root, key);
   if (!path.startsWith(root + sep)) {

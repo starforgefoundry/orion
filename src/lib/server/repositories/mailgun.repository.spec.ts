@@ -30,6 +30,19 @@ describe('MailgunRepository.sendTemplate', () => {
     expect(body.get('html')).toBe('<a href="https://x">Robot Arm</a>');
   });
 
+  it('escapes customer-supplied values in the HTML body only', async () => {
+    const { fetch, repository } = setup({ subject: '{{projectName}}', body: '{{projectName}}' });
+
+    await repository.sendTemplate('a@b.com', 'from', 'reply', 'print_pickup', {
+      ...VARIABLES,
+      projectName: '<b>Arm</b>',
+    });
+
+    const body = fetch.mock.calls[0][1]?.body as URLSearchParams;
+    expect(body.get('subject')).toBe('<b>Arm</b>');
+    expect(body.get('html')).toBe('&lt;b&gt;Arm&lt;/b&gt;');
+  });
+
   it('fails when the template is missing from the database', async () => {
     const { fetch, repository } = setup();
 

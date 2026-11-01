@@ -13,7 +13,7 @@ import { runInBackground } from '$lib/server/utils/background';
 import { printSender } from '$lib/server/utils/email_templates/senders';
 import { printRequestStatusUrl } from '$lib/server/utils/payment_links';
 import { PAYMENT_STATUS } from '$lib/utils/billing';
-import { PRINT_REQUEST_STATUS } from '$lib/utils/print_request';
+import { PRINT_REQUEST_STATUS, printSubmissionProblem } from '$lib/utils/print_request';
 import { DateTime } from 'luxon';
 
 function pickupPaymentNote(payment: Payment | null) {
@@ -26,8 +26,14 @@ function pickupPaymentNote(payment: Payment | null) {
   return 'You can see your print request and its cost breakdown here:';
 }
 
+export class PrintSubmissionError extends Error {}
+
 export class PrintRequestService extends BaseService {
   async submitPrintRequest(dto: SubmitPrintRequestDto) {
+    const settings = await this.settingsRepository.getSetting('printRequest');
+    const problem = printSubmissionProblem(settings, dto.files);
+    if (problem) throw new PrintSubmissionError(problem);
+
     const printRequest = await this.printRequestRepository.submit(dto);
     await this.printFilesRepository.uploadFiles(printRequest.id, dto.files);
 

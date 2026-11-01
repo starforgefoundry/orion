@@ -12,6 +12,7 @@
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import BanIcon from '@lucide/svelte/icons/ban';
   import { formatCents } from '$lib/utils/billing';
+  import { classHasStarted } from '$lib/utils/classes';
   import CalendarPlusIcon from '@lucide/svelte/icons/calendar-plus';
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
   import { DateTime } from 'luxon';
@@ -121,6 +122,7 @@
   </div>
 {:else}
   {@const isConfirmed = booking.status === 'confirmed'}
+  {@const canCancel = !booking.instance || !classHasStarted(booking.instance)}
   <div class="flex flex-col gap-4">
     <div class="flex items-center gap-2">
       {#if isConfirmed}
@@ -176,17 +178,19 @@
         </div>
       </Section>
 
-      <Separator />
+      {#if canCancel}
+        <Separator />
 
-      <Button
-        variant="destructive"
-        class="self-start max-sm:w-full"
-        onclick={handleCancel}
-        disabled={canceling}
-      >
-        {#if canceling}<Spinner />{:else}<BanIcon />{/if}
-        Cancel Booking
-      </Button>
+        <Button
+          variant="destructive"
+          class="self-start max-sm:w-full"
+          onclick={handleCancel}
+          disabled={canceling}
+        >
+          {#if canceling}<Spinner />{:else}<BanIcon />{/if}
+          Cancel Booking
+        </Button>
+      {/if}
     {:else}
       <p class="text-sm text-muted-foreground">
         This booking has been canceled and a refund has been issued.

@@ -33,7 +33,7 @@ describe('MemberNotificationRepository.sendOnboarding', () => {
       'contact@starforgefoundry.com',
       'member_welcome',
       {
-        memberName: 'Sam &lt;Smith&gt;',
+        memberName: 'Sam <Smith>',
         introMessage: 'Thanks for picking up a day pass at Starforge Foundry!',
         onboardingUrl: 'https://orion.example.com/member/onboard/onboarding-abc',
       },
@@ -79,7 +79,7 @@ describe('MemberNotificationRepository.sendDayPass', () => {
       'contact@starforgefoundry.com',
       'day_pass',
       {
-        memberName: 'Sam &lt;Smith&gt;',
+        memberName: 'Sam <Smith>',
         passUrl: 'https://orion.example.com/pass/day-abc',
         passQrImageUrl: 'https://orion.example.com/api/pass/day-abc/qr',
       },

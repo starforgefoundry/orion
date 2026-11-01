@@ -1,6 +1,9 @@
 import type { SubmitPrintRequestDto } from '$lib/remotes/dtos/print_request.dto';
 import type { Payment, PrintRequest } from '$lib/server/db/schema';
-import { PrintRequestService } from '$lib/server/services/print_request.service';
+import {
+  PrintRequestService,
+  PrintSubmissionError,
+} from '$lib/server/services/print_request.service';
 import { factory } from '$test/factory';
 import type { PrintRequestDetail } from '$test/factory/print_request';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
@@ -80,7 +83,7 @@ describe(PrintRequestService.name, () => {
         isQuote: true,
         material: 'material-456',
         billingCode: 'DEPT-001',
-        files: [],
+        files: [{ file: new File(['data'], 'part.stl'), filename: 'part.stl', quantity: 1 }],
       };
       stubSubmission(printRequest);
 
@@ -88,6 +91,20 @@ describe(PrintRequestService.name, () => {
 
       expect(mocks.printRequestRepository.submit).toHaveBeenCalledWith(dto);
       expect(result.printRequestId).toBe(printRequest.id);
+    });
+
+    it('rejects a submission the form settings do not allow without storing anything', async () => {
+      const dto: SubmitPrintRequestDto = {
+        customer: { name: 'Test', email: 'test@test.com' },
+        projectName: 'Test',
+        material: 'mat-1',
+        files: [{ file: new File(['data'], 'payload.exe'), filename: 'payload.exe', quantity: 1 }],
+      };
+      stubSubmission(factory.printRequest());
+
+      await expect(sut.submitPrintRequest(dto)).rejects.toThrow(PrintSubmissionError);
+      expect(mocks.printRequestRepository.submit).not.toHaveBeenCalled();
+      expect(mocks.printFilesRepository.uploadFiles).not.toHaveBeenCalled();
     });
 
     it('should store uploaded files before returning', async () => {

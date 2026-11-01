@@ -45,6 +45,7 @@ import { DateTime, Duration } from 'luxon';
 
 const PAYMENT_FAILED_MESSAGE = 'Payment failed';
 const FULLY_BOOKED_MESSAGE = 'This class is fully booked';
+const CLASS_STARTED_MESSAGE = 'This class has already started and can no longer be canceled';
 const CLASS_EMAIL = 'classes@starforgefoundry.com';
 const CLASS_SENDER = `Starforge Classes <${CLASS_EMAIL}>`;
 export const CLASS_REMINDER_LEAD = Duration.fromObject({ hours: 24 });
@@ -428,6 +429,9 @@ export class ClassService extends BaseService {
     if (!booking) throw new Error('Booking not found');
     if (booking.status === CLASS_BOOKING_STATUS.CANCELED)
       throw new Error('Booking is already canceled');
+    if (booking.instance && classHasStarted(booking.instance)) {
+      throw new Error(CLASS_STARTED_MESSAGE);
+    }
 
     await this.refund(booking);
 
