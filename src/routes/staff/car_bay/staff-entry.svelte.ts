@@ -24,8 +24,9 @@ type EntryContext = { rules: CarBayRules; blocks: () => CarBayBlock[] };
 type EntryStart = { date: string; startHour: number };
 
 export class CarBayClosureForm {
-  date = $state('');
+  startDate = $state('');
   startHour = $state(0);
+  endDate = $state('');
   endHour = $state(0);
   reason = $state('');
 
@@ -33,7 +34,8 @@ export class CarBayClosureForm {
 
   constructor(context: EntryContext, start: EntryStart) {
     this.#context = context;
-    this.date = start.date;
+    this.startDate = start.date;
+    this.endDate = start.date;
     this.startHour = start.startHour;
     this.endHour = start.startHour + 1;
   }
@@ -47,8 +49,9 @@ export class CarBayClosureForm {
   }
 
   request = $derived<CarBayClosureRequest>({
-    date: this.date,
+    startDate: this.startDate,
     startHour: this.startHour,
+    endDate: this.endDate,
     endHour: this.endHour,
   });
 
@@ -57,25 +60,44 @@ export class CarBayClosureForm {
   period = $derived(this.fits ? this.#rules().resolveClosure(this.request) : null);
 
   startHourOptions = $derived(
-    this.date
+    this.startDate
       ? this.#rules()
-          .slotHours(this.date)
-          .filter((startHour) => this.#fits({ date: this.date, startHour, endHour: startHour + 1 }))
+          .slotHours(this.startDate)
+          .filter((startHour) =>
+            this.#fits({
+              startDate: this.startDate,
+              startHour,
+              endDate: this.startDate,
+              endHour: startHour + 1,
+            }),
+          )
       : [],
   );
 
   endHourOptions = $derived(
-    this.date
+    this.endDate
       ? this.#rules()
-          .slotHours(this.date)
+          .slotHours(this.endDate)
           .map((hour) => hour + 1)
           .filter((endHour) => this.#fits({ ...this.request, endHour }))
       : [],
   );
 
+  setStartDate(date: string) {
+    this.startDate = date;
+    if (this.endDate < date) this.endDate = date;
+    this.#keepEndAfterStart();
+  }
+
   setStartHour(hour: number) {
     this.startHour = hour;
-    if (this.endHour <= hour) this.endHour = hour + 1;
+    this.#keepEndAfterStart();
+  }
+
+  #keepEndAfterStart() {
+    if (this.startDate === this.endDate && this.endHour <= this.startHour) {
+      this.endHour = this.startHour + 1;
+    }
   }
 }
 
@@ -114,7 +136,7 @@ export class StaffBayEntry {
 
   set date(date: string) {
     this.booking.date = date;
-    this.closure.date = date;
+    this.closure.setStartDate(date);
   }
 
   setType(type: StaffEntryType) {

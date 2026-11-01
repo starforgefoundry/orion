@@ -153,6 +153,14 @@ export class SettingsService extends BaseService {
     return await this.settingsRepository.setSetting('carBayPolicy', value);
   }
 
+  async getCarBayAvailability() {
+    return await this.settingsRepository.getSetting('carBayAvailability');
+  }
+
+  async setCarBayAvailability(value: SettingsMap['carBayAvailability']) {
+    return await this.settingsRepository.setSetting('carBayAvailability', value);
+  }
+
   async getMemberSquareSettings() {
     return await this.settingsRepository.getSetting('memberSquare');
   }

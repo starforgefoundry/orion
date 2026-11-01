@@ -97,7 +97,12 @@ export type CarBayPeriod = { startAt: DateTime; endAt: DateTime };
 /** The span of time something takes the bay out of use, including any turnover after it. */
 export type CarBayBlock = { startAt: DateTime; blockedUntil: DateTime };
 
-export type CarBayClosureRequest = { date: string; startHour: number; endHour: number };
+export type CarBayClosureRequest = {
+  startDate: string;
+  startHour: number;
+  endDate: string;
+  endHour: number;
+};
 
 export class CarBayRuleError extends Error {}
 
@@ -281,16 +286,17 @@ export class CarBayRules {
   }
 
   resolveClosure(request: CarBayClosureRequest): CarBayPeriod {
-    const startAt = this.#startOfSlot(request.date, request.startHour);
-    const { close } = this.openWindow(request.date);
-    if (
-      !Number.isInteger(request.endHour) ||
-      request.endHour <= request.startHour ||
-      request.endHour > close.hour
-    ) {
+    const startAt = this.#startOfSlot(request.startDate, request.startHour);
+    const { open, close } = this.openWindow(request.endDate);
+    const endAt =
+      Number.isInteger(request.endHour) &&
+      request.endHour > open.hour &&
+      request.endHour <= close.hour &&
+      open.set({ hour: request.endHour });
+    if (!endAt || endAt <= startAt) {
       throw new CarBayRuleError('A closure ends after it starts and by closing time');
     }
-    return { startAt, endAt: startAt.set({ hour: request.endHour }) };
+    return { startAt, endAt };
   }
 
   closureFits(request: CarBayClosureRequest, existing: CarBayBlock[]) {

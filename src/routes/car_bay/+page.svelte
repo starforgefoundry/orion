@@ -1,16 +1,23 @@
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner';
-  import { getCarBayPolicy, getCarBayRates } from '$lib/remotes/endpoints/settings.remote';
+  import {
+    getCarBayAvailability,
+    getCarBayPolicy,
+    getCarBayRates,
+  } from '$lib/remotes/endpoints/settings.remote';
   import { CAR_BAY_TIER, CAR_BAY_TIER_NAMES } from '$lib/utils/car_bay';
   import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
+  import ClosedNotice from './ClosedNotice.svelte';
   import ContactLine from './ContactLine.svelte';
   import TierPrices from './TierPrices.svelte';
   import { openHoursSummary, priceRows, tierDetails } from './tiers';
 
   const ratesRemote = getCarBayRates();
   const policyRemote = getCarBayPolicy();
+  const availabilityRemote = getCarBayAvailability();
   const rates = $derived(ratesRemote.current);
   const policy = $derived(policyRemote.current);
+  const availability = $derived(availabilityRemote.current);
 </script>
 
 <svelte:head>
@@ -18,8 +25,10 @@
 </svelte:head>
 
 <div class="flex flex-col gap-6">
-  {#if ratesRemote.loading || policyRemote.loading}
+  {#if ratesRemote.loading || policyRemote.loading || availabilityRemote.loading}
     <Spinner class="mx-auto mt-12 size-8" />
+  {:else if availability && !availability.isOpen}
+    <ClosedNotice />
   {:else if !rates || !policy}
     <p class="rounded-lg border p-6 text-center text-sm text-destructive">
       Booking isn't available right now. Try again later.

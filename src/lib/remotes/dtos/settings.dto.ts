@@ -58,6 +58,10 @@ export const carBayRatesDto = v.object({
   overnightFee: pricePair,
 });
 
+export const carBayAvailabilityDto = v.object({
+  isOpen: v.boolean(),
+});
+
 function wholeNumberBetween(min: number, max: number) {
   return v.pipe(v.number(), v.integer(), v.minValue(min), v.maxValue(max));
 }

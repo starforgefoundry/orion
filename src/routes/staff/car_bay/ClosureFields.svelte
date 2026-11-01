@@ -22,7 +22,7 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <div class="grid gap-4 sm:grid-cols-2">
+  <div class="grid gap-4 sm:grid-cols-3">
     <FormField label="Closed from" required>
       <OptionSelect
         options={form.startHourOptions.map(hourOption)}
@@ -31,7 +31,15 @@
         onValueChange={(value) => form.setStartHour(Number(value))}
       />
     </FormField>
-    <FormField label="Until" required>
+    <FormField label="Until date" for="{fieldId}-end-date" required>
+      <TextInput
+        id="{fieldId}-end-date"
+        type="date"
+        min={form.startDate}
+        bind:value={form.endDate}
+      />
+    </FormField>
+    <FormField label="Until time" required>
       <OptionSelect
         options={form.endHourOptions.map(hourOption)}
         value={form.endHour.toString()}

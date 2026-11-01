@@ -4,7 +4,11 @@
   import BayWeekCalendar from '$lib/frontend/components/BayWeekCalendar.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { getCarBaySchedule } from '$lib/remotes/endpoints/car_bay.remote';
-  import { getCarBayPolicy, getCarBayRates } from '$lib/remotes/endpoints/settings.remote';
+  import {
+    getCarBayAvailability,
+    getCarBayPolicy,
+    getCarBayRates,
+  } from '$lib/remotes/endpoints/settings.remote';
   import {
     CAR_BAY_TIER,
     CAR_BAY_TIER_NAMES,
@@ -16,6 +20,7 @@
   import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
   import { DateTime } from 'luxon';
   import CheckoutModal from '../CheckoutModal.svelte';
+  import ClosedNotice from '../ClosedNotice.svelte';
   import DayPicker from '../DayPicker.svelte';
   import ContactLine from '../ContactLine.svelte';
   import TierPrices from '../TierPrices.svelte';
@@ -26,7 +31,9 @@
   const scheduleRemote = getCarBaySchedule();
   const ratesRemote = getCarBayRates();
   const policyRemote = getCarBayPolicy();
+  const availabilityRemote = getCarBayAvailability();
 
+  const availability = $derived(availabilityRemote.current);
   const schedule = $derived(scheduleRemote.current);
   const rates = $derived(ratesRemote.current);
   const policy = $derived(policyRemote.current);
@@ -81,8 +88,10 @@
     All booking types
   </a>
 
-  {#if scheduleRemote.loading || ratesRemote.loading || policyRemote.loading}
+  {#if scheduleRemote.loading || ratesRemote.loading || policyRemote.loading || availabilityRemote.loading}
     <Spinner class="mx-auto mt-12 size-8" />
+  {:else if availability && !availability.isOpen}
+    <ClosedNotice />
   {:else if !schedule || !rates || !policy || !rules || !details}
     <p class="rounded-lg border p-6 text-center text-sm text-destructive">
       Booking isn't available right now. Try again later.

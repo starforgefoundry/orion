@@ -7,6 +7,7 @@
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import {
     getBambuddySettings,
+    getCarBayAvailability,
     getCarBayPolicy,
     getCarBayRates,
     getClassSettings,
@@ -126,6 +127,7 @@
   const classSettings = getClassSettings();
   const carBayRates = getCarBayRates();
   const carBayPolicy = getCarBayPolicy();
+  const carBayAvailability = getCarBayAvailability();
   const bambuddySettings = getBambuddySettings();
 </script>
 
@@ -236,8 +238,13 @@
       >
         {@render loadState(carBayRates, 'car bay rates')}
         {@render loadState(carBayPolicy, 'car bay rules')}
-        {#if carBayRates.current && carBayPolicy.current}
-          <CarBaySettings rates={carBayRates.current} policy={carBayPolicy.current} />
+        {@render loadState(carBayAvailability, 'car bay availability')}
+        {#if carBayRates.current && carBayPolicy.current && carBayAvailability.current}
+          <CarBaySettings
+            rates={carBayRates.current}
+            policy={carBayPolicy.current}
+            availability={carBayAvailability.current}
+          />
         {/if}
       </SettingsSection>
     {:else if active.id === SECTIONS.MEMBERS}

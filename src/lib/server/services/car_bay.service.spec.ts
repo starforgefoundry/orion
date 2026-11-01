@@ -86,10 +86,11 @@ describe(CarBayService.name, () => {
   let sut: CarBayService;
   let mocks: ServiceMocks;
 
-  function stubCarBaySettings(policy: CarBayPolicy = DEFAULT_CAR_BAY_POLICY) {
+  function stubCarBaySettings(policy: CarBayPolicy = DEFAULT_CAR_BAY_POLICY, isOpen = true) {
     stubSettings(mocks.settingsRepository, {
       carBayRates: DEFAULT_CAR_BAY_RATES,
       carBayPolicy: policy,
+      carBayAvailability: { isOpen },
     });
   }
 
@@ -150,6 +151,13 @@ describe(CarBayService.name, () => {
       expect(mocks.carBayRepository.create.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.paymentRepository.capture.mock.invocationCallOrder[0],
       );
+    });
+
+    it('refuses to book while staff have stopped taking bookings', async () => {
+      stubCarBaySettings(DEFAULT_CAR_BAY_POLICY, false);
+
+      await expect(sut.book(dto, NOW)).rejects.toThrow(CarBayRuleError);
+      expect(mocks.paymentRepository.authorize).not.toHaveBeenCalled();
     });
 
     it('charges the non-member rate when the customer has no membership', async () => {
@@ -292,6 +300,14 @@ describe(CarBayService.name, () => {
       );
     });
 
+    it('books while staff have stopped taking public bookings', async () => {
+      stubCarBaySettings(DEFAULT_CAR_BAY_POLICY, false);
+
+      await expect(
+        sut.staffBook({ request: QUICK_JOB, ...CUSTOMER }, STAFF_EMAIL, NOW),
+      ).resolves.toBeDefined();
+    });
+
     it('ignores the public booking horizon', async () => {
       const request = { ...QUICK_JOB, date: '2026-12-01' };
 
@@ -313,7 +329,13 @@ describe(CarBayService.name, () => {
   });
 
   describe('staffClose', () => {
-    const CLOSURE = { date: MONDAY, startHour: 17, endHour: 19, reason: 'Lift inspection' };
+    const CLOSURE = {
+      startDate: MONDAY,
+      startHour: 17,
+      endDate: MONDAY,
+      endHour: 19,
+      reason: 'Lift inspection',
+    };
 
     beforeEach(() => {
       mocks.carBayRepository.getConfirmedInRange.mockResolvedValue([]);

@@ -67,27 +67,39 @@
   import OptionSelect from '$lib/frontend/components/form/OptionSelect.svelte';
   import PriceInput from '$lib/frontend/components/form/PriceInput.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { Switch } from '$lib/components/ui/switch';
   import { submitWithToast } from '$lib/frontend/form-submit';
-  import { setCarBayPolicy, setCarBayRates } from '$lib/remotes/endpoints/settings.remote';
+  import {
+    setCarBayAvailability,
+    setCarBayPolicy,
+    setCarBayRates,
+  } from '$lib/remotes/endpoints/settings.remote';
   import { untrack } from 'svelte';
 
   interface Props {
     rates: CarBayRates;
     policy: CarBayPolicy;
+    availability: { isOpen: boolean };
     formId?: string;
   }
 
-  let { rates, policy, formId = 'car-bay-settings' }: Props = $props();
+  let { rates, policy, availability, formId = 'car-bay-settings' }: Props = $props();
 
   const fieldId = $props.id();
 
   let draftRates = $state(untrack(() => $state.snapshot(rates)));
   let draftPolicy = $state(untrack(() => $state.snapshot(policy)));
+  let draftAvailability = $state(untrack(() => $state.snapshot(availability)));
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
     await submitWithToast(
-      () => Promise.all([setCarBayPolicy(draftPolicy), setCarBayRates(draftRates)]),
+      () =>
+        Promise.all([
+          setCarBayPolicy(draftPolicy),
+          setCarBayRates(draftRates),
+          setCarBayAvailability(draftAvailability),
+        ]),
       { success: 'Car bay settings saved', error: 'Error saving car bay settings' },
     );
   }
@@ -114,6 +126,14 @@
 {/snippet}
 
 <form id={formId} class="flex flex-col gap-8" onsubmit={handleSubmit}>
+  <FormField
+    label="Accept Car Bay Bookings"
+    for="{fieldId}-is-open"
+    description="When disabled, customers see a closed message instead of open times. Existing bookings and staff bookings are unaffected."
+  >
+    <Switch id="{fieldId}-is-open" bind:checked={draftAvailability.isOpen} />
+  </FormField>
+
   <section class="flex flex-col gap-4">
     <h3 class="text-sm font-semibold">Open hours</h3>
     <div class="overflow-x-auto rounded-lg border">

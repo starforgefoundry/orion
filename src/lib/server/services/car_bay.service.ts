@@ -46,6 +46,7 @@ import { DateTime } from 'luxon';
 
 const CAR_BAY_SENDER = `Starforge Car Bay <${CAR_BAY_EMAIL}>`;
 const CLOSED_MESSAGE = 'The bay is closed at that time. Please pick another time.';
+const BOOKINGS_CLOSED_MESSAGE = 'The car bay is not taking bookings right now.';
 
 type CustomerDetails = Pick<
   StaffBookCarBayDto,
@@ -231,6 +232,9 @@ export class CarBayService extends BaseService {
   }
 
   async book(dto: BookCarBayDto, now: DateTime = DateTime.now()) {
+    const { isOpen } = await this.settingsRepository.getSetting('carBayAvailability');
+    if (!isOpen) throw new CarBayRuleError(BOOKINGS_CLOSED_MESSAGE);
+
     const rules = await this.rules();
     const period = await this.validateRequest(rules, dto.request, dto.customerEmail, now, {
       enforceHorizon: true,

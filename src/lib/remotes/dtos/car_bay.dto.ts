@@ -72,8 +72,9 @@ export const sendCarBayOverrunInvoiceDto = v.object({
 export type SendCarBayOverrunInvoiceDto = v.InferOutput<typeof sendCarBayOverrunInvoiceDto>;
 
 export const staffCloseCarBayDto = v.object({
-  date: isoDate,
+  startDate: isoDate,
   startHour: wholeNumber,
+  endDate: isoDate,
   endHour: wholeNumber,
   reason: v.pipe(v.string(), v.trim()),
 });

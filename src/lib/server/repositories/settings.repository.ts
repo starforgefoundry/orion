@@ -31,6 +31,9 @@ export type SettingsMap = {
   };
   carBayRates: CarBayRates;
   carBayPolicy: CarBayPolicy;
+  carBayAvailability: {
+    isOpen: boolean;
+  };
   memberSquare: {
     dayPassItemVariationIds: string[];
   };
@@ -61,6 +64,9 @@ const defaults: SettingsMap = {
   },
   carBayRates: DEFAULT_CAR_BAY_RATES,
   carBayPolicy: DEFAULT_CAR_BAY_POLICY,
+  carBayAvailability: {
+    isOpen: true,
+  },
   memberSquare: {
     dayPassItemVariationIds: [],
   },

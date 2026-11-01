@@ -239,29 +239,62 @@ describe('requestFits', () => {
 });
 
 describe('closures', () => {
+  function sameDay(date: string, startHour: number, endHour: number) {
+    return { startDate: date, startHour, endDate: date, endHour };
+  }
+
   it('closes the bay between whole hours', () => {
-    const period = rules.resolveClosure({ date: SATURDAY, startHour: 13, endHour: 17 });
+    const period = rules.resolveClosure(sameDay(SATURDAY, 13, 17));
     expect(period.startAt.toFormat('HH:mm')).toBe('13:00');
     expect(period.endAt.toFormat('HH:mm')).toBe('17:00');
   });
 
   it('can close until closing time but not past it', () => {
-    expect(rules.closureFits({ date: MONDAY, startHour: 16, endHour: 21 }, [])).toBe(true);
-    expect(rules.closureFits({ date: MONDAY, startHour: 16, endHour: 22 }, [])).toBe(false);
+    expect(rules.closureFits(sameDay(MONDAY, 16, 21), [])).toBe(true);
+    expect(rules.closureFits(sameDay(MONDAY, 16, 22), [])).toBe(false);
   });
 
   it('rejects a closure that ends before it starts', () => {
-    expect(() => rules.resolveClosure({ date: MONDAY, startHour: 18, endHour: 18 })).toThrow(
-      CarBayRuleError,
-    );
+    expect(() => rules.resolveClosure(sameDay(MONDAY, 18, 18))).toThrow(CarBayRuleError);
+  });
+
+  it('closes the bay across several days', () => {
+    const period = rules.resolveClosure({
+      startDate: FRIDAY,
+      startHour: 16,
+      endDate: SUNDAY,
+      endHour: 21,
+    });
+    expect(period.startAt.toISO()).toBe(at(`${FRIDAY}T16:00`).toISO());
+    expect(period.endAt.toISO()).toBe(at(`${SUNDAY}T21:00`).toISO());
+  });
+
+  it('ends a multi-day closure within the last day open hours', () => {
+    const request = { startDate: FRIDAY, startHour: 16, endDate: SATURDAY, endHour: 12 };
+    expect(rules.closureFits(request, [])).toBe(false);
+    expect(rules.closureFits({ ...request, endHour: 13 }, [])).toBe(true);
+  });
+
+  it('rejects a closure that ends on an earlier day', () => {
+    expect(() =>
+      rules.resolveClosure({ startDate: SATURDAY, startHour: 13, endDate: FRIDAY, endHour: 21 }),
+    ).toThrow(CarBayRuleError);
   });
 
   it('cannot close over a booking or its buffer', () => {
     const booked = [
       rules.bookingBlock({ startAt: at(`${MONDAY}T16:00`), endAt: at(`${MONDAY}T17:30`) }),
     ];
-    expect(rules.closureFits({ date: MONDAY, startHour: 17, endHour: 19 }, booked)).toBe(false);
-    expect(rules.closureFits({ date: MONDAY, startHour: 18, endHour: 19 }, booked)).toBe(true);
+    expect(rules.closureFits(sameDay(MONDAY, 17, 19), booked)).toBe(false);
+    expect(rules.closureFits(sameDay(MONDAY, 18, 19), booked)).toBe(true);
+  });
+
+  it('cannot close several days over a booking on a middle day', () => {
+    const booked = [
+      rules.bookingBlock({ startAt: at(`${SATURDAY}T12:00`), endAt: at(`${SATURDAY}T13:30`) }),
+    ];
+    const request = { startDate: FRIDAY, startHour: 16, endDate: SUNDAY, endHour: 21 };
+    expect(rules.closureFits(request, booked)).toBe(false);
   });
 });
 

@@ -66,7 +66,8 @@
   {#if entry.isClosure}
     <ClosureFields form={entry.closure} />
     <p class="text-xs text-muted-foreground">
-      Customers see closed times as unavailable. Click the closure on the schedule to reopen.
+      Customers see closed times as unavailable. Click the closure on the schedule to reopen. To
+      stop all bookings until further notice, turn off Accept Car Bay Bookings in settings.
     </p>
   {:else}
     <CarBayBookingFields form={entry.booking} editableSchedule />
