@@ -5,125 +5,63 @@ import {
   MEMBER_SORT,
   ONBOARDING_FILTER,
   SORT_DIRECTION,
+  SUBSCRIPTION_STATUS,
   enumValues,
 } from '$lib/member_enums';
-import type { Database } from '$lib/server/db';
-import { schema } from '$lib/server/db/schema';
+import type { Organization, OrganizationMember } from '$lib/server/db/schema';
 import { resolveAccess } from '$lib/server/utils/member_access';
 import { spaceDate } from '$lib/space';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { describeWithDatabase, useTestDatabase } from '$test/db';
 import { DateTime } from 'luxon';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import postgres from 'postgres';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeEach, expect, it } from 'vitest';
 import { MemberRepository, type MemberSearchFilter } from './member.repository';
 
-const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../db/migrations');
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-// migrations.spec.ts resets TEST_DATABASE_URL itself, so this suite uses its own database.
-const DATABASE_NAME = 'orion_member_access_test';
 const PAGE_SIZE = 100;
 
-describe.skipIf(!TEST_DATABASE_URL)('MemberRepository access filter', () => {
+describeWithDatabase('MemberRepository access filter', () => {
   const now = DateTime.now();
   const today = spaceDate(now);
   const yesterday = spaceDate(now.minus({ days: 1 }));
 
-  const admin = postgres(TEST_DATABASE_URL ?? '', { max: 1, onnotice: () => {} });
-  const url = new URL(TEST_DATABASE_URL ?? 'postgres://localhost');
-  url.pathname = `/${DATABASE_NAME}`;
-  let sql: postgres.Sql;
-  let db: Database;
+  const database = useTestDatabase('member');
   let repository: MemberRepository;
-
-  async function addMember(name: string) {
-    const [member] = await db
-      .insert(schema.member)
-      .values({ name, email: `${name}@example.com` })
-      .returning();
-    return member;
-  }
-
-  async function addSubscription(memberId: string, status: 'active' | 'canceled', ended = false) {
-    await db.insert(schema.memberSubscription).values({
-      id: crypto.randomUUID(),
-      memberId,
-      planVariationId: 'plan',
-      planName: 'Monthly',
-      status,
-      startDate: today,
-      accessEndedDate: ended ? now : null,
-    });
-  }
 
   async function addOrganization(
     memberId: string,
-    options: {
-      archived?: boolean;
-      grantsAccess?: boolean;
-      accessEndDate?: DateTime;
-      removed?: boolean;
-    } = {},
+    organization: Partial<Organization> = {},
+    membership: Partial<OrganizationMember> = {},
   ) {
-    const [organization] = await db
-      .insert(schema.organization)
-      .values({
-        name: 'Club',
-        email: 'club@example.com',
-        archived: options.archived ?? false,
-        grantsAccess: options.grantsAccess ?? true,
-        accessEndDate: options.accessEndDate ?? null,
-      })
-      .returning();
-    await db.insert(schema.organizationMember).values({
-      organizationId: organization.id,
-      memberId,
-      removedDate: options.removed ? now : null,
-    });
+    const { id: organizationId } = await database.insert.organization(organization);
+    await database.insert.organizationMember({ organizationId, memberId, ...membership });
   }
 
-  async function addDayPass(memberId: string, usedDate: string | null) {
-    await db
-      .insert(schema.dayPass)
-      .values({ memberId, squareOrderId: 'order', purchasedDate: now, usedDate });
-  }
-
-  const scenarios: Record<string, (memberId: string) => Promise<void>> = {
+  const scenarios: Record<string, (memberId: string) => Promise<unknown>> = {
     nothing: async () => {},
-    activeSubscription: (id) => addSubscription(id, 'active'),
-    refundedSubscription: (id) => addSubscription(id, 'active', true),
-    canceledSubscription: (id) => addSubscription(id, 'canceled'),
-    organization: (id) => addOrganization(id),
-    removedFromOrganization: (id) => addOrganization(id, { removed: true }),
-    archivedOrganization: (id) => addOrganization(id, { archived: true }),
-    organizationAccessOff: (id) => addOrganization(id, { grantsAccess: false }),
-    expiredOrganization: (id) => addOrganization(id, { accessEndDate: now.minus({ hours: 1 }) }),
-    futureOrganization: (id) => addOrganization(id, { accessEndDate: now.plus({ days: 1 }) }),
-    unusedDayPass: (id) => addDayPass(id, null),
-    dayPassUsedToday: (id) => addDayPass(id, today),
-    dayPassUsedYesterday: (id) => addDayPass(id, yesterday),
+    activeSubscription: (memberId) => database.insert.memberSubscription({ memberId }),
+    refundedSubscription: (memberId) =>
+      database.insert.memberSubscription({ memberId, accessEndedDate: now }),
+    canceledSubscription: (memberId) =>
+      database.insert.memberSubscription({ memberId, status: SUBSCRIPTION_STATUS.CANCELED }),
+    organization: (memberId) => addOrganization(memberId),
+    removedFromOrganization: (memberId) => addOrganization(memberId, {}, { removedDate: now }),
+    archivedOrganization: (memberId) => addOrganization(memberId, { archived: true }),
+    organizationAccessOff: (memberId) => addOrganization(memberId, { grantsAccess: false }),
+    expiredOrganization: (memberId) =>
+      addOrganization(memberId, { accessEndDate: now.minus({ hours: 1 }) }),
+    futureOrganization: (memberId) =>
+      addOrganization(memberId, { accessEndDate: now.plus({ days: 1 }) }),
+    unusedDayPass: (memberId) => database.insert.dayPass({ memberId }),
+    dayPassUsedToday: (memberId) => database.insert.dayPass({ memberId, usedDate: today }),
+    dayPassUsedYesterday: (memberId) => database.insert.dayPass({ memberId, usedDate: yesterday }),
   };
 
-  beforeAll(async () => {
-    await admin.unsafe(`DROP DATABASE IF EXISTS ${DATABASE_NAME} WITH (FORCE)`);
-    await admin.unsafe(`CREATE DATABASE ${DATABASE_NAME}`);
-    sql = postgres(url.toString(), { max: 1, onnotice: () => {} });
-    db = drizzle(sql);
-    await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-    repository = new MemberRepository(db);
+  beforeEach(async () => {
+    repository = new MemberRepository(database.db);
 
     for (const [name, setup] of Object.entries(scenarios)) {
-      const member = await addMember(name);
+      const member = await database.insert.member({ name, email: `${name}@example.com` });
       await setup(member.id);
     }
-  });
-
-  afterAll(async () => {
-    await sql?.end();
-    await admin.unsafe(`DROP DATABASE IF EXISTS ${DATABASE_NAME} WITH (FORCE)`);
-    await admin.end();
   });
 
   async function search(filter: Partial<MemberSearchFilter> = {}) {
@@ -164,7 +102,7 @@ describe.skipIf(!TEST_DATABASE_URL)('MemberRepository access filter', () => {
 
   it('filters and sorts by onboarding email', async () => {
     const [{ member }] = await search({ query: 'nothing' });
-    await db.insert(schema.memberEmail).values({
+    await database.insert.memberEmail({
       memberId: member.id,
       type: MEMBER_EMAIL_TYPE.ONBOARDING,
       trigger: MEMBER_EMAIL_TRIGGER.MANUAL,

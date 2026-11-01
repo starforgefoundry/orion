@@ -1,8 +1,9 @@
+import { SPACE_ZONE } from '$lib/space';
 import { factory } from '$test/factory';
 import { memberAccessContext, organizationAccess } from '$test/factory/member_access';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OnboardingService, PASS_EMAIL_COOLDOWN } from './onboarding.service';
 
 const MEMBER = factory.member({
@@ -17,6 +18,7 @@ const ACTIVE_CONTEXT = memberAccessContext({
   dayPasses: [factory.dayPass({ memberId: MEMBER.id })],
 });
 
+const NOW = DateTime.fromISO('2026-10-12T09:00', { zone: SPACE_ZONE });
 const SIGNATURE = new File(['sig'], 'signature.jpg');
 
 describe(OnboardingService.name, () => {
@@ -95,6 +97,11 @@ describe(OnboardingService.name, () => {
   });
 
   describe('requestOnboardingEmail', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(NOW.toJSDate());
+    });
+
     it('sends onboarding to a member with access', async () => {
       await sut.requestOnboardingEmail('sam@example.com');
 
@@ -142,7 +149,7 @@ describe(OnboardingService.name, () => {
       mocks.memberEmailRepository.listByMember.mockResolvedValue([
         factory.memberEmail({
           memberId: MEMBER.id,
-          sentDate: DateTime.now().minus({ minutes: 1 }),
+          sentDate: NOW.minus({ minutes: 1 }),
         }),
       ]);
 
@@ -155,7 +162,7 @@ describe(OnboardingService.name, () => {
       mocks.memberEmailRepository.listByMember.mockResolvedValue([
         factory.memberEmail({
           memberId: MEMBER.id,
-          sentDate: DateTime.now().minus(PASS_EMAIL_COOLDOWN).minus({ minutes: 1 }),
+          sentDate: NOW.minus(PASS_EMAIL_COOLDOWN).minus({ minutes: 1 }),
         }),
       ]);
 

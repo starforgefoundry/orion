@@ -1,7 +1,6 @@
 import type { CarBayBooking, Payment } from '$lib/server/db/schema';
 import type { CarBayBookingWithPayment } from '$lib/server/repositories/car_bay.repository';
 import { PaymentDeclinedError } from '$lib/server/gateways/payment.gateway';
-import type { NewPayment } from '$lib/server/repositories/payment.repository';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import {
   CarBayRuleError,
@@ -38,10 +37,9 @@ function at(iso: string) {
 }
 
 function storedPayment(overrides: Partial<Payment> = {}) {
-  return factory.payment({
+  return factory.paidPayment({
     id: 'payment-1',
     type: PAYMENT_TYPE.CAR_BAY_BOOKING,
-    status: PAYMENT_STATUS.PAID,
     total: 1200,
     squarePaymentId: 'pay-1',
     ...overrides,
@@ -67,19 +65,6 @@ function storedBooking(
   overrides: Partial<CarBayBookingWithPayment> = {},
 ): CarBayBookingWithPayment {
   return { ...bookingRow(), payment: storedPayment(), ...overrides };
-}
-
-function savedPayment(payment: NewPayment, id?: string) {
-  return factory.payment({
-    ...(id && { id }),
-    type: payment.type,
-    status: payment.status,
-    customerName: payment.customer.name,
-    customerEmail: payment.customer.email,
-    total: payment.bill.total,
-    lineItems: payment.bill.lineItems,
-    discounts: payment.bill.discounts,
-  });
 }
 
 describe(CarBayService.name, () => {
@@ -445,7 +430,7 @@ describe(CarBayService.name, () => {
     beforeEach(() => {
       mocks.carBayRepository.getById.mockResolvedValue(storedBooking());
       mocks.paymentRepository.save.mockImplementation(async (payment, id) =>
-        savedPayment(payment, id),
+        factory.savedPayment(payment, id ? { id } : {}),
       );
       mocks.carBayRepository.createOverrun.mockImplementation(async (bookingId, paymentId) =>
         factory.carBayOverrun({ bookingId, paymentId }),

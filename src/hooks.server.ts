@@ -1,6 +1,6 @@
 import { building, dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
-import type { User } from '$lib/server/db/schema';
+import { devLoginUser } from '$lib/auth/staff';
 import { carBayService } from '$lib/server/services/car_bay.service';
 import { classService } from '$lib/server/services/class.service';
 import { settingsService } from '$lib/server/services/settings.service';
@@ -15,15 +15,9 @@ import { handle as authenticationHandle } from './lib/auth/auth';
 const BOOKING_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const NIGHTLY_SYNC_HOUR = 3;
 
-// Skips Google sign-in during local development. Never active in production builds.
-function devLoginUser(): User | undefined {
-  if (!dev || !env.DEV_LOGIN_EMAIL) return undefined;
-  return { email: env.DEV_LOGIN_EMAIL, name: 'Dev User', picture: '', googleCalendarId: null };
-}
-
 async function userPopulation({ event, resolve }: Parameters<Handle>[0]) {
   const session = await event.locals.auth();
-  event.locals.user = session?.user ?? devLoginUser();
+  event.locals.user = session?.user ?? devLoginUser(dev, env.DEV_LOGIN_EMAIL);
   return resolve(event);
 }
 

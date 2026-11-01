@@ -2,14 +2,15 @@ import { KIOSK_CHECK_IN_STATUS } from '$lib/remotes/dtos/kiosk.dto';
 import type { CarBayBooking, ClassBooking, ClassInstance, DayPass } from '$lib/server/db/schema';
 import type { ClassPass, IssuedPass } from '$lib/server/repositories/pass.repository';
 import type { MemberAccessContext } from '$lib/server/utils/member_access';
+import { SPACE_ZONE, spaceDate } from '$lib/space';
 import { factory } from '$test/factory';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { KioskService } from './kiosk.service';
 
-const NOW = DateTime.fromISO('2026-10-16T15:00:00', { zone: 'America/Chicago' }) as DateTime<true>;
-const TODAY = '2026-10-16';
+const NOW = DateTime.fromISO('2026-10-16T15:00:00', { zone: SPACE_ZONE }) as DateTime<true>;
+const TODAY = spaceDate(NOW);
 
 const member = factory.member({ name: 'Ada Lovelace', email: 'ada@example.com' });
 
@@ -46,15 +47,8 @@ function classPass(
   });
 }
 
-function context(overrides: Partial<MemberAccessContext> = {}): MemberAccessContext {
-  return {
-    member,
-    hasWaiver: true,
-    subscriptions: [],
-    organizations: [],
-    dayPasses: [],
-    ...overrides,
-  };
+function context(overrides: Partial<MemberAccessContext> = {}) {
+  return factory.memberAccessContext({ member, ...overrides });
 }
 
 describe(KioskService.name, () => {

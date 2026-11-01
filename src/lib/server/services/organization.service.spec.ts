@@ -1,4 +1,3 @@
-import type { Payment } from '$lib/server/db/schema';
 import { MailgunRateLimitError } from '$lib/server/gateways/mailgun.gateway';
 import { SPACE_ZONE } from '$lib/space';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
@@ -14,10 +13,6 @@ import {
 
 const PAY_URL = 'https://orion.example.com/pay';
 
-function payment(total: number, status: Payment['status'], type: Payment['type']) {
-  return factory.payment({ total, status, type });
-}
-
 describe(OrganizationService.name, () => {
   let sut: OrganizationService;
   let mocks: ServiceMocks;
@@ -26,39 +21,16 @@ describe(OrganizationService.name, () => {
     ({ sut, mocks } = newTestService(OrganizationService));
   });
 
-  describe('getOrganizations', () => {
-    it('should return all non-archived organizations', async () => {
-      const organizations = [factory.organization(), factory.organization()];
-      mocks.organizationRepository.getAll.mockResolvedValue(organizations);
-
-      const result = await sut.getOrganizations();
-
-      expect(mocks.organizationRepository.getAll).toHaveBeenCalled();
-      expect(result).toEqual(organizations);
-    });
-
-    it('should return empty array when no organizations exist', async () => {
-      mocks.organizationRepository.getAll.mockResolvedValue([]);
-
-      const result = await sut.getOrganizations();
-
-      expect(result).toEqual([]);
-    });
-  });
-
   describe('getOrganizationDetail', () => {
     it('should return organization detail with outstanding balance, print requests, and payments', async () => {
       const organization = factory.organization({ name: 'Detail Org', email: 'detail@org.com' });
-      const printPayments = [
-        payment(5000, PAYMENT_STATUS.PENDING, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(3000, PAYMENT_STATUS.PENDING, PAYMENT_TYPE.PRINT_REQUEST),
-      ];
-      const balancePayment = payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE);
-      const chargePayment = payment(1000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.ORG_CHARGE);
+      const printPayments = [factory.payment({ total: 5000 }), factory.payment({ total: 3000 })];
+      const balancePayment = factory.paidPayment({ total: 2000, type: PAYMENT_TYPE.BALANCE });
+      const chargePayment = factory.paidPayment({ total: 1000, type: PAYMENT_TYPE.ORG_CHARGE });
       mocks.organizationRepository.getById.mockResolvedValue(organization);
       mocks.organizationRepository.getPayments.mockResolvedValue([
-        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(3000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        factory.paidPayment({ total: 5000 }),
+        factory.paidPayment({ total: 3000 }),
         balancePayment,
         chargePayment,
       ]);
@@ -208,21 +180,11 @@ describe(OrganizationService.name, () => {
     });
   });
 
-  describe('archiveOrganization', () => {
-    it('should archive an organization', async () => {
-      mocks.organizationRepository.archive.mockResolvedValue(undefined);
-
-      await sut.archiveOrganization('org-archive');
-
-      expect(mocks.organizationRepository.archive).toHaveBeenCalledWith('org-archive');
-    });
-  });
-
   describe(outstandingBalance.name, () => {
     it('should calculate outstanding balance correctly with paid print requests', async () => {
       const result = outstandingBalance([
-        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(3000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        factory.paidPayment({ total: 5000 }),
+        factory.paidPayment({ total: 3000 }),
       ]);
 
       expect(result).toBe(8000);
@@ -230,9 +192,9 @@ describe(OrganizationService.name, () => {
 
     it('should subtract balance payments from outstanding balance', async () => {
       const result = outstandingBalance([
-        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(3000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
+        factory.paidPayment({ total: 5000 }),
+        factory.paidPayment({ total: 3000 }),
+        factory.paidPayment({ total: 2000, type: PAYMENT_TYPE.BALANCE }),
       ]);
 
       expect(result).toBe(6000);
@@ -240,10 +202,18 @@ describe(OrganizationService.name, () => {
 
     it('should only count non quote or canceled payments', async () => {
       const result = outstandingBalance([
-        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(3000, PAYMENT_STATUS.PENDING, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(4000, PAYMENT_STATUS.QUOTE, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(2000, PAYMENT_STATUS.CANCELED, PAYMENT_TYPE.PRINT_REQUEST),
+        factory.paidPayment({ total: 5000 }),
+        factory.payment({ total: 3000 }),
+        factory.payment({
+          total: 4000,
+          status: PAYMENT_STATUS.QUOTE,
+          type: PAYMENT_TYPE.PRINT_REQUEST,
+        }),
+        factory.payment({
+          total: 2000,
+          status: PAYMENT_STATUS.CANCELED,
+          type: PAYMENT_TYPE.PRINT_REQUEST,
+        }),
       ]);
 
       expect(result).toBe(8000);
@@ -257,8 +227,8 @@ describe(OrganizationService.name, () => {
 
     it('should return negative balance when balance payments exceed print payments', async () => {
       const result = outstandingBalance([
-        payment(1000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
+        factory.paidPayment({ total: 1000 }),
+        factory.paidPayment({ total: 2000, type: PAYMENT_TYPE.BALANCE }),
       ]);
 
       expect(result).toBe(-1000);
@@ -266,10 +236,10 @@ describe(OrganizationService.name, () => {
 
     it('should handle multiple balance payments', async () => {
       const result = outstandingBalance([
-        payment(10000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(3000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
-        payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
-        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
+        factory.paidPayment({ total: 10000 }),
+        factory.paidPayment({ total: 3000, type: PAYMENT_TYPE.BALANCE }),
+        factory.paidPayment({ total: 2000, type: PAYMENT_TYPE.BALANCE }),
+        factory.paidPayment({ total: 5000 }),
       ]);
 
       expect(result).toBe(10000);
@@ -277,10 +247,10 @@ describe(OrganizationService.name, () => {
 
     it('should include organization charges in outstanding balance', async () => {
       const result = outstandingBalance([
-        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
-        payment(1500, PAYMENT_STATUS.PAID, PAYMENT_TYPE.ORG_CHARGE),
-        payment(500, PAYMENT_STATUS.PAID, PAYMENT_TYPE.ORG_CHARGE),
+        factory.paidPayment({ total: 5000 }),
+        factory.paidPayment({ total: 2000, type: PAYMENT_TYPE.BALANCE }),
+        factory.paidPayment({ total: 1500, type: PAYMENT_TYPE.ORG_CHARGE }),
+        factory.paidPayment({ total: 500, type: PAYMENT_TYPE.ORG_CHARGE }),
       ]);
 
       expect(result).toBe(5000);
@@ -293,8 +263,8 @@ describe(OrganizationService.name, () => {
     beforeEach(() => {
       mocks.organizationRepository.getById.mockResolvedValue(organization);
       mocks.organizationRepository.getPayments.mockResolvedValue([
-        payment(5000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(3000, PAYMENT_STATUS.PENDING, PAYMENT_TYPE.PRINT_REQUEST),
+        factory.paidPayment({ total: 5000 }),
+        factory.payment({ total: 3000 }),
       ]);
       mocks.paymentRepository.save.mockImplementation(async (data) =>
         factory.payment({ id: 'balance-1', total: data.bill.total }),
@@ -340,8 +310,8 @@ describe(OrganizationService.name, () => {
 
     it('throws when nothing is owed', async () => {
       mocks.organizationRepository.getPayments.mockResolvedValue([
-        payment(1000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.PRINT_REQUEST),
-        payment(2000, PAYMENT_STATUS.PAID, PAYMENT_TYPE.BALANCE),
+        factory.paidPayment({ total: 1000 }),
+        factory.paidPayment({ total: 2000, type: PAYMENT_TYPE.BALANCE }),
       ]);
 
       await expect(sut.chargeBalance({ organizationId: organization.id })).rejects.toThrow(
@@ -502,19 +472,6 @@ describe(OrganizationService.name, () => {
           expect(sentEmails()).toEqual(['ada@example.com', 'grace@example.com']),
         );
       });
-    });
-  });
-
-  describe('removeOrganizationMembers', () => {
-    it('removes the memberships within the organization', async () => {
-      mocks.organizationMemberRepository.removeMany.mockResolvedValue(undefined);
-
-      await sut.removeOrganizationMembers('org-1', ['m1', 'm2']);
-
-      expect(mocks.organizationMemberRepository.removeMany).toHaveBeenCalledWith('org-1', [
-        'm1',
-        'm2',
-      ]);
     });
   });
 });

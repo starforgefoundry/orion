@@ -1,109 +1,43 @@
-import type {
-  DayPass,
-  MemberSubscription,
-  Organization,
-  OrganizationMember,
-} from '$lib/server/db/schema';
-import { SPACE_ZONE } from '$lib/space';
+import { ACCESS_BASIS, SUBSCRIPTION_STATUS } from '$lib/member_enums';
+import type { DayPass } from '$lib/server/db/schema';
+import { SPACE_ZONE, spaceDate } from '$lib/space';
+import { factory } from '$test/factory';
 import { DateTime } from 'luxon';
 import { describe, expect, it } from 'vitest';
-import {
-  belongsToOrganization,
-  hasMembership,
-  resolveAccess,
-  type MemberAccessContext,
-} from './member_access';
+import { belongsToOrganization, hasMembership, resolveAccess } from './member_access';
 
 const NOW = DateTime.fromISO('2026-10-16T23:30:00', { zone: SPACE_ZONE });
+const TODAY = spaceDate(NOW);
+const YESTERDAY = spaceDate(NOW.minus({ days: 1 }));
 
-function context(overrides: Partial<MemberAccessContext> = {}): MemberAccessContext {
-  return {
-    member: {
-      id: 'm1',
-      email: 'sam@example.com',
-      name: 'Sam',
-      phone: null,
-      squareCustomerId: null,
-      passToken: 'token',
-      onboardingToken: 'onboarding-token',
-      createdDate: NOW,
-    },
-    hasWaiver: true,
-    subscriptions: [],
-    organizations: [],
-    dayPasses: [],
-    ...overrides,
-  };
-}
+const context = factory.memberAccessContext;
 
-function subscription(overrides: Partial<MemberSubscription> = {}): MemberSubscription {
-  return {
-    id: 'sub1',
-    memberId: 'm1',
-    planVariationId: 'plan',
-    planName: 'Monthly',
-    status: 'active',
-    startDate: '2026-01-01',
-    chargedThroughDate: '2026-11-01',
-    canceledDate: null,
-    accessEndedDate: null,
-    refundedPaymentId: null,
-    updatedDate: NOW,
-    ...overrides,
-  };
-}
-
-function organization(overrides: Partial<Organization> = {}, removed = false) {
-  const membership: OrganizationMember = {
-    id: 'om1',
-    organizationId: 'org1',
-    memberId: 'm1',
-    addedDate: NOW,
-    removedDate: removed ? NOW : null,
-  };
-  return {
-    membership,
-    organization: {
-      id: 'org1',
-      name: 'Robotics Club',
-      email: 'robotics@example.com',
-      archived: false,
-      grantsAccess: true,
-      accessEndDate: null,
-      ...overrides,
-    },
-  };
-}
-
-function dayPass(id: string, purchasedDaysAgo: number, usedDate: string | null = null): DayPass {
-  return {
-    id,
-    memberId: 'm1',
-    squareOrderId: `order-${id}`,
-    purchasedDate: NOW.minus({ days: purchasedDaysAgo }),
-    usedDate,
-    passToken: `pass-${id}`,
-  };
+function dayPass(purchasedDaysAgo: number, overrides: Partial<DayPass> = {}): DayPass {
+  return factory.dayPass({ purchasedDate: NOW.minus({ days: purchasedDaysAgo }), ...overrides });
 }
 
 describe('hasMembership', () => {
   it('counts an active subscription', () => {
-    expect(hasMembership(context({ subscriptions: [subscription()] }), NOW)).toBe(true);
+    expect(hasMembership(context({ subscriptions: [factory.memberSubscription()] }), NOW)).toBe(
+      true,
+    );
   });
 
   it('counts a current organization membership', () => {
-    expect(hasMembership(context({ organizations: [organization()] }), NOW)).toBe(true);
+    expect(hasMembership(context({ organizations: [factory.organizationAccess()] }), NOW)).toBe(
+      true,
+    );
   });
 
   it('does not count day passes', () => {
-    const passes = [dayPass('unused', 1), dayPass('today', 2, '2026-10-16')];
+    const passes = [dayPass(1), dayPass(2, { usedDate: TODAY })];
 
     expect(hasMembership(context({ dayPasses: passes }), NOW)).toBe(false);
   });
 
   it('does not count a refunded subscription or an organization with access off', () => {
-    const refunded = subscription({ accessEndedDate: NOW });
-    const off = organization({ grantsAccess: false });
+    const refunded = factory.memberSubscription({ accessEndedDate: NOW });
+    const off = factory.organizationAccess({ grantsAccess: false });
 
     expect(hasMembership(context({ subscriptions: [refunded], organizations: [off] }), NOW)).toBe(
       false,
@@ -113,14 +47,14 @@ describe('hasMembership', () => {
 
 describe('belongsToOrganization', () => {
   it('counts an organization with access off', () => {
-    expect(
-      belongsToOrganization(context({ organizations: [organization({ grantsAccess: false })] })),
-    ).toBe(true);
+    const off = factory.organizationAccess({ grantsAccess: false });
+
+    expect(belongsToOrganization(context({ organizations: [off] }))).toBe(true);
   });
 
   it('does not count a removed membership or an archived organization', () => {
-    const removed = organization({}, true);
-    const archived = organization({ archived: true });
+    const removed = factory.organizationAccess({}, { removedDate: NOW });
+    const archived = factory.organizationAccess({ archived: true });
 
     expect(belongsToOrganization(context({ organizations: [removed, archived] }))).toBe(false);
   });
@@ -128,78 +62,94 @@ describe('belongsToOrganization', () => {
 
 describe('resolveAccess', () => {
   it('denies a member with nothing on file', () => {
-    expect(resolveAccess(context(), NOW)).toEqual({ basis: 'none' });
+    expect(resolveAccess(context(), NOW)).toEqual({ basis: ACCESS_BASIS.NONE });
   });
 
   it('admits an active subscriber', () => {
-    expect(resolveAccess(context({ subscriptions: [subscription()] }), NOW).basis).toBe(
-      'subscription',
-    );
+    const subscriptions = [factory.memberSubscription()];
+
+    expect(resolveAccess(context({ subscriptions }), NOW).basis).toBe(ACCESS_BASIS.SUBSCRIPTION);
   });
 
   it('denies a subscriber whose access was ended by a refund', () => {
-    const refunded = subscription({ accessEndedDate: NOW.minus({ hours: 1 }) });
+    const refunded = factory.memberSubscription({ accessEndedDate: NOW.minus({ hours: 1 }) });
 
-    expect(resolveAccess(context({ subscriptions: [refunded] }), NOW).basis).toBe('none');
+    expect(resolveAccess(context({ subscriptions: [refunded] }), NOW).basis).toBe(
+      ACCESS_BASIS.NONE,
+    );
   });
 
-  it.each(['pending', 'paused', 'canceled', 'deactivated'] as const)(
-    'denies a %s subscription',
-    (status) => {
-      expect(resolveAccess(context({ subscriptions: [subscription({ status })] }), NOW).basis).toBe(
-        'none',
-      );
-    },
-  );
+  it.each([
+    SUBSCRIPTION_STATUS.PENDING,
+    SUBSCRIPTION_STATUS.PAUSED,
+    SUBSCRIPTION_STATUS.CANCELED,
+    SUBSCRIPTION_STATUS.DEACTIVATED,
+  ])('denies a %s subscription', (status) => {
+    const subscriptions = [factory.memberSubscription({ status })];
+
+    expect(resolveAccess(context({ subscriptions }), NOW).basis).toBe(ACCESS_BASIS.NONE);
+  });
 
   it('admits an organization member before the access end date', () => {
-    const org = organization({ accessEndDate: NOW.plus({ days: 1 }) });
+    const org = factory.organizationAccess({ accessEndDate: NOW.plus({ days: 1 }) });
 
-    expect(resolveAccess(context({ organizations: [org] }), NOW).basis).toBe('organization');
+    expect(resolveAccess(context({ organizations: [org] }), NOW).basis).toBe(
+      ACCESS_BASIS.ORGANIZATION,
+    );
   });
 
   it('denies an organization member after the access end date', () => {
-    const org = organization({ accessEndDate: NOW.minus({ minutes: 1 }) });
+    const org = factory.organizationAccess({ accessEndDate: NOW.minus({ minutes: 1 }) });
 
-    expect(resolveAccess(context({ organizations: [org] }), NOW).basis).toBe('none');
+    expect(resolveAccess(context({ organizations: [org] }), NOW).basis).toBe(ACCESS_BASIS.NONE);
   });
 
   it('denies members of an organization whose access is switched off', () => {
-    const org = organization({ grantsAccess: false, accessEndDate: NOW.plus({ days: 30 }) });
+    const org = factory.organizationAccess({
+      grantsAccess: false,
+      accessEndDate: NOW.plus({ days: 30 }),
+    });
 
-    expect(resolveAccess(context({ organizations: [org] }), NOW).basis).toBe('none');
+    expect(resolveAccess(context({ organizations: [org] }), NOW).basis).toBe(ACCESS_BASIS.NONE);
   });
 
   it('denies members removed from an organization or of an archived one', () => {
-    const organizations = [organization({}, true), organization({ archived: true })];
+    const organizations = [
+      factory.organizationAccess({}, { removedDate: NOW }),
+      factory.organizationAccess({ archived: true }),
+    ];
 
-    expect(resolveAccess(context({ organizations }), NOW).basis).toBe('none');
+    expect(resolveAccess(context({ organizations }), NOW).basis).toBe(ACCESS_BASIS.NONE);
   });
 
   it('keeps a day pass unused when the member has a subscription', () => {
     const access = resolveAccess(
-      context({ subscriptions: [subscription()], dayPasses: [dayPass('d1', 3)] }),
+      context({ subscriptions: [factory.memberSubscription()], dayPasses: [dayPass(3)] }),
       NOW,
     );
 
-    expect(access).toEqual({ basis: 'subscription' });
+    expect(access).toEqual({ basis: ACCESS_BASIS.SUBSCRIPTION });
   });
 
   it('uses the oldest unused day pass', () => {
-    const passes = [dayPass('newer', 1), dayPass('older', 10)];
+    const older = dayPass(10);
 
-    expect(resolveAccess(context({ dayPasses: passes }), NOW).dayPassToUse?.id).toBe('older');
+    expect(resolveAccess(context({ dayPasses: [dayPass(1), older] }), NOW).dayPassToUse).toBe(
+      older,
+    );
   });
 
   it('readmits on a day pass already used today without using another', () => {
-    const passes = [dayPass('today', 5, '2026-10-16'), dayPass('spare', 1)];
+    const passes = [dayPass(5, { usedDate: TODAY }), dayPass(1)];
 
-    expect(resolveAccess(context({ dayPasses: passes }), NOW)).toEqual({ basis: 'day_pass' });
+    expect(resolveAccess(context({ dayPasses: passes }), NOW)).toEqual({
+      basis: ACCESS_BASIS.DAY_PASS,
+    });
   });
 
   it('treats a pass used on a previous day as spent', () => {
-    const passes = [dayPass('yesterday', 5, '2026-10-15')];
+    const passes = [dayPass(5, { usedDate: YESTERDAY })];
 
-    expect(resolveAccess(context({ dayPasses: passes }), NOW).basis).toBe('none');
+    expect(resolveAccess(context({ dayPasses: passes }), NOW).basis).toBe(ACCESS_BASIS.NONE);
   });
 });

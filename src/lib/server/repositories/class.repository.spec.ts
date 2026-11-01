@@ -1,61 +1,23 @@
-import type { Database } from '$lib/server/db';
-import { schema, type ClassBooking } from '$lib/server/db/schema';
+import type { ClassBooking, ClassInstance } from '$lib/server/db/schema';
 import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '$lib/utils/classes';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import postgres from 'postgres';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { describeWithDatabase, useTestDatabase } from '$test/db';
+import { DateTime } from 'luxon';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { ClassRepository } from './class.repository';
 
-const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../db/migrations');
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-// migrations.spec.ts resets TEST_DATABASE_URL itself, so this suite uses its own database.
-const DATABASE_NAME = 'orion_class_test';
-const TEACHER = 'teacher@example.com';
-
-describe.skipIf(!TEST_DATABASE_URL)(ClassRepository.name, () => {
-  const admin = postgres(TEST_DATABASE_URL ?? '', { max: 1, onnotice: () => {} });
-  const url = new URL(TEST_DATABASE_URL ?? 'postgres://localhost');
-  url.pathname = `/${DATABASE_NAME}`;
-  let sql: postgres.Sql;
-  let db: Database;
+describeWithDatabase(ClassRepository.name, () => {
+  const database = useTestDatabase('class');
   let repository: ClassRepository;
-
-  beforeAll(async () => {
-    await admin.unsafe(`DROP DATABASE IF EXISTS ${DATABASE_NAME} WITH (FORCE)`);
-    await admin.unsafe(`CREATE DATABASE ${DATABASE_NAME}`);
-    sql = postgres(url.toString(), { max: 1, onnotice: () => {} });
-    db = drizzle(sql);
-    await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-    repository = new ClassRepository(db);
-    await db.insert(schema.user).values({ email: TEACHER, name: 'Teacher', picture: '' });
-  });
-
-  afterAll(async () => {
-    await sql?.end();
-    await admin.unsafe(`DROP DATABASE IF EXISTS ${DATABASE_NAME} WITH (FORCE)`);
-    await admin.end();
-  });
+  let teacherEmail: string;
 
   beforeEach(async () => {
-    await db.delete(schema.classBooking);
-    await db.delete(schema.classInstance);
-    await db.delete(schema.classCatalog);
+    repository = new ClassRepository(database.db);
+    ({ email: teacherEmail } = await database.insert.user());
   });
 
-  async function addInstance(seats = 10) {
-    const catalog = await repository.createCatalog({ name: 'Welding', description: '', price: 0 });
-    return await repository.createInstance({
-      classId: catalog.id,
-      teacherEmail: TEACHER,
-      date: '2099-01-01',
-      startTime: '10:00',
-      durationMinutes: 60,
-      seats,
-      status: CLASS_INSTANCE_STATUS.SCHEDULED,
-    });
+  async function addInstance(overrides: Partial<ClassInstance> = {}) {
+    const catalog = await database.insert.classCatalog();
+    return await database.insert.classInstance({ classId: catalog.id, teacherEmail, ...overrides });
   }
 
   async function book(
@@ -63,14 +25,7 @@ describe.skipIf(!TEST_DATABASE_URL)(ClassRepository.name, () => {
     quantity: number,
     status: ClassBooking['status'] = CLASS_BOOKING_STATUS.CONFIRMED,
   ) {
-    return await repository.createBooking({
-      instanceId,
-      customerName: 'Ada',
-      customerEmail: `${crypto.randomUUID()}@example.com`,
-      customerPhone: '555',
-      status,
-      quantity,
-    });
+    return await database.insert.classBooking({ instanceId, status, quantity });
   }
 
   describe('getConfirmedSeatCounts', () => {
@@ -95,6 +50,123 @@ describe.skipIf(!TEST_DATABASE_URL)(ClassRepository.name, () => {
 
     it('returns no counts for no instances', async () => {
       expect(await repository.getConfirmedSeatCounts([])).toEqual(new Map());
+    });
+  });
+
+  describe('getConfirmedBookingCount', () => {
+    it('sums confirmed seats for one instance', async () => {
+      const instance = await addInstance();
+      await book(instance.id, 2);
+      await book(instance.id, 3, CLASS_BOOKING_STATUS.CANCELED);
+
+      expect(await repository.getConfirmedBookingCount(instance.id)).toBe(2);
+    });
+
+    it('is zero for an instance with no bookings', async () => {
+      const instance = await addInstance();
+
+      expect(await repository.getConfirmedBookingCount(instance.id)).toBe(0);
+    });
+  });
+
+  describe('getScheduledInstances', () => {
+    it('lists scheduled instances with only the public teacher fields', async () => {
+      const scheduled = await addInstance();
+      await addInstance({ status: CLASS_INSTANCE_STATUS.CANCELED });
+
+      const instances = await repository.getScheduledInstances();
+
+      expect(instances.map((instance) => instance.id)).toEqual([scheduled.id]);
+      expect(instances[0].teacher).toEqual({
+        name: expect.any(String),
+        picture: expect.any(String),
+      });
+    });
+
+    it('limits the list to one catalog when given', async () => {
+      const wanted = await addInstance();
+      await addInstance();
+
+      const instances = await repository.getScheduledInstances(wanted.classId);
+
+      expect(instances.map((instance) => instance.id)).toEqual([wanted.id]);
+    });
+  });
+
+  describe('getScheduledInstancesByRecurrenceGroup', () => {
+    it('returns scheduled instances of the group from the given date on', async () => {
+      const recurrenceGroupId = crypto.randomUUID();
+      const catalog = await database.insert.classCatalog();
+      const inGroup = (
+        date: string,
+        status: ClassInstance['status'] = CLASS_INSTANCE_STATUS.SCHEDULED,
+      ) =>
+        database.insert.classInstance({
+          classId: catalog.id,
+          teacherEmail,
+          recurrenceGroupId,
+          date,
+          status,
+        });
+      await inGroup('2026-10-07');
+      const onDate = await inGroup('2026-10-14');
+      const later = await inGroup('2026-10-21');
+      await inGroup('2026-10-28', CLASS_INSTANCE_STATUS.CANCELED);
+      await addInstance({ date: '2026-10-21' });
+
+      const instances = await repository.getScheduledInstancesByRecurrenceGroup(
+        recurrenceGroupId,
+        '2026-10-14',
+      );
+
+      expect(instances.map((instance) => instance.id).toSorted()).toEqual(
+        [onDate.id, later.id].toSorted(),
+      );
+    });
+  });
+
+  describe('getReminderCandidates', () => {
+    it('returns confirmed, unreminded bookings for scheduled classes in the date range', async () => {
+      const inRange = await addInstance({ date: '2026-10-16' });
+      const due = await book(inRange.id, 1);
+      await book(inRange.id, 1, CLASS_BOOKING_STATUS.CANCELED);
+      await database.insert.classBooking({
+        instanceId: inRange.id,
+        reminderSentDate: DateTime.now(),
+      });
+      const canceledClass = await addInstance({
+        date: '2026-10-16',
+        status: CLASS_INSTANCE_STATUS.CANCELED,
+      });
+      await book(canceledClass.id, 1);
+      const outOfRange = await addInstance({ date: '2026-10-18' });
+      await book(outOfRange.id, 1);
+
+      const candidates = await repository.getReminderCandidates('2026-10-15', '2026-10-17');
+
+      expect(candidates.map(({ booking }) => booking.id)).toEqual([due.id]);
+    });
+  });
+
+  describe('getBookingByToken', () => {
+    it('returns the booking with its instance, catalog and payment', async () => {
+      const instance = await addInstance();
+      const payment = await database.insert.payment();
+      const booking = await database.insert.classBooking({
+        instanceId: instance.id,
+        paymentId: payment.id,
+      });
+
+      expect(await repository.getBookingByToken(booking.bookingToken)).toMatchObject({
+        id: booking.id,
+        instance: { id: instance.id },
+        catalog: { id: instance.classId },
+        payment: { id: payment.id },
+      });
+    });
+
+    it('returns null for an unknown token', async () => {
+      expect(await repository.getBookingByToken(crypto.randomUUID())).toBeNull();
     });
   });
 });

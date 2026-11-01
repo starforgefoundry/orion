@@ -1,4 +1,10 @@
-import type { ClassBooking, ClassCatalog, ClassInstance } from '$lib/server/db/schema';
+import type {
+  ClassBooking,
+  ClassCatalog,
+  ClassInstance,
+  Payment,
+  User,
+} from '$lib/server/db/schema';
 import { DateTime } from 'luxon';
 import { newId } from './id';
 
@@ -48,4 +54,28 @@ export function classBooking(overrides: Partial<ClassBooking> = {}): ClassBookin
     createdDate: DateTime.now(),
     ...overrides,
   };
+}
+
+export function classInstanceDetail(
+  overrides: Partial<ClassInstance> = {},
+  catalog: ClassCatalog | null = classCatalog(),
+  teacher: User | null = null,
+) {
+  return { ...classInstance(overrides), teacher, catalog };
+}
+
+export function classBookingWithPayment(
+  overrides: Partial<ClassBooking> = {},
+  payment: Payment | null = null,
+) {
+  return { ...classBooking(overrides), payment };
+}
+
+export function classBookingDetail(
+  overrides: Partial<ClassBooking> = {},
+  payment: Payment | null = null,
+  instance: ClassInstance | null = classInstance(),
+  catalog: ClassCatalog | null = classCatalog(),
+) {
+  return { ...classBookingWithPayment(overrides, payment), instance, catalog };
 }

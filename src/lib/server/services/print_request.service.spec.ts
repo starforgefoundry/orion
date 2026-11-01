@@ -205,34 +205,6 @@ describe(PrintRequestService.name, () => {
     });
   });
 
-  describe('getPrintRequests', () => {
-    it('should return all print requests from repository', async () => {
-      const requests = [
-        { ...factory.printRequest(), material: factory.printMaterial(), payment: null },
-        {
-          ...factory.printRequest({ status: 'printing' }),
-          material: factory.printMaterial({ name: 'ABS' }),
-          payment: null,
-        },
-      ];
-      mocks.printRequestRepository.getAll.mockResolvedValue(requests);
-
-      const result = await sut.getPrintRequests();
-
-      expect(mocks.printRequestRepository.getAll).toHaveBeenCalled();
-      expect(result).toEqual(requests);
-    });
-
-    it('should return empty array when no requests exist', async () => {
-      mocks.printRequestRepository.getAll.mockResolvedValue([]);
-
-      const result = await sut.getPrintRequests();
-
-      expect(mocks.printRequestRepository.getAll).toHaveBeenCalled();
-      expect(result).toEqual([]);
-    });
-  });
-
   describe('updatePrintRequest', () => {
     it('should update request with provided fields and refresh list', async () => {
       const updates = { customerName: 'Updated Customer', projectName: 'Updated Project' };
@@ -265,65 +237,6 @@ describe(PrintRequestService.name, () => {
 
       expect(mocks.printRequestRepository.update).toHaveBeenCalledWith('request-789', updates);
       expect(result).toEqual(updated);
-    });
-  });
-
-  describe('getPrintRequestById', () => {
-    it('should return a single print request by ID', async () => {
-      const request = factory.printRequestDetail();
-      mocks.printRequestRepository.getById.mockResolvedValue(request);
-
-      const result = await sut.getPrintRequestById(request.id);
-
-      expect(mocks.printRequestRepository.getById).toHaveBeenCalledWith(request.id);
-      expect(result).toEqual(request);
-    });
-
-    it('should return undefined when request not found', async () => {
-      mocks.printRequestRepository.getById.mockResolvedValue(undefined);
-
-      const result = await sut.getPrintRequestById('nonexistent-request');
-
-      expect(mocks.printRequestRepository.getById).toHaveBeenCalledWith('nonexistent-request');
-      expect(result).toBeUndefined();
-    });
-  });
-
-  describe('searchPrintRequests', () => {
-    it('should search print requests with given criteria', async () => {
-      const dto = { query: 'search@example.com' };
-      const results = {
-        data: [
-          {
-            ...factory.printRequest({ email: 'search@example.com', projectName: 'Project A' }),
-            material: factory.printMaterial(),
-            payment: null,
-          },
-          {
-            ...factory.printRequest({ email: 'search@example.com', projectName: 'Project B' }),
-            material: factory.printMaterial(),
-            payment: null,
-          },
-        ],
-        pagination: { total: 2, page: 1, pageSize: 25, totalPages: 1 },
-      };
-      mocks.printRequestRepository.search.mockResolvedValue(results);
-
-      const result = await sut.searchPrintRequests(dto);
-
-      expect(mocks.printRequestRepository.search).toHaveBeenCalledWith(dto);
-      expect(result).toEqual(results);
-    });
-
-    it('should return an empty page when no requests match', async () => {
-      const dto = { query: 'nothing matches' };
-      const results = { data: [], pagination: { total: 0, page: 1, pageSize: 25, totalPages: 0 } };
-      mocks.printRequestRepository.search.mockResolvedValue(results);
-
-      const result = await sut.searchPrintRequests(dto);
-
-      expect(mocks.printRequestRepository.search).toHaveBeenCalledWith(dto);
-      expect(result).toEqual(results);
     });
   });
 

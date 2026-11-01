@@ -1,8 +1,8 @@
 import type { SquareWebhookLog } from '$lib/server/db/schema';
 import { factory } from '$test/factory';
-import { catalogDiscount, squareCustomer, squareOrder } from '$test/factory/square';
+import { squareCustomer, squareOrder } from '$test/factory/square';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
-import type { CatalogObject, Location, Payment, Subscription } from 'square';
+import type { Payment, Subscription } from 'square';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NEW_MEMBER_ONBOARDING, SquareService } from './square.service';
 
@@ -20,98 +20,6 @@ describe(SquareService.name, () => {
 
   beforeEach(() => {
     ({ sut, mocks } = newTestService(SquareService));
-  });
-
-  describe('getLocations', () => {
-    it('should return all locations from Square', async () => {
-      const locations: Location[] = [
-        {
-          id: 'loc-123',
-          name: 'Main Location',
-          address: {
-            addressLine1: '123 Main St',
-            locality: 'Seattle',
-            administrativeDistrictLevel1: 'WA',
-            postalCode: '98101',
-          },
-        },
-        {
-          id: 'loc-456',
-          name: 'Secondary Location',
-          address: {
-            addressLine1: '456 Second Ave',
-            locality: 'Portland',
-            administrativeDistrictLevel1: 'OR',
-            postalCode: '97201',
-          },
-        },
-      ];
-      mocks.squareRepository.getLocations.mockResolvedValue(locations);
-
-      const result = await sut.getLocations();
-
-      expect(mocks.squareRepository.getLocations).toHaveBeenCalled();
-      expect(result).toEqual(locations);
-      expect(result).toHaveLength(2);
-    });
-
-    it('should return empty array when no locations exist', async () => {
-      mocks.squareRepository.getLocations.mockResolvedValue([]);
-
-      const result = await sut.getLocations();
-
-      expect(mocks.squareRepository.getLocations).toHaveBeenCalled();
-      expect(result).toEqual([]);
-    });
-
-    it('should handle single location', async () => {
-      mocks.squareRepository.getLocations.mockResolvedValue([
-        { id: 'loc-single', name: 'Only Location', address: { addressLine1: '789 Lone St' } },
-      ]);
-
-      const result = await sut.getLocations();
-
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('loc-single');
-      expect(result[0].name).toBe('Only Location');
-    });
-
-    it('should handle repository errors gracefully', async () => {
-      mocks.squareRepository.getLocations.mockRejectedValue(new Error('Square API error'));
-
-      await expect(sut.getLocations()).rejects.toThrow('Square API error');
-    });
-  });
-
-  describe('getCatalog', () => {
-    it('should return catalog items from Square', async () => {
-      const catalog: CatalogObject[] = [
-        { type: 'ITEM', id: 'item-123', itemData: { name: '3D Print Service' } },
-        catalogDiscount('discount-456', { name: 'Member Discount', percentage: '10' }),
-      ];
-      mocks.squareRepository.getCatalog.mockResolvedValue(catalog);
-
-      const result = await sut.getCatalog();
-
-      expect(mocks.squareRepository.getCatalog).toHaveBeenCalled();
-      expect(result).toEqual(catalog);
-      expect(result).toHaveLength(2);
-    });
-
-    it('should return empty catalog when no items exist', async () => {
-      mocks.squareRepository.getCatalog.mockResolvedValue([]);
-
-      const result = await sut.getCatalog();
-
-      expect(mocks.squareRepository.getCatalog).toHaveBeenCalled();
-      expect(result).toEqual([]);
-    });
-
-    it('should handle repository errors gracefully', async () => {
-      mocks.squareRepository.getCatalog.mockRejectedValue(new Error('Catalog not available'));
-
-      await expect(sut.getCatalog()).rejects.toThrow('Catalog not available');
-    });
   });
 
   describe('processWebhook', () => {

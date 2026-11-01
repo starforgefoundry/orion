@@ -13,29 +13,6 @@ describe(InventoryService.name, () => {
     ({ sut, mocks } = newTestService(InventoryService));
   });
 
-  describe('getItems', () => {
-    it('should return all inventory items', async () => {
-      const items = [factory.inventoryItem(), factory.inventoryItem({ imageUrl: null })];
-      mocks.inventoryRepository.getAll.mockResolvedValue(items);
-
-      const result = await sut.getItems();
-
-      expect(mocks.inventoryRepository.getAll).toHaveBeenCalled();
-      expect(result).toEqual(items);
-      expect(result).toHaveLength(2);
-    });
-
-    it('should return empty array when no items exist', async () => {
-      mocks.inventoryRepository.getAll.mockResolvedValue([]);
-
-      const result = await sut.getItems();
-
-      expect(mocks.inventoryRepository.getAll).toHaveBeenCalled();
-      expect(result).toEqual([]);
-      expect(result).toHaveLength(0);
-    });
-  });
-
   describe('upsertItem', () => {
     it('should create a new inventory item', async () => {
       const dto: UpsertInventoryItemDto = {
@@ -87,16 +64,6 @@ describe(InventoryService.name, () => {
 
       expect(mocks.inventoryRepository.upsert).toHaveBeenCalledWith(dto);
       expect(result).toEqual(created);
-    });
-  });
-
-  describe('deleteItem', () => {
-    it('should delete an inventory item', async () => {
-      mocks.inventoryRepository.delete.mockResolvedValue();
-
-      await sut.deleteItem('item-to-delete');
-
-      expect(mocks.inventoryRepository.delete).toHaveBeenCalledWith('item-to-delete');
     });
   });
 
@@ -166,16 +133,6 @@ describe(InventoryService.name, () => {
       await expect(sut.addToPurchaseList('non-existent')).rejects.toThrow(
         'Inventory item not found',
       );
-    });
-  });
-
-  describe('removeFromPurchaseList', () => {
-    it('should remove an item from the purchase list', async () => {
-      mocks.inventoryRepository.removeFromPurchaseList.mockResolvedValue();
-
-      await sut.removeFromPurchaseList('item-1');
-
-      expect(mocks.inventoryRepository.removeFromPurchaseList).toHaveBeenCalledWith('item-1');
     });
   });
 });

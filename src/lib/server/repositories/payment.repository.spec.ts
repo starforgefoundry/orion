@@ -1,18 +1,7 @@
-import type { Database } from '$lib/server/db';
-import { schema } from '$lib/server/db/schema';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import postgres from 'postgres';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { describeWithDatabase, useTestDatabase } from '$test/db';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { PaymentRepository, PaymentStateError, type NewPayment } from './payment.repository';
-
-const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../db/migrations');
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-// migrations.spec.ts resets TEST_DATABASE_URL itself, so this suite uses its own database.
-const DATABASE_NAME = 'orion_payment_test';
 
 const BILL = {
   lineItems: [
@@ -30,31 +19,12 @@ const NEW_PAYMENT: NewPayment = {
   bill: BILL,
 };
 
-describe.skipIf(!TEST_DATABASE_URL)(PaymentRepository.name, () => {
-  const admin = postgres(TEST_DATABASE_URL ?? '', { max: 1, onnotice: () => {} });
-  const url = new URL(TEST_DATABASE_URL ?? 'postgres://localhost');
-  url.pathname = `/${DATABASE_NAME}`;
-  let sql: postgres.Sql;
-  let db: Database;
+describeWithDatabase(PaymentRepository.name, () => {
+  const database = useTestDatabase('payment');
   let repository: PaymentRepository;
 
-  beforeAll(async () => {
-    await admin.unsafe(`DROP DATABASE IF EXISTS ${DATABASE_NAME} WITH (FORCE)`);
-    await admin.unsafe(`CREATE DATABASE ${DATABASE_NAME}`);
-    sql = postgres(url.toString(), { max: 1, onnotice: () => {} });
-    db = drizzle(sql);
-    await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-  });
-
-  afterAll(async () => {
-    await sql?.end();
-    await admin.unsafe(`DROP DATABASE IF EXISTS ${DATABASE_NAME} WITH (FORCE)`);
-    await admin.end();
-  });
-
-  beforeEach(async () => {
-    await db.delete(schema.payment);
-    repository = new PaymentRepository(db);
+  beforeEach(() => {
+    repository = new PaymentRepository(database.db);
   });
 
   describe('save', () => {

@@ -1,4 +1,5 @@
 import type { BillingCode, Organization, OrganizationCharge, Payment } from '$lib/server/db/schema';
+import type { NewPayment } from '$lib/server/repositories/payment.repository';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { DateTime } from 'luxon';
 import { newId } from './id';
@@ -59,4 +60,23 @@ export function payment(overrides: Partial<Payment> = {}): Payment {
     squareInvoiceId: null,
     ...overrides,
   };
+}
+
+export function paidPayment(overrides: Partial<Payment> = {}): Payment {
+  return payment({ status: PAYMENT_STATUS.PAID, paymentDate: DateTime.now(), ...overrides });
+}
+
+/** The row a payment repository would store for `data`. */
+export function savedPayment(data: NewPayment, overrides: Partial<Payment> = {}): Payment {
+  return payment({
+    type: data.type,
+    status: data.status,
+    customerName: data.customer.name,
+    customerEmail: data.customer.email,
+    total: data.bill.total,
+    lineItems: data.bill.lineItems,
+    discounts: data.bill.discounts,
+    organizationId: data.organizationId ?? null,
+    ...overrides,
+  });
 }

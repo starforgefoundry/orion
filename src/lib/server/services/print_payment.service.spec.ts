@@ -67,14 +67,12 @@ describe(PrintPaymentService.name, () => {
     mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
     mocks.squareRepository.cancelInvoice.mockResolvedValue(undefined as never);
     mocks.paymentRepository.save.mockImplementation(async (data, id) =>
-      factory.payment({
+      factory.savedPayment(data, {
         id: id ?? PAYMENT_ID,
         status:
           data.status === PAYMENT_STATUS.PENDING && data.bill.total === 0
             ? PAYMENT_STATUS.PAID
             : data.status,
-        total: data.bill.total,
-        organizationId: data.organizationId ?? null,
       }),
     );
     mocks.paymentRepository.approveQuote.mockImplementation(async (quote) => ({

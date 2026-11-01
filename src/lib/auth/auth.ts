@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import { isStaffEmail } from '$lib/auth/staff';
 import { getDB } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 import { SvelteKitAuth } from '@auth/sveltekit';
@@ -22,11 +23,8 @@ export const { handle, signIn, signOut } = SvelteKitAuth({
   trustHost: true,
   callbacks: {
     async signIn({ profile }) {
-      if (!profile) return false;
-
-      const email = profile.email;
-      if (!email) return false;
-      if (!email.endsWith('@starforgefoundry.com')) return false;
+      const email = profile?.email;
+      if (!profile || !isStaffEmail(email)) return false;
 
       const db = getDB();
       await db
