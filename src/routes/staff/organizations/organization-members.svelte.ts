@@ -6,7 +6,7 @@ import {
   removeOrganizationMembers,
 } from '$lib/remotes/endpoints/organization.remote';
 import type { Member, OrganizationMember } from '$lib/server/db/schema';
-import { SvelteSet } from 'svelte/reactivity';
+import { TableSelection } from '$lib/frontend/table-selection.svelte';
 import AddOrganizationMembersModal from './AddOrganizationMembersModal.svelte';
 
 type AddResult = Awaited<ReturnType<typeof addOrganizationMembers>>;
@@ -15,7 +15,10 @@ export class OrganizationMembersManager {
   private getOrganizationId: () => string;
 
   members = $derived(getOrganizationMembers(this.organizationId));
-  selected = new SvelteSet<string>();
+  selected = new TableSelection(
+    () => this.memberships,
+    (row) => row.membership.id,
+  );
 
   constructor(getOrganizationId: () => string) {
     this.getOrganizationId = getOrganizationId;
@@ -33,28 +36,6 @@ export class OrganizationMembersManager {
     return this.members.current ?? [];
   }
 
-  get allSelected() {
-    return this.memberships.length > 0 && this.selected.size === this.memberships.length;
-  }
-
-  get someSelected() {
-    return this.selected.size > 0 && !this.allSelected;
-  }
-
-  isSelected(membership: OrganizationMember) {
-    return this.selected.has(membership.id);
-  }
-
-  toggle(membership: OrganizationMember, checked: boolean) {
-    if (checked) this.selected.add(membership.id);
-    else this.selected.delete(membership.id);
-  }
-
-  toggleAll(checked: boolean) {
-    this.selected.clear();
-    if (checked) this.memberships.forEach(({ membership }) => this.selected.add(membership.id));
-  }
-
   async remove(membership: OrganizationMember, member: Member) {
     await this.confirmAndRemove(
       [membership.id],
@@ -64,7 +45,7 @@ export class OrganizationMembersManager {
 
   async removeSelected() {
     await this.confirmAndRemove(
-      [...this.selected],
+      this.selected.selectedIds,
       `Remove ${this.selected.size} members from this organization? They lose access granted by it.`,
     );
   }
@@ -82,7 +63,7 @@ export class OrganizationMembersManager {
       () => removeOrganizationMembers({ organizationId: this.organizationId, membershipIds }),
       { success: 'Members removed', error: 'Failed to remove members' },
     );
-    if (removed) membershipIds.forEach((id) => this.selected.delete(id));
+    if (removed) this.selected.deselect(membershipIds);
   }
 }
 

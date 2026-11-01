@@ -1,4 +1,5 @@
 import { BaseRepository } from '$lib/server/repositories/base.repository';
+import { PRINTER_LABEL_PREFIX } from '$lib/remotes/dtos/print_materials.dto';
 
 export type BambuddyConfig = {
   serverUrl: string;
@@ -47,9 +48,6 @@ export type BambuddyColor = {
 type PrinterStatus = {
   ams: { id: number; tray: { id: number }[] }[] | null;
 };
-
-/** Printer labels read "SF-" and then the printer's Bambuddy name without spaces. */
-const PRINTER_LABEL_PREFIX = 'SF-';
 
 export function printerForLabel(printers: BambuddyPrinter[], label: string) {
   const [, nameWithoutSpaces] = label.split(PRINTER_LABEL_PREFIX);

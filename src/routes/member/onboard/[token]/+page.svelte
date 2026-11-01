@@ -7,8 +7,9 @@
   import PassCard from '$lib/frontend/member-pass/PassCard.svelte';
   import { getOnboarding } from '$lib/remotes/endpoints/onboarding.remote';
   import OnboardingWaiverForm from './OnboardingWaiverForm.svelte';
+  import { SPACE_EMAIL } from '$lib/space';
 
-  const CONTACT_EMAIL = 'contact@starforgefoundry.com';
+  const CONTACT_EMAIL = SPACE_EMAIL.CONTACT;
   const PASS_INSTRUCTIONS =
     "Add it to your wallet so it's ready when you arrive, then scan it at the front desk kiosk.";
 

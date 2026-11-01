@@ -1,5 +1,5 @@
 import type { Member } from '$lib/server/db/schema';
-import { SPACE_ZONE } from '$lib/space';
+import { SPACE_EMAIL, SPACE_ZONE } from '$lib/space';
 
 type Rgb = [number, number, number];
 
@@ -8,7 +8,7 @@ export const PASS_BRAND = {
   gold: [242, 196, 70] as Rgb,
   white: [255, 255, 255] as Rgb,
   website: 'https://starforgefoundry.com',
-  contactEmail: 'contact@starforgefoundry.com',
+  contactEmail: SPACE_EMAIL.CONTACT,
   checkInInstructions:
     'Hold the QR code up to the iPad at the front desk when you arrive. You need a signed waiver on file before your first visit.',
 };

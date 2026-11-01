@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import { Button } from '$lib/components/ui/button';
   import { Spinner } from '$lib/components/ui/spinner';
+  import QueryState from '$lib/frontend/components/QueryState.svelte';
   import { cn } from '$lib/frontend/cn';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
@@ -120,23 +121,10 @@
     SECTION_LIST.find((section) => section.id === page.url.searchParams.get(SECTION_PARAM)) ??
       SECTION_LIST[0],
   );
-
-  const printRequestSettings = getPrintRequestSettings();
-  const squareSettings = getPrintRequestSquareSettings();
-  const printPricing = getPrintPricing();
-  const classSettings = getClassSettings();
-  const carBayRates = getCarBayRates();
-  const carBayPolicy = getCarBayPolicy();
-  const carBayAvailability = getCarBayAvailability();
-  const bambuddySettings = getBambuddySettings();
 </script>
 
-{#snippet loadState(query: { loading: boolean; error?: unknown }, name: string)}
-  {#if query.loading}
-    <Spinner />
-  {:else if query.error}
-    <p class="text-sm text-destructive">Error loading {name} settings.</p>
-  {/if}
+{#snippet settingsPending()}
+  <Spinner />
 {/snippet}
 
 <PageHeader title="Settings" />
@@ -173,20 +161,30 @@
           description="Intake form, announcements, upload limits and notifications."
           formId="print-request-settings"
         >
-          {@render loadState(printRequestSettings, 'print request')}
-          {#if printRequestSettings.current}
-            <SystemSettings printRequestSettings={printRequestSettings.current} />
-          {/if}
+          <QueryState
+            query={getPrintRequestSettings()}
+            label="print request settings"
+            pending={settingsPending}
+          >
+            {#snippet children(settings)}
+              <SystemSettings printRequestSettings={settings} />
+            {/snippet}
+          </QueryState>
         </SettingsSection>
         <SettingsSection
           title="Print Pricing"
           description="Build plate price and member discount used when billing print requests."
           formId="print-pricing-settings"
         >
-          {@render loadState(printPricing, 'print pricing')}
-          {#if printPricing.current}
-            <PrintPricingSettings pricing={printPricing.current} />
-          {/if}
+          <QueryState
+            query={getPrintPricing()}
+            label="print pricing settings"
+            pending={settingsPending}
+          >
+            {#snippet children(pricing)}
+              <PrintPricingSettings {pricing} />
+            {/snippet}
+          </QueryState>
         </SettingsSection>
         <SettingsSection
           title="Bambuddy"
@@ -195,10 +193,15 @@
         >
           <div class="flex flex-col gap-4">
             <BambuddyStatus />
-            {@render loadState(bambuddySettings, 'Bambuddy')}
-            {#if bambuddySettings.current}
-              <BambuddySettings bambuddySettings={bambuddySettings.current} />
-            {/if}
+            <QueryState
+              query={getBambuddySettings()}
+              label="Bambuddy settings"
+              pending={settingsPending}
+            >
+              {#snippet children(settings)}
+                <BambuddySettings bambuddySettings={settings} />
+              {/snippet}
+            </QueryState>
           </div>
         </SettingsSection>
       </div>
@@ -214,10 +217,15 @@
             Setup help
           </Button>
         {/snippet}
-        {@render loadState(squareSettings, 'Square')}
-        {#if squareSettings.current}
-          <SquareSettings squareSettings={squareSettings.current} />
-        {/if}
+        <QueryState
+          query={getPrintRequestSquareSettings()}
+          label="Square settings"
+          pending={settingsPending}
+        >
+          {#snippet children(settings)}
+            <SquareSettings squareSettings={settings} />
+          {/snippet}
+        </QueryState>
       </SettingsSection>
     {:else if active.id === SECTIONS.CLASSES}
       <SettingsSection
@@ -225,27 +233,38 @@
         description={active.description}
         formId="class-settings"
       >
-        {@render loadState(classSettings, 'class')}
-        {#if classSettings.current}
-          <ClassSettings classSettings={classSettings.current} />
-        {/if}
+        <QueryState query={getClassSettings()} label="class settings" pending={settingsPending}>
+          {#snippet children(settings)}
+            <ClassSettings classSettings={settings} />
+          {/snippet}
+        </QueryState>
       </SettingsSection>
     {:else if active.id === SECTIONS.CAR_BAY}
+      {@const ratesQuery = getCarBayRates()}
+      {@const policyQuery = getCarBayPolicy()}
+      {@const availabilityQuery = getCarBayAvailability()}
       <SettingsSection
         title={active.title}
         description={active.description}
         formId="car-bay-settings"
       >
-        {@render loadState(carBayRates, 'car bay rates')}
-        {@render loadState(carBayPolicy, 'car bay rules')}
-        {@render loadState(carBayAvailability, 'car bay availability')}
-        {#if carBayRates.current && carBayPolicy.current && carBayAvailability.current}
-          <CarBaySettings
-            rates={carBayRates.current}
-            policy={carBayPolicy.current}
-            availability={carBayAvailability.current}
-          />
-        {/if}
+        <QueryState query={ratesQuery} label="car bay rates" pending={settingsPending}>
+          {#snippet children(rates)}
+            <QueryState query={policyQuery} label="car bay rules" pending={settingsPending}>
+              {#snippet children(policy)}
+                <QueryState
+                  query={availabilityQuery}
+                  label="car bay availability"
+                  pending={settingsPending}
+                >
+                  {#snippet children(availability)}
+                    <CarBaySettings {rates} {policy} {availability} />
+                  {/snippet}
+                </QueryState>
+              {/snippet}
+            </QueryState>
+          {/snippet}
+        </QueryState>
       </SettingsSection>
     {:else if active.id === SECTIONS.MEMBERS}
       <SettingsSection

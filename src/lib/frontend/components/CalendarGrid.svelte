@@ -1,4 +1,7 @@
 <script lang="ts" module>
+  import { DATE_FORMAT } from '$lib/frontend/format';
+  import { monthGridDays } from '$lib/frontend/month-grid';
+  import { DateTime } from 'luxon';
   const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
   const MAX_MOBILE_DOTS = 3;
 </script>
@@ -8,7 +11,7 @@
   import { cn } from '$lib/frontend/cn';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
-  import { DateTime } from 'luxon';
+  import { SPACE_ZONE } from '$lib/space';
   import type { Snippet } from 'svelte';
 
   interface Props {
@@ -23,9 +26,10 @@
 
   let { instances, filter, dayContent }: Props = $props();
 
-  const todayStr = DateTime.now().toISODate();
+  const today = DateTime.now().setZone(SPACE_ZONE);
+  const todayStr = today.toISODate();
 
-  let currentMonth = $state(DateTime.now());
+  let currentMonth = $state(today);
   let selectedDateStr = $state(todayStr);
 
   const instancesByDate = $derived.by(() => {
@@ -39,38 +43,14 @@
     return map;
   });
 
-  const calendarDays = $derived.by(() => {
-    const start = currentMonth.startOf('month');
-    const end = currentMonth.endOf('month');
-    const startWeekday = start.weekday % 7;
-    const days: CalendarDay[] = [];
-
-    for (let i = 0; i < startWeekday; i++) {
-      const date = start.minus({ days: startWeekday - i });
-      days.push({ date, dateStr: date.toISODate()!, isCurrentMonth: false, instances: [] });
-    }
-
-    for (let i = 0; i < end.day; i++) {
-      const date = start.plus({ days: i });
+  const calendarDays = $derived(
+    monthGridDays(currentMonth).map((date): CalendarDay => {
       const dateStr = date.toISODate()!;
-      days.push({
-        date,
-        dateStr,
-        isCurrentMonth: true,
-        instances: instancesByDate.get(dateStr) ?? [],
-      });
-    }
-
-    const remaining = 7 - (days.length % 7);
-    if (remaining < 7) {
-      for (let i = 0; i < remaining; i++) {
-        const date = end.plus({ days: i + 1 });
-        days.push({ date, dateStr: date.toISODate()!, isCurrentMonth: false, instances: [] });
-      }
-    }
-
-    return days;
-  });
+      const isCurrentMonth = date.hasSame(currentMonth, 'month');
+      const dayInstances = isCurrentMonth ? (instancesByDate.get(dateStr) ?? []) : [];
+      return { date, dateStr, isCurrentMonth, instances: dayInstances };
+    }),
+  );
 
   const selectedDay = $derived(
     calendarDays.find((d) => d.isCurrentMonth && d.dateStr === selectedDateStr),
@@ -78,7 +58,7 @@
 
   function changeMonth(months: number) {
     currentMonth = currentMonth.plus({ months });
-    const isThisMonth = currentMonth.hasSame(DateTime.now(), 'month');
+    const isThisMonth = currentMonth.hasSame(today, 'month');
     selectedDateStr = isThisMonth ? todayStr : currentMonth.startOf('month').toISODate()!;
   }
 </script>
@@ -99,7 +79,9 @@
       aria-label="Previous month"
       onclick={() => changeMonth(-1)}
     />
-    <h2 class="w-36 text-center text-sm font-semibold">{currentMonth.toFormat('MMMM yyyy')}</h2>
+    <h2 class="w-36 text-center text-sm font-semibold">
+      {currentMonth.toFormat(DATE_FORMAT.MONTH_YEAR)}
+    </h2>
     <IconButton icon={ChevronRightIcon} aria-label="Next month" onclick={() => changeMonth(1)} />
   </div>
 
@@ -129,7 +111,7 @@
             class="flex h-12 w-full flex-col items-center justify-center gap-1 disabled:cursor-default md:hidden"
             disabled={!calDay.isCurrentMonth}
             aria-pressed={isSelected}
-            aria-label={calDay.date.toFormat('EEEE, MMMM d')}
+            aria-label={calDay.date.toFormat(DATE_FORMAT.WEEKDAY_MONTH_DAY)}
             onclick={() => (selectedDateStr = calDay.dateStr)}
           >
             <span
@@ -168,7 +150,9 @@
 
   {#if selectedDay}
     <div class="flex flex-col gap-2 md:hidden">
-      <h3 class="text-sm font-medium">{selectedDay.date.toFormat('EEEE, MMMM d')}</h3>
+      <h3 class="text-sm font-medium">
+        {selectedDay.date.toFormat(DATE_FORMAT.WEEKDAY_MONTH_DAY)}
+      </h3>
       {#if selectedDay.instances.length === 0}
         <p class="rounded-lg border p-3 text-center text-sm text-muted-foreground">
           Nothing scheduled.

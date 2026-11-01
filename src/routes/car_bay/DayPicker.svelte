@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { DATE_FORMAT, HOUR_FORMAT } from '$lib/frontend/format';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import { cn } from '$lib/frontend/cn';
   import {
@@ -26,7 +27,7 @@
 
   function hoursLabel(date: string) {
     const { open, close } = rules.openWindow(date);
-    return `${open.toFormat('h a')} – ${close.toFormat('h a')}`;
+    return `${open.toFormat(HOUR_FORMAT)} – ${close.toFormat(HOUR_FORMAT)}`;
   }
 
   function isBooked(date: string) {
@@ -57,9 +58,9 @@
       <div class="flex items-start justify-between gap-2">
         <div>
           <p class={cn('text-xs font-medium', date === todayStr && 'text-primary')}>
-            {date === todayStr ? 'Today' : day.toFormat('EEEE')}
+            {date === todayStr ? 'Today' : day.toFormat(DATE_FORMAT.WEEKDAY)}
           </p>
-          <p class="text-lg font-semibold">{day.toFormat('MMM d')}</p>
+          <p class="text-lg font-semibold">{day.toFormat(DATE_FORMAT.MONTH_DAY)}</p>
         </div>
         {#if open}
           <StatusBadge tone="success">Open</StatusBadge>

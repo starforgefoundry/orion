@@ -4,9 +4,9 @@
   import * as Table from '$lib/components/ui/table';
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
-  import { waiverDisplay } from '../members/display';
+  import { waiverDisplay } from '$lib/frontend/member-display';
   import UserMinusIcon from '@lucide/svelte/icons/user-minus';
-  import { DateTime } from 'luxon';
+  import { DATE_STYLE, formatDate } from '$lib/frontend/format';
   import type { OrganizationMembersManager } from './organization-members.svelte';
 
   const COLUMN_COUNT = 6;
@@ -30,10 +30,10 @@
           <Table.Head class="w-10">
             <Checkbox
               aria-label="Select all members"
-              checked={manager.allSelected}
-              indeterminate={manager.someSelected}
+              checked={manager.selected.allSelected}
+              indeterminate={manager.selected.someSelected}
               disabled={manager.memberships.length === 0}
-              onCheckedChange={(checked) => manager.toggleAll(checked)}
+              onCheckedChange={(checked) => manager.selected.toggleAll(checked)}
             />
           </Table.Head>
           <Table.Head>Name</Table.Head>
@@ -44,14 +44,15 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each manager.members.current as { membership, member, hasWaiver } (membership.id)}
+        {#each manager.members.current as row (row.membership.id)}
+          {@const { membership, member, hasWaiver } = row}
           {@const waiver = waiverDisplay(hasWaiver)}
-          <Table.Row data-state={manager.isSelected(membership) ? 'selected' : undefined}>
+          <Table.Row data-state={manager.selected.has(row) ? 'selected' : undefined}>
             <Table.Cell>
               <Checkbox
                 aria-label="Select {member.name}"
-                checked={manager.isSelected(membership)}
-                onCheckedChange={(checked) => manager.toggle(membership, checked)}
+                checked={manager.selected.has(row)}
+                onCheckedChange={(checked) => manager.selected.toggle(row, checked)}
               />
             </Table.Cell>
             <Table.Cell class="max-w-48">
@@ -68,7 +69,7 @@
               <StatusBadge tone={waiver.tone}>{waiver.label}</StatusBadge>
             </Table.Cell>
             <Table.Cell class="hidden sm:table-cell">
-              {membership.addedDate.toLocaleString(DateTime.DATE_SHORT)}
+              {formatDate(membership.addedDate, DATE_STYLE.SHORT)}
             </Table.Cell>
             <Table.Cell class="text-right">
               <IconButton

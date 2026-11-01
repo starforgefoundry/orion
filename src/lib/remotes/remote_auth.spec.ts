@@ -34,7 +34,6 @@ const PUBLIC_REMOTES: Record<string, string[]> = {
     'getCatalogById',
     'getActiveClasses',
     'getClassInstances',
-    'bookClassForm',
     'bookClass',
     'getBookingByToken',
     'cancelBooking',

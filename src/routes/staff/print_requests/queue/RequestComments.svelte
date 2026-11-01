@@ -18,7 +18,7 @@
   import SendIcon from '@lucide/svelte/icons/send';
   import UploadIcon from '@lucide/svelte/icons/upload';
   import XIcon from '@lucide/svelte/icons/x';
-  import { DateTime } from 'luxon';
+  import { formatDateTime } from '$lib/frontend/format';
   import { CommentComposer } from './comment-composer.svelte';
 
   type Props = {
@@ -126,7 +126,7 @@
           </div>
           <span class="min-w-0 flex-1 truncate text-xs font-medium">{comment.authorName}</span>
           <time class="shrink-0 text-xs text-muted-foreground">
-            {comment.createdDate.toLocaleString(DateTime.DATETIME_MED)}
+            {formatDateTime(comment.createdDate)}
           </time>
         </header>
 

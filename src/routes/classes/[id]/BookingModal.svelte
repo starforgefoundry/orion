@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { CLASS_DATE_FORMAT } from '$lib/utils/classes';
+  import { formatCents } from '$lib/utils/billing';
   import { goto } from '$app/navigation';
   import { Button } from '$lib/components/ui/button';
   import { Spinner } from '$lib/components/ui/spinner';
@@ -6,16 +8,14 @@
   import FormField from '$lib/frontend/components/form/FormField.svelte';
   import NumberStepper from '$lib/frontend/components/form/NumberStepper.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
-  import { initForm } from '$lib/frontend/components/form/utils.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { formatTime } from '$lib/frontend/utils';
-  import { squareCard, type SquareCard } from '$lib/frontend/square-card';
-  import { bookClass, bookClassForm } from '$lib/remotes/endpoints/class.remote';
-  import { getCheckoutConfig } from '$lib/remotes/endpoints/payment.remote';
+  import SquareCardField from '$lib/frontend/components/SquareCardField.svelte';
+  import { SquarePayment } from '$lib/frontend/square-payment.svelte';
+  import { bookClass } from '$lib/remotes/endpoints/class.remote';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
   import CheckIcon from '@lucide/svelte/icons/check';
   import { DateTime } from 'luxon';
-  import { toast } from 'svelte-sonner';
 
   const FORM_ID = 'book-class-form';
 
@@ -40,68 +40,28 @@
     availableSpots,
   }: Props = $props();
 
-  const formattedDate = (() => DateTime.fromISO(date).toFormat('EEEE, MMMM d, yyyy'))();
+  const formattedDate = $derived(DateTime.fromISO(date).toFormat(CLASS_DATE_FORMAT));
 
   let quantity = $state(1);
-  let submitting = $state(false);
 
-  let cardInstance = $state<SquareCard>();
-  let squareReady = $state(false);
-
-  const squareConfigRemote = getCheckoutConfig();
-  const squareConfig = $derived(squareConfigRemote.current);
+  const payment = new SquarePayment();
 
   const totalPrice = $derived(price * quantity);
 
-  initForm(bookClassForm, () => ({
-    instanceId,
-    customerName: '',
-    customerEmail: '',
-    customerPhone: '',
-    quantity: 1,
-    sourceId: '',
-  }));
+  const customer = $state({ customerName: '', customerEmail: '', customerPhone: '' });
 
-  type SubmitParameters = Parameters<Parameters<typeof bookClassForm.enhance>[0]>[0];
-  async function handleSubmit(params: SubmitParameters) {
-    if (!cardInstance) {
-      toast.error('Payment form not ready. Please wait and try again.');
-      return;
-    }
-
-    submitting = true;
-
-    try {
-      const tokenResult = await cardInstance.tokenize();
-      if (tokenResult.status !== 'OK' || !tokenResult.token) {
-        toast.error('Payment card error. Please check your card details.');
-        submitting = false;
-        return;
-      }
-
-      const booking = await bookClass({
-        ...params.data,
-        sourceId: tokenResult.token,
-      });
-
-      if (booking) {
-        onClose();
-        await goto(`/classes/booking/${booking.bookingToken}`);
-      }
-    } catch (error: any) {
-      toast.error(error?.message ?? 'Failed to book class');
-    } finally {
-      submitting = false;
-    }
+  async function handleSubmit(event: SubmitEvent) {
+    event.preventDefault();
+    await payment.pay(async (sourceId) => {
+      const booking = await bookClass({ ...customer, instanceId, quantity, sourceId });
+      onClose();
+      await goto(`/classes/booking/${booking.bookingToken}`);
+    }, 'Failed to book class');
   }
 </script>
 
 <Modal title="Book {catalogName}" icon={CalendarIcon} {onClose}>
-  <form id={FORM_ID} {...bookClassForm.enhance(handleSubmit)} class="flex flex-col gap-4">
-    <input {...bookClassForm.fields.instanceId.as('text')} hidden />
-    <input {...bookClassForm.fields.sourceId.as('text')} hidden />
-    <input {...bookClassForm.fields.quantity.as('number')} value={quantity} hidden />
-
+  <form id={FORM_ID} onsubmit={handleSubmit} class="flex flex-col gap-4">
     <div class="rounded-lg border bg-muted/50 p-3 text-center">
       <p class="text-sm font-medium">{formattedDate}</p>
       <p class="text-xs text-muted-foreground">
@@ -110,22 +70,24 @@
     </div>
 
     <FormField label="Full Name" required>
-      <TextInput {...bookClassForm.fields.customerName.as('text')} placeholder="John Doe" />
+      <TextInput bind:value={customer.customerName} placeholder="John Doe" required />
     </FormField>
 
     <FormField label="Email" required>
       <TextInput
-        {...bookClassForm.fields.customerEmail.as('text')}
+        bind:value={customer.customerEmail}
         type="email"
         placeholder="john@example.com"
+        required
       />
     </FormField>
 
     <FormField label="Phone Number" required>
       <TextInput
-        {...bookClassForm.fields.customerPhone.as('text')}
+        bind:value={customer.customerPhone}
         type="tel"
         placeholder="(555) 123-4567"
+        required
       />
     </FormField>
 
@@ -135,38 +97,22 @@
     </div>
 
     <FormField label="Payment">
-      {#if squareConfig}
-        <div
-          id="card-container"
-          {@attach squareCard(squareConfig, (card) => {
-            cardInstance = card;
-            squareReady = true;
-          })}
-        ></div>
-      {/if}
-      {#if !squareReady}
-        <div
-          class="flex h-24 items-center justify-center rounded-lg border"
-          aria-label="Loading payment form"
-        >
-          <Spinner class="size-5 text-muted-foreground" />
-        </div>
-      {/if}
+      <SquareCardField {payment} />
     </FormField>
   </form>
 
   {#snippet footer()}
     <div class="flex w-full items-center justify-between gap-3">
       <div>
-        <p class="text-base font-semibold">Total: ${(totalPrice / 100).toFixed(2)}</p>
+        <p class="text-base font-semibold">Total: {formatCents(totalPrice)}</p>
         {#if quantity > 1}
           <p class="text-xs text-muted-foreground">
-            ${(price / 100).toFixed(2)} x {quantity}
+            {formatCents(price)} x {quantity}
           </p>
         {/if}
       </div>
-      <Button type="submit" form={FORM_ID} disabled={submitting || !squareReady}>
-        {#if submitting}<Spinner />{:else}<CheckIcon />{/if}
+      <Button type="submit" form={FORM_ID} disabled={payment.paying || !payment.ready}>
+        {#if payment.paying}<Spinner />{:else}<CheckIcon />{/if}
         Confirm & Pay
       </Button>
     </div>

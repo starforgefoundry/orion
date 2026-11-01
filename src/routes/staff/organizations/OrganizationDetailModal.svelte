@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatCents } from '$lib/utils/billing';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
@@ -14,6 +15,7 @@
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import FormField from '$lib/frontend/components/form/FormField.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
+  import { submitWithToast } from '$lib/frontend/form-submit';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import {
     archiveOrganization,
@@ -31,8 +33,8 @@
   import XIcon from '@lucide/svelte/icons/x';
   import { SPACE_ZONE } from '$lib/space';
   import { PAYMENT_STATUS } from '$lib/utils/billing';
-  import { DateTime } from 'luxon';
-  import { getPaymentStatusColor } from '../print_requests/queue/utils';
+  import { DATE_STYLE, formatDate, formatIsoDate } from '$lib/frontend/format';
+  import { getPaymentStatusColor } from '$lib/frontend/payment-status';
   import UserMinusIcon from '@lucide/svelte/icons/user-minus';
   import UserPlusIcon from '@lucide/svelte/icons/user-plus';
   import CreateBillingCodeModal from './CreateBillingCodeModal.svelte';
@@ -67,24 +69,24 @@
   const membersManager = new OrganizationMembersManager(() => organizationId);
 
   let chargesCurrentPage = $state(1);
-  let chargesItemsPerPage = 10;
+  const CHARGES_PER_PAGE = 10;
 
-  let paginatedCharges = $derived(() => {
+  const paginatedCharges = $derived.by(() => {
     if (!organizationDetail.current) return [];
-    const startIndex = (chargesCurrentPage - 1) * chargesItemsPerPage;
-    const endIndex = startIndex + chargesItemsPerPage;
+    const startIndex = (chargesCurrentPage - 1) * CHARGES_PER_PAGE;
+    const endIndex = startIndex + CHARGES_PER_PAGE;
     return organizationDetail.current.charges.slice(startIndex, endIndex);
   });
 
-  let chargesTotalPages = $derived(() => {
+  const chargesTotalPages = $derived.by(() => {
     if (!organizationDetail.current) return 1;
-    return Math.ceil(organizationDetail.current.charges.length / chargesItemsPerPage);
+    return Math.ceil(organizationDetail.current.charges.length / CHARGES_PER_PAGE);
   });
 
   async function handleChargeBalance() {
     const confirm = await modalManager.confirm({
       title: 'Charge Outstanding Balance',
-      prompt: `Are you sure you want to email a payment link for the outstanding balance of ${formatCurrency(
+      prompt: `Are you sure you want to email a payment link for the outstanding balance of ${formatCents(
         organizationDetail.current?.outstandingBalance || 0,
       )} to the organization's email?`,
       confirmText: 'Charge Balance',
@@ -95,12 +97,12 @@
     }
 
     isChargingBalance = true;
-    try {
-      await chargeOrganizationBalance({ organizationId });
-      await organizationDetail.refresh();
-    } finally {
-      isChargingBalance = false;
-    }
+    const charged = await submitWithToast(() => chargeOrganizationBalance({ organizationId }), {
+      success: 'Payment link sent',
+      error: 'Failed to charge balance',
+    });
+    if (charged) await organizationDetail.refresh();
+    isChargingBalance = false;
   }
 
   function startEditing() {
@@ -131,13 +133,19 @@
   }
 
   async function saveEdits() {
-    await updateOrganization({
-      id: organizationId,
-      name: editName,
-      email: editEmail,
-      grantsAccess: editGrantsAccess,
-      accessEndDate: editAccessEndDate || null,
-    });
+    const saved = await submitWithToast(
+      () =>
+        updateOrganization({
+          id: organizationId,
+          name: editName,
+          email: editEmail,
+          grantsAccess: editGrantsAccess,
+          accessEndDate: editAccessEndDate || null,
+        }),
+      { success: 'Organization updated', error: 'Failed to update organization' },
+    );
+    if (!saved) return;
+
     await organizationDetail.refresh();
     isEditing = false;
   }
@@ -151,14 +159,13 @@
       variant: 'destructive',
     });
 
-    if (confirm) {
-      await archiveOrganization({ id: organizationId });
-      onClose();
-    }
-  }
+    if (!confirm) return;
 
-  function formatCurrency(cents: number): string {
-    return `$${(cents / 100).toFixed(2)}`;
+    const archived = await submitWithToast(() => archiveOrganization({ id: organizationId }), {
+      success: 'Organization archived',
+      error: 'Failed to archive organization',
+    });
+    if (archived) onClose();
   }
 
   function formatStatus(status: string): string {
@@ -226,9 +233,7 @@
                 {#if !organizationDetail.current.grantsAccess}
                   Off
                 {:else if organizationDetail.current.accessEndDate}
-                  Through {organizationDetail.current.accessEndDate
-                    .setZone(SPACE_ZONE)
-                    .toLocaleString(DateTime.DATE_MED)}
+                  Through {formatDate(organizationDetail.current.accessEndDate.setZone(SPACE_ZONE))}
                 {:else}
                   No end date
                 {/if}
@@ -240,7 +245,7 @@
         <Section title="Outstanding Balance">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <span class="text-2xl font-semibold tabular-nums">
-              {formatCurrency(organizationDetail.current.outstandingBalance)}
+              {formatCents(organizationDetail.current.outstandingBalance)}
             </span>
             {#if organizationDetail.current.outstandingBalance > 0}
               <Button size="sm" onclick={handleChargeBalance} disabled={isChargingBalance}>
@@ -309,19 +314,19 @@
                 </Table.Row>
               </Table.Header>
               <Table.Body>
-                {#each paginatedCharges() as charge, index (index)}
+                {#each paginatedCharges as charge (`${charge.type}-${charge.id}`)}
                   <Table.Row>
                     <Table.Cell class="max-w-64">
                       <div class="truncate">{charge.description}</div>
                       <div class="text-xs text-muted-foreground sm:hidden">
-                        {DateTime.fromISO(charge.date).toLocaleString(DateTime.DATE_SHORT)}
+                        {formatIsoDate(charge.date, DATE_STYLE.SHORT)}
                       </div>
                     </Table.Cell>
                     <Table.Cell class="hidden sm:table-cell">
-                      {DateTime.fromISO(charge.date).toLocaleString(DateTime.DATE_SHORT)}
+                      {formatIsoDate(charge.date, DATE_STYLE.SHORT)}
                     </Table.Cell>
                     <Table.Cell class="text-right tabular-nums">
-                      {formatCurrency(charge.amount)}
+                      {formatCents(charge.amount)}
                     </Table.Cell>
                   </Table.Row>
                 {:else}
@@ -337,7 +342,7 @@
 
           <Pagination
             currentPage={chargesCurrentPage}
-            totalPages={chargesTotalPages()}
+            totalPages={chargesTotalPages}
             onPageChange={(page) => (chargesCurrentPage = page)}
           />
         </Tabs.Content>
@@ -355,15 +360,13 @@
                 </Table.Row>
               </Table.Header>
               <Table.Body>
-                {#each organizationDetail.current.balancePayments as payment, index (index)}
+                {#each organizationDetail.current.balancePayments as payment (payment.id)}
                   <Table.Row>
                     <Table.Cell>
-                      {payment.issuedDate.toLocaleString(DateTime.DATE_SHORT)}
+                      {formatDate(payment.issuedDate, DATE_STYLE.SHORT)}
                     </Table.Cell>
                     <Table.Cell class="hidden sm:table-cell">
-                      {payment.paymentDate
-                        ? payment.paymentDate.toLocaleString(DateTime.DATE_SHORT)
-                        : '—'}
+                      {formatDate(payment.paymentDate, DATE_STYLE.SHORT)}
                     </Table.Cell>
                     <Table.Cell>
                       <StatusBadge tone={getPaymentStatusColor(payment.status)}>
@@ -371,7 +374,7 @@
                       </StatusBadge>
                     </Table.Cell>
                     <Table.Cell class="text-right tabular-nums">
-                      {formatCurrency(payment.total)}
+                      {formatCents(payment.total)}
                     </Table.Cell>
                     <Table.Cell class="text-right">
                       {#if payment.paymentUrl && payment.status === PAYMENT_STATUS.PENDING}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { TIME_FORMAT } from '$lib/frontend/format';
   import { Checkbox } from '$lib/components/ui/checkbox';
   import { Label } from '$lib/components/ui/label';
   import type { CarBayBookingForm } from '$lib/frontend/car-bay-booking-form.svelte';
@@ -26,7 +27,7 @@
   );
 
   function hourOption(hour: number): SelectOption {
-    return { value: hour.toString(), label: DateTime.fromObject({ hour }).toFormat('h:mm a') };
+    return { value: hour.toString(), label: DateTime.fromObject({ hour }).toFormat(TIME_FORMAT) };
   }
 
   function countOptions(counts: number[], unit: string): SelectOption[] {

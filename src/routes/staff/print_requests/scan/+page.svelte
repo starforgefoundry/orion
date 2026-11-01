@@ -10,6 +10,7 @@
   import { BarqodeStream, type DetectedBarcode } from 'barqode';
   import { onDestroy } from 'svelte';
   import { toast } from 'svelte-sonner';
+  import { isFilamentTag, isPrinterLabel, printerLabelName } from './ams-scan';
 
   // The five labels sit far enough from the camera that each QR lands on ~60px of sensor at
   // 1080p. Below that the decoder stops resolving modules and the scan looks "flaky". Ask for
@@ -24,6 +25,8 @@
   };
 
   const AMS_SLOT_COUNT = 4;
+  const CODE_OUTLINE_COLOR = '#ff0000';
+  const CODE_OUTLINE_WIDTH = 4;
 
   // TTL configuration
   const CODE_TTL_MS = 1500; // Code expires after this long without being seen
@@ -31,7 +34,6 @@
   const POSITION_THRESHOLD = 50; // Pixels - how close two codes must be to be considered the same instance
 
   interface TrackedCode {
-    id: string;
     code: DetectedBarcode;
     lastSeen: number;
   }
@@ -41,15 +43,12 @@
   let torchOn = $state(false);
   let torchSupported = $state(false);
   let trackedCodes: TrackedCode[] = $state([]);
-  let nextId = 0;
 
   // Derived states based on currently active codes
   let activeCodes = $derived(trackedCodes.map((tracked) => tracked.code));
-  let foundPrinter = $derived(activeCodes.find((c) => c.rawValue.startsWith('SF-')));
+  let foundPrinter = $derived(activeCodes.find((c) => isPrinterLabel(c.rawValue)));
   let hasAllFilaments = $derived.by(() => filaments.length === AMS_SLOT_COUNT);
-  let filaments = $derived(
-    activeCodes.filter((c) => !c.rawValue.startsWith('SF-') && c.rawValue.length == 8),
-  );
+  let filaments = $derived(activeCodes.filter((c) => isFilamentTag(c.rawValue)));
 
   // Calculate center point of a code's bounding box
   function getCenter(code: DetectedBarcode): { x: number; y: number } {
@@ -115,14 +114,13 @@
       } else {
         // Add new instance
         updatedCodes.push({
-          id: `code-${nextId++}`,
           code: detectedCode,
           lastSeen: now,
         });
       }
 
-      ctx.strokeStyle = '#ff0000';
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = CODE_OUTLINE_COLOR;
+      ctx.lineWidth = CODE_OUTLINE_WIDTH;
       ctx.beginPath();
       ctx.moveTo(firstPoint.x, firstPoint.y);
 
@@ -146,7 +144,7 @@
     try {
       const sortedFilaments = trackedCodes
         .map((tracked) => tracked.code)
-        .filter((code) => !code.rawValue.startsWith('SF-'))
+        .filter((code) => isFilamentTag(code.rawValue))
         .sort((a, b) => a.boundingBox.left - b.boundingBox.left)
         .map((code) => code.rawValue);
 
@@ -192,7 +190,7 @@
         <span class="flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1">
           {#if foundPrinter}
             <CircleCheckIcon class="size-3.5 text-success" />
-            Printer {foundPrinter.rawValue.split('-')[1]}
+            Printer {printerLabelName(foundPrinter.rawValue)}
           {:else}
             <CircleXIcon class="size-3.5 text-destructive" />
             No printer

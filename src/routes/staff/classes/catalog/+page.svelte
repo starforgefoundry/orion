@@ -1,24 +1,24 @@
 <script lang="ts">
+  import { formatCents } from '$lib/utils/billing';
   import { Button } from '$lib/components/ui/button';
-  import { Spinner } from '$lib/components/ui/spinner';
+  import QueryState from '$lib/frontend/components/QueryState.svelte';
   import * as Table from '$lib/components/ui/table';
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
+  import { filterBySearch } from '$lib/frontend/search';
   import { getCatalogs } from '$lib/remotes/endpoints/class.remote';
   import PencilIcon from '@lucide/svelte/icons/pencil';
   import PlusIcon from '@lucide/svelte/icons/plus';
   import SearchIcon from '@lucide/svelte/icons/search';
   import ClassModal from './ClassModal.svelte';
 
-  const catalogsRemote = getCatalogs();
-  const catalogs = $derived(catalogsRemote.current ?? []);
+  const catalogsQuery = $derived(getCatalogs());
+  const catalogs = $derived(catalogsQuery.current ?? []);
 
   let searchTerm = $state('');
-  const filtered = $derived(
-    catalogs.filter((c) => c.name.toUpperCase().includes(searchTerm.toUpperCase())),
-  );
+  const filtered = $derived(filterBySearch(catalogs, searchTerm, ['name']));
 
   function openCreate() {
     modalManager.show(ClassModal, {});
@@ -53,11 +53,7 @@
   bind:value={searchTerm}
 />
 
-{#if catalogsRemote.loading}
-  <div class="flex justify-center py-10">
-    <Spinner class="size-6" />
-  </div>
-{:else}
+<QueryState query={catalogsQuery} label="classes">
   <div class="overflow-hidden rounded-lg border">
     <Table.Root>
       <Table.Header class="bg-muted/50">
@@ -71,7 +67,7 @@
         {#each filtered as cls (cls.id)}
           <Table.Row>
             <Table.Cell class="max-w-48 truncate font-medium sm:max-w-none">{cls.name}</Table.Cell>
-            <Table.Cell class="text-right tabular-nums">${(cls.price / 100).toFixed(2)}</Table.Cell>
+            <Table.Cell class="text-right tabular-nums">{formatCents(cls.price)}</Table.Cell>
             <Table.Cell class="py-1.5 text-right">
               <IconButton icon={PencilIcon} aria-label="Edit class" onclick={() => openEdit(cls)} />
             </Table.Cell>
@@ -86,4 +82,4 @@
       </Table.Body>
     </Table.Root>
   </div>
-{/if}
+</QueryState>

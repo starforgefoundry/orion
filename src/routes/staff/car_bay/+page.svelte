@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { DATE_FORMAT } from '$lib/frontend/format';
   import { Button } from '$lib/components/ui/button';
-  import { Spinner } from '$lib/components/ui/spinner';
+  import QueryState from '$lib/frontend/components/QueryState.svelte';
   import BayWeekCalendar, {
     type BayClosureSlot,
   } from '$lib/frontend/components/BayWeekCalendar.svelte';
@@ -8,6 +9,7 @@
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import { submitWithToast } from '$lib/frontend/form-submit';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
+  import { DAYS_IN_WEEK } from '$lib/frontend/month-grid';
   import { getCarBayStaffSchedule, reopenCarBay } from '$lib/remotes/endpoints/car_bay.remote';
   import { getCarBayPolicy } from '$lib/remotes/endpoints/settings.remote';
   import {
@@ -27,7 +29,6 @@
   import BookingDetailModal from './BookingDetailModal.svelte';
   import StaffBookingModal from './StaffBookingModal.svelte';
 
-  const DAYS_IN_WEEK = 7;
   const STAFF = { enforceHorizon: false };
 
   const today = DateTime.now().setZone(SPACE_ZONE).startOf('day');
@@ -36,15 +37,15 @@
 
   const days = $derived(consecutiveDates(weekStart.toISODate()!, DAYS_IN_WEEK));
   const range = $derived({ from: days[0], to: days.at(-1)! });
-  const scheduleRemote = $derived(getCarBayStaffSchedule(range));
+  const scheduleQuery = $derived(getCarBayStaffSchedule(range));
   const bookings = $derived(
-    (scheduleRemote.current?.bookings ?? []).filter(
+    (scheduleQuery.current?.bookings ?? []).filter(
       (booking) => booking.status === CAR_BAY_STATUS.CONFIRMED,
     ),
   );
-  const closures = $derived(scheduleRemote.current?.closures ?? []);
-  const policyRemote = getCarBayPolicy();
-  const rules = $derived(policyRemote.current && new CarBayRules(policyRemote.current));
+  const closures = $derived(scheduleQuery.current?.closures ?? []);
+  const policyQuery = $derived(getCarBayPolicy());
+  const rules = $derived(policyQuery.current && new CarBayRules(policyQuery.current));
   const blocks = $derived(rules ? rules.scheduleBlocks({ bookings, closures }) : []);
 
   function isSlotOpen(date: string, startHour: number) {
@@ -58,7 +59,7 @@
   }
 
   async function refresh() {
-    await getCarBayStaffSchedule(range).refresh();
+    await scheduleQuery.refresh();
   }
 
   function openNewBooking(date: string, startHour: number) {
@@ -114,9 +115,9 @@
       onclick={() => (weekStart = weekStart.minus({ weeks: 1 }))}
     />
     <h2 class="w-44 text-center text-sm font-semibold">
-      {weekStart.toFormat('MMM d')} – {weekStart
+      {weekStart.toFormat(DATE_FORMAT.MONTH_DAY)} – {weekStart
         .plus({ days: DAYS_IN_WEEK - 1 })
-        .toFormat('MMM d, yyyy')}
+        .toFormat(DATE_FORMAT.MONTH_DAY_YEAR)}
     </h2>
     <IconButton
       icon={ChevronRightIcon}
@@ -125,31 +126,31 @@
     />
   </div>
 
-  {#if (scheduleRemote.loading && !scheduleRemote.current) || !rules}
-    <div class="flex justify-center py-10">
-      <Spinner class="size-6" />
-    </div>
-  {:else}
-    <BayWeekCalendar
-      {rules}
-      {days}
-      {bookings}
-      {closures}
-      {isSlotOpen}
-      showDetails
-      onSlotClick={openNewBooking}
-      onClosureClick={reopen}
-      onBookingClick={(booking) =>
-        modalManager.show(BookingDetailModal, {
-          bookingId: booking.id,
-          refundCutoffHours: rules.policy.refundCutoffHours,
-          onChanged: refresh,
-        })}
-    >
-      {#snippet bookingLabel(booking)}
-        <span class="block truncate font-medium">{booking.customerName}</span>
-        <span class="block truncate opacity-80">{CAR_BAY_TIER_NAMES[booking.tier]}</span>
-      {/snippet}
-    </BayWeekCalendar>
-  {/if}
+  <QueryState query={policyQuery} label="car bay rules">
+    <QueryState query={scheduleQuery} label="car bay schedule">
+      {#if rules}
+        <BayWeekCalendar
+          {rules}
+          {days}
+          {bookings}
+          {closures}
+          {isSlotOpen}
+          showDetails
+          onSlotClick={openNewBooking}
+          onClosureClick={reopen}
+          onBookingClick={(booking) =>
+            modalManager.show(BookingDetailModal, {
+              bookingId: booking.id,
+              refundCutoffHours: rules.policy.refundCutoffHours,
+              onChanged: refresh,
+            })}
+        >
+          {#snippet bookingLabel(booking)}
+            <span class="block truncate font-medium">{booking.customerName}</span>
+            <span class="block truncate opacity-80">{CAR_BAY_TIER_NAMES[booking.tier]}</span>
+          {/snippet}
+        </BayWeekCalendar>
+      {/if}
+    </QueryState>
+  </QueryState>
 </div>

@@ -1,4 +1,5 @@
 import { downloadFilamentCard } from '$lib/frontend/filament-card/download';
+import { filterBySearch } from '$lib/frontend/search';
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
 import {
   getPrintMaterials,
@@ -22,13 +23,13 @@ export class MaterialsManager {
   }
 
   get results(): PrintMaterial[] {
-    const term = this.searchTerm.trim().toUpperCase();
-
-    return (this.materials.current ?? []).filter((material) =>
-      [material.name, material.vendor, material.materialType, material.colorName, material.tagId]
-        .filter(Boolean)
-        .some((value) => value!.toUpperCase().includes(term)),
-    );
+    return filterBySearch(this.materials.current ?? [], this.searchTerm.trim(), [
+      'name',
+      'vendor',
+      'materialType',
+      'colorName',
+      'tagId',
+    ]);
   }
 
   filamentLabel(material: PrintMaterial) {

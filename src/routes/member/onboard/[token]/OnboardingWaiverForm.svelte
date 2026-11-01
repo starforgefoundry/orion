@@ -6,6 +6,7 @@
   import FormField from '$lib/frontend/components/form/FormField.svelte';
   import HiddenField from '$lib/frontend/components/form/HiddenField.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { initForm } from '$lib/frontend/components/form/utils.svelte';
   import { enhanceWithToast } from '$lib/frontend/form-submit';
   import { submitOnboardingWaiverForm } from '$lib/remotes/endpoints/onboarding.remote';
 
@@ -16,9 +17,7 @@
   const fields = submitOnboardingWaiverForm.fields;
   const submitting = $derived(submitOnboardingWaiverForm.pending > 0);
 
-  $effect(() => {
-    fields.name.set(name);
-  });
+  initForm(submitOnboardingWaiverForm, () => ({ name }));
 </script>
 
 <WaiverAgreement />

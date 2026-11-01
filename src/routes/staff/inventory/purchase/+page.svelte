@@ -5,6 +5,7 @@
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
+  import { DATE_STYLE, formatIsoDate } from '$lib/frontend/format';
   import { getPurchaseList, removeFromPurchaseList } from '$lib/remotes/endpoints/inventory.remote';
   import CheckIcon from '@lucide/svelte/icons/check';
   import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
@@ -96,7 +97,7 @@
                     {item.inventoryItem.description}
                   </Table.Cell>
                   <Table.Cell class="hidden sm:table-cell">
-                    {item.addedDate ? new Date(item.addedDate).toLocaleDateString() : 'N/A'}
+                    {formatIsoDate(item.addedDate, DATE_STYLE.SHORT)}
                   </Table.Cell>
                   <Table.Cell class="text-right">
                     <IconButton

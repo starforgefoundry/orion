@@ -2,6 +2,8 @@
   import TextInput from './TextInput.svelte';
   import DollarSignIcon from '@lucide/svelte/icons/dollar-sign';
 
+  const DECIMALS = 2;
+
   interface Props {
     value?: number;
     placeholder?: string;
@@ -16,20 +18,21 @@
     multiplier = 1,
   }: Props = $props();
 
-  let displayValue = $derived((value / multiplier).toFixed(2));
+  // While focused the field shows what was typed; otherwise it follows `value`.
+  let draft = $state<string>();
 
-  // Update display when value changes externally
-  $effect(() => {
-    if (document.activeElement?.tagName !== 'INPUT') {
-      displayValue = (value / multiplier).toFixed(2);
-    }
-  });
+  const formatted = $derived((value / multiplier).toFixed(DECIMALS));
+  const displayValue = $derived(draft ?? formatted);
+
+  function handleFocus() {
+    draft = formatted;
+  }
 
   function handleInput(event: Event) {
     const input = event.target as HTMLInputElement;
     let rawValue = input.value;
 
-    // Remove all non-numeric characters except decimal point and minus sign
+    // Remove all non-numeric characters except the decimal point
     rawValue = rawValue.replace(/[^0-9.]/g, '');
 
     // Keep only the first decimal point
@@ -45,20 +48,13 @@
       input.setSelectionRange(cursorPos, cursorPos);
     }
 
-    displayValue = rawValue;
+    draft = rawValue;
   }
 
   function handleBlur() {
-    // Parse and format to 2 decimal places on blur
-    const parsed = parseFloat(displayValue);
-
-    if (isNaN(parsed)) {
-      value = 0;
-      displayValue = '0.00';
-    } else {
-      value = Math.round(parsed * multiplier);
-      displayValue = (value / multiplier).toFixed(2);
-    }
+    const parsed = parseFloat(draft ?? formatted);
+    value = isNaN(parsed) ? 0 : Math.round(parsed * multiplier);
+    draft = undefined;
   }
 </script>
 
@@ -67,6 +63,7 @@
   inputmode="decimal"
   icon={DollarSignIcon}
   value={displayValue}
+  onfocus={handleFocus}
   oninput={handleInput}
   onblur={handleBlur}
   {placeholder}

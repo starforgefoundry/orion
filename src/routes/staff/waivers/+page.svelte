@@ -4,6 +4,8 @@
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { DebouncedSearch } from '$lib/frontend/debounced-search.svelte';
+  import { formatDate } from '$lib/frontend/format';
   import { searchWaivers } from '$lib/remotes/endpoints/waiver.remote';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
@@ -12,51 +14,19 @@
   import UserIcon from '@lucide/svelte/icons/user';
   import { goto } from '$app/navigation';
 
-  let searchTerm = $state('');
+  const PAGE_SIZE = 25;
+
   let page = $state(1);
-  const pageSize = 25;
+  const search = new DebouncedSearch(() => (page = 1));
 
-  let waivers = $state(searchWaivers({ query: '', page: 1, pageSize }));
-
-  let debounceTimer: ReturnType<typeof setTimeout>;
-  function handleSearch(value: string) {
-    searchTerm = value;
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      page = 1;
-      waivers = searchWaivers({ query: searchTerm, page: 1, pageSize });
-    }, 300);
-  }
+  const waivers = $derived(searchWaivers({ query: search.query, page, pageSize: PAGE_SIZE }));
 
   function handlePrevPage() {
-    if (page > 1) {
-      page--;
-      waivers = searchWaivers({ query: searchTerm, page, pageSize });
-    }
+    if (page > 1) page--;
   }
 
   function handleNextPage() {
-    if (waivers.current && page < waivers.current.pagination.totalPages) {
-      page++;
-      waivers = searchWaivers({ query: searchTerm, page, pageSize });
-    }
-  }
-
-  function formatDate(date: unknown) {
-    if (!date) return '';
-    if (typeof date === 'object' && 'toLocaleString' in date) {
-      return (date as { toLocaleString: (opts: object) => string }).toLocaleString({
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    }
-    const d = new Date(String(date));
-    return d.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    if (waivers.current && page < waivers.current.pagination.totalPages) page++;
   }
 
   function viewWaiver(waiverId: string) {
@@ -70,8 +40,7 @@
   icon={SearchIcon}
   placeholder="Search waivers..."
   class="mb-3 sm:max-w-xs"
-  value={searchTerm}
-  oninput={(e) => handleSearch(e.currentTarget.value)}
+  bind:value={search.term}
 />
 
 {#if waivers.loading}

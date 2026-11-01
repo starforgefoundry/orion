@@ -19,10 +19,10 @@
     ACCESS_BASIS_DISPLAY,
     ONBOARDING_FILTER_LABEL,
     WAIVER_FILTER_LABEL,
-    formatDate,
     memberHref,
     waiverDisplay,
-  } from './display';
+  } from '$lib/frontend/member-display';
+  import { formatDate } from '$lib/frontend/format';
   import { MembersManager, type FilterKey, type MemberFilters } from './members.svelte';
 
   const COLUMN_COUNT = 6;
@@ -67,8 +67,7 @@
     icon={SearchIcon}
     placeholder="Search name or email"
     class="sm:max-w-xs"
-    value={manager.searchTerm}
-    oninput={(e) => manager.setSearchTerm(e.currentTarget.value)}
+    bind:value={manager.search.term}
   />
   {#if manager.hasFilters}
     <Button variant="ghost" size="sm" onclick={() => manager.clearFilters()}>
@@ -99,10 +98,10 @@
           <Table.Head class="w-10">
             <Checkbox
               aria-label="Select all members"
-              checked={manager.allSelected}
-              indeterminate={manager.someSelected}
+              checked={manager.selected.allSelected}
+              indeterminate={manager.selected.someSelected}
               disabled={manager.rows.length === 0}
-              onCheckedChange={(checked) => manager.toggleAll(checked)}
+              onCheckedChange={(checked) => manager.selected.toggleAll(checked)}
             />
           </Table.Head>
           <Table.Head>
@@ -140,7 +139,7 @@
             <Table.Row
               class="cursor-pointer"
               tabindex={0}
-              data-state={manager.isSelected(row.member.id) ? 'selected' : undefined}
+              data-state={manager.selected.has(row) ? 'selected' : undefined}
               onclick={() => goto(memberHref(row.member.id))}
               onkeydown={(e) => handleRowKeydown(e, row.member.id)}
             >
@@ -150,8 +149,8 @@
               >
                 <Checkbox
                   aria-label="Select {row.member.name}"
-                  checked={manager.isSelected(row.member.id)}
-                  onCheckedChange={(checked) => manager.toggle(row.member.id, checked)}
+                  checked={manager.selected.has(row)}
+                  onCheckedChange={(checked) => manager.selected.toggle(row, checked)}
                 />
               </Table.Cell>
               <Table.Cell class="max-w-48">

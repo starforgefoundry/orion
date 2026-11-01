@@ -6,6 +6,7 @@
   import FormField from '$lib/frontend/components/form/FormField.svelte';
   import HiddenField from '$lib/frontend/components/form/HiddenField.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { enhanceForm } from '$lib/frontend/form-submit';
   import { kioskWaiverForm } from '$lib/remotes/endpoints/kiosk.remote';
   import { toast } from 'svelte-sonner';
   import type { KioskManager } from './kiosk-manager.svelte';
@@ -30,20 +31,10 @@
   });
 
   const enhanced = $derived(
-    waiverForm.enhance(async ({ submit }) => {
-      try {
-        await submit();
-      } catch (error) {
-        kiosk.fail(error);
-        return;
-      }
-
-      const [issue] = waiverForm.fields.allIssues() ?? [];
-      if (issue) {
-        toast.error(issue.message);
-        return;
-      }
-      if (waiverForm.result) kiosk.show(waiverForm.result);
+    enhanceForm(waiverForm, {
+      onIssue: (message) => toast.error(message),
+      onError: (error) => kiosk.fail(error),
+      onSuccess: (result) => result && kiosk.show(result),
     }),
   );
 </script>

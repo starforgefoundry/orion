@@ -1,5 +1,6 @@
 <script lang="ts">
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
+  import { SPACE_EMAIL } from '$lib/space';
 </script>
 
 <svelte:head>
@@ -18,8 +19,8 @@
 
   <p class="text-muted-foreground">
     If you have any questions, please contact us at
-    <a href="mailto:contact@starforgefoundry.com" class="text-primary hover:underline"
-      >contact@starforgefoundry.com</a
+    <a href="mailto:{SPACE_EMAIL.CONTACT}" class="text-primary hover:underline"
+      >{SPACE_EMAIL.CONTACT}</a
     >.
   </p>
 </div>

@@ -9,17 +9,14 @@
   import { PAYMENT_STATUS } from '$lib/utils/billing';
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
-  import { DateTime } from 'luxon';
+  import { formatIsoDate } from '$lib/frontend/format';
   import { toast } from 'svelte-sonner';
+  import { SPACE_EMAIL } from '$lib/space';
 
-  const CONTACT_EMAIL = 'contact@starforgefoundry.com';
+  const CONTACT_EMAIL = SPACE_EMAIL.CONTACT;
 
   const checkoutQuery = $derived(getPaymentCheckout(page.params.id ?? ''));
   const checkout = $derived(checkoutQuery.current);
-
-  function formatDate(iso: string) {
-    return DateTime.fromISO(iso).toLocaleString(DateTime.DATE_MED);
-  }
 
   async function pay(sourceId: string) {
     await payPayment({ id: checkout!.id, sourceId });
@@ -40,7 +37,7 @@
       </Card.Title>
       {#if checkout}
         <Card.Description>
-          For {checkout.customerName} · Issued {formatDate(checkout.issuedDate)}
+          For {checkout.customerName} · Issued {formatIsoDate(checkout.issuedDate)}
         </Card.Description>
       {/if}
     </Card.Header>
@@ -65,7 +62,7 @@
           {#if checkout.status === PAYMENT_STATUS.PAID}
             <p class="flex items-center gap-2 text-sm font-medium text-success">
               <CircleCheckIcon class="size-4" />
-              Paid{checkout.paymentDate ? ` on ${formatDate(checkout.paymentDate)}` : ''}
+              Paid{checkout.paymentDate ? ` on ${formatIsoDate(checkout.paymentDate)}` : ''}
             </p>
           {:else if checkout.status === PAYMENT_STATUS.PENDING && checkout.invoiceUrl}
             <Button href={checkout.invoiceUrl} target="_blank">Pay Invoice</Button>

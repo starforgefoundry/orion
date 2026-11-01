@@ -7,12 +7,13 @@
   import StatusIndicator from '$lib/frontend/components/StatusIndicator.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { pollQuery } from '$lib/frontend/poll-query.svelte';
+  import { PAYMENT_STATUS } from '$lib/utils/billing';
   import type { PrintRequestStatus } from '$lib/utils/print_request';
   import { getPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
   import EllipsisVerticalIcon from '@lucide/svelte/icons/ellipsis-vertical';
   import MailIcon from '@lucide/svelte/icons/mail';
   import PackageCheckIcon from '@lucide/svelte/icons/package-check';
-  import type { DateTime } from 'luxon';
+  import { formatDate } from '$lib/frontend/format';
   import { MediaQuery } from 'svelte/reactivity';
   import { KanbanDrag } from './kanban-drag.svelte';
   import RequestDetailModal from './RequestDetailModal.svelte';
@@ -23,7 +24,7 @@
     STATUS,
     STATUS_LABELS,
   } from './request-actions';
-  import { PAYMENT_STATUS_DISPLAY } from './utils';
+  import { PAYMENT_STATUS_DISPLAY } from '$lib/frontend/payment-status';
 
   type ColumnStyle = { dot: string; column: string; card: string };
 
@@ -53,7 +54,7 @@
 
   const printRequests = getPrintRequests();
   const prints = $derived(
-    (printRequests.current || []).filter((p) => p.payment?.status !== 'quote'),
+    (printRequests.current || []).filter((p) => p.payment?.status !== PAYMENT_STATUS.QUOTE),
   );
 
   // Touch devices use the long-press drag instead of native drag and drop.
@@ -80,10 +81,6 @@
   function openRequest(requestId: string) {
     goto(`?id=${requestId}`, { replaceState: true, noScroll: true, keepFocus: true });
     modalManager.show(RequestDetailModal, { requestId });
-  }
-
-  function formatDate(date: DateTime): string {
-    return date.toLocaleString({ month: 'short', day: 'numeric', year: 'numeric' });
   }
 </script>
 

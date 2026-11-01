@@ -7,7 +7,11 @@
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { submitWithToast } from '$lib/frontend/form-submit';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
+  import { inventoryLabelsHref } from '$lib/frontend/inventory-labels';
+  import { filterBySearch } from '$lib/frontend/search';
+  import { TableSelection } from '$lib/frontend/table-selection.svelte';
   import type { InventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
   import {
     addToPurchaseList,
@@ -20,23 +24,18 @@
   import SearchIcon from '@lucide/svelte/icons/search';
   import ShoppingCartPlusIcon from '@lucide/svelte/icons/shopping-cart-plus';
   import TrashIcon from '@lucide/svelte/icons/trash';
-  import { toast } from 'svelte-sonner';
   import InventoryItemModal from './InventoryItemModal.svelte';
 
   let inventoryItems = getInventoryItems();
   let searchTerm = $state('');
   let searchedItems = $derived(
-    inventoryItems.current?.filter(
-      (item) =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.vendor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchTerm.toLowerCase()),
-    ) || [],
+    filterBySearch(inventoryItems.current ?? [], searchTerm, ['name', 'vendor', 'description']),
   );
 
-  let selectedItems = $state<Set<string>>(new Set());
-  let selectedCount = $derived(selectedItems.size);
-  let lastSelectedIndex = $state<number | null>(null);
+  const selection = new TableSelection(
+    () => searchedItems,
+    (item) => item.id,
+  );
 
   function showCreateModal() {
     modalManager.show(InventoryItemModal, {});
@@ -55,64 +54,39 @@
       variant: 'destructive',
     });
 
-    if (confirm) {
-      await deleteInventoryItem({ id });
-      const newSelected = new Set(selectedItems);
-      newSelected.delete(id);
-      selectedItems = newSelected;
-    }
+    if (!confirm) return;
+
+    const deleted = await submitWithToast(() => deleteInventoryItem({ id }), {
+      success: 'Item deleted',
+      error: 'Failed to delete item',
+    });
+    if (deleted) selection.deselect([id]);
   }
 
-  function handleCheckboxChange(id: string, index: number, isChecked: boolean) {
-    const shiftKey = (event as any).shiftKey;
-
-    if (shiftKey && lastSelectedIndex !== null && searchedItems.length > 0) {
-      // Shift-click: select range
-      const start = Math.min(lastSelectedIndex, index);
-      const end = Math.max(lastSelectedIndex, index);
-      const newSelected = new Set(selectedItems);
-      for (let i = start; i <= end; i++) {
-        if (searchedItems[i]) {
-          if (isChecked) {
-            newSelected.add(searchedItems[i].id);
-          } else {
-            newSelected.delete(searchedItems[i].id);
-          }
-        }
-      }
-      selectedItems = newSelected;
-    } else {
-      const newSelected = new Set(selectedItems);
-      if (isChecked) {
-        newSelected.add(id);
-      } else {
-        newSelected.delete(id);
-      }
-      selectedItems = newSelected;
-      lastSelectedIndex = index;
-    }
+  // Handles the click itself so shift-click can select a range.
+  function toggleItem(event: MouseEvent, item: (typeof searchedItems)[number]) {
+    event.preventDefault();
+    selection.toggle(item, !selection.has(item), event.shiftKey);
   }
 
-  async function handlePrintLabels() {
-    if (selectedItems.size === 0) return;
-
-    const itemsToPrint = searchedItems.filter((item) => selectedItems.has(item.id));
-
-    goto('/staff/inventory/labels?items=' + encodeURIComponent(JSON.stringify(itemsToPrint)));
+  function handlePrintLabels() {
+    if (selection.size === 0) return;
+    goto(inventoryLabelsHref(selection.selectedRows.map((item) => item.id)));
   }
 
   async function handleAddToPurchaseList(item: InventoryItemDto) {
-    await addToPurchaseList({ inventoryItemId: item.id });
-
-    toast.success(`Added "${item.name}" to purchase list.`);
+    await submitWithToast(() => addToPurchaseList({ inventoryItemId: item.id }), {
+      success: `Added "${item.name}" to purchase list.`,
+      error: 'Failed to add to purchase list',
+    });
   }
 </script>
 
 <PageHeader title="Inventory Items">
   {#snippet actions()}
-    <Button variant="outline" size="sm" disabled={selectedCount === 0} onclick={handlePrintLabels}>
+    <Button variant="outline" size="sm" disabled={selection.size === 0} onclick={handlePrintLabels}>
       <PrinterIcon />
-      Print Labels{selectedCount > 0 ? ` (${selectedCount})` : ''}
+      Print Labels{selection.size > 0 ? ` (${selection.size})` : ''}
     </Button>
     <Button size="sm" onclick={showCreateModal}>
       <PlusIcon />
@@ -149,13 +123,13 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each searchedItems as item, index (item.id)}
-          <Table.Row data-state={selectedItems.has(item.id) ? 'selected' : undefined}>
+        {#each searchedItems as item (item.id)}
+          <Table.Row data-state={selection.has(item) ? 'selected' : undefined}>
             <Table.Cell>
               <Checkbox
                 aria-label="Select {item.name}"
-                checked={selectedItems.has(item.id)}
-                onCheckedChange={(newValue) => handleCheckboxChange(item.id, index, newValue)}
+                checked={selection.has(item)}
+                onclick={(event) => toggleItem(event, item)}
               />
             </Table.Cell>
             <Table.Cell class="max-w-48">

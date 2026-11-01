@@ -1,20 +1,22 @@
 <script lang="ts">
+  import { formatCents } from '$lib/utils/billing';
   import { goto } from '$app/navigation';
   import * as Table from '$lib/components/ui/table';
   import Pagination from '$lib/frontend/components/Pagination.svelte';
   import StatusIndicator from '$lib/frontend/components/StatusIndicator.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { DebouncedSearch } from '$lib/frontend/debounced-search.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { pollQuery } from '$lib/frontend/poll-query.svelte';
   import { searchPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
   import SearchIcon from '@lucide/svelte/icons/search';
   import RequestDetailModal from './RequestDetailModal.svelte';
-  import { formatPrice, PAYMENT_STATUS_DISPLAY, REQUEST_STATUS_DISPLAY } from './utils';
+  import { PAYMENT_STATUS_DISPLAY } from '$lib/frontend/payment-status';
+  import { REQUEST_STATUS_DISPLAY } from './utils';
 
-  let searchField = $state('');
-  let searchState = $state('');
   let page = $state(1);
-  let printsRequest = $derived(searchPrintRequests({ query: searchState, page }));
+  const search = new DebouncedSearch(() => (page = 1));
+  let printsRequest = $derived(searchPrintRequests({ query: search.query, page }));
 
   let prints = $derived(printsRequest.current?.data || []);
   let pagination = $derived(printsRequest.current?.pagination);
@@ -31,20 +33,14 @@
     event.preventDefault();
     openRequest(requestId);
   }
-
-  function search() {
-    searchState = searchField;
-    page = 1;
-  }
 </script>
 
 <TextInput
   icon={SearchIcon}
   placeholder="Search print requests"
   class="mb-3 sm:max-w-xs"
-  bind:value={searchField}
-  onkeydown={(e) => e.key === 'Enter' && search()}
-  onblur={search}
+  bind:value={search.term}
+  onkeydown={(e) => e.key === 'Enter' && search.commit()}
 />
 
 <div class="overflow-hidden rounded-lg border">
@@ -87,7 +83,7 @@
           </Table.Cell>
           <Table.Cell class="text-right tabular-nums">
             {#if print.payment?.total}
-              {formatPrice(print.payment.total)}
+              {formatCents(print.payment.total)}
             {:else}
               <span class="text-muted-foreground">—</span>
             {/if}

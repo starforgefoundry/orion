@@ -6,6 +6,7 @@ import {
   sendPickupNotification,
   updatePrintRequestStatus,
 } from '$lib/remotes/endpoints/print_request.remote';
+import { PAYMENT_STATUS } from '$lib/utils/billing';
 import { PRINT_REQUEST_STATUS, type PrintRequestStatus } from '$lib/utils/print_request';
 import { toast } from 'svelte-sonner';
 
@@ -24,7 +25,7 @@ export const STATUS_LABELS: Record<PrintRequestStatus, string> = {
 type RequestSummary = Pick<PrintRequestDto, 'id' | 'status' | 'payment'>;
 
 export function isAwaitingPayment(request: RequestSummary) {
-  return !!request.payment && request.payment.status !== 'paid';
+  return !!request.payment && request.payment.status !== PAYMENT_STATUS.PAID;
 }
 
 export function isClosed(request: RequestSummary) {

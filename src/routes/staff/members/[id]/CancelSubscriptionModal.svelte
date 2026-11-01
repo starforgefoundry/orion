@@ -7,7 +7,7 @@
   import { cancelMemberSubscription } from '$lib/remotes/endpoints/member.remote';
   import type { MemberSubscription } from '$lib/server/db/schema';
   import BanIcon from '@lucide/svelte/icons/ban';
-  import { formatIsoDate } from '../display';
+  import { formatIsoDate } from '$lib/frontend/format';
 
   type Props = ModalProps & {
     memberId: string;

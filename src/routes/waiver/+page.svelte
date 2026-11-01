@@ -9,8 +9,9 @@
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { enhanceWithToast } from '$lib/frontend/form-submit';
   import { submitWaiverForm } from '$lib/remotes/endpoints/waiver.remote';
+  import { SPACE_EMAIL } from '$lib/space';
 
-  const CONTACT_EMAIL = 'contact@starforgefoundry.com';
+  const CONTACT_EMAIL = SPACE_EMAIL.CONTACT;
 
   let signature = $state<File | null>(null);
 

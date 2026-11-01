@@ -3,6 +3,7 @@
   import { Spinner } from '$lib/components/ui/spinner';
   import FormField from '$lib/frontend/components/form/FormField.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
+  import { enhanceForm } from '$lib/frontend/form-submit';
   import { requestPassEmailForm } from '$lib/remotes/endpoints/onboarding.remote';
   import { toast } from 'svelte-sonner';
   import type { KioskManager } from './kiosk-manager.svelte';
@@ -18,20 +19,10 @@
   const submitting = $derived(passEmailForm.pending > 0);
 
   const enhanced = $derived(
-    passEmailForm.enhance(async ({ submit }) => {
-      try {
-        await submit();
-      } catch (error) {
-        kiosk.fail(error);
-        return;
-      }
-
-      const [issue] = passEmailForm.fields.allIssues() ?? [];
-      if (issue) {
-        toast.error(issue.message);
-        return;
-      }
-      if (passEmailForm.result?.requested) kiosk.passEmailSent();
+    enhanceForm(passEmailForm, {
+      onIssue: (message) => toast.error(message),
+      onError: (error) => kiosk.fail(error),
+      onSuccess: (result) => result?.requested && kiosk.passEmailSent(),
     }),
   );
 </script>

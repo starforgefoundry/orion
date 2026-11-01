@@ -9,14 +9,13 @@
   } from '$lib/frontend/car-bay-booking-form.svelte';
   import CarBayBookingFields from '$lib/frontend/components/CarBayBookingFields.svelte';
   import CarBayBookingReview from '$lib/frontend/components/CarBayBookingReview.svelte';
-  import StepIndicator from '$lib/frontend/components/StepIndicator.svelte';
+  import StepProgress from '$lib/frontend/components/StepProgress.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
   import Modal from '$lib/frontend/components/Modal.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
-  import { errorDescription } from '$lib/frontend/form-submit';
-  import { squareCard, type SquareCard } from '$lib/frontend/square-card';
+  import SquareCardField from '$lib/frontend/components/SquareCardField.svelte';
+  import { SquarePayment } from '$lib/frontend/square-payment.svelte';
   import { bookCarBay, getCarBayMembership } from '$lib/remotes/endpoints/car_bay.remote';
-  import { getCheckoutConfig } from '$lib/remotes/endpoints/payment.remote';
   import {
     formatDollars,
     type CarBayBlock,
@@ -29,7 +28,6 @@
   import CarIcon from '@lucide/svelte/icons/car';
   import CheckIcon from '@lucide/svelte/icons/check';
   import { untrack } from 'svelte';
-  import { toast } from 'svelte-sonner';
 
   interface Props extends ModalProps {
     tier: CarBayTier;
@@ -68,47 +66,34 @@
     form.checkedEmail ? getCarBayMembership(form.checkedEmail) : undefined,
   );
 
-  const squareConfig = $derived(getCheckoutConfig().current);
-
-  let card = $state<SquareCard>();
-  let submitting = $state(false);
+  const payment = new SquarePayment();
 
   function goBack() {
-    card = undefined;
+    payment.reset();
     form.back();
+  }
+
+  async function book(sourceId: string) {
+    try {
+      const booking = await bookCarBay({ request: form.request, ...form.customer(), sourceId });
+      onClose();
+      await goto(`/car_bay/booking/${booking.bookingToken}`);
+    } catch (error) {
+      await onUnavailable();
+      throw error;
+    }
   }
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
-    if (!card || !form.canSubmit) return;
-
-    submitting = true;
-    try {
-      const tokenResult = await card.tokenize();
-      if (tokenResult.status !== 'OK' || !tokenResult.token) {
-        toast.error('Payment card error. Please check your card details.');
-        return;
-      }
-
-      const booking = await bookCarBay({
-        request: form.request,
-        ...form.customer(),
-        sourceId: tokenResult.token,
-      });
-      onClose();
-      await goto(`/car_bay/booking/${booking.bookingToken}`);
-    } catch (error) {
-      toast.error('Booking failed', { description: errorDescription(error) });
-      await onUnavailable();
-    } finally {
-      submitting = false;
-    }
+    if (!form.canSubmit) return;
+    await payment.pay(book, 'Booking failed');
   }
 </script>
 
 <Modal title="Book the Car Bay" icon={CarIcon} {onClose}>
   <form id={FORM_ID} class="flex flex-col gap-4" onsubmit={handleSubmit}>
-    <StepIndicator steps={STEP_LIST} current={form.step} />
+    <StepProgress steps={STEP_LIST} current={form.step} />
 
     {#if form.step === CHECKOUT_STEPS.DETAILS}
       <CarBayBookingFields {form} />
@@ -116,17 +101,7 @@
       <CarBayBookingReview {form} />
 
       <Section title="Payment">
-        {#if squareConfig}
-          <div {@attach squareCard(squareConfig, (created) => (card = created))}></div>
-        {/if}
-        {#if !card}
-          <div
-            class="flex h-24 items-center justify-center rounded-lg border"
-            aria-label="Loading payment form"
-          >
-            <Spinner class="size-5 text-muted-foreground" />
-          </div>
-        {/if}
+        <SquareCardField {payment} />
         <p class="text-xs text-muted-foreground">
           Cancel at least {rules.policy.refundCutoffHours} hours before your start time and we refund
           you in full. Later cancellations and no-shows don't get a refund.
@@ -149,12 +124,16 @@
             <ArrowRightIcon />
           </Button>
         {:else}
-          <Button variant="outline" disabled={submitting} onclick={goBack}>
+          <Button variant="outline" disabled={payment.paying} onclick={goBack}>
             <ArrowLeftIcon />
             Back
           </Button>
-          <Button type="submit" form={FORM_ID} disabled={submitting || !card || !form.canSubmit}>
-            {#if submitting}<Spinner />{:else}<CheckIcon />{/if}
+          <Button
+            type="submit"
+            form={FORM_ID}
+            disabled={payment.paying || !payment.ready || !form.canSubmit}
+          >
+            {#if payment.paying}<Spinner />{:else}<CheckIcon />{/if}
             Confirm & Pay
           </Button>
         {/if}

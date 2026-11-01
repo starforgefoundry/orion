@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatCents, PAYMENT_STATUS } from '$lib/utils/billing';
   import { goto } from '$app/navigation';
   import * as Alert from '$lib/components/ui/alert';
   import { Button } from '$lib/components/ui/button';
@@ -9,9 +10,11 @@
   import * as Item from '$lib/components/ui/item';
   import { cn } from '$lib/frontend/cn';
   import Modal from '$lib/frontend/components/Modal.svelte';
+  import QueryState from '$lib/frontend/components/QueryState.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
   import StatusIndicator from '$lib/frontend/components/StatusIndicator.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
+  import { errorDescription } from '$lib/frontend/form-submit';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import type { PrintRequestStatus } from '$lib/utils/print_request';
   import {
@@ -39,9 +42,9 @@
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import FileBoxIcon from '@lucide/svelte/icons/file-box';
   import LinkIcon from '@lucide/svelte/icons/link';
-  import { DateTime } from 'luxon';
+  import { formatDate } from '$lib/frontend/format';
   import { toast } from 'svelte-sonner';
-  import { MediaQuery } from 'svelte/reactivity';
+  import { DESKTOP_BREAKPOINT, IsMobile } from '$lib/hooks/is-mobile.svelte';
   import CustomerEditModal from './CustomerEditModal.svelte';
   import DiscountCodeModal from './DiscountCodeModal.svelte';
   import PaymentModal from './PaymentModal.svelte';
@@ -56,7 +59,8 @@
     unmarkPickedUp,
     STATUS,
   } from './request-actions';
-  import { formatPrice, PAYMENT_STATUS_DISPLAY, REQUEST_STATUS_DISPLAY } from './utils';
+  import { PAYMENT_STATUS_DISPLAY } from '$lib/frontend/payment-status';
+  import { REQUEST_STATUS_DISPLAY } from './utils';
 
   type Props = ModalProps & {
     requestId: string;
@@ -67,22 +71,25 @@
   const TABS = { DETAILS: 'details', FILES: 'files', COMMENTS: 'comments' } as const;
   type Tab = (typeof TABS)[keyof typeof TABS];
 
-  const isDesktop = new MediaQuery('min-width: 1024px');
+  const belowDesktop = new IsMobile(DESKTOP_BREAKPOINT);
   const quantityEditor = new QuantityEditor();
 
   let activeTab = $state<Tab>(TABS.DETAILS);
   let isUpdatingStatus = $state(false);
 
-  let request = $derived(getPrintRequestById(requestId).current);
-  let commentCount = $derived(getPrintRequestComments(requestId).current?.length ?? 0);
-  let downloadPath = $derived(getPrintRequestDownloadUrl(requestId).current);
+  const requestQuery = $derived(getPrintRequestById(requestId));
+  const request = $derived(requestQuery.current);
+  const commentsQuery = $derived(getPrintRequestComments(requestId));
+  const commentCount = $derived(commentsQuery.current?.length ?? 0);
+  const downloadPathQuery = $derived(getPrintRequestDownloadUrl(requestId));
+  const downloadPath = $derived(downloadPathQuery.current);
   let downloadUrl = $derived(downloadPath && new URL(downloadPath, window.location.origin).href);
   let slicerUrl = $derived(
     downloadUrl && `orcaslicer://open?file=${encodeURIComponent(downloadUrl)}`,
   );
 
   let billingType = $derived(
-    request?.isQuote && (!request.payment || request.payment.status === 'quote')
+    request?.isQuote && (!request.payment || request.payment.status === PAYMENT_STATUS.QUOTE)
       ? 'Quote'
       : 'Payment',
   );
@@ -90,8 +97,8 @@
   const canEditPayment = $derived(
     !!request?.payment &&
       request.status !== STATUS.CANCELED &&
-      request.payment.status !== 'paid' &&
-      request.payment.status !== 'canceled',
+      request.payment.status !== PAYMENT_STATUS.PAID &&
+      request.payment.status !== PAYMENT_STATUS.CANCELED,
   );
   const canCreatePayment = $derived(
     !!request && !request.payment && request.status !== STATUS.CANCELED,
@@ -100,7 +107,7 @@
     !!request &&
       !isClosed(request) &&
       request.status !== STATUS.DONE &&
-      request.payment?.status !== 'paid',
+      request.payment?.status !== PAYMENT_STATUS.PAID,
   );
 
   const quoteNotice = $derived.by(() => {
@@ -111,7 +118,7 @@
         description: 'Create a quote for the customer to approve before printing.',
       };
     }
-    if (request.payment.status === 'quote') {
+    if (request.payment.status === PAYMENT_STATUS.QUOTE) {
       return {
         title: 'Quote sent, awaiting approval',
         description: 'Hold off on printing until the customer approves the quote.',
@@ -185,7 +192,7 @@
           });
         } catch (error) {
           toast.error('Failed to update discount code', {
-            description: (error as Error)?.message,
+            description: errorDescription(error),
           });
         }
       },
@@ -211,7 +218,7 @@
             </Item.Description>
           </Item.Content>
           <Item.Actions class="flex-col items-end gap-0.5 text-right">
-            <span class="text-sm">{request.submissionDate.toLocaleString(DateTime.DATE_MED)}</span>
+            <span class="text-sm">{formatDate(request.submissionDate)}</span>
             <span class="text-xs text-muted-foreground">{request.submissionDate.toRelative()}</span>
           </Item.Actions>
           <Item.Actions>
@@ -238,7 +245,7 @@
               <Item.Title class="max-w-full truncate">{request.material.name}</Item.Title>
               {#if request.materialCost && request.materialCost >= 0}
                 <Item.Description>
-                  {formatPrice(request.materialCost)} material · {request.buildplateCount}
+                  {formatCents(request.materialCost)} material · {request.buildplateCount}
                   {request.buildplateCount === 1 ? 'plate' : 'plates'}
                 </Item.Description>
               {/if}
@@ -252,13 +259,11 @@
             <Item.Content class="min-w-0 gap-0.5">
               {#if request.payment}
                 <Item.Title>
-                  <span class="tabular-nums">{formatPrice(request.payment.total)}</span>
+                  <span class="tabular-nums">{formatCents(request.payment.total)}</span>
                   <StatusIndicator display={PAYMENT_STATUS_DISPLAY[request.payment.status]} />
                 </Item.Title>
                 <Item.Description class="truncate [&>a]:no-underline">
-                  {billingType} issued {request.payment.issuedDate.toLocaleString(
-                    DateTime.DATE_MED,
-                  )}
+                  {billingType} issued {formatDate(request.payment.issuedDate)}
                   {#if request.billingCode}· <span class="font-mono">{request.billingCode}</span
                     >{/if}
                 </Item.Description>
@@ -418,40 +423,40 @@
     {/if}
   {/snippet}
 
-  {#if !request}
-    <div class="flex justify-center py-10"><Spinner class="size-6" /></div>
-  {:else}
-    {#if quoteNotice}
-      <Alert.Root variant="warning">
-        <FileWarningIcon />
-        <Alert.Title>{quoteNotice.title}</Alert.Title>
-        <Alert.Description>{quoteNotice.description}</Alert.Description>
-      </Alert.Root>
-    {/if}
+  <QueryState query={requestQuery} label="print request">
+    {#snippet children(request)}
+      {#if quoteNotice}
+        <Alert.Root variant="warning">
+          <FileWarningIcon />
+          <Alert.Title>{quoteNotice.title}</Alert.Title>
+          <Alert.Description>{quoteNotice.description}</Alert.Description>
+        </Alert.Root>
+      {/if}
 
-    {#if isDesktop.current}
-      <div class="grid grid-cols-[3fr_2fr] gap-4">
-        <div class="flex min-w-0 flex-col gap-4">
-          {@render overviewPanel()}
-          {@render filesPanel()}
+      {#if !belowDesktop.current}
+        <div class="grid grid-cols-[3fr_2fr] gap-4">
+          <div class="flex min-w-0 flex-col gap-4">
+            {@render overviewPanel()}
+            {@render filesPanel()}
+          </div>
+          <div class="flex min-h-[30rem] flex-col">
+            <RequestComments {requestId} />
+          </div>
         </div>
-        <div class="flex min-h-[30rem] flex-col">
-          <RequestComments {requestId} />
-        </div>
-      </div>
-    {:else}
-      <Tabs.Root bind:value={activeTab} class="flex min-h-0 flex-1 flex-col">
-        <Tabs.List class="w-full">
-          <Tabs.Trigger value={TABS.DETAILS}>Details</Tabs.Trigger>
-          <Tabs.Trigger value={TABS.FILES}>Files ({request.files.length})</Tabs.Trigger>
-          <Tabs.Trigger value={TABS.COMMENTS}>Comments ({commentCount})</Tabs.Trigger>
-        </Tabs.List>
-        <Tabs.Content value={TABS.DETAILS}>{@render overviewPanel()}</Tabs.Content>
-        <Tabs.Content value={TABS.FILES}>{@render filesPanel()}</Tabs.Content>
-        <Tabs.Content value={TABS.COMMENTS} class="flex min-h-[60dvh] flex-col">
-          <RequestComments {requestId} />
-        </Tabs.Content>
-      </Tabs.Root>
-    {/if}
-  {/if}
+      {:else}
+        <Tabs.Root bind:value={activeTab} class="flex min-h-0 flex-1 flex-col">
+          <Tabs.List class="w-full">
+            <Tabs.Trigger value={TABS.DETAILS}>Details</Tabs.Trigger>
+            <Tabs.Trigger value={TABS.FILES}>Files ({request.files.length})</Tabs.Trigger>
+            <Tabs.Trigger value={TABS.COMMENTS}>Comments ({commentCount})</Tabs.Trigger>
+          </Tabs.List>
+          <Tabs.Content value={TABS.DETAILS}>{@render overviewPanel()}</Tabs.Content>
+          <Tabs.Content value={TABS.FILES}>{@render filesPanel()}</Tabs.Content>
+          <Tabs.Content value={TABS.COMMENTS} class="flex min-h-[60dvh] flex-col">
+            <RequestComments {requestId} />
+          </Tabs.Content>
+        </Tabs.Root>
+      {/if}
+    {/snippet}
+  </QueryState>
 </Modal>

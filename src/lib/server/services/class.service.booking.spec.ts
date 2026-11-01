@@ -170,15 +170,14 @@ describe(ClassService.name, () => {
   describe('cancelBooking', () => {
     it('should cancel a booking and refund payment', async () => {
       const payment = factory.paidPayment({ id: PAYMENT_ID, total: 5000 });
-      mocks.classRepository.getBookingByToken.mockResolvedValue(
-        factory.classBookingDetail({ id: 'book-1', status: 'confirmed' }, payment),
-      );
+      const booking = factory.classBookingDetail({ id: 'book-1', status: 'confirmed' }, payment);
+      mocks.classRepository.getBookingByToken.mockResolvedValue(booking);
       mocks.paymentGateway.refund.mockResolvedValue(true);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
       const result = await sut.cancelBooking({ bookingToken: 'tok-abc' }, NOW);
 
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual({ success: true, instanceId: booking.instanceId });
       expect(mocks.paymentGateway.refund).toHaveBeenCalledWith(payment);
       expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
         status: 'canceled',
@@ -239,15 +238,14 @@ describe(ClassService.name, () => {
   describe('cancelBookingStaff', () => {
     it('should cancel a booking by id and refund', async () => {
       const payment = factory.paidPayment({ id: PAYMENT_ID, total: 3000 });
-      mocks.classRepository.getBookingById.mockResolvedValue(
-        factory.classBookingDetail({ id: 'book-1', status: 'confirmed' }, payment),
-      );
+      const booking = factory.classBookingDetail({ id: 'book-1', status: 'confirmed' }, payment);
+      mocks.classRepository.getBookingById.mockResolvedValue(booking);
       mocks.paymentGateway.refund.mockResolvedValue(true);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
       const result = await sut.cancelBookingStaff({ bookingId: 'book-1' });
 
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual({ success: true, instanceId: booking.instanceId });
       expect(mocks.paymentGateway.refund).toHaveBeenCalledWith(payment);
     });
 
@@ -261,7 +259,7 @@ describe(ClassService.name, () => {
       );
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
-      await expect(sut.cancelBookingStaff({ bookingId: 'book-1' })).resolves.toEqual({
+      await expect(sut.cancelBookingStaff({ bookingId: 'book-1' })).resolves.toMatchObject({
         success: true,
       });
       expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {

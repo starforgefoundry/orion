@@ -9,9 +9,9 @@
     ACCESS_BASIS_DISPLAY,
     VISIT_OUTCOME_DISPLAY,
     VISIT_SOURCE_LABEL,
-    formatDateTime,
     memberHref,
-  } from '../members/display';
+  } from '$lib/frontend/member-display';
+  import { formatDateTime } from '$lib/frontend/format';
 
   const COLUMN_COUNT = 5;
 

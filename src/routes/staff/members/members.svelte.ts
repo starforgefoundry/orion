@@ -10,10 +10,9 @@ import {
   type WaiverFilter,
 } from '$lib/member_enums';
 import { searchMembers, sendMemberOnboardings } from '$lib/remotes/endpoints/member.remote';
-import { SvelteSet } from 'svelte/reactivity';
+import { DebouncedSearch } from '$lib/frontend/debounced-search.svelte';
+import { TableSelection } from '$lib/frontend/table-selection.svelte';
 import { toast } from 'svelte-sonner';
-
-const SEARCH_DEBOUNCE_MS = 300;
 
 export type MemberFilters = {
   access: AccessBasis[];
@@ -33,20 +32,20 @@ const DEFAULT_FILTERS: MemberFilters = {
 const EMPTY_FILTERS: MemberFilters = { access: [], waiver: [], onboarding: [] };
 
 export class MembersManager {
-  searchTerm = $state('');
+  search = new DebouncedSearch(() => this.resetPage());
   filters = $state<MemberFilters>(structuredClone(DEFAULT_FILTERS));
   sort = $state<MemberSort>(MEMBER_SORT.NAME);
   direction = $state<SortDirection>(SORT_DIRECTION.ASC);
   page = $state(1);
-  selected = new SvelteSet<string>();
+  selected = new TableSelection(
+    () => this.rows,
+    (row) => row.member.id,
+  );
   sending = $state(false);
-
-  private query = $state('');
-  private debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   results = $derived(
     searchMembers({
-      query: this.query,
+      query: this.search.query,
       ...this.filters,
       sort: this.sort,
       direction: this.direction,
@@ -60,15 +59,6 @@ export class MembersManager {
 
   get hasFilters() {
     return Object.values(this.filters).some((values) => values.length > 0);
-  }
-
-  setSearchTerm(value: string) {
-    this.searchTerm = value;
-    clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(() => {
-      this.query = value;
-      this.resetPage();
-    }, SEARCH_DEBOUNCE_MS);
   }
 
   isFiltered<K extends FilterKey>(key: K, value: MemberFilters[K][number]) {
@@ -108,30 +98,8 @@ export class MembersManager {
     this.selected.clear();
   }
 
-  get allSelected() {
-    return this.rows.length > 0 && this.rows.every(({ member }) => this.selected.has(member.id));
-  }
-
-  get someSelected() {
-    return this.selected.size > 0 && !this.allSelected;
-  }
-
-  isSelected(memberId: string) {
-    return this.selected.has(memberId);
-  }
-
-  toggle(memberId: string, checked: boolean) {
-    if (checked) this.selected.add(memberId);
-    else this.selected.delete(memberId);
-  }
-
-  toggleAll(checked: boolean) {
-    this.selected.clear();
-    if (checked) this.rows.forEach(({ member }) => this.selected.add(member.id));
-  }
-
   async sendOnboardingToSelected() {
-    const memberIds = [...this.selected];
+    const memberIds = this.selected.selectedIds;
     const confirmed = await modalManager.confirm({
       title: 'Send Onboarding Emails',
       prompt: `Send the onboarding email to ${memberIds.length} members?`,

@@ -14,11 +14,9 @@
     ACCESS_BASIS_DISPLAY,
     EMAIL_TRIGGER_LABEL,
     EMAIL_TYPE_LABEL,
-    formatDate,
-    formatDateTime,
-    formatIsoDate,
     waiverDisplay,
-  } from '../display';
+  } from '$lib/frontend/member-display';
+  import { formatDate, formatDateTime, formatIsoDate } from '$lib/frontend/format';
   import MemberSubscriptions from './MemberSubscriptions.svelte';
   import MemberVisits from './MemberVisits.svelte';
   import { MemberDetailManager } from './member-detail.svelte';

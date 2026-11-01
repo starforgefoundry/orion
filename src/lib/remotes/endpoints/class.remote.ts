@@ -1,6 +1,4 @@
 import { command, form, query } from '$app/server';
-import { redirect } from '@sveltejs/kit';
-import { HTTP_STATUS } from '$lib/http';
 import {
   bookClassDto,
   cancelBookingDto,
@@ -14,7 +12,6 @@ import {
 } from '$lib/remotes/dtos/class.dto';
 import { exposeUserErrors, verifyAuth } from '$lib/remotes/utils';
 import { classService } from '$lib/server/services/class.service';
-import { CLASS_BOOKING_PATH } from '$lib/server/utils/member_links';
 import * as v from 'valibot';
 
 // ── Staff: Catalog ──
@@ -97,6 +94,7 @@ export const cancelBookingStaff = command(
     verifyAuth();
     const result = await classService.cancelBookingStaff(dto);
     await getAllInstances().refresh();
+    await getInstanceDetail(result.instanceId).refresh();
     return result;
   }),
 );
@@ -152,14 +150,6 @@ export const getClassInstances = query(
   }),
 );
 
-export const bookClassForm = form(
-  bookClassDto,
-  exposeUserErrors(async (dto) => {
-    const result = await classService.bookClass(dto);
-    redirect(HTTP_STATUS.SEE_OTHER, `${CLASS_BOOKING_PATH}/${result.bookingToken}`);
-  }),
-);
-
 export const bookClass = command(
   bookClassDto,
   exposeUserErrors(async (dto) => {
@@ -177,6 +167,8 @@ export const getBookingByToken = query(
 export const cancelBooking = command(
   cancelBookingDto,
   exposeUserErrors(async (dto) => {
-    return await classService.cancelBooking(dto);
+    const result = await classService.cancelBooking(dto);
+    await getBookingByToken(dto.bookingToken).refresh();
+    return result;
   }),
 );

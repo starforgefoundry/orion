@@ -1,8 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state';
   import PassCard from '$lib/frontend/member-pass/PassCard.svelte';
+  import { SPACE_EMAIL } from '$lib/space';
 
-  const CONTACT_EMAIL = 'contact@starforgefoundry.com';
+  const CONTACT_EMAIL = SPACE_EMAIL.CONTACT;
 
   const token = page.params.token ?? '';
 </script>

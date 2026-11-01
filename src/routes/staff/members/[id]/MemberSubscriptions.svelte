@@ -4,7 +4,8 @@
   import Section from '$lib/frontend/components/Section.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import type { MemberSubscription } from '$lib/server/db/schema';
-  import { SUBSCRIPTION_STATUS_DISPLAY, formatDate, formatIsoDate } from '../display';
+  import { formatDate, formatIsoDate } from '$lib/frontend/format';
+  import { SUBSCRIPTION_STATUS_DISPLAY } from '$lib/frontend/member-display';
   import type { MemberDetailManager } from './member-detail.svelte';
 
   const COLUMN_COUNT = 7;

@@ -30,6 +30,7 @@
   import { toast } from 'svelte-sonner';
   import { PrintRequestFormManager, STEPS } from './print-request-form.svelte';
   import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
+  import { SPACE_EMAIL } from '$lib/space';
 
   const BYTES_PER_UNIT = 1024;
   const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte'] as const;
@@ -64,7 +65,7 @@
     submitPrintRequestForm.fields.files.set(manager.files);
   });
 
-  const CONTACT_EMAIL = '3dprint@starforgefoundry.com';
+  const CONTACT_EMAIL = SPACE_EMAIL.PRINTS;
   const PRINTING_GUIDE_URL = 'https://wiki.starforgefoundry.com/en/3d-printers';
 
   const HOW_IT_WORKS = [

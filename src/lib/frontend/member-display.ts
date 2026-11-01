@@ -1,7 +1,6 @@
 import type { Tone } from '$lib/frontend/components/StatusBadge.svelte';
 import type { OnboardingFilter, WaiverFilter } from '$lib/member_enums';
 import type { MemberEmail, MemberSubscription, Visit } from '$lib/server/db/schema';
-import { DateTime } from 'luxon';
 
 type Display = { label: string; tone: Tone };
 
@@ -68,17 +67,4 @@ export function waiverDisplay(hasWaiver: boolean) {
 
 export function memberHref(memberId: string) {
   return `/staff/members/${memberId}`;
-}
-
-export function formatDate(date: DateTime | null | undefined) {
-  return date ? date.toLocaleString(DateTime.DATE_MED) : '—';
-}
-
-export function formatDateTime(date: DateTime) {
-  return date.toLocaleString(DateTime.DATETIME_MED);
-}
-
-/** For YYYY-MM-DD columns, which have no time zone. */
-export function formatIsoDate(date: string | null | undefined) {
-  return date ? DateTime.fromISO(date).toLocaleString(DateTime.DATE_MED) : '—';
 }

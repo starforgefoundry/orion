@@ -1,4 +1,5 @@
 <script lang="ts" module>
+  import { DATE_FORMAT } from '$lib/frontend/format';
   import type { Tone } from '$lib/frontend/components/StatusBadge.svelte';
   import type { CarBayBookingView, CarBayOverrunInvoiceView } from '$lib/remotes/dtos/car_bay.dto';
 
@@ -22,9 +23,9 @@
 
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
-  import { Spinner } from '$lib/components/ui/spinner';
   import InfoRow from '$lib/frontend/components/InfoRow.svelte';
   import Modal from '$lib/frontend/components/Modal.svelte';
+  import QueryState from '$lib/frontend/components/QueryState.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
@@ -54,8 +55,8 @@
 
   let { onClose, bookingId, refundCutoffHours, onChanged }: Props = $props();
 
-  const detailRemote = $derived(getCarBayBookingDetail(bookingId));
-  const detail = $derived(detailRemote.current);
+  const detailQuery = $derived(getCarBayBookingDetail(bookingId));
+  const detail = $derived(detailQuery.current);
   const isPaid = $derived((detail?.amountPaid ?? 0) > 0);
 
   let busy = $state(false);
@@ -132,81 +133,83 @@
   size="lg"
   footer={detail ? actionsFooter : undefined}
 >
-  {#if detailRemote.loading && !detail}
-    <div class="flex justify-center py-6">
-      <Spinner class="size-6" />
-    </div>
-  {:else if !detail}
-    <p class="text-sm text-destructive">Booking not found.</p>
-  {:else}
-    {@const badge = STATUS_BADGES[detail.status]}
-    <div class="flex flex-col gap-3">
-      <Section title="Booking">
-        <dl>
-          <InfoRow label="When">{formatPeriod(toPeriod(detail))}</InfoRow>
-          <InfoRow label="Status">
-            <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
-          </InfoRow>
-          <InfoRow label="Rate">{detail.isMember ? 'Member' : 'Non-member'}</InfoRow>
-          <InfoRow label="Paid">
-            {isPaid ? formatDollars(detail.amountPaid) : 'Staff booking (free)'}
-          </InfoRow>
-          {#if isPaid && detail.status === CAR_BAY_STATUS.CONFIRMED}
-            <InfoRow label="Refund policy">
-              {detail.refundable
-                ? 'Refundable'
-                : `Not refundable (inside ${refundCutoffHours} hours)`}
-            </InfoRow>
-          {/if}
-        </dl>
-      </Section>
+  <QueryState query={detailQuery} label="booking">
+    {#snippet children(detail)}
+      {#if !detail}
+        <p class="text-sm text-destructive">Booking not found.</p>
+      {:else}
+        {@const badge = STATUS_BADGES[detail.status]}
+        <div class="flex flex-col gap-3">
+          <Section title="Booking">
+            <dl>
+              <InfoRow label="When">{formatPeriod(toPeriod(detail))}</InfoRow>
+              <InfoRow label="Status">
+                <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+              </InfoRow>
+              <InfoRow label="Rate">{detail.isMember ? 'Member' : 'Non-member'}</InfoRow>
+              <InfoRow label="Paid">
+                {isPaid ? formatDollars(detail.amountPaid) : 'Staff booking (free)'}
+              </InfoRow>
+              {#if isPaid && detail.status === CAR_BAY_STATUS.CONFIRMED}
+                <InfoRow label="Refund policy">
+                  {detail.refundable
+                    ? 'Refundable'
+                    : `Not refundable (inside ${refundCutoffHours} hours)`}
+                </InfoRow>
+              {/if}
+            </dl>
+          </Section>
 
-      <Section title="Customer">
-        <dl>
-          <InfoRow label="Name">{detail.customerName}</InfoRow>
-          <InfoRow label="Email">{detail.customerEmail}</InfoRow>
-          <InfoRow label="Phone">{detail.customerPhone}</InfoRow>
-        </dl>
-      </Section>
+          <Section title="Customer">
+            <dl>
+              <InfoRow label="Name">{detail.customerName}</InfoRow>
+              <InfoRow label="Email">{detail.customerEmail}</InfoRow>
+              <InfoRow label="Phone">{detail.customerPhone}</InfoRow>
+            </dl>
+          </Section>
 
-      <Section title="Overrun Invoices">
-        {#if detail.overrunInvoices.length === 0}
-          <p class="text-sm text-muted-foreground">No overrun invoices sent.</p>
-        {:else}
-          <ul class="-my-1.5 divide-y">
-            {#each detail.overrunInvoices as invoice (invoice.id)}
-              {@const invoiceBadge = INVOICE_BADGES[invoice.status]}
-              <li class="flex items-center justify-between gap-3 py-1.5 text-sm">
-                <span>
-                  {formatDollars(invoice.total)}
-                  <span class="text-muted-foreground">
-                    · {DateTime.fromISO(invoice.issuedDate).toFormat('MMM d, h:mm a')}
-                  </span>
-                </span>
-                <span class="flex items-center gap-2">
-                  {#if invoice.paymentUrl}
-                    <a
-                      href={invoice.paymentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="text-xs text-primary hover:underline"
-                    >
-                      View
-                    </a>
-                  {/if}
-                  <StatusBadge tone={invoiceBadge.tone}>{invoiceBadge.label}</StatusBadge>
-                </span>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </Section>
+          <Section title="Overrun Invoices">
+            {#if detail.overrunInvoices.length === 0}
+              <p class="text-sm text-muted-foreground">No overrun invoices sent.</p>
+            {:else}
+              <ul class="-my-1.5 divide-y">
+                {#each detail.overrunInvoices as invoice (invoice.id)}
+                  {@const invoiceBadge = INVOICE_BADGES[invoice.status]}
+                  <li class="flex items-center justify-between gap-3 py-1.5 text-sm">
+                    <span>
+                      {formatDollars(invoice.total)}
+                      <span class="text-muted-foreground">
+                        · {DateTime.fromISO(invoice.issuedDate).toFormat(
+                          DATE_FORMAT.MONTH_DAY_TIME,
+                        )}
+                      </span>
+                    </span>
+                    <span class="flex items-center gap-2">
+                      {#if invoice.paymentUrl}
+                        <a
+                          href={invoice.paymentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-xs text-primary hover:underline"
+                        >
+                          View
+                        </a>
+                      {/if}
+                      <StatusBadge tone={invoiceBadge.tone}>{invoiceBadge.label}</StatusBadge>
+                    </span>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </Section>
 
-      <p class="text-xs text-muted-foreground">
-        No overrun or overnight charge applies if the customer moved their own vehicle outside at
-        the end of the reservation. Vehicles may stay on the property up to 3 days from the start
-        date.
-      </p>
-    </div>
-  {/if}
+          <p class="text-xs text-muted-foreground">
+            No overrun or overnight charge applies if the customer moved their own vehicle outside
+            at the end of the reservation. Vehicles may stay on the property up to 3 days from the
+            start date.
+          </p>
+        </div>
+      {/if}
+    {/snippet}
+  </QueryState>
 </Modal>

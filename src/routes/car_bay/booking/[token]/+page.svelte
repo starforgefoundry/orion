@@ -1,13 +1,11 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { Button } from '$lib/components/ui/button';
-  import { Separator } from '$lib/components/ui/separator';
   import { Spinner } from '$lib/components/ui/spinner';
+  import BookingConfirmation from '$lib/frontend/components/BookingConfirmation.svelte';
+  import BookingNotFound from '$lib/frontend/components/BookingNotFound.svelte';
   import InfoRow from '$lib/frontend/components/InfoRow.svelte';
-  import Section from '$lib/frontend/components/Section.svelte';
-  import PassCard from '$lib/frontend/member-pass/PassCard.svelte';
+  import QueryState from '$lib/frontend/components/QueryState.svelte';
   import ContactLine from '../../ContactLine.svelte';
-  import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import { submitWithToast } from '$lib/frontend/form-submit';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import {
@@ -24,8 +22,6 @@
     toPeriod,
   } from '$lib/utils/car_bay';
   import type { CustomerCarBayBooking } from '$lib/remotes/dtos/car_bay.dto';
-  import BanIcon from '@lucide/svelte/icons/ban';
-  import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
 
   const STATUS_HEADINGS: Record<CustomerCarBayBooking['status'], string> = {
     confirmed: 'Booking Confirmed',
@@ -39,13 +35,13 @@
     no_show: 'No-show',
   };
 
-  const token = page.params.token ?? '';
-  const bookingRemote = getCarBayBookingByToken(token);
-  const policyRemote = getCarBayPolicy();
+  const token = $derived(page.params.token ?? '');
+  const bookingQuery = $derived(getCarBayBookingByToken(token));
+  const policyQuery = $derived(getCarBayPolicy());
   const refundCutoffHours = $derived(
-    policyRemote.current?.refundCutoffHours ?? DEFAULT_CAR_BAY_POLICY.refundCutoffHours,
+    policyQuery.current?.refundCutoffHours ?? DEFAULT_CAR_BAY_POLICY.refundCutoffHours,
   );
-  const booking = $derived(bookingRemote.current);
+  const booking = $derived(bookingQuery.current);
 
   let canceling = $state(false);
 
@@ -77,63 +73,47 @@
   <title>Car Bay Booking - Starforge</title>
 </svelte:head>
 
-{#if bookingRemote.loading || policyRemote.loading}
+{#snippet pending()}
   <Spinner class="mx-auto mt-12 size-8" />
-{:else if !booking}
-  <div class="rounded-lg border p-4 text-sm">
-    <p class="font-medium text-destructive">Booking not found.</p>
-    <p class="mt-1 text-muted-foreground">This booking may not exist or the link may be invalid.</p>
-  </div>
-{:else}
-  {@const isConfirmed = booking.status === CAR_BAY_STATUS.CONFIRMED}
-  <div class="flex flex-col gap-4">
-    <div class="flex items-center gap-2">
-      {#if isConfirmed}
-        <CircleCheckIcon class="size-5 text-success" />
+{/snippet}
+
+<QueryState query={policyQuery} label="car bay rules" {pending}>
+  <QueryState query={bookingQuery} label="booking" {pending}>
+    {#snippet children(booking)}
+      {#if !booking}
+        <BookingNotFound />
       {:else}
-        <BanIcon class="size-5 text-destructive" />
+        <BookingConfirmation
+          confirmed={booking.status === CAR_BAY_STATUS.CONFIRMED}
+          heading={STATUS_HEADINGS[booking.status]}
+          statusLabel={STATUS_LABELS[booking.status]}
+          title="Car Bay - {CAR_BAY_TIER_NAMES[booking.tier]}"
+          customerName={booking.customerName}
+          customerEmail={booking.customerEmail}
+          passTitle="Your Car Bay Pass"
+          passToken={booking.passToken}
+          canCancel
+          {canceling}
+          onCancel={handleCancel}
+        >
+          {#snippet details()}
+            <InfoRow label="When">{formatPeriod(toPeriod(booking))}</InfoRow>
+          {/snippet}
+          {#snippet payment()}
+            <InfoRow label="Amount Paid">{formatDollars(booking.amountPaid)}</InfoRow>
+          {/snippet}
+          {#snippet extras()}
+            <ContactLine />
+          {/snippet}
+          {#snippet cancelNotice()}
+            <p class="text-sm text-muted-foreground">
+              {booking.refundable
+                ? `Cancel now and we refund you in full. Refunds stop ${refundCutoffHours} hours before your start time.`
+                : `Your booking starts in less than ${refundCutoffHours} hours, so canceling now won't get a refund.`}
+            </p>
+          {/snippet}
+        </BookingConfirmation>
       {/if}
-      <h2 class="flex-1 text-lg font-semibold">
-        {STATUS_HEADINGS[booking.status]}
-      </h2>
-      <StatusBadge tone={isConfirmed ? 'success' : 'danger'}>
-        {STATUS_LABELS[booking.status]}
-      </StatusBadge>
-    </div>
-
-    <Section title="Car Bay - {CAR_BAY_TIER_NAMES[booking.tier]}">
-      <dl>
-        <InfoRow label="When">{formatPeriod(toPeriod(booking))}</InfoRow>
-        <InfoRow label="Name">{booking.customerName}</InfoRow>
-        <InfoRow label="Email">{booking.customerEmail}</InfoRow>
-        <InfoRow label="Amount Paid">{formatDollars(booking.amountPaid)}</InfoRow>
-      </dl>
-    </Section>
-
-    {#if isConfirmed}
-      <Section title="Your Car Bay Pass">
-        <PassCard token={booking.passToken} />
-      </Section>
-    {/if}
-
-    <ContactLine />
-
-    {#if isConfirmed}
-      <Separator />
-      <p class="text-sm text-muted-foreground">
-        {booking.refundable
-          ? `Cancel now and we refund you in full. Refunds stop ${refundCutoffHours} hours before your start time.`
-          : `Your booking starts in less than ${refundCutoffHours} hours, so canceling now won't get a refund.`}
-      </p>
-      <Button
-        variant="destructive"
-        class="self-start max-sm:w-full"
-        onclick={handleCancel}
-        disabled={canceling}
-      >
-        {#if canceling}<Spinner />{:else}<BanIcon />{/if}
-        Cancel Booking
-      </Button>
-    {/if}
-  </div>
-{/if}
+    {/snippet}
+  </QueryState>
+</QueryState>

@@ -1,14 +1,19 @@
 <script lang="ts">
+  import { DATE_FORMAT } from '$lib/frontend/format';
   import { Button } from '$lib/components/ui/button';
   import { Spinner } from '$lib/components/ui/spinner';
   import InfoRow from '$lib/frontend/components/InfoRow.svelte';
   import Modal from '$lib/frontend/components/Modal.svelte';
+  import QueryState from '$lib/frontend/components/QueryState.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
+  import { errorDescription } from '$lib/frontend/form-submit';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { formatTime } from '$lib/frontend/utils';
   import { formatCents, PAYMENT_STATUS } from '$lib/utils/billing';
+  import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '$lib/utils/classes';
+  import type { CancelInstanceDto } from '$lib/remotes/dtos/class.dto';
   import {
     cancelBookingStaff,
     cancelInstance,
@@ -33,25 +38,27 @@
 
   let { onClose, instanceId }: Props = $props();
 
-  function isPaid(booking: any) {
+  type InstanceBooking = NonNullable<
+    Awaited<ReturnType<typeof getInstanceDetail>>
+  >['bookings'][number];
+
+  function isPaid(booking: InstanceBooking) {
     return booking.payment?.status === PAYMENT_STATUS.PAID && booking.payment.total > 0;
   }
 
-  const detailRemote = $derived(getInstanceDetail(instanceId));
-  const detail = $derived(detailRemote.current);
+  const detailQuery = $derived(getInstanceDetail(instanceId));
+  const detail = $derived(detailQuery.current);
   const confirmedBookings = $derived(
-    detail?.bookings?.filter((b: any) => b.status === 'confirmed') ?? [],
+    detail?.bookings?.filter((b) => b.status === CLASS_BOOKING_STATUS.CONFIRMED) ?? [],
   );
   const canceledBookings = $derived(
-    detail?.bookings?.filter((b: any) => b.status === 'canceled') ?? [],
+    detail?.bookings?.filter((b) => b.status === CLASS_BOOKING_STATUS.CANCELED) ?? [],
   );
-  const totalBooked = $derived(
-    confirmedBookings.reduce((sum: number, b: any) => sum + (b.quantity ?? 1), 0),
-  );
+  const totalBooked = $derived(confirmedBookings.reduce((sum, b) => sum + (b.quantity ?? 1), 0));
 
   let cancelingBookingId = $state('');
 
-  async function handleCancelBooking(booking: any) {
+  async function handleCancelBooking(booking: InstanceBooking) {
     const hasPaid = isPaid(booking);
     const confirmed = await modalManager.confirm({
       title: 'Cancel Booking',
@@ -66,10 +73,8 @@
     cancelingBookingId = booking.id;
     try {
       await cancelBookingStaff({ bookingId: booking.id });
-      await getInstanceDetail(instanceId).refresh();
-      await getAllInstances().refresh();
-    } catch (error: any) {
-      toast.error(error?.message ?? 'Failed to cancel booking');
+    } catch (error) {
+      toast.error('Failed to cancel booking', { description: errorDescription(error) });
     } finally {
       cancelingBookingId = '';
     }
@@ -95,16 +100,15 @@
   function showCancelModal() {
     modalManager.show(CancelClassModal, {
       hasRecurrenceGroup: !!detail?.recurrenceGroupId,
-      onConfirm: async (mode: 'single' | 'this_and_future') => {
+      onConfirm: async (mode: CancelInstanceDto['mode']) => {
         try {
           const result = await cancelInstance({ instanceId, mode });
           toast.success(
             `Canceled ${result.canceledCount} class${result.canceledCount !== 1 ? 'es' : ''}`,
           );
-          await getAllInstances().refresh();
           onClose();
-        } catch (error: any) {
-          toast.error(error?.message ?? 'Failed to cancel');
+        } catch (error) {
+          toast.error('Failed to cancel', { description: errorDescription(error) });
         }
       },
     });
@@ -123,107 +127,114 @@
   icon={CalendarIcon}
   {onClose}
   size="lg"
-  footer={detail?.status === 'scheduled' ? cancelClassFooter : undefined}
+  footer={detail?.status === CLASS_INSTANCE_STATUS.SCHEDULED ? cancelClassFooter : undefined}
 >
-  {#if detailRemote.loading}
-    <div class="flex justify-center py-6">
-      <Spinner class="size-6" />
-    </div>
-  {:else if detail}
-    <div class="flex flex-col gap-3">
-      <Section title="Details">
-        <dl>
-          <InfoRow label="Date"
-            >{DateTime.fromISO(detail.date).toFormat('EEE, MMM d, yyyy')}</InfoRow
-          >
-          <InfoRow label="Time">{formatTime(detail.startTime)} ({detail.durationMinutes}m)</InfoRow>
-          <InfoRow label="Teacher">{detail.teacher?.name ?? detail.teacherEmail}</InfoRow>
-          <InfoRow label="Seats">{totalBooked}/{detail.seats} booked</InfoRow>
-          <InfoRow label="Status">
-            <StatusBadge tone={detail.status === 'scheduled' ? 'success' : 'danger'}>
-              {detail.status === 'scheduled' ? 'Scheduled' : 'Canceled'}
-            </StatusBadge>
-          </InfoRow>
-        </dl>
-      </Section>
-
-      {#if detail.status === 'scheduled'}
-        <Section title="Bookings">
-          {#snippet actions()}
-            {#if totalBooked < detail.seats}
-              <Button size="sm" variant="ghost" onclick={showAddBookingModal}>
-                <UserPlusIcon />
-                Add Booking
-              </Button>
-            {/if}
-          {/snippet}
-          {#if confirmedBookings.length === 0}
-            <p class="text-sm text-muted-foreground">No bookings yet.</p>
-          {:else}
-            <ul class="-my-1.5 divide-y">
-              {#each confirmedBookings as booking (booking.id)}
-                <li class="flex items-center justify-between gap-3 py-1.5 text-sm">
-                  <div class="min-w-0">
-                    <div class="truncate font-medium">
-                      {booking.customerName}{booking.quantity > 1 ? ` (x${booking.quantity})` : ''}
-                    </div>
-                    <div class="truncate text-xs text-muted-foreground">
-                      {booking.customerEmail} · {booking.customerPhone}
-                    </div>
-                    <div class="text-xs text-muted-foreground">
-                      {#if isPaid(booking)}
-                        {formatCents(booking.payment?.total ?? 0)}
-                      {:else}
-                        Manual (no payment)
-                      {/if}
-                    </div>
-                  </div>
-                  <div class="flex shrink-0 gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onclick={() => showRescheduleModal(booking)}
-                      disabled={cancelingBookingId === booking.id}
-                    >
-                      <CalendarClockIcon />
-                      Reschedule
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      class="text-destructive hover:text-destructive"
-                      onclick={() => handleCancelBooking(booking)}
-                      disabled={cancelingBookingId === booking.id}
-                    >
-                      {#if cancelingBookingId === booking.id}<Spinner />{:else}<TrashIcon />{/if}
-                      {isPaid(booking) ? 'Cancel & Refund' : 'Cancel'}
-                    </Button>
-                  </div>
-                </li>
-              {/each}
-            </ul>
-          {/if}
-        </Section>
-
-        {#if canceledBookings.length > 0}
-          <Section title="Canceled Bookings">
-            <ul class="flex flex-col gap-1 text-sm text-muted-foreground">
-              {#each canceledBookings as booking (booking.id)}
-                <li>
-                  {booking.customerName}{booking.quantity > 1 ? ` (x${booking.quantity})` : ''}
-                  {#if booking.payment?.status === PAYMENT_STATUS.REFUNDED}
-                    - {formatCents(booking.payment?.total ?? 0)} (refunded)
-                  {:else}
-                    (canceled)
-                  {/if}
-                </li>
-              {/each}
-            </ul>
+  <QueryState query={detailQuery} label="class">
+    {#snippet children(detail)}
+      {#if detail}
+        <div class="flex flex-col gap-3">
+          <Section title="Details">
+            <dl>
+              <InfoRow label="Date"
+                >{DateTime.fromISO(detail.date).toFormat(DATE_FORMAT.SHORT_WEEKDAY_DATE)}</InfoRow
+              >
+              <InfoRow label="Time"
+                >{formatTime(detail.startTime)} ({detail.durationMinutes}m)</InfoRow
+              >
+              <InfoRow label="Teacher">{detail.teacher?.name ?? detail.teacherEmail}</InfoRow>
+              <InfoRow label="Seats">{totalBooked}/{detail.seats} booked</InfoRow>
+              <InfoRow label="Status">
+                <StatusBadge
+                  tone={detail.status === CLASS_INSTANCE_STATUS.SCHEDULED ? 'success' : 'danger'}
+                >
+                  {detail.status === CLASS_INSTANCE_STATUS.SCHEDULED ? 'Scheduled' : 'Canceled'}
+                </StatusBadge>
+              </InfoRow>
+            </dl>
           </Section>
-        {/if}
+
+          {#if detail.status === CLASS_INSTANCE_STATUS.SCHEDULED}
+            <Section title="Bookings">
+              {#snippet actions()}
+                {#if totalBooked < detail.seats}
+                  <Button size="sm" variant="ghost" onclick={showAddBookingModal}>
+                    <UserPlusIcon />
+                    Add Booking
+                  </Button>
+                {/if}
+              {/snippet}
+              {#if confirmedBookings.length === 0}
+                <p class="text-sm text-muted-foreground">No bookings yet.</p>
+              {:else}
+                <ul class="-my-1.5 divide-y">
+                  {#each confirmedBookings as booking (booking.id)}
+                    <li class="flex items-center justify-between gap-3 py-1.5 text-sm">
+                      <div class="min-w-0">
+                        <div class="truncate font-medium">
+                          {booking.customerName}{booking.quantity > 1
+                            ? ` (x${booking.quantity})`
+                            : ''}
+                        </div>
+                        <div class="truncate text-xs text-muted-foreground">
+                          {booking.customerEmail} · {booking.customerPhone}
+                        </div>
+                        <div class="text-xs text-muted-foreground">
+                          {#if isPaid(booking)}
+                            {formatCents(booking.payment?.total ?? 0)}
+                          {:else}
+                            Manual (no payment)
+                          {/if}
+                        </div>
+                      </div>
+                      <div class="flex shrink-0 gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onclick={() => showRescheduleModal(booking)}
+                          disabled={cancelingBookingId === booking.id}
+                        >
+                          <CalendarClockIcon />
+                          Reschedule
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          class="text-destructive hover:text-destructive"
+                          onclick={() => handleCancelBooking(booking)}
+                          disabled={cancelingBookingId === booking.id}
+                        >
+                          {#if cancelingBookingId === booking.id}<Spinner />{:else}<TrashIcon
+                            />{/if}
+                          {isPaid(booking) ? 'Cancel & Refund' : 'Cancel'}
+                        </Button>
+                      </div>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </Section>
+
+            {#if canceledBookings.length > 0}
+              <Section title="Canceled Bookings">
+                <ul class="flex flex-col gap-1 text-sm text-muted-foreground">
+                  {#each canceledBookings as booking (booking.id)}
+                    <li>
+                      {booking.customerName}{booking.quantity > 1 ? ` (x${booking.quantity})` : ''}
+                      {#if booking.payment?.status === PAYMENT_STATUS.REFUNDED}
+                        - {formatCents(booking.payment?.total ?? 0)} (refunded)
+                      {:else}
+                        (canceled)
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+              </Section>
+            {/if}
+          {/if}
+        </div>
+      {:else}
+        <p class="text-sm text-destructive">Class not found.</p>
       {/if}
-    </div>
-  {:else}
-    <p class="text-sm text-destructive">Class not found.</p>
-  {/if}
+    {/snippet}
+  </QueryState>
 </Modal>

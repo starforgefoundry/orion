@@ -7,8 +7,9 @@
   import { enhanceWithToast } from '$lib/frontend/form-submit';
   import { requestPassEmailForm } from '$lib/remotes/endpoints/onboarding.remote';
   import MailCheckIcon from '@lucide/svelte/icons/mail-check';
+  import { SPACE_EMAIL } from '$lib/space';
 
-  const CONTACT_EMAIL = 'contact@starforgefoundry.com';
+  const CONTACT_EMAIL = SPACE_EMAIL.CONTACT;
 
   const submitting = $derived(requestPassEmailForm.pending > 0);
 </script>

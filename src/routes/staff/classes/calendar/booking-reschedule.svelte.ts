@@ -1,3 +1,4 @@
+import { DATE_FORMAT } from '$lib/frontend/format';
 import type { SelectOption } from '$lib/frontend/components/form/OptionSelect.svelte';
 import { submitWithToast } from '$lib/frontend/form-submit';
 import { formatTime } from '$lib/frontend/utils';
@@ -37,7 +38,7 @@ export class BookingReschedule {
       .sort((a, b) => classStartsAt(a).toMillis() - classStartsAt(b).toMillis())
       .map((session) => ({
         value: session.id,
-        label: `${classStartsAt(session).toFormat('EEE, MMM d, yyyy')} · ${formatTime(session.startTime)} (${session.seats - session.confirmedCount} open)`,
+        label: `${classStartsAt(session).toFormat(DATE_FORMAT.SHORT_WEEKDAY_DATE)} · ${formatTime(session.startTime)} (${session.seats - session.confirmedCount} open)`,
       }));
   }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { TIME_FORMAT } from '$lib/frontend/format';
   import FormField from '$lib/frontend/components/form/FormField.svelte';
   import OptionSelect, {
     type SelectOption,
@@ -17,7 +18,7 @@
   const fieldId = $props.id();
 
   function hourOption(hour: number): SelectOption {
-    return { value: hour.toString(), label: DateTime.fromObject({ hour }).toFormat('h:mm a') };
+    return { value: hour.toString(), label: DateTime.fromObject({ hour }).toFormat(TIME_FORMAT) };
   }
 </script>
 

@@ -1,16 +1,17 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import type { InventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
   import QrCode from '$lib/frontend/components/QrCode.svelte';
-  import { onMount } from 'svelte';
+  import { INVENTORY_LABEL_ITEM_PARAM } from '$lib/frontend/inventory-labels';
+  import { getInventoryItems } from '$lib/remotes/endpoints/inventory.remote';
+  import { onMount, tick } from 'svelte';
 
-  let items = $derived.by(() => {
-    const itemJSON = page.url.searchParams.get('items');
-    return (itemJSON ? JSON.parse(itemJSON) : []) as InventoryItemDto[];
-  });
+  const itemsQuery = getInventoryItems();
+  const itemIds = $derived(new Set(page.url.searchParams.getAll(INVENTORY_LABEL_ITEM_PARAM)));
+  const items = $derived((itemsQuery.current ?? []).filter((item) => itemIds.has(item.id)));
 
-  onMount(() => {
-    // Trigger print dialog on mount
+  onMount(async () => {
+    await itemsQuery;
+    await tick();
     window.print();
   });
 </script>

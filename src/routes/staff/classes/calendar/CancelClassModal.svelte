@@ -4,11 +4,13 @@
   import { Label } from '$lib/components/ui/label';
   import Modal from '$lib/frontend/components/Modal.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
+  import type { CancelInstanceDto } from '$lib/remotes/dtos/class.dto';
+  import { CANCEL_INSTANCE_MODE } from '$lib/utils/classes';
   import BanIcon from '@lucide/svelte/icons/ban';
 
   interface Props extends ModalProps {
     hasRecurrenceGroup: boolean;
-    onConfirm: (mode: 'single' | 'this_and_future') => void;
+    onConfirm: (mode: CancelInstanceDto['mode']) => void;
   }
 
   let { onClose, hasRecurrenceGroup, onConfirm }: Props = $props();
@@ -16,7 +18,7 @@
   let cancelFuture = $state(false);
 
   function handleConfirm() {
-    onConfirm(cancelFuture ? 'this_and_future' : 'single');
+    onConfirm(cancelFuture ? CANCEL_INSTANCE_MODE.THIS_AND_FUTURE : CANCEL_INSTANCE_MODE.SINGLE);
     onClose();
   }
 </script>

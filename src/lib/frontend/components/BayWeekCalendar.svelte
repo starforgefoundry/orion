@@ -1,4 +1,5 @@
 <script lang="ts" module>
+  import { DATE_FORMAT } from '$lib/frontend/format';
   const HOUR_HEIGHT_PX = 44;
   const MINUTES_IN_HOUR = 60;
   const TURNOVER_LABEL_MIN_PX = 14;
@@ -125,8 +126,8 @@
             date === todayStr && 'font-semibold text-primary',
           )}
         >
-          <div class="font-medium">{day.toFormat('EEE')}</div>
-          <div class="text-muted-foreground">{day.toFormat('MMM d')}</div>
+          <div class="font-medium">{day.toFormat(DATE_FORMAT.SHORT_WEEKDAY)}</div>
+          <div class="text-muted-foreground">{day.toFormat(DATE_FORMAT.MONTH_DAY)}</div>
         </div>
       {/each}
 
@@ -168,9 +169,9 @@
               style:top="{offset(open.set({ hour }))}px"
               style:height="{HOUR_HEIGHT_PX}px"
               disabled={!slotOpen || !onSlotClick}
-              aria-label="Book {DateTime.fromISO(date).toFormat('EEEE, MMMM d')} at {formatHour(
-                hour,
-              )}"
+              aria-label="Book {DateTime.fromISO(date).toFormat(
+                DATE_FORMAT.WEEKDAY_MONTH_DAY,
+              )} at {formatHour(hour)}"
               onclick={() => onSlotClick?.(date, hour)}
             >
               Book

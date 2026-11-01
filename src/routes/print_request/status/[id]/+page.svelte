@@ -14,10 +14,11 @@
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
   import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
   import XIcon from '@lucide/svelte/icons/x';
-  import { DateTime } from 'luxon';
+  import { formatIsoDate } from '$lib/frontend/format';
   import { PrintRequestStatusManager } from './print-request-status.svelte';
+  import { SPACE_EMAIL } from '$lib/space';
 
-  const CONTACT_EMAIL = '3dprint@starforgefoundry.com';
+  const CONTACT_EMAIL = SPACE_EMAIL.PRINTS;
 
   const STEPS = [
     { id: PRINT_REQUEST_STATUS.IN_QUEUE, label: 'In Queue' },
@@ -29,10 +30,6 @@
   const manager = new PrintRequestStatusManager(page.params.id ?? '');
   const request = $derived(manager.request);
   const payment = $derived(manager.payment);
-
-  function formatDate(iso: string) {
-    return DateTime.fromISO(iso).toLocaleString(DateTime.DATE_MED);
-  }
 </script>
 
 <svelte:head>
@@ -45,7 +42,7 @@
     {request?.projectName ?? '3D Print Request'}
   </Card.Title>
   {#if request}
-    <Card.Description>Submitted {formatDate(request.submissionDate)}</Card.Description>
+    <Card.Description>Submitted {formatIsoDate(request.submissionDate)}</Card.Description>
   {/if}
 </Card.Header>
 
@@ -113,7 +110,7 @@
                 <CircleCheckIcon class="size-4" />
                 {payment.billedToOrganization
                   ? 'Billed to your organization'
-                  : `Paid${payment.paymentDate ? ` on ${formatDate(payment.paymentDate)}` : ''}`}
+                  : `Paid${payment.paymentDate ? ` on ${formatIsoDate(payment.paymentDate)}` : ''}`}
               </p>
             {:else if payment.status === PAYMENT_STATUS.PENDING && payment.billedToOrganization}
               <p class="text-sm text-muted-foreground">

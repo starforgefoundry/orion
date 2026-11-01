@@ -5,6 +5,7 @@
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
+  import { filterBySearch } from '$lib/frontend/search';
   import { getOrganizations } from '$lib/remotes/endpoints/organization.remote';
   import PlusIcon from '@lucide/svelte/icons/plus';
   import SearchIcon from '@lucide/svelte/icons/search';
@@ -14,11 +15,7 @@
   let organizations = getOrganizations();
   let searchTerm = $state('');
   let searchedOrganizations = $derived(
-    organizations.current?.filter(
-      (organization) =>
-        organization.name.toUpperCase().includes(searchTerm.toUpperCase()) ||
-        organization.email.toUpperCase().includes(searchTerm.toUpperCase()),
-    ) || [],
+    filterBySearch(organizations.current ?? [], searchTerm, ['name', 'email']),
   );
 
   function showCreateModal() {

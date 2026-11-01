@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
+  import { SPACE_EMAIL } from '$lib/space';
 </script>
 
 <svelte:head>
@@ -20,8 +21,8 @@
 
   <p class="text-muted-foreground">
     If you have any questions or need further assistance, please contact us at
-    <a href="mailto:3dprint@starforgefoundry.com" class="text-primary hover:underline">
-      3dprint@starforgefoundry.com
+    <a href="mailto:{SPACE_EMAIL.PRINTS}" class="text-primary hover:underline">
+      {SPACE_EMAIL.PRINTS}
     </a>.
   </p>
 

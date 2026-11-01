@@ -428,7 +428,7 @@ export class ClassService extends BaseService {
       'sync canceled booking to calendar',
     );
 
-    return { success: true };
+    return { success: true, instanceId: booking.instanceId };
   }
 
   async rescheduleBooking(dto: RescheduleBookingDto, now: DateTime = DateTime.now()) {

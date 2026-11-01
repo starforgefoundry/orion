@@ -8,8 +8,8 @@
     ACCESS_BASIS_DISPLAY,
     VISIT_OUTCOME_DISPLAY,
     VISIT_SOURCE_LABEL,
-    formatDateTime,
-  } from '../display';
+  } from '$lib/frontend/member-display';
+  import { formatDateTime } from '$lib/frontend/format';
   import type { MemberDetailManager } from './member-detail.svelte';
 
   const COLUMN_COUNT = 4;

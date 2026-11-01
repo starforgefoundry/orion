@@ -4,8 +4,6 @@ import { SPACE_ZONE, spaceDate } from '../space.ts';
 import { CENTS_PER_DOLLAR, type BillingLineItem } from './billing.ts';
 import { DateTime } from 'luxon';
 
-export const CAR_BAY_EMAIL = 'carbay@starforgefoundry.com';
-
 const WEEKEND_DAYS = [6, 7];
 
 export const CAR_BAY_TIER = {

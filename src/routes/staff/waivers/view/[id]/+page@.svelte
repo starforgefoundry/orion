@@ -2,25 +2,9 @@
   import { page } from '$app/state';
   import { getWaiverById } from '$lib/remotes/endpoints/waiver.remote';
   import { Spinner } from '$lib/components/ui/spinner';
+  import { DATE_STYLE, formatDate } from '$lib/frontend/format';
 
   let waiver = $derived(getWaiverById(page.params.id!));
-
-  let signedDate = $derived(() => {
-    if (!waiver.current) return '';
-    const d = waiver.current.signedDate;
-    if (typeof d === 'object' && 'toLocaleString' in d) {
-      return (d as { toLocaleString: (opts: object) => string }).toLocaleString({
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    }
-    return new Date(String(d)).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  });
 </script>
 
 <svelte:head>
@@ -88,7 +72,9 @@
       <div>
         <p class="text-base font-bold">Name: {waiver.current.name}</p>
         <p class="text-base">Email: {waiver.current.email}</p>
-        <p class="text-base">Date Signed: {signedDate()}</p>
+        <p class="text-base">
+          Date Signed: {formatDate(waiver.current.signedDate, DATE_STYLE.FULL)}
+        </p>
       </div>
 
       <img src={waiver.current.signatureUrl} alt="Signature" class="mt-2 max-w-[200px]" />

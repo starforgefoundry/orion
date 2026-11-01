@@ -7,6 +7,7 @@
   import ModalForm from '$lib/frontend/components/ModalForm.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import { submitWithToast } from '$lib/frontend/form-submit';
+  import { DAYS_IN_WEEK } from '$lib/frontend/month-grid';
   import {
     createInstance,
     generateInstances,
@@ -14,6 +15,7 @@
     getCatalogs,
     getStaffUsers,
   } from '$lib/remotes/endpoints/class.remote';
+  import { weeklyDates } from '$lib/utils/classes';
   import CalendarPlusIcon from '@lucide/svelte/icons/calendar-plus';
   import { DateTime } from 'luxon';
   import { toast } from 'svelte-sonner';
@@ -41,17 +43,11 @@
   const date = $derived(dateValue ? DateTime.fromISO(dateValue) : undefined);
   const endDate = $derived(endDateValue ? DateTime.fromISO(endDateValue) : undefined);
 
-  const previewCount = $derived.by(() => {
-    if (!recurring || !date || !endDate) return 0;
-    if (!date.isValid || !endDate.isValid || endDate < date) return 0;
+  const dayOfWeek = $derived(date ? date.weekday % DAYS_IN_WEEK : 0);
 
-    let count = 0;
-    let current = date;
-    while (current <= endDate) {
-      count++;
-      current = current.plus({ days: 7 });
-    }
-    return count;
+  const previewCount = $derived.by(() => {
+    if (!recurring || !date?.isValid || !endDate?.isValid) return 0;
+    return weeklyDates(date.toISODate()!, endDate.toISODate()!, dayOfWeek).length;
   });
 
   async function handleCreate() {
@@ -75,7 +71,7 @@
               generateInstances({
                 classId: selectedCatalog,
                 teacherEmail: selectedTeacher,
-                dayOfWeek: date.weekday % 7,
+                dayOfWeek,
                 startTime,
                 durationMinutes: durationMinutes,
                 seats: seats,
