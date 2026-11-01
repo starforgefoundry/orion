@@ -1,5 +1,13 @@
 <script lang="ts" module>
+  import type { Component } from 'svelte';
+
   export type Tone = 'neutral' | 'primary' | 'info' | 'success' | 'warning' | 'danger';
+
+  export type StatusDisplay = {
+    label: string;
+    tone: Tone;
+    icon: Component;
+  };
 
   const TONE_CLASSES: Record<Tone, string> = {
     neutral: 'bg-muted text-muted-foreground',

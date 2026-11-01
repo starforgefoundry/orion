@@ -1,23 +1,14 @@
 <script lang="ts">
   import { Spinner } from '$lib/components/ui/spinner';
-  import {
-    getCarBayAvailability,
-    getCarBayPolicy,
-    getCarBayRates,
-  } from '$lib/remotes/endpoints/settings.remote';
   import { CAR_BAY_TIER, CAR_BAY_TIER_NAMES } from '$lib/utils/car_bay';
   import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
   import ClosedNotice from './ClosedNotice.svelte';
   import ContactLine from './ContactLine.svelte';
   import TierPrices from './TierPrices.svelte';
+  import { CarBayOffer } from './car-bay-offer.svelte';
   import { openHoursSummary, priceRows, tierDetails } from './tiers';
 
-  const ratesRemote = getCarBayRates();
-  const policyRemote = getCarBayPolicy();
-  const availabilityRemote = getCarBayAvailability();
-  const rates = $derived(ratesRemote.current);
-  const policy = $derived(policyRemote.current);
-  const availability = $derived(availabilityRemote.current);
+  const offer = new CarBayOffer();
 </script>
 
 <svelte:head>
@@ -25,15 +16,17 @@
 </svelte:head>
 
 <div class="flex flex-col gap-6">
-  {#if ratesRemote.loading || policyRemote.loading || availabilityRemote.loading}
+  {#if offer.loading}
     <Spinner class="mx-auto mt-12 size-8" />
-  {:else if availability && !availability.isOpen}
+  {:else if offer.closed}
     <ClosedNotice />
-  {:else if !rates || !policy}
+  {:else if !offer.rates || !offer.policy}
     <p class="rounded-lg border p-6 text-center text-sm text-destructive">
       Booking isn't available right now. Try again later.
     </p>
   {:else}
+    {@const rates = offer.rates}
+    {@const policy = offer.policy}
     {@const details = tierDetails(policy)}
     <div class="flex flex-col gap-1">
       <h2 class="text-xl font-semibold">Book the car bay</h2>

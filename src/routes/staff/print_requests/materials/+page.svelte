@@ -14,9 +14,9 @@
   import PlusIcon from '@lucide/svelte/icons/plus';
   import SearchIcon from '@lucide/svelte/icons/search';
   import TrashIcon from '@lucide/svelte/icons/trash';
-  import { MaterialsManager } from './materials.svelte';
+  import { MaterialCatalog } from './materials.svelte';
 
-  const manager = new MaterialsManager();
+  const manager = new MaterialCatalog();
 
   function handleRowKeydown(event: KeyboardEvent, material: PrintMaterial) {
     if (event.key !== 'Enter' && event.key !== ' ') return;

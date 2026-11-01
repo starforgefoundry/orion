@@ -8,7 +8,7 @@ import {
 import { PRINT_REQUEST_STATUS } from '$lib/utils/print_request';
 import { toast } from 'svelte-sonner';
 
-export class PrintRequestStatusManager {
+export class PrintRequestTracker {
   readonly query;
   readonly request;
   readonly payment;

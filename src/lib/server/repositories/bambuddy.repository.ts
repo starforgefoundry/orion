@@ -1,5 +1,5 @@
 import { BaseRepository } from '$lib/server/repositories/base.repository';
-import { PRINTER_LABEL_PREFIX } from '$lib/remotes/dtos/print_materials.dto';
+import { PRINTER_LABEL_PREFIX } from '$lib/utils/print_materials';
 
 export type BambuddyConfig = {
   serverUrl: string;

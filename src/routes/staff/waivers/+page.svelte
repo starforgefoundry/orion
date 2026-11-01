@@ -4,34 +4,18 @@
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
-  import { DebouncedSearch } from '$lib/frontend/debounced-search.svelte';
   import { formatDate } from '$lib/frontend/format';
-  import { searchWaivers } from '$lib/remotes/endpoints/waiver.remote';
   import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
   import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
   import EyeIcon from '@lucide/svelte/icons/eye';
   import SearchIcon from '@lucide/svelte/icons/search';
   import UserIcon from '@lucide/svelte/icons/user';
-  import { goto } from '$app/navigation';
+  import { WaiverDirectory } from './waivers.svelte';
 
-  const PAGE_SIZE = 25;
+  const COLUMN_COUNT = 4;
 
-  let page = $state(1);
-  const search = new DebouncedSearch(() => (page = 1));
-
-  const waivers = $derived(searchWaivers({ query: search.query, page, pageSize: PAGE_SIZE }));
-
-  function handlePrevPage() {
-    if (page > 1) page--;
-  }
-
-  function handleNextPage() {
-    if (waivers.current && page < waivers.current.pagination.totalPages) page++;
-  }
-
-  function viewWaiver(waiverId: string) {
-    window.open(`/staff/waivers/view/${waiverId}`, '_blank');
-  }
+  const directory = new WaiverDirectory();
+  const waivers = $derived(directory.results);
 </script>
 
 <PageHeader title="Signed Waivers" formHref="/waiver" />
@@ -40,7 +24,7 @@
   icon={SearchIcon}
   placeholder="Search waivers..."
   class="mb-3 sm:max-w-xs"
-  bind:value={search.term}
+  bind:value={directory.search.term}
 />
 
 {#if waivers.loading}
@@ -76,18 +60,18 @@
               <IconButton
                 icon={UserIcon}
                 aria-label="View Member"
-                onclick={() => goto(`/staff/members/${waiver.memberId}`)}
+                onclick={() => directory.viewMember(waiver.memberId)}
               />
               <IconButton
                 icon={EyeIcon}
                 aria-label="View Waiver"
-                onclick={() => viewWaiver(waiver.id)}
+                onclick={() => directory.viewWaiver(waiver.id)}
               />
             </Table.Cell>
           </Table.Row>
         {:else}
           <Table.Row>
-            <Table.Cell colspan={4} class="h-20 text-center text-muted-foreground">
+            <Table.Cell colspan={COLUMN_COUNT} class="h-20 text-center text-muted-foreground">
               No waivers found.
             </Table.Cell>
           </Table.Row>
@@ -101,8 +85,8 @@
       <IconButton
         icon={ChevronLeftIcon}
         aria-label="Previous page"
-        disabled={page <= 1}
-        onclick={handlePrevPage}
+        disabled={!directory.hasPreviousPage}
+        onclick={() => directory.previousPage()}
       />
       <span class="text-sm">
         Page {waivers.current.pagination.page} of {waivers.current.pagination.totalPages}
@@ -110,8 +94,8 @@
       <IconButton
         icon={ChevronRightIcon}
         aria-label="Next page"
-        disabled={page >= waivers.current.pagination.totalPages}
-        onclick={handleNextPage}
+        disabled={!directory.hasNextPage}
+        onclick={() => directory.nextPage()}
       />
     </div>
   {/if}

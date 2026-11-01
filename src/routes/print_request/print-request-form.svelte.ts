@@ -14,7 +14,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type SubmitParameters = Parameters<Parameters<typeof submitPrintRequestForm.enhance>[0]>[0];
 
-export class PrintRequestFormManager {
+export class PrintRequestForm {
   step = $state<Step>(STEPS.CONTACT);
   files = $state<PrintRequestFileDto[]>([]);
   isQuote = $state(false);

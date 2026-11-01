@@ -16,7 +16,7 @@ const CANCELABLE_STATUSES: MemberSubscription['status'][] = [
   SUBSCRIPTION_STATUS.PAUSED,
 ];
 
-export class MemberDetailManager {
+export class MemberDetail {
   visitsPage = $state(1);
   checkingIn = $state(false);
   resending = $state(false);

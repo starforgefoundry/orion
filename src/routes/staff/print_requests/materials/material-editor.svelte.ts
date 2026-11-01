@@ -1,4 +1,4 @@
-import { TAG_ID_LENGTH } from '$lib/remotes/dtos/print_materials.dto';
+import { TAG_ID_LENGTH } from '$lib/utils/print_materials';
 import {
   createPrintMaterial,
   getFilamentCatalog,

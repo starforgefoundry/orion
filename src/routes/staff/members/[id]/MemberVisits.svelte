@@ -10,11 +10,11 @@
     VISIT_SOURCE_LABEL,
   } from '$lib/frontend/member-display';
   import { formatDateTime } from '$lib/frontend/format';
-  import type { MemberDetailManager } from './member-detail.svelte';
+  import type { MemberDetail } from './member-detail.svelte';
 
   const COLUMN_COUNT = 4;
 
-  type Props = { manager: MemberDetailManager };
+  type Props = { manager: MemberDetail };
 
   let { manager }: Props = $props();
 </script>

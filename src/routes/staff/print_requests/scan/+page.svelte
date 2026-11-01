@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { updateAMSForPrinter } from '$lib/remotes/endpoints/print_materials.remote';
   import { Button } from '$lib/components/ui/button';
   import { Spinner } from '$lib/components/ui/spinner';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
@@ -7,159 +6,13 @@
   import CircleXIcon from '@lucide/svelte/icons/circle-x';
   import FlashlightIcon from '@lucide/svelte/icons/flashlight';
   import FlashlightOffIcon from '@lucide/svelte/icons/flashlight-off';
-  import { BarqodeStream, type DetectedBarcode } from 'barqode';
-  import { onDestroy } from 'svelte';
-  import { toast } from 'svelte-sonner';
-  import { isFilamentTag, isPrinterLabel, printerLabelName } from './ams-scan';
+  import { BarqodeStream } from 'barqode';
+  import { onMount } from 'svelte';
+  import { AMS_SLOT_COUNT, AmsScanner, CAMERA_CONSTRAINTS } from './ams-scanner.svelte';
 
-  // The five labels sit far enough from the camera that each QR lands on ~60px of sensor at
-  // 1080p. Below that the decoder stops resolving modules and the scan looks "flaky". Ask for
-  // as much resolution as the camera will give, and pin the object so barqode doesn't read it
-  // as a settings change and restart the stream on every render.
-  const CAMERA_CONSTRAINTS: MediaTrackConstraints = {
-    facingMode: 'environment',
-    width: { ideal: 2560 },
-    height: { ideal: 1440 },
-    // focusMode is widely supported on phones but missing from the DOM typings
-    advanced: [{ focusMode: 'continuous' }] as unknown as MediaTrackConstraintSet[],
-  };
+  const scanner = new AmsScanner();
 
-  const AMS_SLOT_COUNT = 4;
-  const CODE_OUTLINE_COLOR = '#ff0000';
-  const CODE_OUTLINE_WIDTH = 4;
-
-  // TTL configuration
-  const CODE_TTL_MS = 1500; // Code expires after this long without being seen
-  const CLEANUP_INTERVAL_MS = 100;
-  const POSITION_THRESHOLD = 50; // Pixels - how close two codes must be to be considered the same instance
-
-  interface TrackedCode {
-    code: DetectedBarcode;
-    lastSeen: number;
-  }
-
-  let loadingCamera = $state(true);
-  let updatingAMS = $state(false);
-  let torchOn = $state(false);
-  let torchSupported = $state(false);
-  let trackedCodes: TrackedCode[] = $state([]);
-
-  // Derived states based on currently active codes
-  let activeCodes = $derived(trackedCodes.map((tracked) => tracked.code));
-  let foundPrinter = $derived(activeCodes.find((c) => isPrinterLabel(c.rawValue)));
-  let hasAllFilaments = $derived.by(() => filaments.length === AMS_SLOT_COUNT);
-  let filaments = $derived(activeCodes.filter((c) => isFilamentTag(c.rawValue)));
-
-  // Calculate center point of a code's bounding box
-  function getCenter(code: DetectedBarcode): { x: number; y: number } {
-    return {
-      x: code.boundingBox.left + code.boundingBox.width / 2,
-      y: code.boundingBox.top + code.boundingBox.height / 2,
-    };
-  }
-
-  // Calculate distance between two points
-  function distance(p1: { x: number; y: number }, p2: { x: number; y: number }): number {
-    return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
-  }
-
-  // Periodic cleanup of expired codes
-  const cleanupInterval = setInterval(() => {
-    if (updatingAMS) return;
-
-    const now = Date.now();
-    trackedCodes = trackedCodes.filter((tracked) => now - tracked.lastSeen <= CODE_TTL_MS);
-  }, CLEANUP_INTERVAL_MS);
-
-  onDestroy(() => {
-    clearInterval(cleanupInterval);
-  });
-
-  function onCameraOn(capabilities: MediaTrackCapabilities) {
-    loadingCamera = false;
-    torchSupported = 'torch' in capabilities;
-  }
-
-  function track(detectedCodes: DetectedBarcode[], ctx: CanvasRenderingContext2D) {
-    if (updatingAMS) return;
-    const now = Date.now();
-    const updatedCodes = [...trackedCodes];
-    const matchedIndices = new Set<number>(); // Track which existing codes we've already matched
-
-    for (const detectedCode of detectedCodes) {
-      const [firstPoint, ...otherPoints] = detectedCode.cornerPoints;
-      const detectedCenter = getCenter(detectedCode);
-
-      // Try to find existing tracked instance (only from ORIGINAL trackedCodes, not newly added ones)
-      const existingIndex = trackedCodes.findIndex((tracked, idx) => {
-        // Skip if we've already matched this tracked code in this frame
-        if (matchedIndices.has(idx)) return false;
-
-        // Must have same raw value
-        if (tracked.code.rawValue !== detectedCode.rawValue) return false;
-
-        // Must be close in position (handles flicker from previous frames)
-        const trackedCenter = getCenter(tracked.code);
-        return distance(detectedCenter, trackedCenter) < POSITION_THRESHOLD;
-      });
-
-      if (existingIndex !== -1) {
-        // Update existing instance immutably
-        updatedCodes[existingIndex] = {
-          ...updatedCodes[existingIndex],
-          code: detectedCode,
-          lastSeen: now,
-        };
-        matchedIndices.add(existingIndex);
-      } else {
-        // Add new instance
-        updatedCodes.push({
-          code: detectedCode,
-          lastSeen: now,
-        });
-      }
-
-      ctx.strokeStyle = CODE_OUTLINE_COLOR;
-      ctx.lineWidth = CODE_OUTLINE_WIDTH;
-      ctx.beginPath();
-      ctx.moveTo(firstPoint.x, firstPoint.y);
-
-      for (const { x, y } of otherPoints) {
-        ctx.lineTo(x, y);
-      }
-
-      ctx.lineTo(firstPoint.x, firstPoint.y);
-      ctx.closePath();
-      ctx.stroke();
-    }
-
-    // Update state immutably
-    trackedCodes = updatedCodes;
-  }
-
-  async function updateAMS() {
-    if (!foundPrinter) return;
-    updatingAMS = true;
-
-    try {
-      const sortedFilaments = trackedCodes
-        .map((tracked) => tracked.code)
-        .filter((code) => isFilamentTag(code.rawValue))
-        .sort((a, b) => a.boundingBox.left - b.boundingBox.left)
-        .map((code) => code.rawValue);
-
-      await updateAMSForPrinter({
-        printer_id: foundPrinter.rawValue,
-        filaments: sortedFilaments,
-      });
-
-      toast.success('AMS updated successfully');
-    } catch {
-      toast.error('Failed to update AMS');
-    } finally {
-      updatingAMS = false;
-    }
-  }
+  onMount(() => scanner.start());
 </script>
 
 <PageHeader title="Scan AMS" />
@@ -170,64 +23,64 @@
 >
   <div class="relative min-h-0 flex-1 overflow-hidden rounded-lg border bg-black">
     <BarqodeStream
-      {onCameraOn}
-      {track}
+      onCameraOn={(capabilities) => scanner.cameraOn(capabilities)}
+      track={(codes, ctx) => scanner.track(codes, ctx)}
       constraints={CAMERA_CONSTRAINTS}
-      torch={torchOn}
-      paused={updatingAMS}
+      torch={scanner.torchOn}
+      paused={scanner.updating}
     >
-      {#if loadingCamera}
+      {#if scanner.loadingCamera}
         <div class="flex h-full items-center justify-center text-white">
           <Spinner class="size-6" />
         </div>
       {/if}
     </BarqodeStream>
 
-    {#if !loadingCamera}
+    {#if !scanner.loadingCamera}
       <div
         class="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap gap-1.5 bg-gradient-to-b from-black/70 to-transparent p-2 pb-6 text-xs font-medium text-white"
       >
         <span class="flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1">
-          {#if foundPrinter}
+          {#if scanner.printer}
             <CircleCheckIcon class="size-3.5 text-success" />
-            Printer {printerLabelName(foundPrinter.rawValue)}
+            Printer {scanner.printerName}
           {:else}
             <CircleXIcon class="size-3.5 text-destructive" />
             No printer
           {/if}
         </span>
         <span class="flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1">
-          {#if hasAllFilaments}
+          {#if scanner.hasAllFilaments}
             <CircleCheckIcon class="size-3.5 text-success" />
           {:else}
             <CircleXIcon class="size-3.5 text-destructive" />
           {/if}
-          {filaments.length}/{AMS_SLOT_COUNT} filaments
+          {scanner.filaments.length}/{AMS_SLOT_COUNT} filaments
         </span>
       </div>
     {/if}
   </div>
 
   <div class="flex shrink-0 gap-2 pb-[env(safe-area-inset-bottom)]">
-    {#if torchSupported}
+    {#if scanner.torchSupported}
       <Button
         variant="outline"
         size="icon-lg"
-        aria-label={torchOn ? 'Turn light off' : 'Turn light on'}
-        aria-pressed={torchOn}
-        onclick={() => (torchOn = !torchOn)}
+        aria-label={scanner.torchOn ? 'Turn light off' : 'Turn light on'}
+        aria-pressed={scanner.torchOn}
+        onclick={() => scanner.toggleTorch()}
       >
-        {#if torchOn}<FlashlightIcon />{:else}<FlashlightOffIcon />{/if}
+        {#if scanner.torchOn}<FlashlightIcon />{:else}<FlashlightOffIcon />{/if}
       </Button>
     {/if}
 
     <Button
       size="lg"
       class="flex-1"
-      disabled={!hasAllFilaments || !foundPrinter || updatingAMS}
-      onclick={updateAMS}
+      disabled={!scanner.canUpdate}
+      onclick={() => scanner.updateAms()}
     >
-      {#if updatingAMS}<Spinner />{/if}
+      {#if scanner.updating}<Spinner />{/if}
       Update AMS
     </Button>
   </div>

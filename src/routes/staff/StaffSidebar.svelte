@@ -6,7 +6,7 @@
   import * as Sidebar from '$lib/components/ui/sidebar';
   import { useSidebar } from '$lib/components/ui/sidebar';
   import IconButton from '$lib/frontend/components/IconButton.svelte';
-  import { currentUser } from '$lib/frontend/stores/user.svelte';
+  import { currentUser } from './current-user.svelte';
   import { signOut } from '@auth/sveltekit/client';
   import ArchiveIcon from '@lucide/svelte/icons/archive';
   import LogOutIcon from '@lucide/svelte/icons/log-out';

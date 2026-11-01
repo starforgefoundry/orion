@@ -1,10 +1,10 @@
-import {
-  EMPTY_SLOT_TAG_ID,
-  type CreatePrintMaterialDto,
-  type FilamentVendorDto,
-  type SetMaterialSetupDto,
-  type UpdatePrintMaterialDto,
+import type {
+  CreatePrintMaterialDto,
+  FilamentVendorDto,
+  SetMaterialSetupDto,
+  UpdatePrintMaterialDto,
 } from '$lib/remotes/dtos/print_materials.dto';
+import { EMPTY_SLOT_TAG_ID } from '$lib/utils/print_materials';
 import { ConflictError, NotFoundError, UserError } from '$lib/errors';
 import type { PrintMaterial } from '$lib/server/db/schema';
 import type {

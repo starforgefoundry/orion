@@ -8,29 +8,15 @@
   import Section from '$lib/frontend/components/Section.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
-  import { errorDescription } from '$lib/frontend/form-submit';
-  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { formatTime } from '$lib/frontend/utils';
-  import { formatCents, PAYMENT_STATUS } from '$lib/utils/billing';
-  import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '$lib/utils/classes';
-  import type { CancelInstanceDto } from '$lib/remotes/dtos/class.dto';
-  import {
-    cancelBookingStaff,
-    cancelInstance,
-    getAllInstances,
-    getInstanceDetail,
-  } from '$lib/remotes/endpoints/class.remote';
+  import { formatCents } from '$lib/utils/billing';
   import BanIcon from '@lucide/svelte/icons/ban';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
   import CalendarClockIcon from '@lucide/svelte/icons/calendar-clock';
   import TrashIcon from '@lucide/svelte/icons/trash';
   import UserPlusIcon from '@lucide/svelte/icons/user-plus';
   import { DateTime } from 'luxon';
-  import { toast } from 'svelte-sonner';
-  import AddBookingModal from './AddBookingModal.svelte';
-  import CancelClassModal from './CancelClassModal.svelte';
-  import type { ReschedulableBooking } from './booking-reschedule.svelte';
-  import RescheduleBookingModal from './RescheduleBookingModal.svelte';
+  import { InstanceDetail, isPaid, isRefunded } from './instance-detail.svelte';
 
   interface Props extends ModalProps {
     instanceId: string;
@@ -38,98 +24,27 @@
 
   let { onClose, instanceId }: Props = $props();
 
-  type InstanceBooking = NonNullable<
-    Awaited<ReturnType<typeof getInstanceDetail>>
-  >['bookings'][number];
-
-  function isPaid(booking: InstanceBooking) {
-    return booking.payment?.status === PAYMENT_STATUS.PAID && booking.payment.total > 0;
-  }
-
-  const detailQuery = $derived(getInstanceDetail(instanceId));
-  const detail = $derived(detailQuery.current);
-  const confirmedBookings = $derived(
-    detail?.bookings?.filter((b) => b.status === CLASS_BOOKING_STATUS.CONFIRMED) ?? [],
+  const instance = new InstanceDetail(
+    () => instanceId,
+    () => onClose(),
   );
-  const canceledBookings = $derived(
-    detail?.bookings?.filter((b) => b.status === CLASS_BOOKING_STATUS.CANCELED) ?? [],
-  );
-  const totalBooked = $derived(confirmedBookings.reduce((sum, b) => sum + (b.quantity ?? 1), 0));
-
-  let cancelingBookingId = $state('');
-
-  async function handleCancelBooking(booking: InstanceBooking) {
-    const hasPaid = isPaid(booking);
-    const confirmed = await modalManager.confirm({
-      title: 'Cancel Booking',
-      prompt: hasPaid
-        ? 'Cancel this booking and issue a full refund?'
-        : 'Cancel this booking? No refund will be issued.',
-      confirmText: hasPaid ? 'Cancel & Refund' : 'Cancel Booking',
-      variant: 'destructive',
-    });
-    if (!confirmed) return;
-
-    cancelingBookingId = booking.id;
-    try {
-      await cancelBookingStaff({ bookingId: booking.id });
-    } catch (error) {
-      toast.error('Failed to cancel booking', { description: errorDescription(error) });
-    } finally {
-      cancelingBookingId = '';
-    }
-  }
-
-  function showAddBookingModal() {
-    const available = (detail?.seats ?? 0) - totalBooked;
-    modalManager.show(AddBookingModal, {
-      instanceId,
-      availableSpots: available,
-      onBookingCreated: async () => {
-        await getInstanceDetail(instanceId).refresh();
-        await getAllInstances().refresh();
-      },
-    });
-  }
-
-  function showRescheduleModal(booking: ReschedulableBooking) {
-    if (!detail) return;
-    modalManager.show(RescheduleBookingModal, { booking, classId: detail.classId });
-  }
-
-  function showCancelModal() {
-    modalManager.show(CancelClassModal, {
-      hasRecurrenceGroup: !!detail?.recurrenceGroupId,
-      onConfirm: async (mode: CancelInstanceDto['mode']) => {
-        try {
-          const result = await cancelInstance({ instanceId, mode });
-          toast.success(
-            `Canceled ${result.canceledCount} class${result.canceledCount !== 1 ? 'es' : ''}`,
-          );
-          onClose();
-        } catch (error) {
-          toast.error('Failed to cancel', { description: errorDescription(error) });
-        }
-      },
-    });
-  }
 </script>
 
 {#snippet cancelClassFooter()}
-  <Button variant="destructive" onclick={showCancelModal}>
+  <Button variant="destructive" onclick={() => instance.cancelClass()}>
     <BanIcon />
     Cancel Class
   </Button>
 {/snippet}
 
 <Modal
-  title={detail?.catalog?.name ?? 'Class Details'}
+  title={instance.instance?.catalog?.name ?? 'Class Details'}
   icon={CalendarIcon}
   {onClose}
   size="lg"
-  footer={detail?.status === CLASS_INSTANCE_STATUS.SCHEDULED ? cancelClassFooter : undefined}
+  footer={instance.scheduled ? cancelClassFooter : undefined}
 >
-  <QueryState query={detailQuery} label="class">
+  <QueryState query={instance.query} label="class">
     {#snippet children(detail)}
       {#if detail}
         <div class="flex flex-col gap-3">
@@ -142,32 +57,30 @@
                 >{formatTime(detail.startTime)} ({detail.durationMinutes}m)</InfoRow
               >
               <InfoRow label="Teacher">{detail.teacher?.name ?? detail.teacherEmail}</InfoRow>
-              <InfoRow label="Seats">{totalBooked}/{detail.seats} booked</InfoRow>
+              <InfoRow label="Seats">{instance.bookedSeats}/{detail.seats} booked</InfoRow>
               <InfoRow label="Status">
-                <StatusBadge
-                  tone={detail.status === CLASS_INSTANCE_STATUS.SCHEDULED ? 'success' : 'danger'}
-                >
-                  {detail.status === CLASS_INSTANCE_STATUS.SCHEDULED ? 'Scheduled' : 'Canceled'}
+                <StatusBadge tone={instance.scheduled ? 'success' : 'danger'}>
+                  {instance.scheduled ? 'Scheduled' : 'Canceled'}
                 </StatusBadge>
               </InfoRow>
             </dl>
           </Section>
 
-          {#if detail.status === CLASS_INSTANCE_STATUS.SCHEDULED}
+          {#if instance.scheduled}
             <Section title="Bookings">
               {#snippet actions()}
-                {#if totalBooked < detail.seats}
-                  <Button size="sm" variant="ghost" onclick={showAddBookingModal}>
+                {#if instance.openSeats > 0}
+                  <Button size="sm" variant="ghost" onclick={() => instance.addBooking()}>
                     <UserPlusIcon />
                     Add Booking
                   </Button>
                 {/if}
               {/snippet}
-              {#if confirmedBookings.length === 0}
+              {#if instance.confirmedBookings.length === 0}
                 <p class="text-sm text-muted-foreground">No bookings yet.</p>
               {:else}
                 <ul class="-my-1.5 divide-y">
-                  {#each confirmedBookings as booking (booking.id)}
+                  {#each instance.confirmedBookings as booking (booking.id)}
                     <li class="flex items-center justify-between gap-3 py-1.5 text-sm">
                       <div class="min-w-0">
                         <div class="truncate font-medium">
@@ -190,8 +103,8 @@
                         <Button
                           size="sm"
                           variant="outline"
-                          onclick={() => showRescheduleModal(booking)}
-                          disabled={cancelingBookingId === booking.id}
+                          onclick={() => instance.reschedule(booking)}
+                          disabled={instance.isCanceling(booking)}
                         >
                           <CalendarClockIcon />
                           Reschedule
@@ -200,11 +113,10 @@
                           size="sm"
                           variant="outline"
                           class="text-destructive hover:text-destructive"
-                          onclick={() => handleCancelBooking(booking)}
-                          disabled={cancelingBookingId === booking.id}
+                          onclick={() => instance.cancelBooking(booking)}
+                          disabled={instance.isCanceling(booking)}
                         >
-                          {#if cancelingBookingId === booking.id}<Spinner />{:else}<TrashIcon
-                            />{/if}
+                          {#if instance.isCanceling(booking)}<Spinner />{:else}<TrashIcon />{/if}
                           {isPaid(booking) ? 'Cancel & Refund' : 'Cancel'}
                         </Button>
                       </div>
@@ -214,13 +126,13 @@
               {/if}
             </Section>
 
-            {#if canceledBookings.length > 0}
+            {#if instance.canceledBookings.length > 0}
               <Section title="Canceled Bookings">
                 <ul class="flex flex-col gap-1 text-sm text-muted-foreground">
-                  {#each canceledBookings as booking (booking.id)}
+                  {#each instance.canceledBookings as booking (booking.id)}
                     <li>
                       {booking.customerName}{booking.quantity > 1 ? ` (x${booking.quantity})` : ''}
-                      {#if booking.payment?.status === PAYMENT_STATUS.REFUNDED}
+                      {#if isRefunded(booking)}
                         - {formatCents(booking.payment?.total ?? 0)} (refunded)
                       {:else}
                         (canceled)

@@ -1,4 +1,4 @@
-import { EMPTY_SLOT_TAG_ID } from '$lib/remotes/dtos/print_materials.dto';
+import { EMPTY_SLOT_TAG_ID } from '$lib/utils/print_materials';
 import { describe, expect, it } from 'vitest';
 import { isFilamentTag, isPrinterLabel, printerLabelName } from './ams-scan';
 

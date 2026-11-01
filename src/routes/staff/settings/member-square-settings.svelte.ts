@@ -4,7 +4,7 @@ import { toast } from 'svelte-sonner';
 
 type SyncSummary = Awaited<ReturnType<typeof syncSquareMembers>>;
 
-export class MemberSquareSettingsManager {
+export class MemberSquareSync {
   readonly catalog = getSquareCatalog();
   isSyncing = $state(false);
   lastSync = $state<SyncSummary>();

@@ -8,7 +8,7 @@
     type CheckoutStep,
   } from '$lib/frontend/car-bay-booking-form.svelte';
   import CarBayBookingFields from '$lib/frontend/components/CarBayBookingFields.svelte';
-  import CarBayBookingReview from '$lib/frontend/components/CarBayBookingReview.svelte';
+  import CarBayBookingReview from './CarBayBookingReview.svelte';
   import StepProgress from '$lib/frontend/components/StepProgress.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
   import Modal from '$lib/frontend/components/Modal.svelte';

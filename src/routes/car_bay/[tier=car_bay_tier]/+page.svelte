@@ -2,78 +2,20 @@
   import { page } from '$app/state';
   import { Spinner } from '$lib/components/ui/spinner';
   import BayWeekCalendar from '$lib/frontend/components/BayWeekCalendar.svelte';
-  import { modalManager } from '$lib/frontend/modal-manager.svelte';
-  import { getCarBaySchedule } from '$lib/remotes/endpoints/car_bay.remote';
-  import {
-    getCarBayAvailability,
-    getCarBayPolicy,
-    getCarBayRates,
-  } from '$lib/remotes/endpoints/settings.remote';
-  import {
-    CAR_BAY_TIER,
-    CAR_BAY_TIER_NAMES,
-    CarBayRules,
-    consecutiveDates,
-    type CarBayRequest,
-    type CarBayTier,
-  } from '$lib/utils/car_bay';
+  import { CAR_BAY_TIER, CAR_BAY_TIER_NAMES, type CarBayTier } from '$lib/utils/car_bay';
   import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
-  import { DateTime } from 'luxon';
-  import CheckoutModal from '../CheckoutModal.svelte';
   import ClosedNotice from '../ClosedNotice.svelte';
   import DayPicker from '../DayPicker.svelte';
   import ContactLine from '../ContactLine.svelte';
   import TierPrices from '../TierPrices.svelte';
-  import { priceRows, tierDetails } from '../tiers';
+  import { priceRows } from '../tiers';
+  import { TierSchedule } from './tier-schedule.svelte';
 
-  const tier = $derived(page.params.tier as CarBayTier);
-
-  const scheduleRemote = getCarBaySchedule();
-  const ratesRemote = getCarBayRates();
-  const policyRemote = getCarBayPolicy();
-  const availabilityRemote = getCarBayAvailability();
-
-  const availability = $derived(availabilityRemote.current);
-  const schedule = $derived(scheduleRemote.current);
-  const rates = $derived(ratesRemote.current);
-  const policy = $derived(policyRemote.current);
-  const rules = $derived(policy && new CarBayRules(policy));
-  const details = $derived(policy && tierDetails(policy)[tier]);
-  const blocks = $derived(schedule && rules ? rules.scheduleBlocks(schedule) : []);
-  const days = $derived(
-    schedule && policy ? consecutiveDates(schedule.today, policy.publicHorizonDays + 1) : [],
-  );
-
-  function shortestRequest(rules: CarBayRules, date: string, startHour: number): CarBayRequest {
-    if (tier === CAR_BAY_TIER.QUICK_JOB) return { tier, date, startHour };
-    if (tier === CAR_BAY_TIER.HOURLY) {
-      return { tier, date, startHour, hours: rules.policy.hourlyMinHours };
-    }
-    return { tier, date, days: 1 };
-  }
-
-  function isSlotOpen(date: string, startHour: number) {
-    if (!rules) return false;
-    return rules.requestFits(shortestRequest(rules, date, startHour), blocks, DateTime.now(), {
-      enforceHorizon: true,
-    });
-  }
-
-  function openCheckout(date: string, startHour: number) {
-    if (!rates || !rules) return;
-    modalManager.show(CheckoutModal, {
-      tier,
-      date,
-      startHour,
-      bookings: () => blocks,
-      rates,
-      rules,
-      onUnavailable: () => getCarBaySchedule().refresh(),
-    });
-  }
+  const view = new TierSchedule(() => page.params.tier as CarBayTier);
+  const tier = $derived(view.tier);
 </script>
 
-<svelte:window onfocus={() => getCarBaySchedule().refresh()} />
+<svelte:window onfocus={() => view.refresh()} />
 
 <svelte:head>
   <title>{CAR_BAY_TIER_NAMES[tier]} - Car Bay Booking - Starforge</title>
@@ -88,15 +30,20 @@
     All booking types
   </a>
 
-  {#if scheduleRemote.loading || ratesRemote.loading || policyRemote.loading || availabilityRemote.loading}
+  {#if view.loading}
     <Spinner class="mx-auto mt-12 size-8" />
-  {:else if availability && !availability.isOpen}
+  {:else if view.closed}
     <ClosedNotice />
-  {:else if !schedule || !rates || !policy || !rules || !details}
+  {:else if !view.schedule || !view.rates || !view.policy || !view.rules || !view.details}
     <p class="rounded-lg border p-6 text-center text-sm text-destructive">
       Booking isn't available right now. Try again later.
     </p>
   {:else}
+    {@const schedule = view.schedule}
+    {@const rates = view.rates}
+    {@const policy = view.policy}
+    {@const rules = view.rules}
+    {@const details = view.details}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div class="flex items-center gap-3">
         <span
@@ -128,19 +75,19 @@
       <DayPicker
         {rules}
         {rates}
-        {days}
-        {blocks}
-        isDayOpen={(date) => isSlotOpen(date, rules.slotHours(date)[0])}
-        onDayClick={(date) => openCheckout(date, rules.slotHours(date)[0])}
+        days={view.days}
+        blocks={view.blocks}
+        isDayOpen={(date) => view.isDayOpen(date)}
+        onDayClick={(date) => view.openDay(date)}
       />
     {:else}
       <BayWeekCalendar
         {rules}
-        {days}
+        days={view.days}
         bookings={schedule.bookings}
         closures={schedule.closures}
-        {isSlotOpen}
-        onSlotClick={openCheckout}
+        isSlotOpen={(date, hour) => view.isSlotOpen(date, hour)}
+        onSlotClick={(date, hour) => view.openCheckout(date, hour)}
       />
     {/if}
 

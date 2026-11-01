@@ -19,11 +19,11 @@
   import { formatDate, formatDateTime, formatIsoDate } from '$lib/frontend/format';
   import MemberSubscriptions from './MemberSubscriptions.svelte';
   import MemberVisits from './MemberVisits.svelte';
-  import { MemberDetailManager } from './member-detail.svelte';
+  import { MemberDetail } from './member-detail.svelte';
 
   const MEMBERS_HREF = '/staff/members';
 
-  const manager = new MemberDetailManager(() => page.params.id!);
+  const manager = new MemberDetail(() => page.params.id!);
 </script>
 
 <a

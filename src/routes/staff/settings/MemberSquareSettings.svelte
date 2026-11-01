@@ -9,7 +9,7 @@
     memberSquareSettingsForm,
   } from '$lib/remotes/endpoints/settings.remote';
   import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
-  import { MemberSquareSettingsManager } from './member-square-settings.svelte';
+  import { MemberSquareSync } from './member-square-settings.svelte';
 
   interface Props {
     formId?: string;
@@ -18,7 +18,7 @@
   const { formId = 'member-square-settings' }: Props = $props();
 
   const settings = getMemberSquareSettings();
-  const manager = new MemberSquareSettingsManager();
+  const manager = new MemberSquareSync();
 
   initForm(memberSquareSettingsForm, () => ({
     dayPassItemVariationIds: settings.current?.dayPassItemVariationIds ?? [],

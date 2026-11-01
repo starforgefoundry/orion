@@ -7,11 +7,11 @@
   import { waiverDisplay } from '$lib/frontend/member-display';
   import UserMinusIcon from '@lucide/svelte/icons/user-minus';
   import { DATE_STYLE, formatDate } from '$lib/frontend/format';
-  import type { OrganizationMembersManager } from './organization-members.svelte';
+  import type { OrganizationMemberList } from './organization-members.svelte';
 
   const COLUMN_COUNT = 6;
 
-  type Props = { manager: OrganizationMembersManager };
+  type Props = { manager: OrganizationMemberList };
 
   let { manager }: Props = $props();
 </script>

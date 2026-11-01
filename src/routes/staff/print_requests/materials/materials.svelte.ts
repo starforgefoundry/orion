@@ -1,4 +1,4 @@
-import { downloadFilamentCard } from '$lib/frontend/filament-card/download';
+import { downloadFilamentCard } from './filament-card/download';
 import { filterBySearch } from '$lib/frontend/search';
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
 import {
@@ -8,7 +8,7 @@ import {
 import type { PrintMaterial } from '$lib/server/db/schema';
 import MaterialModal from './MaterialModal.svelte';
 
-export class MaterialsManager {
+export class MaterialCatalog {
   searchTerm = $state('');
   downloadingCardId = $state<string | null>(null);
 

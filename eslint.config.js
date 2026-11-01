@@ -31,7 +31,7 @@ export default defineConfig(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true },
       ],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       // Links and goto use plain paths; the app has no base path to resolve against.
       'svelte/no-navigation-without-resolve': 'off',
       // Flags local temporary Maps and Sets that are never reactive.

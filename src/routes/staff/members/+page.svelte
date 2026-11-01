@@ -23,11 +23,11 @@
     waiverDisplay,
   } from '$lib/frontend/member-display';
   import { formatDate } from '$lib/frontend/format';
-  import { MembersManager, type FilterKey, type MemberFilters } from './members.svelte';
+  import { MemberDirectory, type FilterKey, type MemberFilters } from './members.svelte';
 
   const COLUMN_COUNT = 6;
 
-  const manager = new MembersManager();
+  const manager = new MemberDirectory();
 
   function sortFor(sort: MemberSort) {
     return {

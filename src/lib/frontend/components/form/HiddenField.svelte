@@ -21,5 +21,4 @@
   });
 </script>
 
-<!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -->
-<input hidden {...field.as(inputType as any)} />
+<input hidden {...(field as RemoteFormField<RemoteFormFieldValue>).as(inputType)} />

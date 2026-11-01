@@ -1,5 +1,5 @@
 <script lang="ts">
-  import FileUpload from '$lib/frontend/components/FileUpload.svelte';
+  import FileUpload from './FileUpload.svelte';
   import FormField from '$lib/frontend/components/form/FormField.svelte';
   import HiddenField from '$lib/frontend/components/form/HiddenField.svelte';
   import PriceInput from '$lib/frontend/components/form/PriceInput.svelte';

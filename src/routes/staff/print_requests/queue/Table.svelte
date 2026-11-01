@@ -3,11 +3,11 @@
   import { goto } from '$app/navigation';
   import * as Table from '$lib/components/ui/table';
   import Pagination from '$lib/frontend/components/Pagination.svelte';
-  import StatusIndicator from '$lib/frontend/components/StatusIndicator.svelte';
+  import StatusIndicator from './StatusIndicator.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { DebouncedSearch } from '$lib/frontend/debounced-search.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
-  import { pollQuery } from '$lib/frontend/poll-query.svelte';
+  import { pollQuery } from './poll-query.svelte';
   import { searchPrintRequests } from '$lib/remotes/endpoints/print_request.remote';
   import SearchIcon from '@lucide/svelte/icons/search';
   import RequestDetailModal from './RequestDetailModal.svelte';

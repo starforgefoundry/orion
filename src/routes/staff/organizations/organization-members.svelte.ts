@@ -11,7 +11,7 @@ import AddOrganizationMembersModal from './AddOrganizationMembersModal.svelte';
 
 type AddResult = Awaited<ReturnType<typeof addOrganizationMembers>>;
 
-export class OrganizationMembersManager {
+export class OrganizationMemberList {
   private getOrganizationId: () => string;
 
   members = $derived(getOrganizationMembers(this.organizationId));
@@ -67,7 +67,7 @@ export class OrganizationMembersManager {
   }
 }
 
-export class AddOrganizationMembersManager {
+export class AddOrganizationMembersForm {
   lines = $state('');
   submitting = $state(false);
   result = $state<AddResult>();

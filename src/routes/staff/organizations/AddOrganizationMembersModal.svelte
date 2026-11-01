@@ -5,7 +5,7 @@
   import TextArea from '$lib/frontend/components/form/TextArea.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
   import UserPlusIcon from '@lucide/svelte/icons/user-plus';
-  import { AddOrganizationMembersManager } from './organization-members.svelte';
+  import { AddOrganizationMembersForm } from './organization-members.svelte';
 
   const TEXTAREA_ROWS = 8;
 
@@ -13,7 +13,7 @@
 
   let { onClose, organizationId }: Props = $props();
 
-  const manager = new AddOrganizationMembersManager(() => organizationId);
+  const manager = new AddOrganizationMembersForm(() => organizationId);
 
   async function submit() {
     if (await manager.submit()) onClose();

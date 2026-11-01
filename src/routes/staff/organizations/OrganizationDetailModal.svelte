@@ -5,26 +5,14 @@
   import { Label } from '$lib/components/ui/label';
   import { Switch } from '$lib/components/ui/switch';
   import { Spinner } from '$lib/components/ui/spinner';
-  import * as Table from '$lib/components/ui/table';
   import * as Tabs from '$lib/components/ui/tabs';
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import InfoRow from '$lib/frontend/components/InfoRow.svelte';
   import Modal from '$lib/frontend/components/Modal.svelte';
-  import Pagination from '$lib/frontend/components/Pagination.svelte';
   import Section from '$lib/frontend/components/Section.svelte';
-  import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import FormField from '$lib/frontend/components/form/FormField.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
-  import { submitWithToast } from '$lib/frontend/form-submit';
-  import { modalManager } from '$lib/frontend/modal-manager.svelte';
-  import {
-    archiveOrganization,
-    chargeOrganizationBalance,
-    getOrganizationDetail,
-    updateOrganization,
-  } from '$lib/remotes/endpoints/organization.remote';
   import CheckIcon from '@lucide/svelte/icons/check';
-  import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
   import HandCoinsIcon from '@lucide/svelte/icons/hand-coins';
   import TicketIcon from '@lucide/svelte/icons/ticket';
   import PencilIcon from '@lucide/svelte/icons/pencil';
@@ -32,24 +20,14 @@
   import UsersIcon from '@lucide/svelte/icons/users';
   import XIcon from '@lucide/svelte/icons/x';
   import { SPACE_ZONE } from '$lib/space';
-  import { PAYMENT_STATUS } from '$lib/utils/billing';
-  import { DATE_STYLE, formatDate, formatIsoDate } from '$lib/frontend/format';
-  import { getPaymentStatusColor } from '$lib/frontend/payment-status';
+  import { formatDate } from '$lib/frontend/format';
   import UserMinusIcon from '@lucide/svelte/icons/user-minus';
   import UserPlusIcon from '@lucide/svelte/icons/user-plus';
-  import CreateBillingCodeModal from './CreateBillingCodeModal.svelte';
-  import CreateChargeModal from './CreateChargeModal.svelte';
+  import OrganizationBalancePayments from './OrganizationBalancePayments.svelte';
   import OrganizationBillingCodes from './OrganizationBillingCodes.svelte';
+  import OrganizationCharges from './OrganizationCharges.svelte';
   import OrganizationMembers from './OrganizationMembers.svelte';
-  import { OrganizationMembersManager } from './organization-members.svelte';
-
-  const TABS = {
-    CHARGES: 'charges',
-    BALANCE_PAYMENTS: 'balance_payments',
-    MEMBERS: 'members',
-    GROUP_CODES: 'group_codes',
-  } as const;
-  type Tab = (typeof TABS)[keyof typeof TABS];
+  import { ORGANIZATION_TABS, OrganizationDetail } from './organization-detail.svelte';
 
   type Props = ModalProps & {
     organizationId: string;
@@ -57,183 +35,84 @@
 
   let { onClose, organizationId }: Props = $props();
 
-  let organizationDetail = $derived(getOrganizationDetail({ id: organizationId }));
-  let activeTab: Tab = $state(TABS.CHARGES);
-  let isEditing = $state(false);
-  let isChargingBalance = $state(false);
-  let editName = $state('');
-  let editEmail = $state('');
-  let editAccessEndDate = $state('');
-  let editGrantsAccess = $state(true);
-
-  const membersManager = new OrganizationMembersManager(() => organizationId);
-
-  let chargesCurrentPage = $state(1);
-  const CHARGES_PER_PAGE = 10;
-
-  const paginatedCharges = $derived.by(() => {
-    if (!organizationDetail.current) return [];
-    const startIndex = (chargesCurrentPage - 1) * CHARGES_PER_PAGE;
-    const endIndex = startIndex + CHARGES_PER_PAGE;
-    return organizationDetail.current.charges.slice(startIndex, endIndex);
-  });
-
-  const chargesTotalPages = $derived.by(() => {
-    if (!organizationDetail.current) return 1;
-    return Math.ceil(organizationDetail.current.charges.length / CHARGES_PER_PAGE);
-  });
-
-  async function handleChargeBalance() {
-    const confirm = await modalManager.confirm({
-      title: 'Charge Outstanding Balance',
-      prompt: `Are you sure you want to email a payment link for the outstanding balance of ${formatCents(
-        organizationDetail.current?.outstandingBalance || 0,
-      )} to the organization's email?`,
-      confirmText: 'Charge Balance',
-    });
-
-    if (!confirm) {
-      return;
-    }
-
-    isChargingBalance = true;
-    const charged = await submitWithToast(() => chargeOrganizationBalance({ organizationId }), {
-      success: 'Payment link sent',
-      error: 'Failed to charge balance',
-    });
-    if (charged) await organizationDetail.refresh();
-    isChargingBalance = false;
-  }
-
-  function startEditing() {
-    if (organizationDetail.current) {
-      editName = organizationDetail.current.name;
-      editEmail = organizationDetail.current.email;
-      editAccessEndDate =
-        organizationDetail.current.accessEndDate?.setZone(SPACE_ZONE).toISODate() ?? '';
-      editGrantsAccess = organizationDetail.current.grantsAccess;
-      isEditing = true;
-    }
-  }
-
-  function cancelEditing() {
-    editName = '';
-    editEmail = '';
-    isEditing = false;
-  }
-
-  function createOrganizationCharge() {
-    modalManager.show(CreateChargeModal, {
-      orgId: organizationId,
-    });
-  }
-
-  function createGroupCode() {
-    modalManager.show(CreateBillingCodeModal, { organizationId });
-  }
-
-  async function saveEdits() {
-    const saved = await submitWithToast(
-      () =>
-        updateOrganization({
-          id: organizationId,
-          name: editName,
-          email: editEmail,
-          grantsAccess: editGrantsAccess,
-          accessEndDate: editAccessEndDate || null,
-        }),
-      { success: 'Organization updated', error: 'Failed to update organization' },
-    );
-    if (!saved) return;
-
-    await organizationDetail.refresh();
-    isEditing = false;
-  }
-
-  async function deleteOrganization() {
-    const confirm = await modalManager.confirm({
-      title: 'Archive Organization',
-      prompt:
-        'Are you sure you want to archive this organization? This will hide it from the list but preserve all data.',
-      confirmText: 'Archive',
-      variant: 'destructive',
-    });
-
-    if (!confirm) return;
-
-    const archived = await submitWithToast(() => archiveOrganization({ id: organizationId }), {
-      success: 'Organization archived',
-      error: 'Failed to archive organization',
-    });
-    if (archived) onClose();
-  }
-
-  function formatStatus(status: string): string {
-    return status
-      .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  }
+  const detail = new OrganizationDetail(
+    () => organizationId,
+    () => onClose(),
+  );
+  const members = detail.members;
 </script>
 
 <Modal title="Organization Details" icon={UsersIcon} {onClose} size="xl">
-  {#if organizationDetail.loading}
+  {#if detail.query.loading}
     <div class="flex justify-center py-8">
       <Spinner class="size-6" />
     </div>
-  {:else if organizationDetail.error}
+  {:else if detail.query.error}
     <p class="text-sm text-destructive">
-      Error loading organization details: {organizationDetail.error.message}
+      Error loading organization details: {detail.query.error.message}
     </p>
-  {:else if organizationDetail.current}
+  {:else if detail.organization}
+    {@const organization = detail.organization}
     <div class="flex flex-col gap-3">
       <div class="grid gap-3 md:grid-cols-2">
         <Section title="Organization">
           {#snippet actions()}
-            {#if isEditing}
-              <IconButton icon={CheckIcon} aria-label="Save Changes" onclick={saveEdits} />
-              <IconButton icon={XIcon} aria-label="Cancel" onclick={cancelEditing} />
+            {#if detail.edits}
+              <IconButton
+                icon={CheckIcon}
+                aria-label="Save Changes"
+                onclick={() => detail.save()}
+              />
+              <IconButton icon={XIcon} aria-label="Cancel" onclick={() => detail.cancelEditing()} />
             {:else}
-              <IconButton icon={PencilIcon} aria-label="Edit Organization" onclick={startEditing} />
+              <IconButton
+                icon={PencilIcon}
+                aria-label="Edit Organization"
+                onclick={() => detail.startEditing()}
+              />
               <IconButton
                 icon={TrashIcon}
                 aria-label="Archive Organization"
                 class="text-destructive hover:text-destructive"
-                onclick={deleteOrganization}
+                onclick={() => detail.archive()}
               />
             {/if}
           {/snippet}
-          {#if isEditing}
+          {#if detail.edits}
             <div class="flex flex-col gap-3">
               <FormField label="Name" for="organization-name">
-                <Input id="organization-name" bind:value={editName} />
+                <Input id="organization-name" bind:value={detail.edits.name} />
               </FormField>
               <FormField label="Email" for="organization-email">
-                <Input id="organization-email" bind:value={editEmail} type="email" />
+                <Input id="organization-email" bind:value={detail.edits.email} type="email" />
               </FormField>
               <div class="flex items-center justify-between gap-3">
                 <Label for="organization-grants-access">Grants member access</Label>
-                <Switch id="organization-grants-access" bind:checked={editGrantsAccess} />
+                <Switch id="organization-grants-access" bind:checked={detail.edits.grantsAccess} />
               </div>
-              {#if editGrantsAccess}
+              {#if detail.edits.grantsAccess}
                 <FormField
                   label="Access Through"
                   for="organization-access-end"
                   description="Leave empty for no end date."
                 >
-                  <Input id="organization-access-end" bind:value={editAccessEndDate} type="date" />
+                  <Input
+                    id="organization-access-end"
+                    bind:value={detail.edits.accessEndDate}
+                    type="date"
+                  />
                 </FormField>
               {/if}
             </div>
           {:else}
             <dl>
-              <InfoRow label="Name">{organizationDetail.current.name}</InfoRow>
-              <InfoRow label="Email">{organizationDetail.current.email}</InfoRow>
+              <InfoRow label="Name">{organization.name}</InfoRow>
+              <InfoRow label="Email">{organization.email}</InfoRow>
               <InfoRow label="Member Access">
-                {#if !organizationDetail.current.grantsAccess}
+                {#if !organization.grantsAccess}
                   Off
-                {:else if organizationDetail.current.accessEndDate}
-                  Through {formatDate(organizationDetail.current.accessEndDate.setZone(SPACE_ZONE))}
+                {:else if organization.accessEndDate}
+                  Through {formatDate(organization.accessEndDate.setZone(SPACE_ZONE))}
                 {:else}
                   No end date
                 {/if}
@@ -245,11 +124,15 @@
         <Section title="Outstanding Balance">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <span class="text-2xl font-semibold tabular-nums">
-              {formatCents(organizationDetail.current.outstandingBalance)}
+              {formatCents(organization.outstandingBalance)}
             </span>
-            {#if organizationDetail.current.outstandingBalance > 0}
-              <Button size="sm" onclick={handleChargeBalance} disabled={isChargingBalance}>
-                {#if isChargingBalance}<Spinner />{/if}
+            {#if organization.outstandingBalance > 0}
+              <Button
+                size="sm"
+                onclick={() => detail.chargeBalance()}
+                disabled={detail.chargingBalance}
+              >
+                {#if detail.chargingBalance}<Spinner />{/if}
                 Charge Balance
               </Button>
             {/if}
@@ -257,146 +140,54 @@
         </Section>
       </div>
 
-      <Tabs.Root bind:value={activeTab}>
+      <Tabs.Root bind:value={detail.activeTab}>
         <div class="flex flex-wrap items-center justify-between gap-2">
           <Tabs.List>
-            <Tabs.Trigger value={TABS.CHARGES}>Charges</Tabs.Trigger>
-            <Tabs.Trigger value={TABS.BALANCE_PAYMENTS}>Balance Payments</Tabs.Trigger>
-            <Tabs.Trigger value={TABS.MEMBERS}>Members</Tabs.Trigger>
-            <Tabs.Trigger value={TABS.GROUP_CODES}>Group Codes</Tabs.Trigger>
+            <Tabs.Trigger value={ORGANIZATION_TABS.CHARGES}>Charges</Tabs.Trigger>
+            <Tabs.Trigger value={ORGANIZATION_TABS.BALANCE_PAYMENTS}>Balance Payments</Tabs.Trigger>
+            <Tabs.Trigger value={ORGANIZATION_TABS.MEMBERS}>Members</Tabs.Trigger>
+            <Tabs.Trigger value={ORGANIZATION_TABS.GROUP_CODES}>Group Codes</Tabs.Trigger>
           </Tabs.List>
-          {#if activeTab === TABS.CHARGES}
-            <Button size="sm" variant="outline" onclick={createOrganizationCharge}>
+          {#if detail.activeTab === ORGANIZATION_TABS.CHARGES}
+            <Button size="sm" variant="outline" onclick={() => detail.addCharge()}>
               <HandCoinsIcon />
               Add Charge
             </Button>
-          {:else if activeTab === TABS.MEMBERS}
+          {:else if detail.activeTab === ORGANIZATION_TABS.MEMBERS}
             <div class="flex flex-wrap gap-2">
-              {#if membersManager.selected.size > 0}
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onclick={() => membersManager.removeSelected()}
-                >
+              {#if members.selected.size > 0}
+                <Button size="sm" variant="destructive" onclick={() => members.removeSelected()}>
                   <UserMinusIcon />
-                  Remove {membersManager.selected.size}
+                  Remove {members.selected.size}
                 </Button>
               {/if}
-              <Button size="sm" variant="outline" onclick={() => membersManager.add()}>
+              <Button size="sm" variant="outline" onclick={() => members.add()}>
                 <UserPlusIcon />
                 Add Members
               </Button>
             </div>
-          {:else if activeTab === TABS.GROUP_CODES}
-            <Button size="sm" variant="outline" onclick={createGroupCode}>
+          {:else if detail.activeTab === ORGANIZATION_TABS.GROUP_CODES}
+            <Button size="sm" variant="outline" onclick={() => detail.addGroupCode()}>
               <TicketIcon />
               Add Group Code
             </Button>
           {/if}
         </div>
 
-        <Tabs.Content value={TABS.MEMBERS}>
-          <OrganizationMembers manager={membersManager} />
+        <Tabs.Content value={ORGANIZATION_TABS.MEMBERS}>
+          <OrganizationMembers manager={members} />
         </Tabs.Content>
 
-        <Tabs.Content value={TABS.GROUP_CODES}>
+        <Tabs.Content value={ORGANIZATION_TABS.GROUP_CODES}>
           <OrganizationBillingCodes {organizationId} />
         </Tabs.Content>
 
-        <Tabs.Content value={TABS.CHARGES}>
-          <div class="overflow-hidden rounded-lg border">
-            <Table.Root>
-              <Table.Header class="bg-muted/50">
-                <Table.Row>
-                  <Table.Head>Description</Table.Head>
-                  <Table.Head class="hidden sm:table-cell">Date</Table.Head>
-                  <Table.Head class="text-right">Amount</Table.Head>
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {#each paginatedCharges as charge (`${charge.type}-${charge.id}`)}
-                  <Table.Row>
-                    <Table.Cell class="max-w-64">
-                      <div class="truncate">{charge.description}</div>
-                      <div class="text-xs text-muted-foreground sm:hidden">
-                        {formatIsoDate(charge.date, DATE_STYLE.SHORT)}
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell class="hidden sm:table-cell">
-                      {formatIsoDate(charge.date, DATE_STYLE.SHORT)}
-                    </Table.Cell>
-                    <Table.Cell class="text-right tabular-nums">
-                      {formatCents(charge.amount)}
-                    </Table.Cell>
-                  </Table.Row>
-                {:else}
-                  <Table.Row>
-                    <Table.Cell colspan={3} class="h-20 text-center text-muted-foreground">
-                      No charges found.
-                    </Table.Cell>
-                  </Table.Row>
-                {/each}
-              </Table.Body>
-            </Table.Root>
-          </div>
-
-          <Pagination
-            currentPage={chargesCurrentPage}
-            totalPages={chargesTotalPages}
-            onPageChange={(page) => (chargesCurrentPage = page)}
-          />
+        <Tabs.Content value={ORGANIZATION_TABS.CHARGES}>
+          <OrganizationCharges {detail} />
         </Tabs.Content>
 
-        <Tabs.Content value={TABS.BALANCE_PAYMENTS}>
-          <div class="overflow-hidden rounded-lg border">
-            <Table.Root>
-              <Table.Header class="bg-muted/50">
-                <Table.Row>
-                  <Table.Head>Issued</Table.Head>
-                  <Table.Head class="hidden sm:table-cell">Paid</Table.Head>
-                  <Table.Head>Status</Table.Head>
-                  <Table.Head class="text-right">Amount</Table.Head>
-                  <Table.Head class="w-12"><span class="sr-only">Pay link</span></Table.Head>
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {#each organizationDetail.current.balancePayments as payment (payment.id)}
-                  <Table.Row>
-                    <Table.Cell>
-                      {formatDate(payment.issuedDate, DATE_STYLE.SHORT)}
-                    </Table.Cell>
-                    <Table.Cell class="hidden sm:table-cell">
-                      {formatDate(payment.paymentDate, DATE_STYLE.SHORT)}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <StatusBadge tone={getPaymentStatusColor(payment.status)}>
-                        {formatStatus(payment.status)}
-                      </StatusBadge>
-                    </Table.Cell>
-                    <Table.Cell class="text-right tabular-nums">
-                      {formatCents(payment.total)}
-                    </Table.Cell>
-                    <Table.Cell class="text-right">
-                      {#if payment.paymentUrl && payment.status === PAYMENT_STATUS.PENDING}
-                        <IconButton
-                          icon={ExternalLinkIcon}
-                          aria-label="Open payment link"
-                          href={payment.paymentUrl}
-                          target="_blank"
-                        />
-                      {/if}
-                    </Table.Cell>
-                  </Table.Row>
-                {:else}
-                  <Table.Row>
-                    <Table.Cell colspan={5} class="h-20 text-center text-muted-foreground">
-                      No balance payments found.
-                    </Table.Cell>
-                  </Table.Row>
-                {/each}
-              </Table.Body>
-            </Table.Root>
-          </div>
+        <Tabs.Content value={ORGANIZATION_TABS.BALANCE_PAYMENTS}>
+          <OrganizationBalancePayments payments={organization.balancePayments} />
         </Tabs.Content>
       </Tabs.Root>
     </div>

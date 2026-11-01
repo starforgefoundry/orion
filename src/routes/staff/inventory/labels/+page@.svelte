@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import QrCode from '$lib/frontend/components/QrCode.svelte';
-  import { INVENTORY_LABEL_ITEM_PARAM } from '$lib/frontend/inventory-labels';
+  import { INVENTORY_LABEL_ITEM_PARAM } from '../inventory-labels';
   import { getInventoryItems } from '$lib/remotes/endpoints/inventory.remote';
   import { onMount, tick } from 'svelte';
 

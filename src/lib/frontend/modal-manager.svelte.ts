@@ -12,14 +12,15 @@ export type ConfirmOptions = {
   hideCancel?: boolean;
 };
 
+type ModalProps = Record<string, unknown>;
+
 type OpenModal = {
   id: symbol;
-  component: Component<any>;
-  props: Record<string, unknown>;
+  component: Component<ModalProps>;
+  props: ModalProps;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type CloseProps = { onClose: (result?: any) => void };
+type CloseProps = { onClose: (result?: never) => void };
 type CloseResult<P extends CloseProps> = Parameters<P['onClose']>[0];
 
 class ModalManager {
@@ -35,7 +36,13 @@ class ModalManager {
         this.stack = this.stack.filter((modal) => modal.id !== id);
         resolve(result);
       };
-      this.stack = [...this.stack, { id, component, props: { ...props, onClose } }];
+      // The stack holds modals with different props, so each is stored with loose props.
+      const entry = {
+        id,
+        component: component as Component<ModalProps>,
+        props: { ...props, onClose },
+      };
+      this.stack = [...this.stack, entry];
     });
   }
 

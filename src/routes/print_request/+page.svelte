@@ -6,11 +6,8 @@
   import { Spinner } from '$lib/components/ui/spinner';
   import { Switch } from '$lib/components/ui/switch';
   import { announcementIsActive } from '$lib/frontend/announcement';
-  import banner from '$lib/assets/3dp-banner.jpeg';
-  import logo from '$lib/assets/logo.png';
   import FileDropArea from '$lib/frontend/components/FileDropArea.svelte';
   import IconButton from '$lib/frontend/components/IconButton.svelte';
-  import Section from '$lib/frontend/components/Section.svelte';
   import StepProgress from '$lib/frontend/components/StepProgress.svelte';
   import FormField from '$lib/frontend/components/form/FormField.svelte';
   import HiddenField from '$lib/frontend/components/form/HiddenField.svelte';
@@ -28,9 +25,12 @@
   import PlusIcon from '@lucide/svelte/icons/plus';
   import TrashIcon from '@lucide/svelte/icons/trash';
   import { toast } from 'svelte-sonner';
-  import { PrintRequestFormManager, STEPS } from './print-request-form.svelte';
+  import { PrintRequestForm, STEPS } from './print-request-form.svelte';
   import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
-  import { SPACE_EMAIL } from '$lib/space';
+  import ContactLine from './ContactLine.svelte';
+  import HowItWorks from './HowItWorks.svelte';
+  import PrintRequestBanner from './PrintRequestBanner.svelte';
+  import RequestsClosed from './RequestsClosed.svelte';
 
   const BYTES_PER_UNIT = 1024;
   const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte'] as const;
@@ -50,7 +50,7 @@
 
   let printRequestSettings = await getPublicPrintRequestForm();
 
-  const manager = new PrintRequestFormManager(printRequestSettings.maxUploadMB);
+  const manager = new PrintRequestForm(printRequestSettings.maxUploadMB);
 
   const materialOptions = $derived(
     printRequestSettings.materials.map((material) => ({
@@ -65,25 +65,6 @@
     submitPrintRequestForm.fields.files.set(manager.files);
   });
 
-  const CONTACT_EMAIL = SPACE_EMAIL.PRINTS;
-  const PRINTING_GUIDE_URL = 'https://wiki.starforgefoundry.com/en/3d-printers';
-
-  const HOW_IT_WORKS = [
-    {
-      title: 'Tell us who you are',
-      description: 'We use your email to send updates and invoices.',
-    },
-    {
-      title: 'Upload your models',
-      description: 'Add your files, pick a material and note any special requests.',
-    },
-    {
-      title: 'We print it',
-      description: 'Staff review your request and reach out with a quote if you asked for one.',
-    },
-    { title: 'Pick it up', description: "You'll get an email when your print is ready." },
-  ];
-
   const STEP_LIST = [
     { id: STEPS.CONTACT, label: 'Your Info' },
     { id: STEPS.PROJECT, label: 'Project & Files' },
@@ -94,16 +75,7 @@
   <title>3D Print Request</title>
 </svelte:head>
 
-<header class="relative h-48 w-full overflow-hidden sm:h-60">
-  <img src={banner} alt="" class="absolute inset-0 h-full w-full object-cover" />
-  <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10"></div>
-  <div class="relative mx-auto flex h-full max-w-6xl items-end px-4 pb-6">
-    <div class="flex items-center gap-4">
-      <img src={logo} alt="Starforge" class="size-12 shrink-0 sm:size-14" />
-      <h1 class="min-w-0 text-2xl font-semibold text-white sm:text-3xl">3D Print Request Form</h1>
-    </div>
-  </div>
-</header>
+<PrintRequestBanner />
 
 <div class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6">
   {#if announcementIsActive(printRequestSettings.announcement, printRequestSettings.announcementUntil)}
@@ -116,15 +88,7 @@
   {/if}
 
   {#if !printRequestSettings.isOpen}
-    <Section title="Print Requests Are Closed">
-      <p class="text-sm">
-        We are not accepting print requests at this time. Please check back later. If you have
-        questions, contact us at
-        <a href={`mailto:${CONTACT_EMAIL}`} class="underline">
-          {CONTACT_EMAIL}
-        </a>.
-      </p>
-    </Section>
+    <RequestsClosed />
   {:else}
     <StepProgress steps={STEP_LIST} current={manager.step} />
 
@@ -174,32 +138,7 @@
           </Button>
         </section>
 
-        <aside class="flex flex-col gap-5 rounded-xl bg-muted/40 p-5 sm:p-6">
-          <h2 class="text-base font-semibold">How it works</h2>
-          <ol class="flex flex-col gap-4">
-            {#each HOW_IT_WORKS as item, index (item.title)}
-              <li class="flex gap-3">
-                <span
-                  class="grid size-7 shrink-0 place-items-center rounded-full bg-primary/15 text-sm font-semibold text-primary"
-                >
-                  {index + 1}
-                </span>
-                <div>
-                  <p class="text-sm font-medium">{item.title}</p>
-                  <p class="text-sm text-muted-foreground">{item.description}</p>
-                </div>
-              </li>
-            {/each}
-          </ol>
-          <div class="mt-auto flex flex-col gap-1 border-t pt-4 text-sm text-muted-foreground">
-            <a href={PRINTING_GUIDE_URL} class="text-primary underline" target="_blank">
-              Read the 3D Printing Guide
-            </a>
-            <span>
-              Questions? <a href={`mailto:${CONTACT_EMAIL}`} class="underline">{CONTACT_EMAIL}</a>
-            </span>
-          </div>
-        </aside>
+        <HowItWorks />
       </div>
 
       <div class={cn('flex flex-col gap-6', manager.step !== STEPS.PROJECT && 'hidden')}>
@@ -363,9 +302,6 @@
   {/if}
 
   {#if manager.step !== STEPS.CONTACT}
-    <p class="text-sm text-muted-foreground">
-      Questions? Contact us at
-      <a href={`mailto:${CONTACT_EMAIL}`} class="underline">{CONTACT_EMAIL}</a>
-    </p>
+    <ContactLine />
   {/if}
 </div>

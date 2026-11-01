@@ -1,5 +1,4 @@
-import type { StatusDisplay } from '$lib/frontend/components/StatusIndicator.svelte';
-import type { Tone } from '$lib/frontend/components/StatusBadge.svelte';
+import type { StatusDisplay, Tone } from '$lib/frontend/components/StatusBadge.svelte';
 import type { PaymentStatus } from '$lib/utils/billing';
 import BanIcon from '@lucide/svelte/icons/ban';
 import CircleCheckIcon from '@lucide/svelte/icons/circle-check';

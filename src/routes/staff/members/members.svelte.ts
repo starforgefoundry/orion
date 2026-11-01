@@ -31,7 +31,7 @@ const DEFAULT_FILTERS: MemberFilters = {
 
 const EMPTY_FILTERS: MemberFilters = { access: [], waiver: [], onboarding: [] };
 
-export class MembersManager {
+export class MemberDirectory {
   search = new DebouncedSearch(() => this.resetPage());
   filters = $state<MemberFilters>(structuredClone(DEFAULT_FILTERS));
   sort = $state<MemberSort>(MEMBER_SORT.NAME);

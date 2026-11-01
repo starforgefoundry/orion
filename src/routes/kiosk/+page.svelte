@@ -2,7 +2,7 @@
   import { Spinner } from '$lib/components/ui/spinner';
   import { getKioskStatus } from '$lib/remotes/endpoints/kiosk.remote';
   import { onDestroy } from 'svelte';
-  import { KIOSK_SCREEN, KioskManager } from './kiosk-manager.svelte';
+  import { KIOSK_SCREEN, KioskSession } from './kiosk-manager.svelte';
   import KioskPairing from './KioskPairing.svelte';
   import KioskPassEmail from './KioskPassEmail.svelte';
   import KioskPassEmailSent from './KioskPassEmailSent.svelte';
@@ -11,7 +11,7 @@
   import KioskWaiver from './KioskWaiver.svelte';
 
   const status = getKioskStatus();
-  const kiosk = new KioskManager();
+  const kiosk = new KioskSession();
 
   const unpaired = $derived(
     status.current?.paired === false || kiosk.screen === KIOSK_SCREEN.UNPAIRED,

@@ -1,4 +1,4 @@
-import type { StatusDisplay } from '$lib/frontend/components/StatusIndicator.svelte';
+import type { StatusDisplay } from '$lib/frontend/components/StatusBadge.svelte';
 import type { PrintRequestStatus } from '$lib/utils/print_request';
 import BanIcon from '@lucide/svelte/icons/ban';
 import ListTodoIcon from '@lucide/svelte/icons/list-todo';

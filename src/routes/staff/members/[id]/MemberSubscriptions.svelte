@@ -6,13 +6,13 @@
   import type { MemberSubscription } from '$lib/server/db/schema';
   import { formatDate, formatIsoDate } from '$lib/frontend/format';
   import { SUBSCRIPTION_STATUS_DISPLAY } from '$lib/frontend/member-display';
-  import type { MemberDetailManager } from './member-detail.svelte';
+  import type { MemberDetail } from './member-detail.svelte';
 
   const COLUMN_COUNT = 7;
 
   type Props = {
     subscriptions: MemberSubscription[];
-    manager: MemberDetailManager;
+    manager: MemberDetail;
   };
 
   let { subscriptions, manager }: Props = $props();

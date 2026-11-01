@@ -32,7 +32,7 @@ type NeedsWaiver = Extract<
 type KioskError = { status: typeof KIOSK_ERROR };
 export type KioskDisplayResult = Exclude<KioskCheckInResult, NeedsWaiver> | KioskError;
 
-export class KioskManager {
+export class KioskSession {
   screen = $state<KioskScreen>(KIOSK_SCREEN.SCANNING);
   result = $state<KioskDisplayResult | null>(null);
   waiver = $state<NeedsWaiver | null>(null);

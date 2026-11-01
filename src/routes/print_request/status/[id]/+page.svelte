@@ -15,7 +15,7 @@
   import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
   import XIcon from '@lucide/svelte/icons/x';
   import { formatIsoDate } from '$lib/frontend/format';
-  import { PrintRequestStatusManager } from './print-request-status.svelte';
+  import { PrintRequestTracker } from './print-request-status.svelte';
   import { SPACE_EMAIL } from '$lib/space';
 
   const CONTACT_EMAIL = SPACE_EMAIL.PRINTS;
@@ -27,7 +27,7 @@
     { id: PRINT_REQUEST_STATUS.PICKED_UP, label: 'Picked Up' },
   ] as const;
 
-  const manager = new PrintRequestStatusManager(page.params.id ?? '');
+  const manager = new PrintRequestTracker(page.params.id ?? '');
   const request = $derived(manager.request);
   const payment = $derived(manager.payment);
 </script>
