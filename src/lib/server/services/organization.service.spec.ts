@@ -5,7 +5,7 @@ import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ORGANIZATION_NOT_FOUND, OrganizationService } from './organization.service';
 
 const PAY_URL = 'https://orion.example.com/pay';
@@ -475,10 +475,6 @@ describe(OrganizationService.name, () => {
 
     beforeEach(() => {
       mocks.memberNotificationRepository.sendOnboarding.mockResolvedValue(undefined);
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
     });
 
     function sentMemberIds() {

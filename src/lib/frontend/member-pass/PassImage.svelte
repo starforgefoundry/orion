@@ -1,6 +1,7 @@
 <script lang="ts">
   import logo from '$lib/assets/logo.png';
-  import { PASS_COLORS, renderQrSvg } from './pass-image';
+  import { renderQrSvg } from '$lib/frontend/qr-code';
+  import { PASS_COLORS } from './pass-image';
 
   let { name, passUrl, label }: { name: string; passUrl: string; label: string } = $props();
 

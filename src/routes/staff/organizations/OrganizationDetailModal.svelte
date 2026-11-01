@@ -61,8 +61,6 @@
   let isChargingBalance = $state(false);
   let editName = $state('');
   let editEmail = $state('');
-  let originalName = $state('');
-  let originalEmail = $state('');
   let editAccessEndDate = $state('');
   let editGrantsAccess = $state(true);
 
@@ -109,8 +107,6 @@
     if (organizationDetail.current) {
       editName = organizationDetail.current.name;
       editEmail = organizationDetail.current.email;
-      originalName = organizationDetail.current.name;
-      originalEmail = organizationDetail.current.email;
       editAccessEndDate =
         organizationDetail.current.accessEndDate?.setZone(SPACE_ZONE).toISODate() ?? '';
       editGrantsAccess = organizationDetail.current.grantsAccess;
@@ -121,8 +117,6 @@
   function cancelEditing() {
     editName = '';
     editEmail = '';
-    originalName = '';
-    originalEmail = '';
     isEditing = false;
   }
 

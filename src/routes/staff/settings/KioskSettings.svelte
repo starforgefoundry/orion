@@ -4,7 +4,7 @@
   import { submitWithToast } from '$lib/frontend/form-submit';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { getKioskPairing, rotateKioskToken } from '$lib/remotes/endpoints/kiosk.remote';
-  import QRCode from '@castlenine/svelte-qrcode';
+  import QrCode from '$lib/frontend/components/QrCode.svelte';
   import CopyIcon from '@lucide/svelte/icons/copy';
   import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
   import { toast } from 'svelte-sonner';
@@ -58,7 +58,7 @@
     {#if pairingUrl}
       <div class="flex flex-col items-start gap-4 sm:flex-row">
         <div class="shrink-0 rounded-lg bg-white p-3">
-          <QRCode data={pairingUrl} size={QR_SIZE_PX} />
+          <QrCode data={pairingUrl} size={QR_SIZE_PX} />
         </div>
         <div class="flex min-w-0 flex-1 flex-col gap-2">
           <code class="rounded-md border bg-muted/40 px-3 py-2 text-xs break-all">{pairingUrl}</code

@@ -10,3 +10,4 @@ bun.lockb
 /drizzle/
 
 src/lib/server/db/migrations/meta/_journal.json
+.claude

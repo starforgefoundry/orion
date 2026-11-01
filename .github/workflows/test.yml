@@ -2,6 +2,8 @@ name: Test
 
 on:
   push:
+  pull_request:
+  workflow_call:
 
 jobs:
   test:
@@ -35,8 +37,8 @@ jobs:
       - name: Setup env variables
         run: cp .env.example .env
 
-      - name: Run formatter
-        run: pnpm prettier --check .
+      - name: Run linter
+        run: pnpm lint
 
       - name: Run tsc
         run: pnpm check

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { signUrl, verifySignedUrl } from './signed_url';
 
 const BASE_URL = 'https://orion.test';
@@ -7,10 +7,6 @@ const HOURS = 60 * 60 * 1000;
 function signed(path: string) {
   return new URL(signUrl(path), BASE_URL);
 }
-
-afterEach(() => {
-  vi.useRealTimers();
-});
 
 describe('verifySignedUrl', () => {
   it('accepts a freshly signed url', () => {

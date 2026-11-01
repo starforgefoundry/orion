@@ -20,7 +20,7 @@
   </p>
 {:else}
   <div class="grid gap-4 md:grid-cols-2">
-    {#each catalogs as cls}
+    {#each catalogs as cls (cls.id)}
       <Card.Root size="sm" class="h-full">
         {#if cls.photoUrl}
           <img src={cls.photoUrl} alt={cls.name} class="h-36 w-full object-cover" />

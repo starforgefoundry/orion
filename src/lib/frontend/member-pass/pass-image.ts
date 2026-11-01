@@ -1,9 +1,6 @@
 import logo from '$lib/assets/logo.png';
-import qrcode from 'qrcode-generator';
+import { makeQr } from '$lib/frontend/qr-code';
 
-const QR_TYPE_NUMBER_AUTO = 0;
-const QR_ERROR_CORRECTION = 'M';
-const QUIET_ZONE_MODULES = 4;
 const IMAGE_TYPE = 'image/png';
 
 export const PASS_COLORS = {
@@ -35,18 +32,6 @@ const FONTS = {
 
 const TITLE = 'Starforge Foundry';
 const LABEL_LETTER_SPACING = '4px';
-
-function makeQr(qrValue: string) {
-  const qr = qrcode(QR_TYPE_NUMBER_AUTO, QR_ERROR_CORRECTION);
-  qr.addData(qrValue);
-  qr.make();
-  return qr;
-}
-
-/** A scalable SVG of the QR code alone, for display. */
-export function renderQrSvg(qrValue: string) {
-  return makeQr(qrValue).createSvgTag({ margin: 0, scalable: true });
-}
 
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {

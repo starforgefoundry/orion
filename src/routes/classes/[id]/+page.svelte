@@ -84,7 +84,7 @@
           {#snippet dayContent({ instances: dayInstances, isCurrentMonth })}
             {#if dayInstances.length > 0 && isCurrentMonth}
               <div class="flex flex-col gap-1.5">
-                {#each dayInstances as inst}
+                {#each dayInstances as inst (inst.id)}
                   {@const spotsLeft = inst.seats - inst.confirmedCount}
                   {@const isPast =
                     DateTime.fromISO(`${inst.date}T${inst.startTime}`, {

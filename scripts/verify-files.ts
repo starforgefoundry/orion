@@ -1,5 +1,5 @@
 /**
- * Usage: node scripts/verify-files.ts
+ * Usage: pnpm db:verify-files
  *
  * Checks that every file key stored in Postgres exists under STORAGE_DIR.
  */

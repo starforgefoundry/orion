@@ -1,6 +1,5 @@
 import { EmailTemplateRepository } from '$lib/server/repositories/email_template.repository';
 import { automock } from '$test/utils';
-import { DateTime } from 'luxon';
 import { describe, expect, it, vi } from 'vitest';
 import { MailgunRepository, retryAfter } from './mailgun.repository';
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import type { InventoryItemDto } from '$lib/remotes/dtos/inventory.dto';
-  import QRCode from '@castlenine/svelte-qrcode';
+  import QrCode from '$lib/frontend/components/QrCode.svelte';
   import { onMount } from 'svelte';
 
   let items = $derived.by(() => {
@@ -15,14 +15,14 @@
   });
 </script>
 
-{#each items as item, index}
+{#each items as item (item.id)}
   <div class="flex flex-col items-center justify-center bg-white">
     <h2 class="w-full text-center text-xl leading-none font-bold tracking-tight text-black">
       {item.name}
     </h2>
     <p class="-mt-2 w-full text-center text-black">{item.vendor}</p>
     <div class=" w-full border border-black"></div>
-    <QRCode data={window.location.origin + '/inventory/scan/' + item.id} size={120} />
+    <QrCode data={window.location.origin + '/inventory/scan/' + item.id} size={120} />
 
     <p class="w-full text-center text-xs text-black">{item.description}</p>
     <!-- <div class="flex h-full flex-1 flex-col justify-center overflow-hidden text-black">

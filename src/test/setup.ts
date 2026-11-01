@@ -1,4 +1,8 @@
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 
 vi.mock('$env/dynamic/private', () => ({ env: process.env }));
 vi.mock('$env/dynamic/public', () => ({ env: process.env }));
+
+afterEach(() => {
+  vi.useRealTimers();
+});
