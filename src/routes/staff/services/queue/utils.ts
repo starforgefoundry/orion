@@ -1,12 +1,5 @@
 import type { Tone } from '$lib/frontend/components/StatusBadge.svelte';
-import { PAYMENT_STATUS, type PaymentStatus } from '$lib/utils/billing';
-import {
-  awaitingQuote,
-  SERVICE_PRICING,
-  SERVICE_REQUEST_STATUS,
-  type ServicePricing,
-  type ServiceRequestStatus,
-} from '$lib/utils/services';
+import { SERVICE_REQUEST_STATUS, type ServiceRequestStatus } from '$lib/utils/services';
 
 export const STATUS = SERVICE_REQUEST_STATUS;
 
@@ -20,18 +13,3 @@ export const REQUEST_STATUS_DISPLAY: Record<ServiceRequestStatus, { label: strin
   done: { label: 'Done', tone: 'success' },
   canceled: { label: 'Canceled', tone: 'danger' },
 };
-
-type PaymentSummary = { status: PaymentStatus; lineItems: unknown[] };
-
-/** Work starts only once a quote is sent, which the server enforces too. */
-export function quoteRequired(payment: PaymentSummary, status: ServiceRequestStatus) {
-  return (status === STATUS.IN_PROGRESS || status === STATUS.DONE) && awaitingQuote(payment);
-}
-
-/** Variable prices can be re-quoted until the customer pays. */
-export function canQuote(pricingMode: ServicePricing, payment: PaymentSummary) {
-  return (
-    pricingMode === SERVICE_PRICING.VARIABLE &&
-    (payment.status === PAYMENT_STATUS.QUOTE || payment.status === PAYMENT_STATUS.PENDING)
-  );
-}

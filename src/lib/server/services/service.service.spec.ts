@@ -267,8 +267,21 @@ describe(ServiceService.name, () => {
       });
     });
 
-    it('keeps a paid payment when the request is canceled', async () => {
-      stubRequest({ ...PRICED, status: PAYMENT_STATUS.PAID });
+    it.each([PAYMENT_STATUS.PAID, PAYMENT_STATUS.PROCESSING])(
+      'rejects canceling a request whose payment is %s',
+      async (status) => {
+        stubRequest({ ...PRICED, status });
+
+        await expect(
+          sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED }),
+        ).rejects.toThrow(new ServiceRequestError('Only unpaid requests can be canceled.'));
+        expect(mocks.paymentGateway.cancel).not.toHaveBeenCalled();
+        expect(mocks.serviceRepository.updateRequest).not.toHaveBeenCalled();
+      },
+    );
+
+    it('accepts a repeated cancel without canceling the payment again', async () => {
+      stubRequest({ status: PAYMENT_STATUS.CANCELED }, SERVICE_REQUEST_STATUS.CANCELED);
 
       await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED });
 

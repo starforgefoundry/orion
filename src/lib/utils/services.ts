@@ -73,9 +73,38 @@ function invalidAnswerProblem(field: ServiceField, answer: ServiceAnswerInput) {
   }
 }
 
+type PaymentSummary = { status: PaymentStatus; lineItems: unknown[] };
+
+// Matches the statuses the payment repository lets `save` overwrite.
+const UNPAID_PAYMENT_STATUSES: PaymentStatus[] = [PAYMENT_STATUS.QUOTE, PAYMENT_STATUS.PENDING];
+const WORK_STATUSES: ServiceRequestStatus[] = [
+  SERVICE_REQUEST_STATUS.IN_PROGRESS,
+  SERVICE_REQUEST_STATUS.DONE,
+];
+
 /** A variable-price request starts with an empty quote that staff fill in. */
-export function awaitingQuote(payment: { status: PaymentStatus; lineItems: unknown[] }) {
+export function awaitingQuote(payment: PaymentSummary) {
   return payment.status === PAYMENT_STATUS.QUOTE && payment.lineItems.length === 0;
+}
+
+/** An unpaid bill can still be re-quoted or canceled. Once a card is charging or paid, it is fixed. */
+export function isUnpaid(payment: { status: PaymentStatus }) {
+  return UNPAID_PAYMENT_STATUSES.includes(payment.status);
+}
+
+/** Work starts only once a quote is sent. */
+export function quoteRequired(payment: PaymentSummary, status: ServiceRequestStatus) {
+  return WORK_STATUSES.includes(status) && awaitingQuote(payment);
+}
+
+/** Variable prices can be re-quoted until the customer pays. */
+export function canQuote(pricingMode: ServicePricing, payment: { status: PaymentStatus }) {
+  return pricingMode === SERVICE_PRICING.VARIABLE && isUnpaid(payment);
+}
+
+/** Paid requests need a refund and charging ones cannot be stopped, so only unpaid requests cancel. */
+export function isCancelable(payment: { status: PaymentStatus }) {
+  return isUnpaid(payment);
 }
 
 /** Returns what is wrong with the answers, or undefined when they satisfy the form. */

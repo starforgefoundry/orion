@@ -3,6 +3,7 @@
   import QueryState from '$lib/frontend/components/QueryState.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import { formatDate } from '$lib/frontend/format';
+  import { pollQuery } from '$lib/frontend/poll-query.svelte';
   import { PAYMENT_STATUS_DISPLAY } from '$lib/frontend/payment-status';
   import { getServiceRequests } from '$lib/remotes/endpoints/service.remote';
   import { formatCents } from '$lib/utils/billing';
@@ -10,8 +11,8 @@
   import { openRequest } from './open-request';
   import { REQUEST_STATUS_DISPLAY } from './utils';
 
-  // ponytail: loads every request client-side; add search and paging like print when the list grows.
   const requestsQuery = getServiceRequests();
+  pollQuery(() => requestsQuery);
 
   function handleRowKeydown(event: KeyboardEvent, requestId: string) {
     if (event.key !== 'Enter' && event.key !== ' ') return;

@@ -8,27 +8,22 @@ import { NotFoundError, UserError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
 import type { Service } from '$lib/server/db/schema';
 import { fileUrl } from '$lib/server/utils/storage';
-import { buildBill, PAYMENT_STATUS, PAYMENT_TYPE, type PaymentStatus } from '$lib/utils/billing';
+import { buildBill, PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import {
   answersProblem,
-  awaitingQuote,
   formAnswers,
+  isCancelable,
+  isUnpaid,
+  quoteRequired,
   SERVICE_FIELD_TYPE,
   SERVICE_PRICING,
   SERVICE_REQUEST_STATUS,
   type ServiceAnswers,
-  type ServiceRequestStatus,
 } from '$lib/utils/services';
 import { posix } from 'node:path';
 
 const SERVICE_NOT_FOUND_MESSAGE = 'Service not found';
 const REQUEST_NOT_FOUND_MESSAGE = 'Service request not found';
-const WORK_STATUSES: ServiceRequestStatus[] = [
-  SERVICE_REQUEST_STATUS.IN_PROGRESS,
-  SERVICE_REQUEST_STATUS.DONE,
-];
-// Matches the statuses the payment repository lets `save` overwrite.
-const UNPAID_STATUSES: PaymentStatus[] = [PAYMENT_STATUS.QUOTE, PAYMENT_STATUS.PENDING];
 
 /** One line for the service, so the checkout page names what is being paid for. */
 function serviceBill(service: Pick<Service, 'name'>, price: number) {
@@ -139,14 +134,17 @@ export class ServiceService extends BaseService {
 
   async updateRequestStatus({ id, status }: UpdateServiceRequestStatusDto) {
     const { request, payment } = await this.requireRequest(id);
-    if (WORK_STATUSES.includes(status) && awaitingQuote(payment)) {
+    if (quoteRequired(payment, status)) {
       throw new ServiceRequestError('Send a quote before starting work.');
     }
     // A canceled bill cannot be paid again, so the request stays canceled.
     if (status !== request.status && payment.status === PAYMENT_STATUS.CANCELED) {
       throw new ServiceRequestError('This request was canceled and cannot be reopened.');
     }
-    if (status === SERVICE_REQUEST_STATUS.CANCELED && UNPAID_STATUSES.includes(payment.status)) {
+    if (status === SERVICE_REQUEST_STATUS.CANCELED && request.status !== status) {
+      if (!isCancelable(payment)) {
+        throw new ServiceRequestError('Only unpaid requests can be canceled.');
+      }
       await this.paymentGateway.cancel(payment);
     }
     return await this.serviceRepository.updateRequest(id, { status });
@@ -158,7 +156,7 @@ export class ServiceService extends BaseService {
     if (pricingMode !== SERVICE_PRICING.VARIABLE) {
       throw new ServiceRequestError('Fixed-price requests cannot be quoted.');
     }
-    if (!UNPAID_STATUSES.includes(payment.status)) {
+    if (!isUnpaid(payment)) {
       throw new ServiceRequestError('Only unpaid requests can be quoted.');
     }
     // Services have no approval step: the quote is the bill.

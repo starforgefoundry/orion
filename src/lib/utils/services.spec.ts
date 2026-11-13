@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { PAYMENT_STATUS } from './billing';
 import { BYTES_PER_MB } from './print-request';
 import {
   answersProblem,
   awaitingQuote,
+  canQuote,
   formAnswers,
+  isCancelable,
   MAX_SERVICE_UPLOAD_MB,
+  quoteRequired,
+  SERVICE_PRICING,
+  SERVICE_REQUEST_STATUS,
   storageFileName,
   type ServiceField,
 } from './services';
@@ -62,4 +68,50 @@ describe('storageFileName', () => {
     expect(storageFileName('../../etc/passwd')).toBe('_.._etc_passwd');
     expect(storageFileName('..')).toBe('file');
   });
+});
+
+const unquoted = { status: PAYMENT_STATUS.QUOTE, lineItems: [] };
+const quoted = { status: PAYMENT_STATUS.PENDING, lineItems: [{}] };
+
+describe('quoteRequired', () => {
+  it('blocks starting or finishing work until a quote is sent', () => {
+    expect(quoteRequired(unquoted, SERVICE_REQUEST_STATUS.IN_PROGRESS)).toBe(true);
+    expect(quoteRequired(unquoted, SERVICE_REQUEST_STATUS.DONE)).toBe(true);
+  });
+
+  it('allows moving an unquoted request back to submitted or canceling it', () => {
+    expect(quoteRequired(unquoted, SERVICE_REQUEST_STATUS.SUBMITTED)).toBe(false);
+    expect(quoteRequired(unquoted, SERVICE_REQUEST_STATUS.CANCELED)).toBe(false);
+  });
+
+  it('allows work once quoted', () => {
+    expect(quoteRequired(quoted, SERVICE_REQUEST_STATUS.IN_PROGRESS)).toBe(false);
+  });
+});
+
+describe('canQuote', () => {
+  it('quotes variable requests until they are paid', () => {
+    expect(canQuote(SERVICE_PRICING.VARIABLE, unquoted)).toBe(true);
+    expect(canQuote(SERVICE_PRICING.VARIABLE, quoted)).toBe(true);
+    expect(canQuote(SERVICE_PRICING.VARIABLE, { status: PAYMENT_STATUS.PAID })).toBe(false);
+    expect(canQuote(SERVICE_PRICING.VARIABLE, { status: PAYMENT_STATUS.PROCESSING })).toBe(false);
+  });
+
+  it('never quotes fixed-price requests', () => {
+    expect(canQuote(SERVICE_PRICING.FIXED, quoted)).toBe(false);
+  });
+});
+
+describe('isCancelable', () => {
+  it('only cancels while the payment is a quote or pending', () => {
+    expect(isCancelable({ status: PAYMENT_STATUS.QUOTE })).toBe(true);
+    expect(isCancelable({ status: PAYMENT_STATUS.PENDING })).toBe(true);
+  });
+
+  it.each([PAYMENT_STATUS.PROCESSING, PAYMENT_STATUS.PAID, PAYMENT_STATUS.REFUNDED])(
+    'does not cancel a %s payment',
+    (status) => {
+      expect(isCancelable({ status })).toBe(false);
+    },
+  );
 });

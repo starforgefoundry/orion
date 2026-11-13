@@ -8,15 +8,16 @@
     type KanbanColumn,
     type KanbanColumnStyle,
   } from '$lib/frontend/kanban-drag.svelte';
+  import { pollQuery } from '$lib/frontend/poll-query.svelte';
   import { PAYMENT_STATUS_DISPLAY } from '$lib/frontend/payment-status';
   import { getServiceRequests } from '$lib/remotes/endpoints/service.remote';
   import { formatCents } from '$lib/utils/billing';
-  import { awaitingQuote } from '$lib/utils/services';
+  import { awaitingQuote, quoteRequired } from '$lib/utils/services';
   import { MediaQuery } from 'svelte/reactivity';
   import { toast } from 'svelte-sonner';
   import { changeStatus } from './request-actions';
   import { openRequest } from './open-request';
-  import { BOARD_STATUSES, quoteRequired, REQUEST_STATUS_DISPLAY, type BoardStatus } from './utils';
+  import { BOARD_STATUSES, REQUEST_STATUS_DISPLAY, type BoardStatus } from './utils';
 
   const COLUMN_STYLES: Record<BoardStatus, KanbanColumnStyle> = {
     submitted: {
@@ -61,6 +62,9 @@
     }
     await changeStatus(row, column);
   });
+
+  // New requests and payments arrive without a reload, except while a card is mid-drag.
+  pollQuery(() => requestsQuery, { isPaused: () => drag.draggedId !== null });
 
   let scrollContainer = $state<HTMLElement>();
   $effect(() => drag.setScrollContainer(scrollContainer));

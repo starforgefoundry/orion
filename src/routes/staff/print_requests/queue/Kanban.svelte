@@ -6,7 +6,7 @@
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import StatusIndicator from './StatusIndicator.svelte';
   import { modalManager } from '$lib/frontend/modal-manager.svelte';
-  import { pollQuery } from './poll-query.svelte';
+  import { pollQuery } from '$lib/frontend/poll-query.svelte';
   import { PAYMENT_STATUS } from '$lib/utils/billing';
   import type { PrintRequestStatus } from '$lib/utils/print-request';
   import { getPrintRequests } from '$lib/remotes/endpoints/print-request.remote';

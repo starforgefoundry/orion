@@ -1,11 +1,16 @@
 import { goto } from '$app/navigation';
 import { submitWithToast } from '$lib/frontend/form-submit';
 import { getServiceRequests, priceServiceRequest } from '$lib/remotes/endpoints/service.remote';
-import { PAYMENT_STATUS } from '$lib/utils/billing';
-import { awaitingQuote, type ServiceRequestStatus } from '$lib/utils/services';
+import {
+  awaitingQuote,
+  canQuote,
+  isCancelable,
+  quoteRequired,
+  type ServiceRequestStatus,
+} from '$lib/utils/services';
 import { toast } from 'svelte-sonner';
 import { cancelRequest, changeStatus } from './request-actions';
-import { BOARD_STATUSES, canQuote, quoteRequired, REQUEST_STATUS_DISPLAY, STATUS } from './utils';
+import { BOARD_STATUSES, REQUEST_STATUS_DISPLAY, STATUS } from './utils';
 
 export class ServiceRequestDetail {
   /** Typed quote in cents; until staff type one the field shows the current price. */
@@ -72,9 +77,9 @@ export class ServiceRequestDetail {
     return !!this.row && this.row.request.status !== STATUS.CANCELED;
   }
 
-  /** Paid requests need a refund first, which this page does not handle. */
+  /** The server only cancels unpaid requests, so the button follows the same rule. */
   get canCancel() {
-    return this.canChangeStatus && this.row?.payment.status !== PAYMENT_STATUS.PAID;
+    return this.canChangeStatus && !!this.row && isCancelable(this.row.payment);
   }
 
   close() {

@@ -58,12 +58,15 @@ describe(ServiceRequestDetail.name, () => {
     expect(detail.statusOptions).toHaveLength(3);
   });
 
-  it('stops quoting and canceling once paid', () => {
-    const detail = detailFor({ payment: PAYMENT_STATUS.PAID, quoted: true });
+  it.each([PAYMENT_STATUS.PROCESSING, PAYMENT_STATUS.PAID])(
+    'stops quoting and canceling once the payment is %s',
+    (payment) => {
+      const detail = detailFor({ payment, quoted: true });
 
-    expect(detail.canQuote).toBe(false);
-    expect(detail.canCancel).toBe(false);
-  });
+      expect(detail.canQuote).toBe(false);
+      expect(detail.canCancel).toBe(false);
+    },
+  );
 
   it('freezes a canceled request', () => {
     const detail = detailFor({ status: STATUS.CANCELED, payment: PAYMENT_STATUS.CANCELED });
