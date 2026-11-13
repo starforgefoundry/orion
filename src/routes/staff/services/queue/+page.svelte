@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
+  import { Switch } from '$lib/components/ui/switch';
   import OptionSelect from '$lib/frontend/components/form/OptionSelect.svelte';
   import PriceInput from '$lib/frontend/components/form/PriceInput.svelte';
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
@@ -11,7 +12,13 @@
     updateServiceRequestStatus,
   } from '$lib/remotes/endpoints/service.remote';
   import { CENTS_PER_DOLLAR, formatCents } from '$lib/utils/billing';
-  import { canQuote, SERVICE_REQUEST_STATUS, type ServiceRequestStatus } from '$lib/utils/services';
+  import {
+    canQuote,
+    isClosed,
+    SERVICE_FIELD_TYPE,
+    SERVICE_REQUEST_STATUS,
+    type ServiceRequestStatus,
+  } from '$lib/utils/services';
 
   const requestsQuery = $derived(getServiceRequests());
 
@@ -26,18 +33,22 @@
 
   // Quotes being typed, in cents, by request id.
   let quotes = $state<Record<string, number>>({});
+  let showClosed = $state(false);
 </script>
 
 <PageHeader title="Service Requests">
   {#snippet actions()}
-    <Button variant="outline" href="/staff/services">Catalog</Button>
+    <label class="flex items-center gap-2 text-sm">
+      <Switch bind:checked={showClosed} /> Show done and canceled
+    </label>
+    <Button variant="outline" href="/staff/services/catalog">Catalog</Button>
   {/snippet}
 </PageHeader>
 
 <QueryState query={requestsQuery} label="requests">
   {#snippet children(rows)}
     <div class="flex flex-col gap-3">
-      {#each rows as { request, serviceName, fields, files } (request.id)}
+      {#each rows.filter(({ request }) => showClosed || !isClosed(request.status)) as { request, serviceName, files } (request.id)}
         <div class="flex flex-col gap-3 rounded-lg border p-4">
           <div class="flex flex-wrap items-start justify-between gap-2">
             <div class="min-w-0">
@@ -67,13 +78,15 @@
 
           {#if Object.keys(request.answers).length > 0}
             <dl class="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
-              {#each fields.filter((field) => field.id in request.answers) as field (field.id)}
+              {#each request.fields.filter((field) => field.id in request.answers) as field (field.id)}
                 <dt class="text-muted-foreground">{field.label}</dt>
                 <dd class="break-words whitespace-pre-line">
                   {#if files[field.id]}
                     <a href={files[field.id].url} class="underline" download>
                       {files[field.id].name}
                     </a>
+                  {:else if field.type === SERVICE_FIELD_TYPE.CHECKBOX}
+                    Yes
                   {:else}
                     {String(request.answers[field.id])}
                   {/if}
@@ -98,6 +111,7 @@
               </label>
               <Button
                 size="sm"
+                disabled={!(quotes[request.id] > 0)}
                 onclick={() =>
                   submitWithToast(
                     () => quoteServiceRequest({ id: request.id, price: quotes[request.id] ?? 0 }),

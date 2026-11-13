@@ -666,6 +666,8 @@ export const serviceRequest = pgTable('service_request', {
     .$defaultFn(() => DateTime.now()),
   customerName: text('customer_name').notNull(),
   email: text('email').notNull(),
+  // The form as it was when submitted, so answers keep their labels and types if staff edit the service.
+  fields: jsonb('fields').$type<ServiceField[]>().notNull().default([]),
   answers: jsonb('answers').$type<ServiceAnswers>().notNull().default({}),
   // Set at submit for fixed pricing, by staff for variable pricing.
   price: integer('price'), // in cents

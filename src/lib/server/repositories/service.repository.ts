@@ -67,11 +67,7 @@ export class ServiceRepository extends BaseRepository {
 
   async getRequests() {
     return await this.db
-      .select({
-        request: schema.serviceRequest,
-        serviceName: schema.service.name,
-        fields: schema.service.fields,
-      })
+      .select({ request: schema.serviceRequest, serviceName: schema.service.name })
       .from(schema.serviceRequest)
       .innerJoin(schema.service, eq(schema.service.id, schema.serviceRequest.serviceId))
       .orderBy(desc(schema.serviceRequest.submissionDate));

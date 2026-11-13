@@ -49,8 +49,8 @@
     {
       title: 'Services',
       items: [
-        { href: '/staff/service_requests/queue', title: 'Request Queue', icon: InboxIcon },
-        { href: '/staff/services', title: 'Catalog', icon: ConciergeBellIcon },
+        { href: '/staff/services/queue', title: 'Request Queue', icon: InboxIcon },
+        { href: '/staff/services/catalog', title: 'Catalog', icon: ConciergeBellIcon },
       ],
     },
     {

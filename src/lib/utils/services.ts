@@ -73,6 +73,11 @@ function invalidAnswerProblem(field: ServiceField, answer: ServiceAnswerInput) {
   }
 }
 
+/** Done and canceled requests leave the queue unless staff ask to see them. */
+export function isClosed(status: ServiceRequestStatus) {
+  return status === SERVICE_REQUEST_STATUS.DONE || status === SERVICE_REQUEST_STATUS.CANCELED;
+}
+
 /** Fixed-price requests are priced at submit; variable ones take quotes until work starts. */
 export function canQuote(request: { status: ServiceRequestStatus; price: number | null }) {
   return (

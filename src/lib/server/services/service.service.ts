@@ -6,6 +6,7 @@ import type {
 } from '$lib/remotes/dtos/service.dto';
 import { NotFoundError, UserError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
+import type { ServiceRequest } from '$lib/server/db/schema';
 import { fileUrl } from '$lib/server/utils/storage';
 import {
   answersProblem,
@@ -15,11 +16,16 @@ import {
   SERVICE_PRICING,
   SERVICE_REQUEST_STATUS,
   type ServiceAnswers,
+  type ServiceRequestStatus,
 } from '$lib/utils/services';
 import { posix } from 'node:path';
 
 const SERVICE_NOT_FOUND_MESSAGE = 'Service not found';
 const REQUEST_NOT_FOUND_MESSAGE = 'Service request not found';
+const WORK_STATUSES: ServiceRequestStatus[] = [
+  SERVICE_REQUEST_STATUS.IN_PROGRESS,
+  SERVICE_REQUEST_STATUS.DONE,
+];
 
 export class ServiceRequestError extends UserError {}
 
@@ -76,6 +82,7 @@ export class ServiceService extends BaseService {
     const request = await this.serviceRepository.createRequest({
       id: requestId,
       serviceId: service.id,
+      fields: service.fields,
       customerName: dto.customerName,
       email: dto.email,
       answers,
@@ -91,7 +98,7 @@ export class ServiceService extends BaseService {
     return rows.map((row) => ({
       ...row,
       files: Object.fromEntries(
-        row.fields
+        row.request.fields
           .filter((field) => field.type === SERVICE_FIELD_TYPE.FILE)
           .flatMap((field) => {
             const key = row.request.answers[field.id];
@@ -115,7 +122,21 @@ export class ServiceService extends BaseService {
     if (status === SERVICE_REQUEST_STATUS.QUOTED && request.status !== status) {
       throw new ServiceRequestError('Send a quote to mark this request as quoted.');
     }
-    return await this.serviceRepository.updateRequest(id, { status });
+    // Work can only start once there is a price to charge.
+    if (WORK_STATUSES.includes(status) && request.price === null) {
+      throw new ServiceRequestError('Send a quote before starting work.');
+    }
+    return await this.serviceRepository.updateRequest(id, {
+      status,
+      ...(await this.priceAfterReset(request, status)),
+    });
+  }
+
+  /** A quoted request that goes back to submitted needs a new quote, so its old price is dropped. */
+  private async priceAfterReset(request: ServiceRequest, status: ServiceRequestStatus) {
+    if (status !== SERVICE_REQUEST_STATUS.SUBMITTED) return {};
+    const service = await this.serviceRepository.getById(request.serviceId);
+    return service?.pricingMode === SERVICE_PRICING.VARIABLE ? { price: null } : {};
   }
 
   async quoteRequest({ id, price }: QuoteServiceRequestDto) {

@@ -9,25 +9,17 @@
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import ModalForm from '$lib/frontend/components/ModalForm.svelte';
   import type { ModalProps } from '$lib/frontend/components/utils';
-  import { submitWithToast } from '$lib/frontend/form-submit';
-  import { upsertService } from '$lib/remotes/endpoints/service.remote';
   import type { Service } from '$lib/server/db/schema';
   import { CENTS_PER_DOLLAR } from '$lib/utils/billing';
-  import {
-    SERVICE_FIELD_TYPE,
-    SERVICE_PRICING,
-    type ServiceField,
-    type ServicePricing,
-  } from '$lib/utils/services';
+  import { SERVICE_FIELD_TYPE, SERVICE_PRICING } from '$lib/utils/services';
   import ConciergeBellIcon from '@lucide/svelte/icons/concierge-bell';
   import PlusIcon from '@lucide/svelte/icons/plus';
   import TrashIcon from '@lucide/svelte/icons/trash';
+  import { untrack } from 'svelte';
+  import { ServiceEditor } from './service-editor.svelte';
 
   type Props = ModalProps & { service?: Service };
 
-  let { onClose, service }: Props = $props();
-
-  const FIELD_ID_LENGTH = 8;
   const PRICING_OPTIONS = [
     { value: SERVICE_PRICING.FIXED, label: 'Fixed price' },
     { value: SERVICE_PRICING.VARIABLE, label: 'Variable (quoted per request)' },
@@ -41,101 +33,55 @@
     { value: SERVICE_FIELD_TYPE.FILE, label: 'File upload' },
   ];
 
-  // Choices are edited as comma separated text and split on save.
-  type EditableField = Omit<ServiceField, 'options'> & { options: string };
+  let { onClose, service }: Props = $props();
 
-  const initial = (() => service)();
-
-  let name = $state(initial?.name ?? '');
-  let description = $state(initial?.description ?? '');
-  let pricingMode = $state<ServicePricing>(initial?.pricingMode ?? SERVICE_PRICING.FIXED);
-  let price = $state(initial?.price ?? 0);
-  let enabled = $state(initial?.enabled ?? true);
-  let fields = $state<EditableField[]>(
-    (initial?.fields ?? []).map((field) => ({ ...field, options: field.options.join(', ') })),
-  );
-  let submitting = $state(false);
-
-  const canSubmit = $derived(name.trim() !== '' && description.trim() !== '');
-
-  function addField() {
-    fields.push({
-      id: `f${crypto.randomUUID().slice(0, FIELD_ID_LENGTH)}`,
-      label: '',
-      type: SERVICE_FIELD_TYPE.TEXT,
-      required: false,
-      options: '',
-    });
-  }
+  // Edits a copy taken when the modal opens so list refreshes don't reset the form.
+  const editor = new ServiceEditor(untrack(() => service));
 
   async function save() {
-    submitting = true;
-    const saved = await submitWithToast(
-      () =>
-        upsertService({
-          id: service?.id,
-          name,
-          description,
-          pricingMode,
-          price,
-          enabled,
-          fields: fields.map((field) => ({
-            ...field,
-            options:
-              field.type === SERVICE_FIELD_TYPE.SELECT
-                ? field.options
-                    .split(',')
-                    .map((option) => option.trim())
-                    .filter(Boolean)
-                : [],
-          })),
-        }),
-      { success: 'Service saved', error: 'Failed to save service' },
-    );
-    submitting = false;
-    if (saved) onClose();
+    if (await editor.save()) onClose();
   }
 </script>
 
 <ModalForm
-  title={service ? 'Edit Service' : 'New Service'}
+  title={editor.isNew ? 'New Service' : 'Edit Service'}
   icon={ConciergeBellIcon}
   {onClose}
-  submitLabel={service ? 'Save Changes' : 'Create Service'}
-  {submitting}
-  {canSubmit}
+  submitLabel={editor.isNew ? 'Create Service' : 'Save Changes'}
+  canSubmit={editor.canSave}
+  submitting={editor.saving}
   onSubmit={save}
 >
   <FormField label="Service Name" for="service-name" required>
-    <TextInput id="service-name" bind:value={name} placeholder="Laser Engraving" />
+    <TextInput id="service-name" bind:value={editor.name} placeholder="Laser Engraving" />
   </FormField>
 
   <FormField label="Description" for="service-description" required>
     <TextArea
       id="service-description"
-      bind:value={description}
+      bind:value={editor.description}
       placeholder="What does this service include?"
     />
   </FormField>
 
   <FormField label="Pricing" for="service-pricing" required>
-    <OptionSelect id="service-pricing" options={PRICING_OPTIONS} bind:value={pricingMode} />
+    <OptionSelect id="service-pricing" options={PRICING_OPTIONS} bind:value={editor.pricingMode} />
   </FormField>
 
-  {#if pricingMode === SERVICE_PRICING.FIXED}
+  {#if editor.pricingMode === SERVICE_PRICING.FIXED}
     <FormField label="Price" required>
-      <PriceInput bind:value={price} multiplier={CENTS_PER_DOLLAR} />
+      <PriceInput bind:value={editor.price} multiplier={CENTS_PER_DOLLAR} />
     </FormField>
   {/if}
 
   <div class="flex items-center justify-between">
     <label for="service-enabled" class="text-sm font-medium">Accepting requests</label>
-    <Switch id="service-enabled" bind:checked={enabled} />
+    <Switch id="service-enabled" bind:checked={editor.enabled} />
   </div>
 
   <div class="flex flex-col gap-2">
     <span class="text-sm font-medium">Request form fields</span>
-    {#each fields as field, index (field.id)}
+    {#each editor.fields as field, index (field.id)}
       <div class="flex flex-col gap-2 rounded-lg border p-3">
         <div class="flex gap-2">
           <TextInput
@@ -148,7 +94,7 @@
           <IconButton
             icon={TrashIcon}
             aria-label="Remove field"
-            onclick={() => fields.splice(index, 1)}
+            onclick={() => editor.removeField(index)}
           />
         </div>
         {#if field.type === SERVICE_FIELD_TYPE.SELECT}
@@ -167,7 +113,7 @@
         No fields. Customers only give their name and email.
       </p>
     {/each}
-    <Button variant="outline" size="sm" class="self-start" onclick={addField}>
+    <Button variant="outline" size="sm" class="self-start" onclick={() => editor.addField()}>
       <PlusIcon /> Add Field
     </Button>
   </div>

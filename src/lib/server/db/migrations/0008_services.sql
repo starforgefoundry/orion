@@ -15,6 +15,7 @@ CREATE TABLE "service_request" (
 	"submission_date" timestamp(3) with time zone NOT NULL,
 	"customer_name" text NOT NULL,
 	"email" text NOT NULL,
+	"fields" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"answers" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"price" integer,
 	"status" text NOT NULL
