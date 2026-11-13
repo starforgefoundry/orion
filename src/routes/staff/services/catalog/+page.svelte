@@ -18,7 +18,6 @@
 
 <PageHeader title="Service Catalog" formHref="/services">
   {#snippet actions()}
-    <Button variant="outline" href="/staff/services/queue">Requests</Button>
     <Button onclick={() => modalManager.show(ServiceModal, {})}>
       <PlusIcon />
       Add Service

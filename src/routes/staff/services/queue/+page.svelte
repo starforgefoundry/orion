@@ -41,7 +41,6 @@
     <label class="flex items-center gap-2 text-sm">
       <Switch bind:checked={showClosed} /> Show done and canceled
     </label>
-    <Button variant="outline" href="/staff/services/catalog">Catalog</Button>
   {/snippet}
 </PageHeader>
 
