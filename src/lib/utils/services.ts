@@ -102,9 +102,12 @@ export function canQuote(pricingMode: ServicePricing, payment: { status: Payment
   return pricingMode === SERVICE_PRICING.VARIABLE && isUnpaid(payment);
 }
 
-/** Paid requests need a refund and charging ones cannot be stopped, so only unpaid requests cancel. */
-export function isCancelable(payment: { status: PaymentStatus }) {
-  return isUnpaid(payment);
+/**
+ * Paid requests need a refund and charging ones cannot be stopped, so only unpaid requests cancel.
+ * A free request is settled at submit but has nothing to refund.
+ */
+export function isCancelable(payment: { status: PaymentStatus; total: number }) {
+  return isUnpaid(payment) || (payment.status === PAYMENT_STATUS.PAID && payment.total === 0);
 }
 
 /** Returns what is wrong with the answers, or undefined when they satisfy the form. */

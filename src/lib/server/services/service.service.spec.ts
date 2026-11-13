@@ -280,6 +280,21 @@ describe(ServiceService.name, () => {
       },
     );
 
+    it('cancels a free request that was settled at submit', async () => {
+      const { payment } = stubRequest({ status: PAYMENT_STATUS.PAID, total: 0 });
+      mocks.paymentGateway.cancel.mockResolvedValue({
+        ...payment,
+        status: PAYMENT_STATUS.CANCELED,
+      });
+
+      await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED });
+
+      expect(mocks.paymentGateway.cancel).toHaveBeenCalledWith(payment);
+      expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith(REQUEST_ID, {
+        status: SERVICE_REQUEST_STATUS.CANCELED,
+      });
+    });
+
     it('accepts a repeated cancel without canceling the payment again', async () => {
       stubRequest({ status: PAYMENT_STATUS.CANCELED }, SERVICE_REQUEST_STATUS.CANCELED);
 

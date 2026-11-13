@@ -104,14 +104,18 @@ describe('canQuote', () => {
 
 describe('isCancelable', () => {
   it('only cancels while the payment is a quote or pending', () => {
-    expect(isCancelable({ status: PAYMENT_STATUS.QUOTE })).toBe(true);
-    expect(isCancelable({ status: PAYMENT_STATUS.PENDING })).toBe(true);
+    expect(isCancelable({ status: PAYMENT_STATUS.QUOTE, total: 0 })).toBe(true);
+    expect(isCancelable({ status: PAYMENT_STATUS.PENDING, total: 500 })).toBe(true);
+  });
+
+  it('cancels a free request that was settled at submit', () => {
+    expect(isCancelable({ status: PAYMENT_STATUS.PAID, total: 0 })).toBe(true);
   });
 
   it.each([PAYMENT_STATUS.PROCESSING, PAYMENT_STATUS.PAID, PAYMENT_STATUS.REFUNDED])(
     'does not cancel a %s payment',
     (status) => {
-      expect(isCancelable({ status })).toBe(false);
+      expect(isCancelable({ status, total: 500 })).toBe(false);
     },
   );
 });
