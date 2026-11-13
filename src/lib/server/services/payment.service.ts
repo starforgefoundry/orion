@@ -13,6 +13,7 @@ const PAYMENT_TITLES: Record<PaymentType, string> = {
   [PAYMENT_TYPE.CAR_BAY_OVERRUN]: 'Car Bay Overrun',
   [PAYMENT_TYPE.ORG_CHARGE]: 'Organization Charge',
   [PAYMENT_TYPE.BALANCE]: 'Organization Balance',
+  [PAYMENT_TYPE.SERVICE_REQUEST]: 'Service Request',
 };
 
 function toCheckout(payment: Payment) {

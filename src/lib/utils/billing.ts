@@ -10,6 +10,7 @@ export const PAYMENT_TYPE = {
   CAR_BAY_OVERRUN: 'car_bay_overrun',
   ORG_CHARGE: 'org_charge',
   BALANCE: 'balance',
+  SERVICE_REQUEST: 'service_request',
 } as const;
 export type PaymentType = EnumValue<typeof PAYMENT_TYPE>;
 

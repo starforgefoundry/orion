@@ -12,6 +12,8 @@
   import LogOutIcon from '@lucide/svelte/icons/log-out';
   import BookOpenIcon from '@lucide/svelte/icons/book-open';
   import CalendarIcon from '@lucide/svelte/icons/calendar';
+  import ConciergeBellIcon from '@lucide/svelte/icons/concierge-bell';
+  import InboxIcon from '@lucide/svelte/icons/inbox';
   import CarIcon from '@lucide/svelte/icons/car';
   import IdCardIcon from '@lucide/svelte/icons/id-card';
   import SpoolIcon from '@lucide/svelte/icons/spool';
@@ -42,6 +44,13 @@
       items: [
         { href: '/staff/classes/calendar', title: 'Calendar', icon: CalendarIcon },
         { href: '/staff/classes/catalog', title: 'Catalog', icon: BookOpenIcon },
+      ],
+    },
+    {
+      title: 'Services',
+      items: [
+        { href: '/staff/services/queue', title: 'Request Queue', icon: InboxIcon },
+        { href: '/staff/services/catalog', title: 'Catalog', icon: ConciergeBellIcon },
       ],
     },
     {

@@ -22,6 +22,12 @@ import type { EmailTemplateKey } from '../../utils/email-templates';
 import { CAR_BAY_STATUS, CAR_BAY_TIER } from '../../utils/car-bay';
 import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '../../utils/classes';
 import { PRINT_REQUEST_STATUS } from '../../utils/print-request';
+import {
+  SERVICE_PRICING,
+  SERVICE_REQUEST_STATUS,
+  type ServiceAnswers,
+  type ServiceField,
+} from '../../utils/services';
 
 // A database default so rows that existed before passes were issued get a token too.
 const passTokenColumn = () =>
@@ -629,6 +635,49 @@ export const carBayClosure = pgTable(
 
 export type CarBayClosure = InferSelectModel<typeof carBayClosure>;
 
+export const service = pgTable('service', {
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  pricingMode: text('pricing_mode', { enum: enumValues(SERVICE_PRICING) }).notNull(),
+  price: integer('price').notNull().default(0), // in cents, fixed pricing only
+  fields: jsonb('fields').$type<ServiceField[]>().notNull().default([]),
+  enabled: boolean('enabled').notNull().default(true),
+  createdDate: luxonTimestamp('created_date')
+    .notNull()
+    .$defaultFn(() => DateTime.now()),
+});
+
+export type Service = InferSelectModel<typeof service>;
+
+export const serviceRequest = pgTable('service_request', {
+  id: text('id')
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  serviceId: text('service_id')
+    .notNull()
+    .references(() => service.id),
+  submissionDate: luxonTimestamp('submission_date')
+    .notNull()
+    .$defaultFn(() => DateTime.now()),
+  customerName: text('customer_name').notNull(),
+  email: text('email').notNull(),
+  // The form as it was when submitted, so answers keep their labels and types if staff edit the service.
+  fields: jsonb('fields').$type<ServiceField[]>().notNull().default([]),
+  answers: jsonb('answers').$type<ServiceAnswers>().notNull().default({}),
+  // Created at submit: a pending bill for fixed pricing, an empty quote for variable pricing.
+  paymentId: text('payment_id')
+    .notNull()
+    .references(() => payment.id),
+  status: text('status', { enum: enumValues(SERVICE_REQUEST_STATUS) }).notNull(),
+});
+
+export type ServiceRequest = InferSelectModel<typeof serviceRequest>;
+
 export const schema = {
   user,
   printRequest,
@@ -653,6 +702,8 @@ export const schema = {
   visit,
   memberEmail,
   classCatalog,
+  service,
+  serviceRequest,
   classInstance,
   classBooking,
   carBayBooking,

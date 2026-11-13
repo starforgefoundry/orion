@@ -8,7 +8,7 @@ import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { signUrl } from '$lib/server/utils/signed-url';
 
 export const FILE_ROUTE = '/files';
-export const SIGNED_PREFIXES = ['waivers/', 'print_requests/'];
+export const SIGNED_PREFIXES = ['waivers/', 'print_requests/', 'service_requests/'];
 const DEFAULT_STORAGE_DIR = 'storage';
 
 export class InvalidStorageKeyError extends Error {}

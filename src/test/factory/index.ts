@@ -7,6 +7,7 @@ import * as organization from './organization';
 import * as pass from './pass';
 import * as print from './print';
 import * as printRequest from './print-request';
+import * as service from './service';
 import * as square from './square';
 
 export { newId } from './id';
@@ -21,5 +22,6 @@ export const factory = {
   ...pass,
   ...print,
   ...printRequest,
+  ...service,
   ...square,
 };
