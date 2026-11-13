@@ -21,6 +21,7 @@ import { PrintFilesRepository } from '$lib/server/repositories/print-files.repos
 import { PrintMaterialsRepository } from '$lib/server/repositories/print-materials.repository';
 import { PrintRequestRepository } from '$lib/server/repositories/print-request.repository';
 import { PrintRequestCommentRepository } from '$lib/server/repositories/print-request-comment.repository';
+import { ServiceRepository } from '$lib/server/repositories/service.repository';
 import { SettingsRepository } from '$lib/server/repositories/settings.repository';
 import { SquareRepository } from '$lib/server/repositories/square.repository';
 import { UserRepository } from '$lib/server/repositories/user.repository';
@@ -51,6 +52,7 @@ export const REPOSITORIES = {
   printMaterialsRepository: PrintMaterialsRepository,
   printRequestCommentRepository: PrintRequestCommentRepository,
   printRequestRepository: PrintRequestRepository,
+  serviceRepository: ServiceRepository,
   settingsRepository: SettingsRepository,
   squareRepository: SquareRepository,
   userRepository: UserRepository,
