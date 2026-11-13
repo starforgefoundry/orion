@@ -17,8 +17,9 @@ CREATE TABLE "service_request" (
 	"email" text NOT NULL,
 	"fields" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"answers" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"price" integer,
+	"payment_id" text NOT NULL,
 	"status" text NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "service_request" ADD CONSTRAINT "service_request_service_id_service_id_fk" FOREIGN KEY ("service_id") REFERENCES "public"."service"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "service_request" ADD CONSTRAINT "service_request_service_id_service_id_fk" FOREIGN KEY ("service_id") REFERENCES "public"."service"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "service_request" ADD CONSTRAINT "service_request_payment_id_payment_id_fk" FOREIGN KEY ("payment_id") REFERENCES "public"."payment"("id") ON DELETE no action ON UPDATE no action;

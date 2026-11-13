@@ -1,4 +1,5 @@
 // Relative imports: the database schema loads this file outside SvelteKit.
+import { PAYMENT_STATUS, type PaymentStatus } from './billing.ts';
 import type { EnumValue } from './member-enums.ts';
 import { BYTES_PER_MB } from './print-request.ts';
 
@@ -17,7 +18,6 @@ export type ServiceFieldType = EnumValue<typeof SERVICE_FIELD_TYPE>;
 
 export const SERVICE_REQUEST_STATUS = {
   SUBMITTED: 'submitted',
-  QUOTED: 'quoted',
   IN_PROGRESS: 'in_progress',
   DONE: 'done',
   CANCELED: 'canceled',
@@ -73,17 +73,9 @@ function invalidAnswerProblem(field: ServiceField, answer: ServiceAnswerInput) {
   }
 }
 
-/** Done and canceled requests leave the queue unless staff ask to see them. */
-export function isClosed(status: ServiceRequestStatus) {
-  return status === SERVICE_REQUEST_STATUS.DONE || status === SERVICE_REQUEST_STATUS.CANCELED;
-}
-
-/** Fixed-price requests are priced at submit; variable ones take quotes until work starts. */
-export function canQuote(request: { status: ServiceRequestStatus; price: number | null }) {
-  return (
-    request.status === SERVICE_REQUEST_STATUS.QUOTED ||
-    (request.status === SERVICE_REQUEST_STATUS.SUBMITTED && request.price === null)
-  );
+/** A variable-price request starts with an empty quote that staff fill in. */
+export function awaitingQuote(payment: { status: PaymentStatus; lineItems: unknown[] }) {
+  return payment.status === PAYMENT_STATUS.QUOTE && payment.lineItems.length === 0;
 }
 
 /** Returns what is wrong with the answers, or undefined when they satisfy the form. */

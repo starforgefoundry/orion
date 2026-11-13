@@ -37,7 +37,7 @@ export function serviceRequest(overrides: Partial<ServiceRequest> = {}): Service
     email: 'jane@example.com',
     fields: [],
     answers: {},
-    price: null,
+    paymentId: newId(),
     status: SERVICE_REQUEST_STATUS.SUBMITTED,
     ...overrides,
   };

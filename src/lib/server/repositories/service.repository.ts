@@ -45,11 +45,23 @@ export class ServiceRepository extends BaseRepository {
     return created;
   }
 
-  async getRequestById(id: string) {
-    const [found] = await this.db
-      .select()
+  /** Each request with its service and payment, which every request has from submit. */
+  private selectRequests() {
+    return this.db
+      .select({
+        request: schema.serviceRequest,
+        serviceName: schema.service.name,
+        pricingMode: schema.service.pricingMode,
+        payment: schema.payment,
+      })
       .from(schema.serviceRequest)
-      .where(eq(schema.serviceRequest.id, id));
+      .innerJoin(schema.service, eq(schema.service.id, schema.serviceRequest.serviceId))
+      .innerJoin(schema.payment, eq(schema.payment.id, schema.serviceRequest.paymentId))
+      .$dynamic();
+  }
+
+  async getRequestById(id: string) {
+    const [found] = await this.selectRequests().where(eq(schema.serviceRequest.id, id));
     return found;
   }
 
@@ -66,11 +78,7 @@ export class ServiceRepository extends BaseRepository {
   }
 
   async getRequests() {
-    return await this.db
-      .select({ request: schema.serviceRequest, serviceName: schema.service.name })
-      .from(schema.serviceRequest)
-      .innerJoin(schema.service, eq(schema.service.id, schema.serviceRequest.serviceId))
-      .orderBy(desc(schema.serviceRequest.submissionDate));
+    return await this.selectRequests().orderBy(desc(schema.serviceRequest.submissionDate));
   }
 
   async uploadRequestFile(requestId: string, fieldId: string, file: File) {

@@ -669,8 +669,10 @@ export const serviceRequest = pgTable('service_request', {
   // The form as it was when submitted, so answers keep their labels and types if staff edit the service.
   fields: jsonb('fields').$type<ServiceField[]>().notNull().default([]),
   answers: jsonb('answers').$type<ServiceAnswers>().notNull().default({}),
-  // Set at submit for fixed pricing, by staff for variable pricing.
-  price: integer('price'), // in cents
+  // Created at submit: a pending bill for fixed pricing, an empty quote for variable pricing.
+  paymentId: text('payment_id')
+    .notNull()
+    .references(() => payment.id),
   status: text('status', { enum: enumValues(SERVICE_REQUEST_STATUS) }).notNull(),
 });
 

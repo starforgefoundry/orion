@@ -1,7 +1,13 @@
 import { NotFoundError } from '$lib/errors';
 import type { SubmitServiceRequestDto } from '$lib/remotes/dtos/service.dto';
+import type { Payment } from '$lib/server/db/schema';
 import { ServiceRequestError, ServiceService } from '$lib/server/services/service.service';
-import { SERVICE_PRICING, SERVICE_REQUEST_STATUS } from '$lib/utils/services';
+import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
+import {
+  SERVICE_PRICING,
+  SERVICE_REQUEST_STATUS,
+  type ServiceRequestStatus,
+} from '$lib/utils/services';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -14,6 +20,10 @@ const MATERIAL_FIELD = factory.serviceField({
   required: true,
   options: ['Wood', 'Acrylic'],
 });
+const PAYMENT_ID = 'payment-1';
+const REQUEST_ID = 'request-1';
+const ENGRAVING_ITEM = { name: 'Laser Engraving', quantity: 1, unitAmount: 6000 };
+const PRICED = { status: PAYMENT_STATUS.PENDING, lineItems: [ENGRAVING_ITEM], total: 6000 };
 
 describe(ServiceService.name, () => {
   let sut: ServiceService;
@@ -21,7 +31,41 @@ describe(ServiceService.name, () => {
 
   beforeEach(() => {
     ({ sut, mocks } = newTestService(ServiceService));
+    // Mirrors the repository, which settles a $0 pending bill on save.
+    mocks.paymentRepository.save.mockImplementation(async (data, id) =>
+      factory.savedPayment(data, {
+        id: id ?? PAYMENT_ID,
+        status:
+          data.status === PAYMENT_STATUS.PENDING && data.bill.total === 0
+            ? PAYMENT_STATUS.PAID
+            : data.status,
+      }),
+    );
   });
+
+  /** A variable-price request whose payment starts as an empty quote. */
+  function stubRequest(
+    payment: Partial<Payment> = {},
+    status: ServiceRequestStatus = SERVICE_REQUEST_STATUS.SUBMITTED,
+  ) {
+    const request = factory.serviceRequest({ id: REQUEST_ID, paymentId: PAYMENT_ID, status });
+    const row = {
+      request,
+      serviceName: 'Laser Engraving',
+      pricingMode: SERVICE_PRICING.VARIABLE,
+      payment: factory.payment({
+        id: PAYMENT_ID,
+        type: PAYMENT_TYPE.SERVICE_REQUEST,
+        status: PAYMENT_STATUS.QUOTE,
+        lineItems: [],
+        total: 0,
+        ...payment,
+      }),
+    };
+    mocks.serviceRepository.getRequestById.mockResolvedValue(row);
+    mocks.serviceRepository.updateRequest.mockResolvedValue(request);
+    return row;
+  }
 
   describe('submitRequest', () => {
     function dto(overrides: Partial<SubmitServiceRequestDto> = {}): SubmitServiceRequestDto {
@@ -36,29 +80,56 @@ describe(ServiceService.name, () => {
 
     function stubCreate() {
       mocks.serviceRepository.createRequest.mockImplementation(async (data) =>
-        factory.serviceRequest({ ...data, price: data.price ?? null }),
+        factory.serviceRequest(data),
       );
     }
 
-    it('stores the fixed price and a snapshot of the form', async () => {
+    it('bills a fixed price as one pending line item and keeps a snapshot of the form', async () => {
       const service = factory.service({ price: 4200, fields: [MATERIAL_FIELD] });
       mocks.serviceRepository.getById.mockResolvedValue(service);
       stubCreate();
 
       const result = await sut.submitRequest(dto());
 
-      expect(result).toEqual({ pricingMode: SERVICE_PRICING.FIXED, price: 4200 });
+      expect(result).toEqual({
+        pricingMode: SERVICE_PRICING.FIXED,
+        price: 4200,
+        paymentId: PAYMENT_ID,
+      });
+      expect(mocks.paymentRepository.save).toHaveBeenCalledWith({
+        type: PAYMENT_TYPE.SERVICE_REQUEST,
+        status: PAYMENT_STATUS.PENDING,
+        customer: { name: 'Jane Doe', email: 'jane@example.com' },
+        bill: expect.objectContaining({
+          lineItems: [{ name: service.name, quantity: 1, unitAmount: 4200 }],
+          total: 4200,
+        }),
+      });
       expect(mocks.serviceRepository.createRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           serviceId: service.id,
-          price: 4200,
+          paymentId: PAYMENT_ID,
           fields: [MATERIAL_FIELD],
           status: SERVICE_REQUEST_STATUS.SUBMITTED,
         }),
       );
     });
 
-    it('leaves a variable price empty until staff quote it', async () => {
+    it('settles a $0 fixed price at submit', async () => {
+      mocks.serviceRepository.getById.mockResolvedValue(
+        factory.service({ price: 0, fields: [MATERIAL_FIELD] }),
+      );
+      stubCreate();
+
+      const result = await sut.submitRequest(dto());
+
+      expect(result.price).toBe(0);
+      await expect(mocks.paymentRepository.save.mock.results[0].value).resolves.toMatchObject({
+        status: PAYMENT_STATUS.PAID,
+      });
+    });
+
+    it('opens an empty quote for a variable price', async () => {
       mocks.serviceRepository.getById.mockResolvedValue(
         factory.service({ pricingMode: SERVICE_PRICING.VARIABLE, fields: [MATERIAL_FIELD] }),
       );
@@ -66,9 +137,12 @@ describe(ServiceService.name, () => {
 
       const result = await sut.submitRequest(dto());
 
-      expect(result.price).toBeNull();
-      expect(mocks.serviceRepository.createRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ price: null }),
+      expect(result).toMatchObject({ pricingMode: SERVICE_PRICING.VARIABLE, price: 0 });
+      expect(mocks.paymentRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: PAYMENT_STATUS.QUOTE,
+          bill: expect.objectContaining({ lineItems: [], total: 0 }),
+        }),
       );
     });
 
@@ -78,6 +152,7 @@ describe(ServiceService.name, () => {
 
       mocks.serviceRepository.getById.mockResolvedValue(undefined as never);
       await expect(sut.submitRequest(dto())).rejects.toBeInstanceOf(NotFoundError);
+      expect(mocks.paymentRepository.save).not.toHaveBeenCalled();
       expect(mocks.serviceRepository.createRequest).not.toHaveBeenCalled();
     });
 
@@ -89,6 +164,7 @@ describe(ServiceService.name, () => {
       await expect(sut.submitRequest(dto({ answers: {} }))).rejects.toBeInstanceOf(
         ServiceRequestError,
       );
+      expect(mocks.paymentRepository.save).not.toHaveBeenCalled();
       expect(mocks.serviceRepository.createRequest).not.toHaveBeenCalled();
     });
 
@@ -130,30 +206,22 @@ describe(ServiceService.name, () => {
   describe('getRequests', () => {
     it('signs file links using the field types saved with the request', async () => {
       // The text answer looks like a storage key but its field was never a file field.
-      const request = factory.serviceRequest({
-        fields: [FILE_FIELD, factory.serviceField({ id: 'note', type: 'text' })],
-        answers: {
-          design: 'service_requests/abc/design/logo.svg',
-          note: 'service_requests/other/design/secret.svg',
-        },
-      });
-      mocks.serviceRepository.getRequests.mockResolvedValue([{ request, serviceName: 'Laser' }]);
+      const row = stubRequest();
+      row.request.fields = [FILE_FIELD, factory.serviceField({ id: 'note', type: 'text' })];
+      row.request.answers = {
+        design: 'service_requests/abc/design/logo.svg',
+        note: 'service_requests/other/design/secret.svg',
+      };
+      mocks.serviceRepository.getRequests.mockResolvedValue([row]);
 
-      const [row] = await sut.getRequests();
+      const [result] = await sut.getRequests();
 
-      expect(Object.keys(row.files)).toEqual(['design']);
-      expect(row.files.design.name).toBe('logo.svg');
+      expect(Object.keys(result.files)).toEqual(['design']);
+      expect(result.files.design.name).toBe('logo.svg');
     });
   });
 
   describe('updateRequestStatus', () => {
-    function stubRequest(overrides: Parameters<typeof factory.serviceRequest>[0] = {}) {
-      const request = factory.serviceRequest({ id: 'request-1', ...overrides });
-      mocks.serviceRepository.getRequestById.mockResolvedValue(request);
-      mocks.serviceRepository.updateRequest.mockResolvedValue(request);
-      return request;
-    }
-
     it('rejects a missing request', async () => {
       mocks.serviceRepository.getRequestById.mockResolvedValue(undefined as never);
 
@@ -162,90 +230,113 @@ describe(ServiceService.name, () => {
       ).rejects.toBeInstanceOf(NotFoundError);
     });
 
-    it('only lets a quote move a request to quoted', async () => {
-      stubRequest();
-
-      await expect(
-        sut.updateRequestStatus({ id: 'request-1', status: SERVICE_REQUEST_STATUS.QUOTED }),
-      ).rejects.toBeInstanceOf(ServiceRequestError);
-    });
-
     it.each([SERVICE_REQUEST_STATUS.IN_PROGRESS, SERVICE_REQUEST_STATUS.DONE])(
       'does not start work (%s) before a quote',
       async (status) => {
-        stubRequest({ price: null });
+        stubRequest();
 
-        await expect(sut.updateRequestStatus({ id: 'request-1', status })).rejects.toBeInstanceOf(
-          ServiceRequestError,
+        await expect(sut.updateRequestStatus({ id: REQUEST_ID, status })).rejects.toThrow(
+          new ServiceRequestError('Send a quote before starting work.'),
         );
         expect(mocks.serviceRepository.updateRequest).not.toHaveBeenCalled();
       },
     );
 
     it('starts work on a priced request', async () => {
-      stubRequest({ price: 5000, status: SERVICE_REQUEST_STATUS.QUOTED });
+      stubRequest(PRICED);
 
-      await sut.updateRequestStatus({
-        id: 'request-1',
-        status: SERVICE_REQUEST_STATUS.IN_PROGRESS,
-      });
+      await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.IN_PROGRESS });
 
-      expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith('request-1', {
+      expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith(REQUEST_ID, {
         status: SERVICE_REQUEST_STATUS.IN_PROGRESS,
       });
     });
 
-    it('clears the quote when a variable request goes back to submitted', async () => {
-      stubRequest({ price: 5000, status: SERVICE_REQUEST_STATUS.QUOTED });
-      mocks.serviceRepository.getById.mockResolvedValue(
-        factory.service({ pricingMode: SERVICE_PRICING.VARIABLE }),
-      );
+    it('cancels an unpaid payment with the request', async () => {
+      const { payment } = stubRequest();
+      mocks.paymentGateway.cancel.mockResolvedValue({
+        ...payment,
+        status: PAYMENT_STATUS.CANCELED,
+      });
 
-      await sut.updateRequestStatus({ id: 'request-1', status: SERVICE_REQUEST_STATUS.SUBMITTED });
+      await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED });
 
-      expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith('request-1', {
-        status: SERVICE_REQUEST_STATUS.SUBMITTED,
-        price: null,
+      expect(mocks.paymentGateway.cancel).toHaveBeenCalledWith(payment);
+      expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith(REQUEST_ID, {
+        status: SERVICE_REQUEST_STATUS.CANCELED,
       });
     });
 
-    it('keeps the price of a fixed-price request that goes back to submitted', async () => {
-      stubRequest({ price: 2500, status: SERVICE_REQUEST_STATUS.IN_PROGRESS });
-      mocks.serviceRepository.getById.mockResolvedValue(
-        factory.service({ pricingMode: SERVICE_PRICING.FIXED }),
-      );
+    it('keeps a paid payment when the request is canceled', async () => {
+      stubRequest({ ...PRICED, status: PAYMENT_STATUS.PAID });
 
-      await sut.updateRequestStatus({ id: 'request-1', status: SERVICE_REQUEST_STATUS.SUBMITTED });
+      await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED });
 
-      expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith('request-1', {
-        status: SERVICE_REQUEST_STATUS.SUBMITTED,
-      });
+      expect(mocks.paymentGateway.cancel).not.toHaveBeenCalled();
+    });
+
+    it('does not reopen a request whose payment was canceled', async () => {
+      stubRequest({ status: PAYMENT_STATUS.CANCELED }, SERVICE_REQUEST_STATUS.CANCELED);
+
+      await expect(
+        sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.SUBMITTED }),
+      ).rejects.toBeInstanceOf(ServiceRequestError);
+      expect(mocks.serviceRepository.updateRequest).not.toHaveBeenCalled();
     });
   });
 
-  describe('quoteRequest', () => {
-    it('quotes a request that is waiting for one', async () => {
-      const request = factory.serviceRequest({ id: 'request-1', price: null });
-      mocks.serviceRepository.getRequestById.mockResolvedValue(request);
-      mocks.serviceRepository.updateRequest.mockResolvedValue(request);
+  describe('priceRequest', () => {
+    it('turns the quote into a pending bill with one line item', async () => {
+      stubRequest();
 
-      await sut.quoteRequest({ id: 'request-1', price: 6000 });
+      const payment = await sut.priceRequest({ id: REQUEST_ID, price: 6000 });
 
-      expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith('request-1', {
-        price: 6000,
-        status: SERVICE_REQUEST_STATUS.QUOTED,
-      });
+      expect(mocks.paymentRepository.save).toHaveBeenCalledWith(
+        {
+          type: PAYMENT_TYPE.SERVICE_REQUEST,
+          status: PAYMENT_STATUS.PENDING,
+          customer: { name: 'Jane Doe', email: 'jane@example.com' },
+          bill: expect.objectContaining({ lineItems: [ENGRAVING_ITEM], total: 6000 }),
+        },
+        PAYMENT_ID,
+      );
+      expect(payment).toMatchObject({ status: PAYMENT_STATUS.PENDING, total: 6000 });
     });
 
-    it('does not re-price a fixed-price request', async () => {
-      mocks.serviceRepository.getRequestById.mockResolvedValue(
-        factory.serviceRequest({ id: 'request-1', price: 2500 }),
-      );
+    it('re-prices a bill that is still unpaid', async () => {
+      stubRequest(PRICED);
 
-      await expect(sut.quoteRequest({ id: 'request-1', price: 1 })).rejects.toBeInstanceOf(
+      await sut.priceRequest({ id: REQUEST_ID, price: 7000 });
+
+      expect(mocks.paymentRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ bill: expect.objectContaining({ total: 7000 }) }),
+        PAYMENT_ID,
+      );
+    });
+
+    it.each([PAYMENT_STATUS.PAID, PAYMENT_STATUS.CANCELED])(
+      'does not re-price a %s payment',
+      async (status) => {
+        stubRequest({ ...PRICED, status });
+
+        await expect(sut.priceRequest({ id: REQUEST_ID, price: 1 })).rejects.toBeInstanceOf(
+          ServiceRequestError,
+        );
+        expect(mocks.paymentRepository.save).not.toHaveBeenCalled();
+      },
+    );
+
+    it('does not quote a fixed-price request', async () => {
+      const row = stubRequest(PRICED);
+      mocks.serviceRepository.getRequestById.mockResolvedValue({
+        ...row,
+        pricingMode: SERVICE_PRICING.FIXED,
+      });
+
+      await expect(sut.priceRequest({ id: REQUEST_ID, price: 1 })).rejects.toBeInstanceOf(
         ServiceRequestError,
       );
-      expect(mocks.serviceRepository.updateRequest).not.toHaveBeenCalled();
+      expect(mocks.paymentRepository.save).not.toHaveBeenCalled();
     });
   });
 });

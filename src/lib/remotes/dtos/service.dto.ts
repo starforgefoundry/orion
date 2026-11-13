@@ -63,9 +63,9 @@ export const updateServiceRequestStatusDto = v.object({
 
 export type UpdateServiceRequestStatusDto = v.InferInput<typeof updateServiceRequestStatusDto>;
 
-export const quoteServiceRequestDto = v.object({
+export const priceServiceRequestDto = v.object({
   id: v.string(),
   price: v.pipe(v.number(), v.integer(), v.minValue(1, 'Enter a quote above $0.')), // in cents
 });
 
-export type QuoteServiceRequestDto = v.InferInput<typeof quoteServiceRequestDto>;
+export type PriceServiceRequestDto = v.InferInput<typeof priceServiceRequestDto>;

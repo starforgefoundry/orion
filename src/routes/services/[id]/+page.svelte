@@ -47,13 +47,20 @@
         <CircleCheckIcon class="size-10 text-green-600" aria-hidden="true" />
         <h2 class="text-lg font-semibold">Request received</h2>
         <p class="text-sm text-muted-foreground">
-          {#if result.pricingMode === SERVICE_PRICING.FIXED && result.price !== null}
-            The price is {formatCents(result.price)}. Staff will contact you by email.
+          {#if result.pricingMode === SERVICE_PRICING.VARIABLE}
+            Staff will review your request and send you a quote.
+          {:else if result.price > 0}
+            The price is {formatCents(result.price)}.
           {:else}
-            Staff will review your request and email you a quote.
+            There is nothing to pay.
           {/if}
         </p>
-        <Button variant="outline" href="/services" class="mt-2">Back to Services</Button>
+        <div class="mt-2 flex flex-wrap justify-center gap-2">
+          {#if result.pricingMode === SERVICE_PRICING.FIXED && result.price > 0}
+            <Button href="/pay/{result.paymentId}">Pay Now</Button>
+          {/if}
+          <Button variant="outline" href="/services">Back to Services</Button>
+        </div>
       </div>
     {:else}
       <form

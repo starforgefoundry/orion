@@ -1,16 +1,17 @@
 import type {
-  QuoteServiceRequestDto,
+  PriceServiceRequestDto,
   SubmitServiceRequestDto,
   UpdateServiceRequestStatusDto,
   UpsertServiceDto,
 } from '$lib/remotes/dtos/service.dto';
 import { NotFoundError, UserError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
-import type { ServiceRequest } from '$lib/server/db/schema';
+import type { Service } from '$lib/server/db/schema';
 import { fileUrl } from '$lib/server/utils/storage';
+import { buildBill, PAYMENT_STATUS, PAYMENT_TYPE, type PaymentStatus } from '$lib/utils/billing';
 import {
   answersProblem,
-  canQuote,
+  awaitingQuote,
   formAnswers,
   SERVICE_FIELD_TYPE,
   SERVICE_PRICING,
@@ -26,6 +27,13 @@ const WORK_STATUSES: ServiceRequestStatus[] = [
   SERVICE_REQUEST_STATUS.IN_PROGRESS,
   SERVICE_REQUEST_STATUS.DONE,
 ];
+// Matches the statuses the payment repository lets `save` overwrite.
+const UNPAID_STATUSES: PaymentStatus[] = [PAYMENT_STATUS.QUOTE, PAYMENT_STATUS.PENDING];
+
+/** One line for the service, so the checkout page names what is being paid for. */
+function serviceBill(service: Pick<Service, 'name'>, price: number) {
+  return buildBill([{ name: service.name, quantity: 1, unitAmount: price }]);
+}
 
 export class ServiceRequestError extends UserError {}
 
@@ -79,17 +87,30 @@ export class ServiceService extends BaseService {
           : answer;
     }
 
-    const request = await this.serviceRepository.createRequest({
+    // Fixed prices are billed now; variable ones start as an empty quote for staff to price.
+    const fixed = service.pricingMode === SERVICE_PRICING.FIXED;
+    const payment = await this.paymentRepository.save({
+      type: PAYMENT_TYPE.SERVICE_REQUEST,
+      status: fixed ? PAYMENT_STATUS.PENDING : PAYMENT_STATUS.QUOTE,
+      customer: { name: dto.customerName, email: dto.email },
+      bill: fixed ? serviceBill(service, service.price) : buildBill([]),
+    });
+
+    await this.serviceRepository.createRequest({
       id: requestId,
       serviceId: service.id,
       fields: service.fields,
       customerName: dto.customerName,
       email: dto.email,
       answers,
-      price: service.pricingMode === SERVICE_PRICING.FIXED ? service.price : null,
+      paymentId: payment.id,
       status: SERVICE_REQUEST_STATUS.SUBMITTED,
     });
-    return { pricingMode: service.pricingMode, price: request.price };
+    return {
+      pricingMode: service.pricingMode,
+      price: payment.total,
+      paymentId: payment.id,
+    };
   }
 
   async getRequests() {
@@ -117,37 +138,39 @@ export class ServiceService extends BaseService {
   }
 
   async updateRequestStatus({ id, status }: UpdateServiceRequestStatusDto) {
-    const request = await this.requireRequest(id);
-    // Only sending a quote moves a request to quoted.
-    if (status === SERVICE_REQUEST_STATUS.QUOTED && request.status !== status) {
-      throw new ServiceRequestError('Send a quote to mark this request as quoted.');
-    }
-    // Work can only start once there is a price to charge.
-    if (WORK_STATUSES.includes(status) && request.price === null) {
+    const { request, payment } = await this.requireRequest(id);
+    if (WORK_STATUSES.includes(status) && awaitingQuote(payment)) {
       throw new ServiceRequestError('Send a quote before starting work.');
     }
-    return await this.serviceRepository.updateRequest(id, {
-      status,
-      ...(await this.priceAfterReset(request, status)),
-    });
-  }
-
-  /** A quoted request that goes back to submitted needs a new quote, so its old price is dropped. */
-  private async priceAfterReset(request: ServiceRequest, status: ServiceRequestStatus) {
-    if (status !== SERVICE_REQUEST_STATUS.SUBMITTED) return {};
-    const service = await this.serviceRepository.getById(request.serviceId);
-    return service?.pricingMode === SERVICE_PRICING.VARIABLE ? { price: null } : {};
-  }
-
-  async quoteRequest({ id, price }: QuoteServiceRequestDto) {
-    const request = await this.requireRequest(id);
-    if (!canQuote(request)) {
-      throw new ServiceRequestError('Only requests waiting for a quote can be quoted.');
+    // A canceled bill cannot be paid again, so the request stays canceled.
+    if (status !== request.status && payment.status === PAYMENT_STATUS.CANCELED) {
+      throw new ServiceRequestError('This request was canceled and cannot be reopened.');
     }
-    return await this.serviceRepository.updateRequest(id, {
-      price,
-      status: SERVICE_REQUEST_STATUS.QUOTED,
-    });
+    if (status === SERVICE_REQUEST_STATUS.CANCELED && UNPAID_STATUSES.includes(payment.status)) {
+      await this.paymentGateway.cancel(payment);
+    }
+    return await this.serviceRepository.updateRequest(id, { status });
+  }
+
+  /** Sets a variable request's price. The customer then pays it at /pay/[id]. */
+  async priceRequest({ id, price }: PriceServiceRequestDto) {
+    const { request, serviceName, pricingMode, payment } = await this.requireRequest(id);
+    if (pricingMode !== SERVICE_PRICING.VARIABLE) {
+      throw new ServiceRequestError('Fixed-price requests cannot be quoted.');
+    }
+    if (!UNPAID_STATUSES.includes(payment.status)) {
+      throw new ServiceRequestError('Only unpaid requests can be quoted.');
+    }
+    // Services have no approval step: the quote is the bill.
+    return await this.paymentRepository.save(
+      {
+        type: PAYMENT_TYPE.SERVICE_REQUEST,
+        status: PAYMENT_STATUS.PENDING,
+        customer: { name: request.customerName, email: request.email },
+        bill: serviceBill({ name: serviceName }, price),
+      },
+      payment.id,
+    );
   }
 }
 

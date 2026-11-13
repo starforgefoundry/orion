@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BYTES_PER_MB } from './print-request';
 import {
   answersProblem,
-  canQuote,
+  awaitingQuote,
   formAnswers,
   MAX_SERVICE_UPLOAD_MB,
   storageFileName,
@@ -47,12 +47,12 @@ describe('formAnswers', () => {
   });
 });
 
-describe('canQuote', () => {
-  it('allows quoting unpriced and quoted requests only', () => {
-    expect(canQuote({ status: 'submitted', price: null })).toBe(true);
-    expect(canQuote({ status: 'quoted', price: 500 })).toBe(true);
-    expect(canQuote({ status: 'submitted', price: 500 })).toBe(false);
-    expect(canQuote({ status: 'in_progress', price: null })).toBe(false);
+describe('awaitingQuote', () => {
+  const item = { name: 'Engraving', quantity: 1, unitAmount: 500 };
+  it('is true only for an empty quote', () => {
+    expect(awaitingQuote({ status: 'quote', lineItems: [] })).toBe(true);
+    expect(awaitingQuote({ status: 'quote', lineItems: [item] })).toBe(false);
+    expect(awaitingQuote({ status: 'pending', lineItems: [item] })).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
 import { command, form, query } from '$app/server';
 import {
-  quoteServiceRequestDto,
+  priceServiceRequestDto,
   submitServiceRequestDto,
   updateServiceRequestStatusDto,
   upsertServiceDto,
@@ -45,11 +45,11 @@ export const updateServiceRequestStatus = command(
   }),
 );
 
-export const quoteServiceRequest = command(
-  quoteServiceRequestDto,
+export const priceServiceRequest = command(
+  priceServiceRequestDto,
   exposeUserErrors(async (dto) => {
     verifyAuth();
-    const result = await serviceService.quoteRequest(dto);
+    const result = await serviceService.priceRequest(dto);
     await getServiceRequests().refresh();
     return result;
   }),
