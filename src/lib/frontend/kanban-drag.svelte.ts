@@ -1,4 +1,3 @@
-import type { PrintRequestStatus } from '$lib/utils/print-request';
 import type { Attachment } from 'svelte/attachments';
 
 const LONG_PRESS_MS = 300;
@@ -9,11 +8,22 @@ const SCROLL_FRAME_MS = 16;
 const PICKUP_VIBRATE_MS = 15;
 const COLUMN_ATTRIBUTE = 'data-column-id';
 
-type DropHandler = (requestId: string, column: PrintRequestStatus) => Promise<void> | void;
+export type KanbanColumnStyle = { dot: string; column: string; card: string };
 
-type TouchSession = {
+export type KanbanColumn<Column extends string> = {
+  id: Column;
+  title: string;
+  style: KanbanColumnStyle;
+};
+
+type DropHandler<Column extends string> = (
+  requestId: string,
+  column: Column,
+) => Promise<void> | void;
+
+type TouchSession<Column extends string> = {
   requestId: string;
-  column: PrintRequestStatus;
+  column: Column;
   element: HTMLElement;
   startX: number;
   startY: number;
@@ -22,19 +32,25 @@ type TouchSession = {
   rect?: DOMRect;
 };
 
-export class KanbanDrag {
+/**
+ * Drag state for a kanban board. Columns must render `data-column-id` with their id so touch drags
+ * can find the column under the finger.
+ */
+export class KanbanDrag<Column extends string> {
   draggedId = $state<string | null>(null);
-  overColumn = $state<PrintRequestStatus | null>(null);
+  overColumn = $state<Column | null>(null);
   isTouchDragging = $state(false);
 
-  #fromColumn: PrintRequestStatus | null = null;
-  #onDrop: DropHandler;
+  #columns: readonly Column[];
+  #fromColumn: Column | null = null;
+  #onDrop: DropHandler<Column>;
   #scrollContainer?: HTMLElement;
-  #touch?: TouchSession;
+  #touch?: TouchSession<Column>;
   #pointer = { x: 0, y: 0 };
   #scrollTimer?: ReturnType<typeof setInterval>;
 
-  constructor(onDrop: DropHandler) {
+  constructor(columns: readonly Column[], onDrop: DropHandler<Column>) {
+    this.#columns = columns;
     this.#onDrop = onDrop;
   }
 
@@ -44,7 +60,7 @@ export class KanbanDrag {
 
   // Mouse drag (HTML5 drag and drop)
 
-  dragStart(event: DragEvent, requestId: string, column: PrintRequestStatus) {
+  dragStart(event: DragEvent, requestId: string, column: Column) {
     this.draggedId = requestId;
     this.#fromColumn = column;
     if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
@@ -57,7 +73,7 @@ export class KanbanDrag {
     this.#pointer = { x: event.clientX, y: event.clientY };
   }
 
-  dragOver(event: DragEvent, column: PrintRequestStatus) {
+  dragOver(event: DragEvent, column: Column) {
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
     this.overColumn = column;
@@ -69,7 +85,7 @@ export class KanbanDrag {
     this.overColumn = null;
   }
 
-  async drop(event: DragEvent, column: PrintRequestStatus) {
+  async drop(event: DragEvent, column: Column) {
     event.preventDefault();
     await this.#finish(column);
   }
@@ -80,7 +96,7 @@ export class KanbanDrag {
 
   // Touch drag: long-press a card to pick it up so normal swipes still scroll the page
 
-  touch(requestId: string, column: PrintRequestStatus): Attachment<HTMLElement> {
+  touch(requestId: string, column: Column): Attachment<HTMLElement> {
     return (element) => {
       const onStart = (event: TouchEvent) => this.#touchStart(event, element, requestId, column);
       const onMove = (event: TouchEvent) => this.#touchMove(event);
@@ -101,12 +117,7 @@ export class KanbanDrag {
     };
   }
 
-  #touchStart(
-    event: TouchEvent,
-    element: HTMLElement,
-    requestId: string,
-    column: PrintRequestStatus,
-  ) {
+  #touchStart(event: TouchEvent, element: HTMLElement, requestId: string, column: Column) {
     const interactive = (event.target as HTMLElement).closest('button, a');
     if (interactive && interactive !== element) return;
 
@@ -181,12 +192,17 @@ export class KanbanDrag {
     if (clone) clone.style.display = '';
 
     const column = element?.closest(`[${COLUMN_ATTRIBUTE}]`)?.getAttribute(COLUMN_ATTRIBUTE);
-    if (column) this.overColumn = column as PrintRequestStatus;
+    if (column && this.#isColumn(column)) this.overColumn = column;
+  }
+
+  // The DOM attribute is an untyped string, so only accept ids this board was configured with
+  #isColumn(value: string): value is Column {
+    return (this.#columns as readonly string[]).includes(value);
   }
 
   // Shared
 
-  async #finish(column: PrintRequestStatus | null) {
+  async #finish(column: Column | null) {
     const requestId = this.draggedId;
     const moved = requestId && column && column !== this.#fromColumn;
     this.#reset();

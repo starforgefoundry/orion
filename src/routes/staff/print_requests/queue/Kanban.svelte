@@ -15,7 +15,11 @@
   import PackageCheckIcon from '@lucide/svelte/icons/package-check';
   import { formatDate } from '$lib/frontend/format';
   import { MediaQuery } from 'svelte/reactivity';
-  import { KanbanDrag } from './kanban-drag.svelte';
+  import {
+    KanbanDrag,
+    type KanbanColumn,
+    type KanbanColumnStyle,
+  } from '$lib/frontend/kanban-drag.svelte';
   import RequestDetailModal from './RequestDetailModal.svelte';
   import {
     BOARD_STATUSES,
@@ -26,9 +30,9 @@
   } from './request-actions';
   import { PAYMENT_STATUS_DISPLAY } from '$lib/frontend/payment-status';
 
-  type ColumnStyle = { dot: string; column: string; card: string };
+  type BoardStatus = (typeof BOARD_STATUSES)[number];
 
-  const COLUMN_STYLES: Record<(typeof BOARD_STATUSES)[number], ColumnStyle> = {
+  const COLUMN_STYLES: Record<BoardStatus, KanbanColumnStyle> = {
     in_queue: {
       dot: 'bg-muted-foreground',
       column: 'bg-muted/40',
@@ -46,7 +50,7 @@
     },
   };
 
-  const columns = BOARD_STATUSES.map((id) => ({
+  const columns: KanbanColumn<BoardStatus>[] = BOARD_STATUSES.map((id) => ({
     id,
     title: STATUS_LABELS[id],
     style: COLUMN_STYLES[id],
@@ -60,7 +64,7 @@
   // Touch devices use the long-press drag instead of native drag and drop.
   const hasMouse = new MediaQuery('pointer: fine');
 
-  const drag = new KanbanDrag(async (requestId, column) => {
+  const drag = new KanbanDrag(BOARD_STATUSES, async (requestId, column) => {
     const job = prints.find((print) => print.id === requestId);
     if (job) await changeStatus(job, column);
   });
