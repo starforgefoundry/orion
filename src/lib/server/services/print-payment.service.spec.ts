@@ -262,10 +262,18 @@ describe(PrintPaymentService.name, () => {
       mocks.discordRepository.notify.mockResolvedValue(undefined as never);
     });
 
-    it('approves the quote so the customer can pay', async () => {
-      const approved = await sut.respondToQuote({ id: REQUEST_ID, approve: true });
+    it('approves the quote by charging the card', async () => {
+      const approved = await sut.respondToQuote({
+        id: REQUEST_ID,
+        approve: true,
+        sourceId: 'cnon:ok',
+      });
 
-      expect(approved?.status).toBe(PAYMENT_STATUS.PENDING);
+      expect(approved?.status).toBe(PAYMENT_STATUS.PAID);
+      expect(mocks.paymentGateway.pay).toHaveBeenCalledWith(
+        expect.objectContaining({ id: PAYMENT_ID, status: PAYMENT_STATUS.PENDING }),
+        'cnon:ok',
+      );
       await vi.waitFor(() =>
         expect(mocks.discordRepository.notify).toHaveBeenCalledWith(
           WEBHOOK_URL,
@@ -279,6 +287,38 @@ describe(PrintPaymentService.name, () => {
           }),
         ),
       );
+    });
+
+    it('refuses to approve a quote without a card', async () => {
+      await expect(sut.respondToQuote({ id: REQUEST_ID, approve: true })).rejects.toThrow(
+        PrintPaymentError,
+      );
+      expect(mocks.paymentRepository.approveQuote).not.toHaveBeenCalled();
+    });
+
+    it('keeps the quote open when the charge fails', async () => {
+      mocks.paymentGateway.pay.mockRejectedValue(new Error('declined'));
+      mocks.paymentRepository.reopenQuote.mockResolvedValue(undefined as never);
+
+      await expect(
+        sut.respondToQuote({ id: REQUEST_ID, approve: true, sourceId: 'cnon:bad' }),
+      ).rejects.toThrow('declined');
+      expect(mocks.paymentRepository.reopenQuote).toHaveBeenCalledWith(PAYMENT_ID);
+      expect(mocks.discordRepository.notify).not.toHaveBeenCalled();
+    });
+
+    it('approves an organization quote without a card', async () => {
+      mocks.printRequestRepository.getById.mockResolvedValue(
+        printRequest({
+          isQuote: true,
+          payment: payment({ status: PAYMENT_STATUS.QUOTE, organizationId: ORGANIZATION.id }),
+        }),
+      );
+
+      const approved = await sut.respondToQuote({ id: REQUEST_ID, approve: true });
+
+      expect(approved?.status).toBe(PAYMENT_STATUS.PENDING);
+      expect(mocks.paymentGateway.pay).not.toHaveBeenCalled();
     });
 
     it('cancels the request and its quote when the customer declines', async () => {

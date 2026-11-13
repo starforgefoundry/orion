@@ -12,7 +12,7 @@ import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import { printQueueUrl, printRequestStatusUrl } from '$lib/server/utils/payment-links';
-import { PAYMENT_STATUS } from '$lib/utils/billing';
+import { PAYMENT_STATUS, quoteRequiresCard } from '$lib/utils/billing';
 import { PRINT_REQUEST_STATUS, printSubmissionProblem } from '$lib/utils/print-request';
 import { DateTime } from 'luxon';
 
@@ -148,6 +148,7 @@ export class PrintRequestService extends BaseService {
         paymentDate: payment.paymentDate?.toISO() ?? null,
         billedToOrganization: payment.organizationId !== null,
         invoiceUrl: payment.squareInvoiceId ? payment.paymentUrl : null,
+        quoteRequiresCard: quoteRequiresCard(payment),
       },
     };
   }

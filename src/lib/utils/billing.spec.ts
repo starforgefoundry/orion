@@ -7,6 +7,7 @@ import {
   lineItemsTotal,
   PAYMENT_STATUS,
   PAYMENT_TYPE,
+  quoteRequiresCard,
 } from './billing';
 
 const ITEMS = [
@@ -100,5 +101,26 @@ describe('isPayableOnline', () => {
     ['is billed to an organization', { organizationId: 'org' }],
   ])('refuses a payment that %s', (_, overrides) => {
     expect(isPayableOnline({ ...PENDING, ...overrides })).toBe(false);
+  });
+});
+
+describe('quoteRequiresCard', () => {
+  const QUOTE = {
+    type: PAYMENT_TYPE.PRINT_REQUEST,
+    status: PAYMENT_STATUS.QUOTE,
+    organizationId: null,
+    squareInvoiceId: null,
+    total: 1000,
+  };
+
+  it('requires a card for a quote the customer owes', () => {
+    expect(quoteRequiresCard(QUOTE)).toBe(true);
+  });
+
+  it.each([
+    ['costs nothing', { total: 0 }],
+    ['is billed to an organization', { organizationId: 'org' }],
+  ])('approves a quote that %s without a card', (_, overrides) => {
+    expect(quoteRequiresCard({ ...QUOTE, ...overrides })).toBe(false);
   });
 });

@@ -26,6 +26,11 @@ export class PrintRequestTracker {
     await this.respond(true, { success: 'Quote approved', error: 'Could not approve the quote' });
   }
 
+  async approveAndPay(sourceId: string) {
+    await respondToPrintRequestQuote({ id: this.id, approve: true, sourceId });
+    toast.success('Quote approved and paid. Thank you!');
+  }
+
   async decline() {
     const confirmed = await modalManager.confirm({
       title: 'Cancel Print Request',

@@ -55,6 +55,7 @@ export type UpdatePrintRequestStatusDto = v.InferInput<typeof updatePrintRequest
 export const respondToQuoteDto = v.object({
   id: v.string(),
   approve: v.boolean(),
+  sourceId: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 
 export type RespondToQuoteDto = v.InferInput<typeof respondToQuoteDto>;

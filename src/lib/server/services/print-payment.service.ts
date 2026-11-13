@@ -19,6 +19,7 @@ import {
   isPayableOnline,
   PAYMENT_STATUS,
   PAYMENT_TYPE,
+  quoteRequiresCard,
   type PaymentStatus,
 } from '$lib/utils/billing';
 import { printBill } from '$lib/utils/print-pricing';
@@ -194,14 +195,32 @@ export class PrintPaymentService extends BaseService {
       return null;
     }
 
-    const approved = await this.paymentRepository.approveQuote(payment);
-    if (!approved) throw new PrintPaymentError('This quote has already been answered');
+    const approved = await this.approveQuote(payment, dto.sourceId);
 
     runInBackground(
-      this.sendQuoteApprovedNotification(request, approved.total),
+      this.sendQuoteApprovedNotification(request, payment.total),
       'send quote approved notification',
     );
 
+    return approved;
+  }
+
+  private async approveQuote(quote: Payment, sourceId: string | undefined) {
+    if (!quoteRequiresCard(quote)) return await this.markQuoteApproved(quote);
+    if (!sourceId) throw new PrintPaymentError('Pay for this quote to approve it');
+
+    const approved = await this.markQuoteApproved(quote);
+    try {
+      return await this.paymentGateway.pay(approved, sourceId);
+    } catch (error) {
+      await this.paymentRepository.reopenQuote(approved.id);
+      throw error;
+    }
+  }
+
+  private async markQuoteApproved(quote: Payment) {
+    const approved = await this.paymentRepository.approveQuote(quote);
+    if (!approved) throw new PrintPaymentError('This quote has already been answered');
     return approved;
   }
 
