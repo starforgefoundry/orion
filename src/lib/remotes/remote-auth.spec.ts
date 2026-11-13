@@ -51,6 +51,7 @@ const PUBLIC_REMOTES: Record<string, string[]> = {
     'respondToPrintRequestQuote',
     'payPrintRequest',
   ],
+  'service.remote.ts': ['getEnabledServices', 'getEnabledService', 'submitServiceRequestForm'],
   'settings.remote.ts': [
     'getPublicPrintRequestForm',
     'getCarBayRates',
