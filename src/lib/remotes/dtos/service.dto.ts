@@ -1,10 +1,13 @@
 import { enumValues } from '$lib/utils/member-enums';
 import {
-  MAX_SERVICE_UPLOAD_LIMIT_MB,
+  answerProblem,
+  fileUploadLimitMB,
+  MAX_SERVICE_UPLOAD_TOTAL_MB,
   SERVICE_FIELD_ID_PATTERN,
   SERVICE_FIELD_TYPE,
   SERVICE_PRICING,
   SERVICE_REQUEST_STATUS,
+  type ServiceField,
 } from '$lib/utils/services';
 import * as v from 'valibot';
 
@@ -13,7 +16,7 @@ import * as v from 'valibot';
 const serviceFieldDto = v.pipe(
   v.object({
     id: v.pipe(v.string(), v.regex(SERVICE_FIELD_ID_PATTERN)),
-    label: v.pipe(v.string(), v.trim(), v.minLength(1, 'Enter a label for this field.')),
+    label: v.pipe(v.string(), v.trim(), v.minLength(1, 'Enter a question.')),
     type: v.picklist(enumValues(SERVICE_FIELD_TYPE)),
     required: v.boolean(),
     options: v.array(v.pipe(v.string(), v.trim(), v.minLength(1))),
@@ -34,8 +37,8 @@ const serviceFieldDto = v.pipe(
         v.integer('Use a whole number of MB.'),
         v.minValue(1, 'Max size must be at least 1 MB.'),
         v.maxValue(
-          MAX_SERVICE_UPLOAD_LIMIT_MB,
-          `Max size must be at most ${MAX_SERVICE_UPLOAD_LIMIT_MB} MB.`,
+          MAX_SERVICE_UPLOAD_TOTAL_MB,
+          `Max size must be at most ${MAX_SERVICE_UPLOAD_TOTAL_MB} MB.`,
         ),
       ),
     ),
@@ -51,56 +54,12 @@ const serviceFieldDto = v.pipe(
   v.forward(
     v.partialCheck(
       [['options']],
-      (field) => new Set(field.options.map(labelKey)).size === field.options.length,
+      (field) =>
+        new Set(field.options.map((option) => option.toLowerCase())).size === field.options.length,
       'Choices must be different.',
     ),
     ['options'],
   ),
-);
-
-/** Labels that repeat the name and email every request form already asks for. */
-const BUILT_IN_LABELS = new Set(['name', 'email', 'email address']);
-
-function labelKey(label: string) {
-  return label.trim().toLowerCase();
-}
-
-/** True for labels like `E-mail`, `Your email address` or `Customer name`. */
-function isBuiltInLabel(label: string) {
-  const words = labelKey(label)
-    .replace(/[^a-z0-9\s]/g, '')
-    .split(/\s+/)
-    .filter(Boolean);
-  while (['your', 'customer', 'full'].includes(words[0])) words.shift();
-  return BUILT_IN_LABELS.has(words.join(' '));
-}
-
-/** Reports a label that repeats another field's or a built-in one, at that field's label. */
-const uniqueLabels = v.rawCheck<v.InferOutput<typeof serviceFieldDto>[]>(
-  ({ dataset, addIssue }) => {
-    // Runs even when another field is invalid, so both problems show after one save.
-    const fields: unknown = dataset.value;
-    if (!Array.isArray(fields)) return;
-    const seen = new Set<string>();
-    fields.forEach((field: { label?: unknown }, index) => {
-      if (typeof field?.label !== 'string') return;
-      const key = labelKey(field.label);
-      const builtIn = isBuiltInLabel(field.label);
-      if (builtIn || seen.has(key)) {
-        addIssue({
-          message: builtIn
-            ? 'Customers already give their name and email.'
-            : 'Each field needs a different label.',
-          path: [
-            { type: 'array', origin: 'value', input: fields, key: index, value: field },
-            { type: 'object', origin: 'value', input: field, key: 'label', value: field.label },
-          ],
-        });
-      }
-      // Empty labels already report their own error.
-      if (key) seen.add(key);
-    });
-  },
 );
 
 export const upsertServiceDto = v.object({
@@ -108,14 +67,21 @@ export const upsertServiceDto = v.object({
   name: v.pipe(v.string(), v.trim(), v.minLength(1, 'Enter a service name.')),
   description: v.pipe(v.string(), v.trim(), v.minLength(1, 'Enter a description.')),
   pricingMode: v.picklist(enumValues(SERVICE_PRICING)),
-  price: v.pipe(v.number(), v.integer(), v.minValue(0)), // in cents; 0 is free
+  price: v.pipe(v.number(), v.integer(), v.minValue(0)), // in cents
   fields: v.pipe(
     v.array(serviceFieldDto),
     v.check(
       (fields) => new Set(fields.map((field) => field.id)).size === fields.length,
       'Field ids must be unique.',
     ),
-    uniqueLabels,
+    v.check(
+      (fields) =>
+        fields
+          .filter((field) => field.type === SERVICE_FIELD_TYPE.FILE)
+          .reduce((total, field) => total + fileUploadLimitMB(field), 0) <=
+        MAX_SERVICE_UPLOAD_TOTAL_MB,
+      `File fields can allow at most ${MAX_SERVICE_UPLOAD_TOTAL_MB} MB combined.`,
+    ),
   ),
   enabled: v.boolean(),
 });
@@ -140,6 +106,29 @@ export const submitServiceRequestDto = v.object({
 });
 
 export type SubmitServiceRequestDto = v.InferInput<typeof submitServiceRequestDto>;
+
+/** Adds one service's answer rules to the request schema, so the form can report them before sending. */
+export function serviceRequestSchema(fields: ServiceField[]) {
+  type RequestSchema = v.GenericSchema<
+    SubmitServiceRequestDto,
+    v.InferOutput<typeof submitServiceRequestDto>
+  >;
+  return fields.reduce<RequestSchema>(
+    (schema, field) =>
+      v.pipe(
+        schema,
+        v.forward(
+          v.partialCheck(
+            [['answers', field.id]],
+            (request) => !answerProblem(field, request.answers[field.id]),
+            (issue) => answerProblem(field, issue.input.answers[field.id]) ?? '',
+          ),
+          ['answers', field.id],
+        ),
+      ),
+    submitServiceRequestDto,
+  );
+}
 
 export const updateServiceRequestStatusDto = v.object({
   id: v.string(),

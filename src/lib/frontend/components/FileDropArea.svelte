@@ -5,12 +5,9 @@
 
   type Props = {
     onUpload: (file: File) => void;
-    /** Called for files outside `supportedExtensions`. */
-    onUnsupported?: (file: File) => void;
+    onUnsupported: (file: File) => void;
     supportedExtensions?: string[];
     multiple?: boolean;
-    /** Names the drop region for screen readers. */
-    label?: string;
     class?: string;
     children: Snippet<[{ open: () => void }]>;
   };
@@ -20,7 +17,6 @@
     onUnsupported,
     supportedExtensions,
     multiple = true,
-    label = 'File drop area',
     class: className,
     children,
   }: Props = $props();
@@ -39,7 +35,7 @@
   function addFiles(files: Iterable<File>) {
     for (const file of multiple ? files : [...files].slice(0, 1)) {
       if (isSupported(file)) onUpload(file);
-      else onUnsupported?.(file);
+      else onUnsupported(file);
     }
   }
 
@@ -74,7 +70,7 @@
 
 <div
   role="region"
-  aria-label={label}
+  aria-label="File drop area"
   class={cn('relative', className)}
   ondragover={handleDragOver}
   ondragleave={handleDragLeave}
@@ -92,13 +88,12 @@
   {@render children({ open: () => fileInput?.click() })}
 
   <div
-    aria-hidden="true"
     class={cn(
       'pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-[inherit] border-2 border-dashed border-primary bg-background/90 text-sm font-medium text-primary transition-opacity',
       isDragging ? 'opacity-100' : 'opacity-0',
     )}
   >
     <UploadIcon class="size-6" />
-    {multiple ? 'Drop files to add them' : 'Drop file to add it'}
+    {multiple ? 'Drop files to add them' : 'Drop a file to add it'}
   </div>
 </div>

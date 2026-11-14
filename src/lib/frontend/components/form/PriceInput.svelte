@@ -9,8 +9,6 @@
     placeholder?: string;
     disabled?: boolean;
     multiplier?: number;
-    id?: string;
-    'aria-describedby'?: string;
   }
 
   let {
@@ -18,7 +16,6 @@
     placeholder = '0.00',
     disabled = false,
     multiplier = 1,
-    ...attributes
   }: Props = $props();
 
   // While focused the field shows what was typed; otherwise it follows `value`.
@@ -71,5 +68,4 @@
   onblur={handleBlur}
   {placeholder}
   {disabled}
-  {...attributes}
 />

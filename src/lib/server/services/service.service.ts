@@ -102,11 +102,9 @@ export class ServiceService extends BaseService {
       status: SERVICE_REQUEST_STATUS.SUBMITTED,
     });
     return {
-      id: requestId,
       pricingMode: service.pricingMode,
       price: payment.total,
       paymentId: payment.id,
-      email: dto.email,
     };
   }
 

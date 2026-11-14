@@ -15,12 +15,7 @@ function upload(filename: string, size = 1) {
 
 describe('parseFileExtensions', () => {
   it('normalizes a comma separated list', () => {
-    expect(parseFileExtensions(' .STL, 3mf ,, .step, *.obj')).toEqual([
-      'stl',
-      '3mf',
-      'step',
-      'obj',
-    ]);
+    expect(parseFileExtensions(' .STL, 3mf ,, .step')).toEqual(['stl', '3mf', 'step']);
   });
 });
 

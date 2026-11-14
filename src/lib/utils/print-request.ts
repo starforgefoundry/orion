@@ -27,12 +27,7 @@ type SubmittedFile = { filename: string; file: { size: number } };
 export function parseFileExtensions(allowedFileTypes: string) {
   return allowedFileTypes
     .split(',')
-    .map((ext) =>
-      ext
-        .trim()
-        .replace(/^\*?\./, '')
-        .toLowerCase(),
-    )
+    .map((ext) => ext.trim().replace(/^\./, '').toLowerCase())
     .filter(Boolean);
 }
 

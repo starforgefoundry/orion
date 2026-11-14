@@ -41,10 +41,9 @@ export type ServiceField = {
 /** Field ids become form field paths, which cannot start with a digit or contain `-`. */
 export const SERVICE_FIELD_ID_PATTERN = /^[A-Za-z_]\w*$/;
 export const MAX_SERVICE_UPLOAD_MB = 50;
-/** Staff can raise a field's limit this far. Stays under the server's 1G BODY_SIZE_LIMIT. */
-export const MAX_SERVICE_UPLOAD_LIMIT_MB = 1000;
+/** Combined limit of a form's file fields, under the server's 1G BODY_SIZE_LIMIT. */
+export const MAX_SERVICE_UPLOAD_TOTAL_MB = 1000;
 const MAX_FILE_NAME_LENGTH = 100;
-/** `.svg, .pdf, or .dxf` */
 const TYPE_LIST = new Intl.ListFormat('en', { type: 'disjunction' });
 
 /** Stored answers. A file answer is the storage key of the upload. */

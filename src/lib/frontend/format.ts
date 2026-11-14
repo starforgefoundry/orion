@@ -1,6 +1,21 @@
-import { DateTime, Settings, type DateTimeFormatOptions } from 'luxon';
+import { DateTime, type DateTimeFormatOptions } from 'luxon';
 
 const MISSING = '—';
+const BYTES_PER_UNIT = 1024;
+const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte'] as const;
+
+export function formatBytes(bytes: number) {
+  const exponent =
+    bytes > 0
+      ? Math.min(Math.floor(Math.log(bytes) / Math.log(BYTES_PER_UNIT)), BYTE_UNITS.length - 1)
+      : 0;
+  return new Intl.NumberFormat(undefined, {
+    style: 'unit',
+    unit: BYTE_UNITS[exponent],
+    unitDisplay: exponent === 0 ? 'long' : 'short',
+    maximumFractionDigits: 1,
+  }).format(bytes / BYTES_PER_UNIT ** exponent);
+}
 
 /** Locale-aware formats for `formatDate`. */
 export const DATE_STYLE = {
@@ -55,22 +70,4 @@ export function formatIsoDate(
   style: DateTimeFormatOptions = DATE_STYLE.MEDIUM,
 ) {
   return date ? DateTime.fromISO(date).toLocaleString(style) : MISSING;
-}
-
-const BYTES_PER_UNIT = 1024;
-const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte'] as const;
-
-/** `6 bytes`, `1.5 MB`, in Luxon's default locale like the dates here. */
-export function formatBytes(bytes: number) {
-  const exponent =
-    bytes > 0
-      ? Math.min(Math.floor(Math.log(bytes) / Math.log(BYTES_PER_UNIT)), BYTE_UNITS.length - 1)
-      : 0;
-  return new Intl.NumberFormat(Settings.defaultLocale ?? undefined, {
-    style: 'unit',
-    unit: BYTE_UNITS[exponent],
-    // Short units are abbreviations except `byte`, which does not pluralize.
-    unitDisplay: exponent === 0 ? 'long' : 'short',
-    maximumFractionDigits: 1,
-  }).format(bytes / BYTES_PER_UNIT ** exponent);
 }

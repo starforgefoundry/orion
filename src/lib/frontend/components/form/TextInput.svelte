@@ -3,7 +3,6 @@
   import * as InputGroup from '$lib/components/ui/input-group';
   import type { Component } from 'svelte';
   import type { HTMLInputAttributes } from 'svelte/elements';
-  import { formFieldContext } from './FormField.svelte';
 
   type Props = Omit<HTMLInputAttributes, 'value' | 'type' | 'files'> & {
     value?: string | number | null;
@@ -12,9 +11,6 @@
   };
 
   let { value = $bindable(), icon: Icon, class: className, ...props }: Props = $props();
-
-  const field = formFieldContext();
-  const ariaRequired = $derived(props['aria-required'] ?? field.required());
 </script>
 
 {#if Icon}
@@ -22,8 +18,8 @@
     <InputGroup.Addon>
       <Icon />
     </InputGroup.Addon>
-    <InputGroup.Input bind:value {...props} aria-required={ariaRequired} />
+    <InputGroup.Input bind:value {...props} />
   </InputGroup.Root>
 {:else}
-  <Input bind:value class={className} {...props} aria-required={ariaRequired} />
+  <Input bind:value class={className} {...props} />
 {/if}

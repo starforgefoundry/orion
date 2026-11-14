@@ -92,11 +92,9 @@ describe(ServiceService.name, () => {
       const result = await sut.submitRequest(dto());
 
       expect(result).toEqual({
-        id: expect.any(String),
         pricingMode: SERVICE_PRICING.FIXED,
         price: 4200,
         paymentId: PAYMENT_ID,
-        email: 'jane@example.com',
       });
       expect(mocks.paymentRepository.save).toHaveBeenCalledWith({
         type: PAYMENT_TYPE.SERVICE_REQUEST,

@@ -29,8 +29,6 @@ export async function submitWithToast(action: () => Promise<unknown>, messages: 
 type EnhanceableForm<T extends RemoteFormInput, R> = Omit<RemoteForm<T, R>, 'for'>;
 
 type EnhanceHandlers<R> = {
-  /** Runs before submitting. Returning false stops the submission. */
-  validate?: () => boolean;
   /** Called with the first validation issue the server reported. */
   onIssue: (message: string) => void;
   /** Called when the submission itself failed. */
@@ -44,7 +42,6 @@ export function enhanceForm<T extends RemoteFormInput, R>(
   handlers: EnhanceHandlers<R>,
 ) {
   return form.enhance(async ({ submit }) => {
-    if (handlers.validate?.() === false) return;
     try {
       await submit();
     } catch (error) {
