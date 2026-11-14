@@ -102,6 +102,19 @@ export class PaymentRepository extends BaseRepository {
     });
   }
 
+  async declineQuote(paymentId: string) {
+    return await this.transition(paymentId, PAYMENT_STATUS.QUOTE, {
+      status: PAYMENT_STATUS.CANCELED,
+    });
+  }
+
+  async reopenQuote(paymentId: string) {
+    return await this.transition(paymentId, PAYMENT_STATUS.PENDING, {
+      status: PAYMENT_STATUS.QUOTE,
+      paymentDate: null,
+    });
+  }
+
   async markPaid(paymentId: string) {
     return await this.transition(paymentId, PAYMENT_STATUS.PENDING, {
       status: PAYMENT_STATUS.PAID,

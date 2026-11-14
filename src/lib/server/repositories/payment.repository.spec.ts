@@ -90,6 +90,26 @@ describeWithDatabase(PaymentRepository.name, () => {
     });
   });
 
+  describe('declineQuote', () => {
+    it('does not cancel a quote that was already approved', async () => {
+      const quote = await repository.save({ ...NEW_PAYMENT, status: PAYMENT_STATUS.QUOTE });
+      await repository.approveQuote(quote);
+
+      expect(await repository.declineQuote(quote.id)).toBeUndefined();
+      expect(await repository.getById(quote.id)).toMatchObject({ status: PAYMENT_STATUS.PENDING });
+    });
+  });
+
+  describe('reopenQuote', () => {
+    it('puts an approved quote back so it can be approved again', async () => {
+      const quote = await repository.save({ ...NEW_PAYMENT, status: PAYMENT_STATUS.QUOTE });
+      await repository.approveQuote(quote);
+
+      expect((await repository.reopenQuote(quote.id))?.status).toBe(PAYMENT_STATUS.QUOTE);
+      expect((await repository.approveQuote(quote))?.status).toBe(PAYMENT_STATUS.PENDING);
+    });
+  });
+
   describe('transition', () => {
     it('moves a payment out of a status only once when two callers race', async () => {
       const saved = await repository.save(NEW_PAYMENT);

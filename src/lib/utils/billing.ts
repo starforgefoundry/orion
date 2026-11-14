@@ -99,3 +99,8 @@ export function isPayableOnline(payment: OnlinePayment) {
     payment.status === PAYMENT_STATUS.PENDING && !payment.squareInvoiceId && !billedToOrganization
   );
 }
+
+/** A quote the customer will owe money on is only approved by paying it. */
+export function quoteRequiresCard(quote: OnlinePayment & { total: number }) {
+  return quote.total > 0 && isPayableOnline({ ...quote, status: PAYMENT_STATUS.PENDING });
+}

@@ -86,10 +86,26 @@
 
             {#if manager.isCanceled}
               <p class="text-sm text-muted-foreground">Nothing is due on a canceled request.</p>
+            {:else if payment.status === PAYMENT_STATUS.QUOTE && payment.quoteRequiresCard}
+              <p class="text-sm text-muted-foreground">
+                We won't start printing until you approve and pay for this quote.
+              </p>
+              <CardCheckout
+                total={payment.total}
+                label="Approve and Pay"
+                onPay={(sourceId) => manager.approveAndPay(sourceId)}
+              />
+              <Button
+                variant="outline"
+                disabled={manager.responding}
+                onclick={() => manager.decline()}
+              >
+                <XIcon />
+                Cancel Request
+              </Button>
             {:else if payment.status === PAYMENT_STATUS.QUOTE}
               <p class="text-sm text-muted-foreground">
-                We won't start printing until you approve this quote. You can pay right after
-                approving it.
+                We won't start printing until you approve this quote.
               </p>
               {#if manager.responding}
                 <Spinner class="mx-auto my-2 size-6" />

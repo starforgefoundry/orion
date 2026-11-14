@@ -10,9 +10,10 @@
     total: number;
     /** Receives a single-use card token. Rejects when the charge fails. */
     onPay: (sourceId: string) => Promise<unknown>;
+    label?: string;
   };
 
-  let { total, onPay }: Props = $props();
+  let { total, onPay, label = 'Pay' }: Props = $props();
 
   const payment = new SquarePayment();
 </script>
@@ -26,6 +27,7 @@
     onclick={() => payment.pay(onPay, 'Payment failed')}
   >
     {#if payment.paying}<Spinner />{:else}<CreditCardIcon />{/if}
-    Pay {formatCents(total)}
+    {label}
+    {formatCents(total)}
   </Button>
 </div>

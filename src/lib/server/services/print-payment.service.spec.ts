@@ -258,14 +258,25 @@ describe(PrintPaymentService.name, () => {
       mocks.printRequestRepository.getById.mockResolvedValue(
         printRequest({ isQuote: true, payment: payment({ status: PAYMENT_STATUS.QUOTE }) }),
       );
-      mocks.paymentGateway.cancel.mockResolvedValue(undefined as never);
+      mocks.paymentRepository.declineQuote.mockImplementation(async (id) =>
+        payment({ id, status: PAYMENT_STATUS.CANCELED }),
+      );
+      mocks.paymentRepository.reopenQuote.mockResolvedValue(undefined as never);
       mocks.discordRepository.notify.mockResolvedValue(undefined as never);
     });
 
-    it('approves the quote so the customer can pay', async () => {
-      const approved = await sut.respondToQuote({ id: REQUEST_ID, approve: true });
+    it('approves the quote by charging the card', async () => {
+      const approved = await sut.respondToQuote({
+        id: REQUEST_ID,
+        approve: true,
+        sourceId: 'cnon:ok',
+      });
 
-      expect(approved?.status).toBe(PAYMENT_STATUS.PENDING);
+      expect(approved?.status).toBe(PAYMENT_STATUS.PAID);
+      expect(mocks.paymentGateway.pay).toHaveBeenCalledWith(
+        expect.objectContaining({ id: PAYMENT_ID, status: PAYMENT_STATUS.PENDING }),
+        'cnon:ok',
+      );
       await vi.waitFor(() =>
         expect(mocks.discordRepository.notify).toHaveBeenCalledWith(
           WEBHOOK_URL,
@@ -281,17 +292,73 @@ describe(PrintPaymentService.name, () => {
       );
     });
 
+    it('refuses to approve a quote without a card', async () => {
+      await expect(sut.respondToQuote({ id: REQUEST_ID, approve: true })).rejects.toThrow(
+        'Pay for this quote',
+      );
+      expect(mocks.paymentGateway.pay).not.toHaveBeenCalled();
+      expect(mocks.paymentRepository.reopenQuote).toHaveBeenCalledWith(PAYMENT_ID);
+    });
+
+    it('asks for a card when staff move the bill off an organization mid-approval', async () => {
+      mocks.printRequestRepository.getById.mockResolvedValue(
+        printRequest({
+          isQuote: true,
+          payment: payment({ status: PAYMENT_STATUS.QUOTE, organizationId: ORGANIZATION.id }),
+        }),
+      );
+      mocks.paymentRepository.approveQuote.mockResolvedValue(
+        payment({ status: PAYMENT_STATUS.PENDING, organizationId: null }),
+      );
+
+      await expect(sut.respondToQuote({ id: REQUEST_ID, approve: true })).rejects.toThrow(
+        'Pay for this quote',
+      );
+      expect(mocks.paymentRepository.reopenQuote).toHaveBeenCalledWith(PAYMENT_ID);
+    });
+
+    it('keeps the quote open when the charge fails', async () => {
+      mocks.paymentGateway.pay.mockRejectedValue(new Error('declined'));
+
+      await expect(
+        sut.respondToQuote({ id: REQUEST_ID, approve: true, sourceId: 'cnon:bad' }),
+      ).rejects.toThrow('declined');
+      expect(mocks.paymentRepository.reopenQuote).toHaveBeenCalledWith(PAYMENT_ID);
+      expect(mocks.discordRepository.notify).not.toHaveBeenCalled();
+    });
+
+    it('approves an organization quote without a card', async () => {
+      mocks.printRequestRepository.getById.mockResolvedValue(
+        printRequest({
+          isQuote: true,
+          payment: payment({ status: PAYMENT_STATUS.QUOTE, organizationId: ORGANIZATION.id }),
+        }),
+      );
+
+      const approved = await sut.respondToQuote({ id: REQUEST_ID, approve: true });
+
+      expect(approved?.status).toBe(PAYMENT_STATUS.PENDING);
+      expect(mocks.paymentGateway.pay).not.toHaveBeenCalled();
+    });
+
     it('cancels the request and its quote when the customer declines', async () => {
       await sut.respondToQuote({ id: REQUEST_ID, approve: false });
 
-      expect(mocks.paymentGateway.cancel).toHaveBeenCalledWith(
-        expect.objectContaining({ id: PAYMENT_ID }),
-      );
+      expect(mocks.paymentRepository.declineQuote).toHaveBeenCalledWith(PAYMENT_ID);
       expect(mocks.printRequestRepository.update).toHaveBeenCalledWith(REQUEST_ID, {
         status: 'canceled',
         completionDate: expect.any(DateTime),
       });
       expect(mocks.paymentRepository.approveQuote).not.toHaveBeenCalled();
+    });
+
+    it('does not cancel a quote that was approved while declining', async () => {
+      mocks.paymentRepository.declineQuote.mockResolvedValue(undefined as never);
+
+      await expect(sut.respondToQuote({ id: REQUEST_ID, approve: false })).rejects.toThrow(
+        'already been answered',
+      );
+      expect(mocks.printRequestRepository.update).not.toHaveBeenCalled();
     });
 
     it('rejects a quote that was already answered', async () => {
