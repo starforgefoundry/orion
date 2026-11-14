@@ -1,7 +1,7 @@
 // Relative imports: the database schema loads this file outside SvelteKit.
 import { PAYMENT_STATUS, type PaymentStatus } from './billing.ts';
 import type { EnumValue } from './member-enums.ts';
-import { BYTES_PER_MB } from './print-request.ts';
+import { BYTES_PER_MB, fileExtension } from './print-request.ts';
 
 export const SERVICE_PRICING = { FIXED: 'fixed', VARIABLE: 'variable' } as const;
 export type ServicePricing = EnumValue<typeof SERVICE_PRICING>;
@@ -32,12 +32,19 @@ export type ServiceField = {
   required: boolean;
   /** Choices for a select field. */
   options: string[];
+  /** Extensions a file field accepts, lowercase without the dot. Empty or missing accepts any file. */
+  fileTypes?: string[];
+  /** Size limit of a file field. Missing means `MAX_SERVICE_UPLOAD_MB`. */
+  maxUploadMB?: number;
 };
 
 /** Field ids become form field paths, which cannot start with a digit or contain `-`. */
 export const SERVICE_FIELD_ID_PATTERN = /^[A-Za-z_]\w*$/;
 export const MAX_SERVICE_UPLOAD_MB = 50;
+/** Combined limit of a form's file fields, under the server's 1G BODY_SIZE_LIMIT. */
+export const MAX_SERVICE_UPLOAD_TOTAL_MB = 1000;
 const MAX_FILE_NAME_LENGTH = 100;
+const TYPE_LIST = new Intl.ListFormat('en', { type: 'disjunction' });
 
 /** Stored answers. A file answer is the storage key of the upload. */
 export type ServiceAnswers = Record<string, string | number | boolean>;
@@ -53,6 +60,31 @@ function toNumber(answer: ServiceAnswerInput) {
   return typeof number === 'number' && Number.isFinite(number) ? number : undefined;
 }
 
+/** Lists extensions for people, e.g. `.svg, .pdf, or .dxf`. */
+export function fileTypeList(types: string[]) {
+  return TYPE_LIST.format(types.map((type) => `.${type}`));
+}
+
+export function fileUploadLimitMB(field: ServiceField) {
+  return field.maxUploadMB ?? MAX_SERVICE_UPLOAD_MB;
+}
+
+/** Returns what is wrong with a file for this field, or undefined when it is accepted. */
+export function fileProblem(field: ServiceField, file: { name: string; size: number }) {
+  const types = field.fileTypes ?? [];
+  if (types.length > 0 && !types.includes(fileExtension(file.name))) {
+    return `${field.label} must be ${fileTypeList(types)}.`;
+  }
+  const limitMB = fileUploadLimitMB(field);
+  if (file.size > limitMB * BYTES_PER_MB) return `${field.label} must be at most ${limitMB} MB.`;
+}
+
+function missingAnswerProblem(field: ServiceField) {
+  return field.type === SERVICE_FIELD_TYPE.CHECKBOX
+    ? `Check “${field.label}” to continue.`
+    : `${field.label} is required.`;
+}
+
 function invalidAnswerProblem(field: ServiceField, answer: ServiceAnswerInput) {
   switch (field.type) {
     case SERVICE_FIELD_TYPE.NUMBER:
@@ -64,10 +96,7 @@ function invalidAnswerProblem(field: ServiceField, answer: ServiceAnswerInput) {
     case SERVICE_FIELD_TYPE.CHECKBOX:
       return answer === true ? undefined : `${field.label} is invalid.`;
     case SERVICE_FIELD_TYPE.FILE:
-      if (!(answer instanceof File)) return `${field.label} needs a file.`;
-      return answer.size > MAX_SERVICE_UPLOAD_MB * BYTES_PER_MB
-        ? `${field.label} must be at most ${MAX_SERVICE_UPLOAD_MB} MB.`
-        : undefined;
+      return answer instanceof File ? fileProblem(field, answer) : `${field.label} needs a file.`;
     default:
       return typeof answer === 'string' ? undefined : `${field.label} is invalid.`;
   }
@@ -110,18 +139,19 @@ export function isCancelable(payment: { status: PaymentStatus; total: number }) 
   return isUnpaid(payment) || (payment.status === PAYMENT_STATUS.PAID && payment.total === 0);
 }
 
+/** Returns what is wrong with one answer, or undefined when it satisfies the field. */
+export function answerProblem(field: ServiceField, answer: ServiceAnswerInput) {
+  if (isEmpty(answer)) return field.required ? missingAnswerProblem(field) : undefined;
+  return invalidAnswerProblem(field, answer);
+}
+
 /** Returns what is wrong with the answers, or undefined when they satisfy the form. */
 export function answersProblem(
   fields: ServiceField[],
   answers: Record<string, ServiceAnswerInput>,
 ) {
   for (const field of fields) {
-    const answer = answers[field.id];
-    if (isEmpty(answer)) {
-      if (field.required) return `${field.label} is required.`;
-      continue;
-    }
-    const problem = invalidAnswerProblem(field, answer);
+    const problem = answerProblem(field, answers[field.id]);
     if (problem) return problem;
   }
 }

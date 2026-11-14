@@ -12,7 +12,11 @@ import { toast } from 'svelte-sonner';
 import { cancelRequest, changeStatus } from './request-actions';
 import { BOARD_STATUSES, REQUEST_STATUS_DISPLAY, STATUS } from './utils';
 
+export const REQUEST_DETAIL_TABS = { DETAILS: 'details', CUSTOMER: 'customer' } as const;
+export type RequestDetailTab = (typeof REQUEST_DETAIL_TABS)[keyof typeof REQUEST_DETAIL_TABS];
+
 export class ServiceRequestDetail {
+  activeTab = $state<RequestDetailTab>(REQUEST_DETAIL_TABS.DETAILS);
   /** Typed quote in cents; until staff type one the field shows the current price. */
   quoteDraft = $state<number>();
   savingQuote = $state(false);

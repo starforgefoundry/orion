@@ -31,7 +31,7 @@ export function parseFileExtensions(allowedFileTypes: string) {
     .filter(Boolean);
 }
 
-function fileExtension(filename: string) {
+export function fileExtension(filename: string) {
   const dot = filename.lastIndexOf('.');
   return dot === -1 ? '' : filename.slice(dot + 1).toLowerCase();
 }

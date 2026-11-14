@@ -7,6 +7,8 @@
   import { Switch } from '$lib/components/ui/switch';
   import { announcementIsActive } from '$lib/frontend/announcement';
   import FileDropArea from '$lib/frontend/components/FileDropArea.svelte';
+  import FileUploadPrompt from '$lib/frontend/components/FileUploadPrompt.svelte';
+  import { formatBytes } from '$lib/frontend/format';
   import IconButton from '$lib/frontend/components/IconButton.svelte';
   import StepProgress from '$lib/frontend/components/StepProgress.svelte';
   import FormField from '$lib/frontend/components/form/FormField.svelte';
@@ -21,7 +23,6 @@
   import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
   import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
   import FileBoxIcon from '@lucide/svelte/icons/file-box';
-  import FilePlusIcon from '@lucide/svelte/icons/file-plus';
   import PlusIcon from '@lucide/svelte/icons/plus';
   import TrashIcon from '@lucide/svelte/icons/trash';
   import { toast } from 'svelte-sonner';
@@ -31,22 +32,6 @@
   import HowItWorks from './HowItWorks.svelte';
   import PrintRequestBanner from './PrintRequestBanner.svelte';
   import RequestsClosed from './RequestsClosed.svelte';
-
-  const BYTES_PER_UNIT = 1024;
-  const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte'] as const;
-
-  function formatBytes(bytes: number) {
-    const exponent =
-      bytes > 0
-        ? Math.min(Math.floor(Math.log(bytes) / Math.log(BYTES_PER_UNIT)), BYTE_UNITS.length - 1)
-        : 0;
-    return new Intl.NumberFormat(undefined, {
-      style: 'unit',
-      unit: BYTE_UNITS[exponent],
-      unitDisplay: 'short',
-      maximumFractionDigits: 1,
-    }).format(bytes / BYTES_PER_UNIT ** exponent);
-  }
 
   let printRequestSettings = await getPublicPrintRequestForm();
 
@@ -219,20 +204,13 @@
               {/if}
 
               {#if manager.files.length === 0}
-                <button
-                  type="button"
-                  class="flex min-h-64 flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 text-center transition-colors hover:border-primary/70 hover:bg-muted/30 focus-visible:border-ring focus-visible:outline-none"
+                <FileUploadPrompt
+                  class="min-h-64 flex-1"
                   onclick={open}
-                >
-                  <FilePlusIcon class="size-10 text-muted-foreground" />
-                  <span class="text-base">
-                    <span class="font-medium">Click to upload</span>
-                    <span class="text-muted-foreground">or drag and drop</span>
-                  </span>
-                  <span class="text-sm text-muted-foreground">
-                    {supportedExtensions.join(', ')} · up to {printRequestSettings.maxUploadMB} MB total
-                  </span>
-                </button>
+                  hint="{supportedExtensions.join(
+                    ', ',
+                  )} · up to {printRequestSettings.maxUploadMB} MB total"
+                />
               {:else}
                 <ul class="max-h-96 divide-y overflow-y-auto rounded-lg border">
                   {#each manager.files as file, index (file)}

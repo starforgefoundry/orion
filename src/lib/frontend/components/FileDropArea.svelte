@@ -7,6 +7,7 @@
     onUpload: (file: File) => void;
     onUnsupported: (file: File) => void;
     supportedExtensions?: string[];
+    multiple?: boolean;
     class?: string;
     children: Snippet<[{ open: () => void }]>;
   };
@@ -15,6 +16,7 @@
     onUpload,
     onUnsupported,
     supportedExtensions,
+    multiple = true,
     class: className,
     children,
   }: Props = $props();
@@ -31,7 +33,7 @@
   }
 
   function addFiles(files: Iterable<File>) {
-    for (const file of files) {
+    for (const file of multiple ? files : [...files].slice(0, 1)) {
       if (isSupported(file)) onUpload(file);
       else onUnsupported(file);
     }
@@ -74,7 +76,14 @@
   ondragleave={handleDragLeave}
   ondrop={handleDrop}
 >
-  <input bind:this={fileInput} type="file" {accept} onchange={handlePick} class="hidden" multiple />
+  <input
+    bind:this={fileInput}
+    type="file"
+    {accept}
+    onchange={handlePick}
+    class="hidden"
+    {multiple}
+  />
 
   {@render children({ open: () => fileInput?.click() })}
 
@@ -85,6 +94,6 @@
     )}
   >
     <UploadIcon class="size-6" />
-    Drop files to add them
+    {multiple ? 'Drop files to add them' : 'Drop a file to add it'}
   </div>
 </div>
