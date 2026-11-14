@@ -48,6 +48,7 @@ describe('upsertServiceDto', () => {
       ['fields.0.options', 'Enter at least one choice.'],
       ['fields.1.fileTypes.0', '“pdf files” is not a file type. Use extensions like pdf or svg.'],
       ['fields.1.maxUploadMB', 'Enter a max size in MB.'],
+      ['fields.1.label', 'Each field needs a different label.'],
     ]);
   });
 

@@ -78,9 +78,12 @@ function isBuiltInLabel(label: string) {
 /** Reports a label that repeats another field's or a built-in one, at that field's label. */
 const uniqueLabels = v.rawCheck<v.InferOutput<typeof serviceFieldDto>[]>(
   ({ dataset, addIssue }) => {
-    if (!dataset.typed) return;
+    // Runs even when another field is invalid, so both problems show after one save.
+    const fields: unknown = dataset.value;
+    if (!Array.isArray(fields)) return;
     const seen = new Set<string>();
-    dataset.value.forEach((field, index) => {
+    fields.forEach((field: { label?: unknown }, index) => {
+      if (typeof field?.label !== 'string') return;
       const key = labelKey(field.label);
       const builtIn = isBuiltInLabel(field.label);
       if (builtIn || seen.has(key)) {
@@ -89,7 +92,7 @@ const uniqueLabels = v.rawCheck<v.InferOutput<typeof serviceFieldDto>[]>(
             ? 'Customers already give their name and email.'
             : 'Each field needs a different label.',
           path: [
-            { type: 'array', origin: 'value', input: dataset.value, key: index, value: field },
+            { type: 'array', origin: 'value', input: fields, key: index, value: field },
             { type: 'object', origin: 'value', input: field, key: 'label', value: field.label },
           ],
         });
