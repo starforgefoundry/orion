@@ -9,6 +9,7 @@
   import { getServices } from '$lib/remotes/endpoints/service.remote';
   import { formatCents } from '$lib/utils/billing';
   import { SERVICE_PRICING } from '$lib/utils/services';
+  import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
   import PencilIcon from '@lucide/svelte/icons/pencil';
   import PlusIcon from '@lucide/svelte/icons/plus';
   import ServiceModal from './ServiceModal.svelte';
@@ -32,35 +33,57 @@
         <Table.Header class="bg-muted/50">
           <Table.Row>
             <Table.Head>Name</Table.Head>
-            <Table.Head>Pricing</Table.Head>
-            <Table.Head class="text-right">Fields</Table.Head>
-            <Table.Head class="w-12"><span class="sr-only">Actions</span></Table.Head>
+            <Table.Head>Status</Table.Head>
+            <Table.Head class="hidden sm:table-cell">Pricing</Table.Head>
+            <Table.Head class="hidden text-right sm:table-cell">Fields</Table.Head>
+            <Table.Head class="w-24"><span class="sr-only">Actions</span></Table.Head>
           </Table.Row>
         </Table.Header>
         <Table.Body>
           {#each services as service (service.id)}
+            {@const pricing =
+              service.pricingMode === SERVICE_PRICING.VARIABLE
+                ? 'Quoted per request'
+                : service.price > 0
+                  ? formatCents(service.price)
+                  : 'Free'}
             <Table.Row>
-              <Table.Cell class="font-medium">
+              <Table.Cell class="font-medium whitespace-normal">
                 {service.name}
-                {#if !service.enabled}<Badge variant="secondary" class="ml-2">Closed</Badge>{/if}
+                <!-- Phones hide the Pricing column, so the price sits under the name. -->
+                <span class="block text-xs font-normal text-muted-foreground sm:hidden">
+                  {pricing}
+                </span>
               </Table.Cell>
               <Table.Cell>
-                {service.pricingMode === SERVICE_PRICING.FIXED
-                  ? formatCents(service.price)
-                  : 'Quoted per request'}
+                {#if service.enabled}
+                  <Badge>Open</Badge>
+                {:else}
+                  <Badge variant="secondary">Closed</Badge>
+                {/if}
               </Table.Cell>
-              <Table.Cell class="text-right tabular-nums">{service.fields.length}</Table.Cell>
+              <Table.Cell class="hidden sm:table-cell">{pricing}</Table.Cell>
+              <Table.Cell class="hidden text-right tabular-nums sm:table-cell">
+                {service.fields.length}
+              </Table.Cell>
               <Table.Cell class="py-1.5 text-right">
                 <IconButton
+                  icon={ExternalLinkIcon}
+                  aria-label={`Open the public form for ${service.name}`}
+                  href="/services/{service.id}"
+                  target="_blank"
+                  rel="noopener"
+                />
+                <IconButton
                   icon={PencilIcon}
-                  aria-label="Edit service"
+                  aria-label={`Edit ${service.name}`}
                   onclick={() => modalManager.show(ServiceModal, { service })}
                 />
               </Table.Cell>
             </Table.Row>
           {:else}
             <Table.Row>
-              <Table.Cell colspan={4} class="h-20 text-center text-muted-foreground">
+              <Table.Cell colspan={5} class="h-20 text-center text-muted-foreground">
                 No services yet.
               </Table.Cell>
             </Table.Row>

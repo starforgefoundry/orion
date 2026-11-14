@@ -18,6 +18,7 @@
   import { submitPrintRequestForm } from '$lib/remotes/endpoints/print-request.remote';
   import { getPublicPrintRequestForm } from '$lib/remotes/endpoints/settings.remote';
   import { cn } from '$lib/frontend/cn';
+  import { formatBytes } from '$lib/frontend/format';
   import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
   import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
   import FileBoxIcon from '@lucide/svelte/icons/file-box';
@@ -31,22 +32,6 @@
   import HowItWorks from './HowItWorks.svelte';
   import PrintRequestBanner from './PrintRequestBanner.svelte';
   import RequestsClosed from './RequestsClosed.svelte';
-
-  const BYTES_PER_UNIT = 1024;
-  const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte'] as const;
-
-  function formatBytes(bytes: number) {
-    const exponent =
-      bytes > 0
-        ? Math.min(Math.floor(Math.log(bytes) / Math.log(BYTES_PER_UNIT)), BYTE_UNITS.length - 1)
-        : 0;
-    return new Intl.NumberFormat(undefined, {
-      style: 'unit',
-      unit: BYTE_UNITS[exponent],
-      unitDisplay: 'short',
-      maximumFractionDigits: 1,
-    }).format(bytes / BYTES_PER_UNIT ** exponent);
-  }
 
   let printRequestSettings = await getPublicPrintRequestForm();
 
@@ -100,16 +85,23 @@
       <div class={cn('grid gap-6 lg:grid-cols-2', manager.step !== STEPS.CONTACT && 'hidden')}>
         <section class="flex flex-col gap-4 rounded-xl border bg-card p-5 sm:p-6">
           <h2 class="text-base font-semibold">Your Info</h2>
-          <FormField label="Name" required>
+          <FormField label="Name" for="customer-name" required>
             <TextInput
+              id="customer-name"
               {...submitPrintRequestForm.fields.customer.name.as('text')}
               placeholder="John Doe"
               autocomplete="name"
             />
           </FormField>
 
-          <FormField label="Email" required description="We'll send updates about your print here.">
+          <FormField
+            label="Email"
+            for="customer-email"
+            required
+            description="We'll send updates about your print here."
+          >
             <TextInput
+              id="customer-email"
               {...submitPrintRequestForm.fields.customer.email.as('text')}
               type="email"
               placeholder="john@example.com"
@@ -119,9 +111,11 @@
 
           <FormField
             label="Group Code"
+            for="billing-code"
             description="Only if your organization is paying for this print."
           >
             <TextInput
+              id="billing-code"
               {...submitPrintRequestForm.fields.billingCode.as('text')}
               placeholder="ORG2026"
             />
@@ -147,8 +141,9 @@
             <section class="flex flex-col gap-4 rounded-xl border bg-card p-5 sm:p-6">
               <h2 class="text-base font-semibold">Project Details</h2>
 
-              <FormField label="Project Title" required>
+              <FormField label="Project Title" for="project-name" required>
                 <TextInput
+                  id="project-name"
                   {...submitPrintRequestForm.fields.projectName.as('text')}
                   placeholder="My Awesome Project"
                 />
@@ -170,8 +165,9 @@
                 />
               </FormField>
 
-              <FormField label="Special Requests">
+              <FormField label="Special Requests" for="special-requests">
                 <TextArea
+                  id="special-requests"
                   {...submitPrintRequestForm.fields.specialRequests.as('text')}
                   class="min-h-32"
                   placeholder="Infill, supports, which parts use which material…"

@@ -5,6 +5,7 @@ import {
   answersProblem,
   awaitingQuote,
   canQuote,
+  fileProblem,
   formAnswers,
   isCancelable,
   MAX_SERVICE_UPLOAD_MB,
@@ -28,6 +29,17 @@ describe('answersProblem', () => {
   it('requires required fields', () => {
     expect(answersProblem(fields, {})).toBe('Material is required.');
   });
+  it('asks for required checkboxes to be checked', () => {
+    const checkbox: ServiceField = {
+      id: 'd',
+      label: 'I own this key',
+      type: 'checkbox',
+      required: true,
+      options: [],
+    };
+    expect(answersProblem([checkbox], { d: false })).toBe('Check “I own this key” to continue.');
+    expect(answersProblem([checkbox], { d: true })).toBeUndefined();
+  });
   it('rejects unknown choices and non-numbers', () => {
     expect(answersProblem(fields, { a: 'Steel' })).toBe('Material has an invalid choice.');
     expect(answersProblem(fields, { a: 'Wood', b: 'x' })).toBe('Quantity must be a number.');
@@ -41,6 +53,33 @@ describe('answersProblem', () => {
     const file = new File([], 'big.svg');
     Object.defineProperty(file, 'size', { value: MAX_SERVICE_UPLOAD_MB * BYTES_PER_MB + 1 });
     expect(answersProblem(fields, { a: 'Wood', c: file })).toBe('Design must be at most 50 MB.');
+  });
+});
+
+describe('fileProblem', () => {
+  const field: ServiceField = {
+    id: 'c',
+    label: 'Design',
+    type: 'file',
+    required: false,
+    options: [],
+    fileTypes: ['svg', 'pdf'],
+    maxUploadMB: 2,
+  };
+  const sized = (name: string, size: number) => ({ name, size });
+
+  it('accepts a listed type within the field limit', () => {
+    expect(fileProblem(field, sized('Logo.SVG', 2 * BYTES_PER_MB))).toBeUndefined();
+  });
+  it('rejects unlisted types and files over the field limit', () => {
+    expect(fileProblem(field, sized('logo.png', 1))).toBe('Design must be .svg or .pdf.');
+    expect(fileProblem(field, sized('logo', 1))).toBe('Design must be .svg or .pdf.');
+    expect(fileProblem(field, sized('logo.svg', 2 * BYTES_PER_MB + 1))).toBe(
+      'Design must be at most 2 MB.',
+    );
+  });
+  it('accepts any type when none are listed', () => {
+    expect(fileProblem({ ...field, fileTypes: [] }, sized('logo.png', 1))).toBeUndefined();
   });
 });
 

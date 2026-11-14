@@ -27,11 +27,16 @@ type SubmittedFile = { filename: string; file: { size: number } };
 export function parseFileExtensions(allowedFileTypes: string) {
   return allowedFileTypes
     .split(',')
-    .map((ext) => ext.trim().replace(/^\./, '').toLowerCase())
+    .map((ext) =>
+      ext
+        .trim()
+        .replace(/^\*?\./, '')
+        .toLowerCase(),
+    )
     .filter(Boolean);
 }
 
-function fileExtension(filename: string) {
+export function fileExtension(filename: string) {
   const dot = filename.lastIndexOf('.');
   return dot === -1 ? '' : filename.slice(dot + 1).toLowerCase();
 }

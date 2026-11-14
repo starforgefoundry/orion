@@ -5,8 +5,15 @@
 <script lang="ts">
   import * as Select from '$lib/components/ui/select';
   import type { Snippet } from 'svelte';
+  import type { HTMLButtonAttributes } from 'svelte/elements';
+  import { formFieldContext } from './FormField.svelte';
 
-  type Props = {
+  type AriaProps = Pick<
+    HTMLButtonAttributes,
+    'aria-label' | 'aria-required' | 'aria-invalid' | 'aria-describedby'
+  >;
+
+  type Props = AriaProps & {
     options: SelectOption[];
     value: string;
     placeholder?: string;
@@ -32,7 +39,13 @@
     class: className = 'w-full',
     onValueChange,
     item,
+    ...aria
   }: Props = $props();
+
+  const field = formFieldContext();
+  const labelledBy = $derived(aria['aria-label'] ? undefined : field.labelId());
+  // A combobox can carry aria-required but takes no name from its text, so it needs a label.
+  const role = $derived(aria['aria-label'] || labelledBy ? 'combobox' : undefined);
 
   const allOptions = $derived(
     noneLabel ? [{ value: NONE_VALUE, label: noneLabel }, ...options] : options,
@@ -47,7 +60,14 @@
 </script>
 
 <Select.Root type="single" value={selectValue} onValueChange={handleChange} {disabled}>
-  <Select.Trigger {id} class={className}>
+  <Select.Trigger
+    {id}
+    class={className}
+    {role}
+    aria-labelledby={labelledBy}
+    {...aria}
+    aria-required={role ? (aria['aria-required'] ?? field.required()) : undefined}
+  >
     {#if selected && item && selected.value !== NONE_VALUE}
       <span class="flex min-w-0 items-center gap-2">{@render item(selected)}</span>
     {:else}
