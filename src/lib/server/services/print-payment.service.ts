@@ -27,6 +27,7 @@ import { PRINT_REQUEST_STATUS } from '$lib/utils/print-request';
 import { DateTime } from 'luxon';
 
 const ACTIVE_STATUSES = new Set<PaymentStatus>([PAYMENT_STATUS.QUOTE, PAYMENT_STATUS.PENDING]);
+const QUOTE_ANSWERED = 'This quote has already been answered';
 
 export class PrintPaymentError extends PaymentError {}
 
@@ -178,7 +179,7 @@ export class PrintPaymentService extends BaseService {
     const request = await this.printRequestRepository.getById(id);
     if (!request) throw new NotFoundError('Print request not found');
     if (request.payment?.status !== PAYMENT_STATUS.QUOTE || !request.isQuote) {
-      throw new PrintPaymentError('This quote has already been answered');
+      throw new PrintPaymentError(QUOTE_ANSWERED);
     }
     return { request, payment: request.payment };
   }
@@ -187,7 +188,9 @@ export class PrintPaymentService extends BaseService {
     const { request, payment } = await this.requireQuote(dto.id);
 
     if (!dto.approve) {
-      await this.paymentGateway.cancel(payment);
+      const declined = await this.paymentRepository.declineQuote(payment.id);
+      if (!declined) throw new PrintPaymentError(QUOTE_ANSWERED);
+      await this.cancelLegacyInvoice(payment);
       await this.printRequestRepository.update(request.id, {
         status: PRINT_REQUEST_STATUS.CANCELED,
         completionDate: DateTime.now(),
@@ -205,23 +208,19 @@ export class PrintPaymentService extends BaseService {
     return approved;
   }
 
+  /** Staff can change who pays while the customer is answering, so the saved row decides. */
   private async approveQuote(quote: Payment, sourceId: string | undefined) {
-    if (!quoteRequiresCard(quote)) return await this.markQuoteApproved(quote);
-    if (!sourceId) throw new PrintPaymentError('Pay for this quote to approve it');
+    const approved = await this.paymentRepository.approveQuote(quote);
+    if (!approved) throw new PrintPaymentError(QUOTE_ANSWERED);
+    if (!quoteRequiresCard(approved)) return approved;
 
-    const approved = await this.markQuoteApproved(quote);
     try {
+      if (!sourceId) throw new PrintPaymentError('Pay for this quote to approve it');
       return await this.paymentGateway.pay(approved, sourceId);
     } catch (error) {
       await this.paymentRepository.reopenQuote(approved.id);
       throw error;
     }
-  }
-
-  private async markQuoteApproved(quote: Payment) {
-    const approved = await this.paymentRepository.approveQuote(quote);
-    if (!approved) throw new PrintPaymentError('This quote has already been answered');
-    return approved;
   }
 
   private async sendQuoteApprovedNotification(request: PrintRequestDto, total: number) {
