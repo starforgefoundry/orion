@@ -42,6 +42,13 @@ export class ServiceRequestForm {
     if (this.contactValid) this.step = STEPS.DETAILS;
   }
 
+  /** Enter on the contact step advances instead of submitting the hidden details step. */
+  contactKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Enter' || event.isComposing) return;
+    event.preventDefault();
+    this.next();
+  }
+
   back() {
     this.step = STEPS.CONTACT;
   }
