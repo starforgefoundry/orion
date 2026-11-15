@@ -14,6 +14,7 @@ import { runInBackground } from '$lib/server/utils/background';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import { printQueueUrl, printRequestStatusUrl } from '$lib/server/utils/payment-links';
 import {
+  canSendPaymentReminder,
   centsToDollars,
   formatCents,
   isPayableOnline,
@@ -150,6 +151,22 @@ export class PrintPaymentService extends BaseService {
       projectName: request.projectName,
       total: centsToDollars(total),
       paymentURL: printRequestStatusUrl(request.id),
+    });
+  }
+
+  async sendPaymentReminder(id: string) {
+    const request = await this.printRequestRepository.getById(id);
+    if (!request) throw new NotFoundError('Print request not found');
+    const payment = request.payment;
+    if (!payment || !canSendPaymentReminder(payment)) {
+      throw new PrintPaymentError('This print request has nothing to pay');
+    }
+
+    await this.mailgunGateway.sendTemplate(request.email, SENDERS.print, 'payment_reminder', {
+      customerName: request.customerName,
+      itemName: request.projectName,
+      total: centsToDollars(payment.total),
+      paymentUrl: printRequestStatusUrl(request.id),
     });
   }
 

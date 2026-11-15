@@ -7,8 +7,16 @@ import type {
 import { NotFoundError, UserError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
 import type { Service } from '$lib/server/db/schema';
+import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { payUrl } from '$lib/server/utils/payment-links';
 import { fileUrl } from '$lib/server/utils/storage';
-import { buildBill, PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
+import {
+  buildBill,
+  canSendPaymentReminder,
+  centsToDollars,
+  PAYMENT_STATUS,
+  PAYMENT_TYPE,
+} from '$lib/utils/billing';
 import {
   answersProblem,
   formAnswers,
@@ -148,6 +156,20 @@ export class ServiceService extends BaseService {
       await this.paymentGateway.cancel(payment);
     }
     return await this.serviceRepository.updateRequest(id, { status });
+  }
+
+  async sendPaymentReminder(id: string) {
+    const { request, serviceName, payment } = await this.requireRequest(id);
+    if (!canSendPaymentReminder(payment)) {
+      throw new ServiceRequestError('This request has nothing to pay.');
+    }
+
+    await this.mailgunGateway.sendTemplate(request.email, SENDERS.foundry, 'payment_reminder', {
+      customerName: request.customerName,
+      itemName: serviceName,
+      total: centsToDollars(payment.total),
+      paymentUrl: payUrl(payment),
+    });
   }
 
   /** Sets a variable request's price. The customer then pays it at /pay/[id]. */
