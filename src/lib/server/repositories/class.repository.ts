@@ -3,6 +3,7 @@ import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { fileUrl, saveFile } from '$lib/server/utils/storage';
 import { CLASS_BOOKING_STATUS, CLASS_INSTANCE_STATUS } from '$lib/utils/classes';
 import { and, eq, gte, inArray, isNull, lte, sum, type InferInsertModel } from 'drizzle-orm';
+import type { DateTime } from 'luxon';
 
 function withPhotoUrl<T extends { photoUrl: string | null }>(catalog: T): T {
   return { ...catalog, photoUrl: fileUrl(catalog.photoUrl) };
@@ -194,6 +195,25 @@ export class ClassRepository extends BaseRepository {
       .where(eq(schema.classBooking.id, id))
       .returning();
     return booking;
+  }
+
+  /** Marks the reminder sent unless another sweep already did. */
+  async claimReminder(bookingId: string, now: DateTime) {
+    const claimed = await this.db
+      .update(schema.classBooking)
+      .set({ reminderSentDate: now })
+      .where(
+        and(eq(schema.classBooking.id, bookingId), isNull(schema.classBooking.reminderSentDate)),
+      )
+      .returning({ id: schema.classBooking.id });
+    return claimed.length > 0;
+  }
+
+  async releaseReminder(bookingId: string) {
+    await this.db
+      .update(schema.classBooking)
+      .set({ reminderSentDate: null })
+      .where(eq(schema.classBooking.id, bookingId));
   }
 
   private selectBookingsWithPayment() {

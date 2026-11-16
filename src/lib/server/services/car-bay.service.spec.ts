@@ -488,9 +488,7 @@ describe(CarBayService.name, () => {
   describe('sendDueReminders', () => {
     beforeEach(() => {
       vi.mocked(sendTemplate).mockResolvedValue(undefined as never);
-      mocks.carBayRepository.update.mockImplementation(async (id, updates) =>
-        bookingRow({ id, ...(updates as Partial<CarBayBooking>) }),
-      );
+      mocks.carBayRepository.claimReminder.mockResolvedValue(true);
     });
 
     it('includes the car bay pass', async () => {
@@ -520,10 +518,18 @@ describe(CarBayService.name, () => {
       await sut.sendDueReminders(NOW);
 
       expect(sendTemplate).toHaveBeenCalledTimes(1);
-      expect(mocks.carBayRepository.update).toHaveBeenCalledWith('early', {
-        reminderSentDate: NOW,
-      });
-      expect(mocks.carBayRepository.update).not.toHaveBeenCalledWith('late', expect.anything());
+      expect(mocks.carBayRepository.claimReminder).toHaveBeenCalledExactlyOnceWith('early', NOW);
+    });
+
+    it('skips a reminder another sweep already sent', async () => {
+      mocks.carBayRepository.getReminderCandidates.mockResolvedValue([
+        storedBooking({ createdDate: NOW.minus({ days: 3 }) }),
+      ]);
+      mocks.carBayRepository.claimReminder.mockResolvedValue(false);
+
+      await sut.sendDueReminders(NOW);
+
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
 
     it('looks 24 hours ahead', async () => {

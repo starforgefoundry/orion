@@ -48,7 +48,7 @@ import {
   formatClassTime,
   weeklyDates,
 } from '$lib/utils/classes';
-import { dueForReminder } from '$lib/utils/reminders';
+import { dueForReminder, sendOnce } from '$lib/server/utils/reminders';
 import { DateTime, Duration } from 'luxon';
 
 const FULLY_BOOKED_MESSAGE = 'This class is fully booked';
@@ -539,16 +539,21 @@ export class ClassService extends BaseService {
 
     await forEachSettled(
       due,
-      async ({ booking, instance, catalog }) => {
-        await sendTemplate(
-          this,
-          booking.customerEmail,
-          SENDERS.classes,
-          'class_reminder',
-          bookingEmailVariables(booking, instance, catalog),
-        );
-        await this.classRepository.updateBooking(booking.id, { reminderSentDate: now });
-      },
+      ({ booking, instance, catalog }) =>
+        sendOnce(
+          {
+            claim: () => this.classRepository.claimReminder(booking.id, now),
+            release: () => this.classRepository.releaseReminder(booking.id),
+          },
+          () =>
+            sendTemplate(
+              this,
+              booking.customerEmail,
+              SENDERS.classes,
+              'class_reminder',
+              bookingEmailVariables(booking, instance, catalog),
+            ),
+        ),
       ({ booking }) => `send class reminder for booking ${booking.id}`,
     );
   }

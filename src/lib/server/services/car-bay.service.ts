@@ -44,7 +44,7 @@ import {
   type CarBayRequest,
 } from '$lib/utils/car-bay';
 import { SPACE_ZONE } from '$lib/utils/space';
-import { dueForReminder } from '$lib/utils/reminders';
+import { dueForReminder, sendOnce } from '$lib/server/utils/reminders';
 import { DateTime, Duration } from 'luxon';
 
 const CLOSED_MESSAGE = 'The bay is closed at that time. Please pick another time.';
@@ -369,16 +369,21 @@ export class CarBayService extends BaseService {
 
     await forEachSettled(
       due,
-      async (booking) => {
-        await sendTemplate(this, booking.customerEmail, SENDERS.carBay, 'car_bay_reminder', {
-          customerName: booking.customerName,
-          tierName: CAR_BAY_TIER_NAMES[booking.tier],
-          bookingWhen: formatPeriod(booking),
-          bookingUrl: carBayBookingUrl(booking),
-          ...passLinks(booking),
-        });
-        await this.carBayRepository.update(booking.id, { reminderSentDate: now });
-      },
+      (booking) =>
+        sendOnce(
+          {
+            claim: () => this.carBayRepository.claimReminder(booking.id, now),
+            release: () => this.carBayRepository.releaseReminder(booking.id),
+          },
+          () =>
+            sendTemplate(this, booking.customerEmail, SENDERS.carBay, 'car_bay_reminder', {
+              customerName: booking.customerName,
+              tierName: CAR_BAY_TIER_NAMES[booking.tier],
+              bookingWhen: formatPeriod(booking),
+              bookingUrl: carBayBookingUrl(booking),
+              ...passLinks(booking),
+            }),
+        ),
       (booking) => `send car bay reminder for booking ${booking.id}`,
     );
   }

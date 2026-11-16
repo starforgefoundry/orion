@@ -40,7 +40,8 @@ describe(ClassService.name, () => {
 
     beforeEach(() => {
       vi.mocked(sendTemplate).mockResolvedValue(undefined as never);
-      mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
+      mocks.classRepository.claimReminder.mockResolvedValue(true);
+      mocks.classRepository.releaseReminder.mockResolvedValue();
     });
 
     it('looks at classes from today through tomorrow', async () => {
@@ -77,9 +78,7 @@ describe(ClassService.name, () => {
           passQrImageUrl: 'https://orion.example.com/api/pass/pass-due/qr',
         }),
       );
-      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('due', {
-        reminderSentDate: NOW,
-      });
+      expect(mocks.classRepository.claimReminder).toHaveBeenCalledWith('due', NOW);
     });
 
     it('skips classes that already started or are more than 24 hours out', async () => {
@@ -112,13 +111,8 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.classRepository.updateBooking).not.toHaveBeenCalledWith(
-        'fails',
-        expect.anything(),
-      );
-      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('sends', {
-        reminderSentDate: NOW,
-      });
+      expect(mocks.classRepository.releaseReminder).toHaveBeenCalledExactlyOnceWith('fails');
+      expect(sendTemplate).toHaveBeenCalledTimes(2);
     });
   });
 });

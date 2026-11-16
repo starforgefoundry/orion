@@ -157,6 +157,19 @@ describeWithDatabase(CarBayRepository.name, () => {
     });
   });
 
+  describe('claimReminder', () => {
+    it('claims a booking reminder once until it is released', async () => {
+      const now = at('2026-10-17T08:00');
+      const created = await repository.create(booking('2026-10-17T12:00', '2026-10-17T13:00'));
+
+      expect(await repository.claimReminder(created.id, now)).toBe(true);
+      expect(await repository.claimReminder(created.id, now)).toBe(false);
+
+      await repository.releaseReminder(created.id);
+      expect(await repository.claimReminder(created.id, now)).toBe(true);
+    });
+  });
+
   describe('createClosure', () => {
     it('refuses a closure that overlaps another', async () => {
       const closure = { startAt: at('2026-10-17T00:00'), endAt: at('2026-10-18T00:00') };

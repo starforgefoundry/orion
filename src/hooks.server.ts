@@ -5,14 +5,14 @@ import { carBayService } from '$lib/server/services/car-bay.service';
 import { classService } from '$lib/server/services/class.service';
 import { settingsService } from '$lib/server/services/settings.service';
 import { NEW_MEMBER_ONBOARDING, squareService } from '$lib/server/services/square.service';
-import { runInBackground } from '$lib/server/utils/background';
+import { runEvery, runInBackground } from '$lib/server/utils/background';
 import { scheduleDaily } from '$lib/server/utils/daily-schedule';
 import { SPACE_ZONE } from '$lib/utils/space';
 import { type Handle, type ServerInit } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { handle as authenticationHandle } from '$lib/server/auth/auth';
 
-const BOOKING_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
+const REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const NIGHTLY_SYNC_HOUR = 3;
 
 async function userPopulation({ event, resolve }: Parameters<Handle>[0]) {
@@ -28,10 +28,8 @@ export const init: ServerInit = () => {
 
   runInBackground(settingsService.importLegacyPrintPricing(), 'import print pricing from Square');
 
-  setInterval(() => {
-    runInBackground(carBayService.sendDueReminders(), 'send car bay reminders');
-    runInBackground(classService.sendDueReminders(), 'send class reminders');
-  }, BOOKING_REMINDER_INTERVAL_MS).unref();
+  runEvery(REMINDER_INTERVAL_MS, 'send car bay reminders', () => carBayService.sendDueReminders());
+  runEvery(REMINDER_INTERVAL_MS, 'send class reminders', () => classService.sendDueReminders());
 
   if (dev) return;
   scheduleDaily(NIGHTLY_SYNC_HOUR, SPACE_ZONE, 'nightly Square subscription sync', async () => {

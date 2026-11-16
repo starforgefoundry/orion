@@ -148,6 +148,19 @@ describeWithDatabase(ClassRepository.name, () => {
     });
   });
 
+  describe('claimReminder', () => {
+    it('claims a booking reminder once until it is released', async () => {
+      const instance = await addInstance();
+      const booking = await book(instance.id, 1);
+
+      expect(await repository.claimReminder(booking.id, DateTime.now())).toBe(true);
+      expect(await repository.claimReminder(booking.id, DateTime.now())).toBe(false);
+
+      await repository.releaseReminder(booking.id);
+      expect(await repository.claimReminder(booking.id, DateTime.now())).toBe(true);
+    });
+  });
+
   describe('getBookingByToken', () => {
     it('returns the booking with its instance, catalog and payment', async () => {
       const instance = await addInstance();
