@@ -130,10 +130,10 @@ export class SquareRepository extends BaseRepository {
     return response.payment;
   }
 
-  async refundPayment(paymentId: string, amountCents: number) {
+  async refundPayment(paymentId: string, amountCents: number, idempotencyKey: string) {
     const response = await this.square.refunds.refundPayment({
       paymentId,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey,
       amountMoney: {
         amount: BigInt(amountCents),
         currency: SQUARE_CURRENCY,

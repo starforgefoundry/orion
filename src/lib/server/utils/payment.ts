@@ -19,6 +19,7 @@ export class PaymentDeclinedError extends PaymentError {
 }
 
 /** A hold leaves the money on the card until `capture`; a charge takes it straight away. */
+const REFUND_KEY_PREFIX = 'refund-';
 const PAYMENT_CHANGED_MESSAGE = 'This payment changed while it was being canceled. Try again.';
 
 const CHARGE_MODE = {
@@ -40,17 +41,18 @@ export type PaymentRepositories = {
 
 /**
  * Cancels an unpaid bill, and any Square invoice a pre-Orion payment was sent as. Only cancels
- * from the status the caller read, so a checkout that started charging since then wins.
+ * from the status the caller read, so a checkout that started charging since then wins. Invoices
+ * cannot be paid through Orion checkout, so canceling one in Square first cannot race a charge.
  */
 export async function cancelPayment(repos: PaymentRepositories, payment: Payment) {
   if (payment.status === PAYMENT_STATUS.CANCELED) return payment;
+  if (payment.squareInvoiceId) {
+    await repos.squareRepository.cancelInvoice(payment.squareInvoiceId);
+  }
   const canceled = await repos.paymentRepository.transition(payment.id, payment.status, {
     status: PAYMENT_STATUS.CANCELED,
   });
   if (!canceled) throw new PaymentStateError(PAYMENT_CHANGED_MESSAGE);
-  if (payment.squareInvoiceId) {
-    await repos.squareRepository.cancelInvoice(payment.squareInvoiceId);
-  }
   return canceled;
 }
 
@@ -135,30 +137,25 @@ async function squarePaymentIdFor(repos: PaymentRepositories, payment: Payment) 
 }
 
 /**
- * Marks the payment refunded before refunding in Square, so two cancels cannot both refund it.
- * A refund Square refuses puts the payment back to paid.
+ * Refunds in Square before marking the payment refunded, so a refund Square refuses changes
+ * nothing. Square treats repeats of one payment's refund key as the same refund, so racing
+ * cancels return the money once.
  */
 export async function refundPayment(repos: PaymentRepositories, payment: Payment) {
   if (payment.status !== PAYMENT_STATUS.PAID) return false;
   const squarePaymentId = payment.total > 0 ? await squarePaymentIdFor(repos, payment) : null;
 
-  const claimed = await repos.paymentRepository.transition(payment.id, PAYMENT_STATUS.PAID, {
+  if (squarePaymentId) {
+    await repos.squareRepository.refundPayment(
+      squarePaymentId,
+      payment.total,
+      `${REFUND_KEY_PREFIX}${payment.id}`,
+    );
+  }
+  await repos.paymentRepository.transition(payment.id, PAYMENT_STATUS.PAID, {
     status: PAYMENT_STATUS.REFUNDED,
     refundedDate: DateTime.now(),
   });
-  if (!claimed) return false;
-
-  if (squarePaymentId) {
-    try {
-      await repos.squareRepository.refundPayment(squarePaymentId, payment.total);
-    } catch (error) {
-      await repos.paymentRepository.transition(payment.id, PAYMENT_STATUS.REFUNDED, {
-        status: PAYMENT_STATUS.PAID,
-        refundedDate: null,
-      });
-      throw error;
-    }
-  }
   return true;
 }
 

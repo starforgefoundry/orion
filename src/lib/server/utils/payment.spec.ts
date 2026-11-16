@@ -217,7 +217,11 @@ describe('payment', () => {
       });
 
       expect(await refundPayment(repos, paid)).toBe(true);
-      expect(square.refundPayment).toHaveBeenCalledWith('square-payment-1', 1080);
+      expect(square.refundPayment).toHaveBeenCalledWith(
+        'square-payment-1',
+        1080,
+        'refund-payment-1',
+      );
       expect(payments.transition).toHaveBeenCalledWith(
         'payment-1',
         PAYMENT_STATUS.PAID,
@@ -234,7 +238,11 @@ describe('payment', () => {
       );
 
       expect(square.getInvoicePaymentId).toHaveBeenCalledWith('invoice-1');
-      expect(square.refundPayment).toHaveBeenCalledWith('invoice-payment-1', 1080);
+      expect(square.refundPayment).toHaveBeenCalledWith(
+        'invoice-payment-1',
+        1080,
+        'refund-payment-1',
+      );
     });
 
     it('refuses to mark an invoice refunded when its payment cannot be found', async () => {
@@ -249,19 +257,39 @@ describe('payment', () => {
       expect(payments.transition).not.toHaveBeenCalled();
     });
 
-    it('refunds only once when two cancels race', async () => {
+    it('keys the Square refund to the payment, so racing cancels refund once', async () => {
+      const paid = storedPayment({
+        status: PAYMENT_STATUS.PAID,
+        squarePaymentId: 'square-payment-1',
+      });
       payments.transition.mockResolvedValue(undefined as never);
 
-      expect(
-        await refundPayment(
-          repos,
-          storedPayment({ status: PAYMENT_STATUS.PAID, squarePaymentId: 'square-payment-1' }),
-        ),
-      ).toBe(false);
-      expect(square.refundPayment).not.toHaveBeenCalled();
+      expect(await refundPayment(repos, paid)).toBe(true);
+      expect(square.refundPayment).toHaveBeenCalledWith(
+        'square-payment-1',
+        1080,
+        'refund-payment-1',
+      );
     });
 
-    it('puts the payment back to paid when Square refuses the refund', async () => {
+    it('fits the refund key within the length Square accepts', async () => {
+      const SQUARE_IDEMPOTENCY_KEY_MAX = 45;
+
+      await refundPayment(
+        repos,
+        storedPayment({
+          id: crypto.randomUUID(),
+          status: PAYMENT_STATUS.PAID,
+          squarePaymentId: 'square-payment-1',
+        }),
+      );
+
+      expect(square.refundPayment.mock.calls[0][2].length).toBeLessThanOrEqual(
+        SQUARE_IDEMPOTENCY_KEY_MAX,
+      );
+    });
+
+    it('leaves the payment paid when Square refuses the refund', async () => {
       square.refundPayment.mockRejectedValue(new Error('square down'));
 
       await expect(
@@ -270,10 +298,7 @@ describe('payment', () => {
           storedPayment({ status: PAYMENT_STATUS.PAID, squarePaymentId: 'square-payment-1' }),
         ),
       ).rejects.toThrow('square down');
-      expect(payments.transition).toHaveBeenLastCalledWith('payment-1', PAYMENT_STATUS.REFUNDED, {
-        status: PAYMENT_STATUS.PAID,
-        refundedDate: null,
-      });
+      expect(payments.transition).not.toHaveBeenCalled();
     });
 
     it('does nothing for a payment that was never paid', async () => {
@@ -293,13 +318,19 @@ describe('payment', () => {
       });
     });
 
-    it('does not cancel a payment checkout claimed since it was read', async () => {
-      payments.transition.mockResolvedValue(undefined as never);
+    it('keeps the payment open when Square will not cancel the invoice', async () => {
+      square.cancelInvoice.mockRejectedValue(new Error('square down'));
 
       await expect(
         cancelPayment(repos, storedPayment({ squareInvoiceId: 'invoice-1' })),
-      ).rejects.toThrow(PaymentStateError);
-      expect(square.cancelInvoice).not.toHaveBeenCalled();
+      ).rejects.toThrow('square down');
+      expect(payments.transition).not.toHaveBeenCalled();
+    });
+
+    it('does not cancel a payment checkout claimed since it was read', async () => {
+      payments.transition.mockResolvedValue(undefined as never);
+
+      await expect(cancelPayment(repos, storedPayment())).rejects.toThrow(PaymentStateError);
     });
   });
 });
