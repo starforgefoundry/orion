@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { cleanPriceText, priceFromText } from '$lib/frontend/price-text';
   import TextInput from './TextInput.svelte';
   import DollarSignIcon from '@lucide/svelte/icons/dollar-sign';
 
@@ -28,32 +29,22 @@
     draft = formatted;
   }
 
+  // Updates `value` as staff type, so buttons that depend on it don't wait for the field to blur.
   function handleInput(event: Event) {
     const input = event.target as HTMLInputElement;
-    let rawValue = input.value;
+    const cleaned = cleanPriceText(input.value);
 
-    // Remove all non-numeric characters except the decimal point
-    rawValue = rawValue.replace(/[^0-9.]/g, '');
-
-    // Keep only the first decimal point
-    const parts = rawValue.split('.');
-    if (parts.length > 2) {
-      rawValue = parts[0] + '.' + parts.slice(1).join('');
-    }
-
-    // Update the input value if we cleaned it
-    if (input.value !== rawValue) {
+    if (input.value !== cleaned) {
       const cursorPos = input.selectionStart ?? 0;
-      input.value = rawValue;
+      input.value = cleaned;
       input.setSelectionRange(cursorPos, cursorPos);
     }
 
-    draft = rawValue;
+    draft = cleaned;
+    value = priceFromText(cleaned, multiplier);
   }
 
   function handleBlur() {
-    const parsed = parseFloat(draft ?? formatted);
-    value = isNaN(parsed) ? 0 : Math.round(parsed * multiplier);
     draft = undefined;
   }
 </script>
