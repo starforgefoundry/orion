@@ -55,18 +55,28 @@ describe(ServiceRequestDetail.name, () => {
     expect(detail.quote).toBe(TOTAL);
     expect(detail.quoteLabel).toBe('Update Quote');
     expect(detail.payUrl).toBe('/pay/payment-1');
-    expect(detail.statusOptions).toHaveLength(3);
+    expect(detail.statusOptions.map((option) => option.value)).not.toContain(STATUS.PICKED_UP);
   });
 
-  it.each([PAYMENT_STATUS.PROCESSING, PAYMENT_STATUS.PAID])(
-    'stops quoting and canceling once the payment is %s',
-    (payment) => {
-      const detail = detailFor({ payment, quoted: true });
+  it('offers pickup once the payment is collected', () => {
+    const detail = detailFor({ payment: PAYMENT_STATUS.PAID, quoted: true });
 
-      expect(detail.canQuote).toBe(false);
-      expect(detail.canCancel).toBe(false);
-    },
-  );
+    expect(detail.statusOptions.map((option) => option.value)).toContain(STATUS.PICKED_UP);
+  });
+
+  it('stops quoting and canceling while the card is being charged', () => {
+    const detail = detailFor({ payment: PAYMENT_STATUS.PROCESSING, quoted: true });
+
+    expect(detail.canQuote).toBe(false);
+    expect(detail.canCancel).toBe(false);
+  });
+
+  it('stops quoting a paid request but still cancels it with a refund', () => {
+    const detail = detailFor({ payment: PAYMENT_STATUS.PAID, quoted: true });
+
+    expect(detail.canQuote).toBe(false);
+    expect(detail.canCancel).toBe(true);
+  });
 
   it('freezes a canceled request', () => {
     const detail = detailFor({ status: STATUS.CANCELED, payment: PAYMENT_STATUS.CANCELED });

@@ -105,6 +105,17 @@ export function quoteRequiresCard(quote: OnlinePayment & { total: number }) {
   return quote.total > 0 && isPayableOnline({ ...quote, status: PAYMENT_STATUS.PENDING });
 }
 
+const RELEASABLE_STATUSES: PaymentStatus[] = [
+  PAYMENT_STATUS.QUOTE,
+  PAYMENT_STATUS.PENDING,
+  PAYMENT_STATUS.PAID,
+];
+
+/** Unpaid bills are canceled and paid ones refunded. A card being charged must finish first. */
+export function canReleasePayment(payment: { status: PaymentStatus }) {
+  return RELEASABLE_STATUSES.includes(payment.status);
+}
+
 const REMINDABLE_STATUSES: PaymentStatus[] = [PAYMENT_STATUS.QUOTE, PAYMENT_STATUS.PENDING];
 
 /** Only a bill the customer still owes and can pay online is worth a reminder. */

@@ -42,6 +42,13 @@ export const priceServiceRequest = command(
   }),
 );
 
+export const sendServiceReadyEmail = command(
+  v.string(),
+  staffOnly(async (id: string) => {
+    await serviceService.sendReadyEmail(id);
+  }),
+);
+
 export const sendServicePaymentReminder = command(
   v.string(),
   staffOnly(async (id: string) => {

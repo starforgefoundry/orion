@@ -9,7 +9,7 @@ import {
   updatePrintRequestDiscount,
 } from '$lib/remotes/endpoints/print-request.remote';
 import { sendPrintPaymentReminder } from '$lib/remotes/endpoints/print-payment.remote';
-import { canSendPaymentReminder, PAYMENT_STATUS } from '$lib/utils/billing';
+import { canReleasePayment, canSendPaymentReminder, PAYMENT_STATUS } from '$lib/utils/billing';
 import { toast } from 'svelte-sonner';
 import CustomerEditModal from './CustomerEditModal.svelte';
 import DiscountCodeModal from './DiscountCodeModal.svelte';
@@ -108,7 +108,12 @@ export class RequestDetail {
 
   get canCancel() {
     const request = this.request;
-    return !!request && !isClosed(request) && request.status !== STATUS.DONE;
+    return (
+      !!request &&
+      !isClosed(request) &&
+      request.status !== STATUS.DONE &&
+      (!request.payment || canReleasePayment(request.payment))
+    );
   }
 
   get readyForPickup() {

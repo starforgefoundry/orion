@@ -11,7 +11,9 @@ import {
 } from '$lib/utils/services';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
-import { cancelPayment } from '$lib/server/utils/payment';
+import { cancelPayment, refundPayment } from '$lib/server/utils/payment';
+import { WorkOrderError } from '$lib/server/utils/work-order';
+import { DateTime } from 'luxon';
 import { sendTemplate } from '$lib/server/utils/email';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -273,32 +275,81 @@ describe(ServiceService.name, () => {
       });
     });
 
-    it.each([PAYMENT_STATUS.PAID, PAYMENT_STATUS.PROCESSING])(
-      'rejects canceling a request whose payment is %s',
-      async (status) => {
-        stubRequest({ ...PRICED, status });
-
-        await expect(
-          sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED }),
-        ).rejects.toThrow(new ServiceRequestError('Only unpaid requests can be canceled.'));
-        expect(cancelPayment).not.toHaveBeenCalled();
-        expect(mocks.serviceRepository.updateRequest).not.toHaveBeenCalled();
-      },
-    );
-
-    it('cancels a free request that was settled at submit', async () => {
-      const { payment } = stubRequest({ status: PAYMENT_STATUS.PAID, total: 0 });
-      vi.mocked(cancelPayment).mockResolvedValue({
-        ...payment,
-        status: PAYMENT_STATUS.CANCELED,
-      });
+    it('refunds a paid request when it is canceled', async () => {
+      const { payment } = stubRequest({ ...PRICED, status: PAYMENT_STATUS.PAID });
+      vi.mocked(refundPayment).mockResolvedValue(true);
 
       await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED });
 
-      expect(cancelPayment).toHaveBeenCalledWith(sut, payment);
+      expect(refundPayment).toHaveBeenCalledWith(sut, payment);
       expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith(REQUEST_ID, {
         status: SERVICE_REQUEST_STATUS.CANCELED,
       });
+    });
+
+    it('does not cancel while the card is being charged', async () => {
+      stubRequest({ ...PRICED, status: PAYMENT_STATUS.PROCESSING });
+
+      await expect(
+        sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED }),
+      ).rejects.toBeInstanceOf(WorkOrderError);
+      expect(mocks.serviceRepository.updateRequest).not.toHaveBeenCalled();
+    });
+
+    it('records when the request was done and tells the customer it is ready', async () => {
+      stubRequest(PRICED, SERVICE_REQUEST_STATUS.IN_PROGRESS);
+      vi.mocked(sendTemplate).mockResolvedValue();
+
+      await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.DONE });
+
+      expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith(REQUEST_ID, {
+        status: SERVICE_REQUEST_STATUS.DONE,
+        completionDate: expect.any(DateTime),
+      });
+      await vi.waitFor(() =>
+        expect(sendTemplate).toHaveBeenCalledWith(
+          sut,
+          'jane@example.com',
+          SENDERS.foundry,
+          'service_ready',
+          {
+            customerName: 'Jane Doe',
+            serviceName: 'Laser Engraving',
+            paymentNote: expect.stringContaining('Please pay'),
+            paymentUrl: `https://orion.example.com/pay/${PAYMENT_ID}`,
+          },
+        ),
+      );
+    });
+
+    it('does not hand over a request that is still unpaid', async () => {
+      stubRequest(PRICED, SERVICE_REQUEST_STATUS.DONE);
+
+      await expect(
+        sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.PICKED_UP }),
+      ).rejects.toThrow(new ServiceRequestError('Collect payment before marking it picked up.'));
+      expect(mocks.serviceRepository.updateRequest).not.toHaveBeenCalled();
+    });
+
+    it('hands over a paid request', async () => {
+      stubRequest({ ...PRICED, status: PAYMENT_STATUS.PAID }, SERVICE_REQUEST_STATUS.DONE);
+
+      await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.PICKED_UP });
+
+      expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith(REQUEST_ID, {
+        status: SERVICE_REQUEST_STATUS.PICKED_UP,
+      });
+    });
+
+    it('does not resend the ready email when pickup is undone', async () => {
+      stubRequest(PRICED, SERVICE_REQUEST_STATUS.PICKED_UP);
+
+      await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.DONE });
+
+      expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith(REQUEST_ID, {
+        status: SERVICE_REQUEST_STATUS.DONE,
+      });
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
 
     it('accepts a repeated cancel without canceling the payment again', async () => {
@@ -316,6 +367,30 @@ describe(ServiceService.name, () => {
         sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.SUBMITTED }),
       ).rejects.toBeInstanceOf(ServiceRequestError);
       expect(mocks.serviceRepository.updateRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sendReadyEmail', () => {
+    it('resends the ready email for a finished request', async () => {
+      stubRequest({ ...PRICED, status: PAYMENT_STATUS.PAID }, SERVICE_REQUEST_STATUS.DONE);
+      vi.mocked(sendTemplate).mockResolvedValue();
+
+      await sut.sendReadyEmail(REQUEST_ID);
+
+      expect(sendTemplate).toHaveBeenCalledWith(
+        sut,
+        'jane@example.com',
+        SENDERS.foundry,
+        'service_ready',
+        expect.objectContaining({ serviceName: 'Laser Engraving' }),
+      );
+    });
+
+    it('refuses before the request is done', async () => {
+      stubRequest(PRICED, SERVICE_REQUEST_STATUS.IN_PROGRESS);
+
+      await expect(sut.sendReadyEmail(REQUEST_ID)).rejects.toBeInstanceOf(ServiceRequestError);
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
   });
 
@@ -346,7 +421,7 @@ describe(ServiceService.name, () => {
     ])('refuses to remind about a bill that %s', async (_, payment) => {
       stubRequest(payment);
 
-      await expect(sut.sendPaymentReminder(REQUEST_ID)).rejects.toBeInstanceOf(ServiceRequestError);
+      await expect(sut.sendPaymentReminder(REQUEST_ID)).rejects.toBeInstanceOf(WorkOrderError);
       expect(sendTemplate).not.toHaveBeenCalled();
     });
   });

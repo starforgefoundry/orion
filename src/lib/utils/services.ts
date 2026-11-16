@@ -20,6 +20,7 @@ export const SERVICE_REQUEST_STATUS = {
   SUBMITTED: 'submitted',
   IN_PROGRESS: 'in_progress',
   DONE: 'done',
+  PICKED_UP: 'picked_up',
   CANCELED: 'canceled',
 } as const;
 export type ServiceRequestStatus = EnumValue<typeof SERVICE_REQUEST_STATUS>;
@@ -129,14 +130,6 @@ export function quoteRequired(payment: PaymentSummary, status: ServiceRequestSta
 /** Variable prices can be re-quoted until the customer pays. */
 export function canQuote(pricingMode: ServicePricing, payment: { status: PaymentStatus }) {
   return pricingMode === SERVICE_PRICING.VARIABLE && isUnpaid(payment);
-}
-
-/**
- * Paid requests need a refund and charging ones cannot be stopped, so only unpaid requests cancel.
- * A free request is settled at submit but has nothing to refund.
- */
-export function isCancelable(payment: { status: PaymentStatus; total: number }) {
-  return isUnpaid(payment) || (payment.status === PAYMENT_STATUS.PAID && payment.total === 0);
 }
 
 /** Returns what is wrong with one answer, or undefined when it satisfies the field. */

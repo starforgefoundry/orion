@@ -15,8 +15,8 @@ import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import { sendTemplate } from '$lib/server/utils/email';
 import { printQueueUrl, printRequestStatusUrl } from '$lib/server/utils/payment-links';
 import { chargePayment } from '$lib/server/utils/payment';
+import { sendPaymentReminder } from '$lib/server/utils/work-order';
 import {
-  canSendPaymentReminder,
   centsToDollars,
   formatCents,
   isPayableOnline,
@@ -159,17 +159,19 @@ export class PrintPaymentService extends BaseService {
   async sendPaymentReminder(id: string) {
     const request = await this.printRequestRepository.getById(id);
     if (!request) throw new NotFoundError('Print request not found');
-    const payment = request.payment;
-    if (!payment || !canSendPaymentReminder(payment)) {
-      throw new PrintPaymentError('This print request has nothing to pay');
-    }
+    if (!request.payment) throw new PrintPaymentError('This print request has nothing to pay');
 
-    await sendTemplate(this, request.email, SENDERS.print, 'payment_reminder', {
-      customerName: request.customerName,
-      itemName: request.projectName,
-      total: centsToDollars(payment.total),
-      paymentUrl: printRequestStatusUrl(request.id),
-    });
+    await sendPaymentReminder(
+      this,
+      {
+        email: request.email,
+        customerName: request.customerName,
+        itemName: request.projectName,
+        sender: SENDERS.print,
+        link: printRequestStatusUrl(request.id),
+      },
+      request.payment,
+    );
   }
 
   /** Changing the group code moves who pays, so any unpaid bill is rebuilt and resent. */

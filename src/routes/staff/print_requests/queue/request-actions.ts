@@ -12,8 +12,6 @@ import { toast } from 'svelte-sonner';
 
 export const STATUS = PRINT_REQUEST_STATUS;
 
-export const BOARD_STATUSES = [STATUS.IN_QUEUE, STATUS.PRINTING, STATUS.DONE] as const;
-
 export const STATUS_LABELS: Record<PrintRequestStatus, string> = {
   in_queue: 'Print Queue',
   printing: 'Printing',

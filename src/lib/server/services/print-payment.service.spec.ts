@@ -410,7 +410,7 @@ describe(PrintPaymentService.name, () => {
     ])('refuses to remind about %s', async (_, existing) => {
       mocks.printRequestRepository.getById.mockResolvedValue(printRequest({ payment: existing }));
 
-      await expect(sut.sendPaymentReminder(REQUEST_ID)).rejects.toThrow(PrintPaymentError);
+      await expect(sut.sendPaymentReminder(REQUEST_ID)).rejects.toThrow('has nothing to pay');
       expect(sendTemplate).not.toHaveBeenCalled();
     });
   });

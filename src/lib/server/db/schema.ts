@@ -674,6 +674,7 @@ export const serviceRequest = pgTable('service_request', {
     .notNull()
     .references(() => payment.id),
   status: text('status', { enum: enumValues(SERVICE_REQUEST_STATUS) }).notNull(),
+  completionDate: luxonTimestamp('completion_date'),
 });
 
 export type ServiceRequest = InferSelectModel<typeof serviceRequest>;
