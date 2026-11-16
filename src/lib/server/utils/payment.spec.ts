@@ -218,16 +218,68 @@ describe('payment', () => {
 
       expect(await refundPayment(repos, paid)).toBe(true);
       expect(square.refundPayment).toHaveBeenCalledWith('square-payment-1', 1080);
-      expect(payments.update).toHaveBeenCalledWith(
+      expect(payments.transition).toHaveBeenCalledWith(
         'payment-1',
+        PAYMENT_STATUS.PAID,
         expect.objectContaining({ status: PAYMENT_STATUS.REFUNDED }),
       );
+    });
+
+    it('refunds a paid pre-Orion invoice through the payment behind it', async () => {
+      square.getInvoicePaymentId.mockResolvedValue('invoice-payment-1');
+
+      await refundPayment(
+        repos,
+        storedPayment({ status: PAYMENT_STATUS.PAID, squareInvoiceId: 'invoice-1' }),
+      );
+
+      expect(square.getInvoicePaymentId).toHaveBeenCalledWith('invoice-1');
+      expect(square.refundPayment).toHaveBeenCalledWith('invoice-payment-1', 1080);
+    });
+
+    it('refuses to mark an invoice refunded when its payment cannot be found', async () => {
+      square.getInvoicePaymentId.mockResolvedValue(undefined);
+
+      await expect(
+        refundPayment(
+          repos,
+          storedPayment({ status: PAYMENT_STATUS.PAID, squareInvoiceId: 'invoice-1' }),
+        ),
+      ).rejects.toThrow(PaymentStateError);
+      expect(payments.transition).not.toHaveBeenCalled();
+    });
+
+    it('refunds only once when two cancels race', async () => {
+      payments.transition.mockResolvedValue(undefined as never);
+
+      expect(
+        await refundPayment(
+          repos,
+          storedPayment({ status: PAYMENT_STATUS.PAID, squarePaymentId: 'square-payment-1' }),
+        ),
+      ).toBe(false);
+      expect(square.refundPayment).not.toHaveBeenCalled();
+    });
+
+    it('puts the payment back to paid when Square refuses the refund', async () => {
+      square.refundPayment.mockRejectedValue(new Error('square down'));
+
+      await expect(
+        refundPayment(
+          repos,
+          storedPayment({ status: PAYMENT_STATUS.PAID, squarePaymentId: 'square-payment-1' }),
+        ),
+      ).rejects.toThrow('square down');
+      expect(payments.transition).toHaveBeenLastCalledWith('payment-1', PAYMENT_STATUS.REFUNDED, {
+        status: PAYMENT_STATUS.PAID,
+        refundedDate: null,
+      });
     });
 
     it('does nothing for a payment that was never paid', async () => {
       expect(await refundPayment(repos, storedPayment())).toBe(false);
       expect(square.refundPayment).not.toHaveBeenCalled();
-      expect(payments.update).not.toHaveBeenCalled();
+      expect(payments.transition).not.toHaveBeenCalled();
     });
   });
 
@@ -236,9 +288,18 @@ describe('payment', () => {
       await cancelPayment(repos, storedPayment({ squareInvoiceId: 'invoice-1' }));
 
       expect(square.cancelInvoice).toHaveBeenCalledWith('invoice-1');
-      expect(payments.update).toHaveBeenCalledWith('payment-1', {
+      expect(payments.transition).toHaveBeenCalledWith('payment-1', PAYMENT_STATUS.PENDING, {
         status: PAYMENT_STATUS.CANCELED,
       });
+    });
+
+    it('does not cancel a payment checkout claimed since it was read', async () => {
+      payments.transition.mockResolvedValue(undefined as never);
+
+      await expect(
+        cancelPayment(repos, storedPayment({ squareInvoiceId: 'invoice-1' })),
+      ).rejects.toThrow(PaymentStateError);
+      expect(square.cancelInvoice).not.toHaveBeenCalled();
     });
   });
 });

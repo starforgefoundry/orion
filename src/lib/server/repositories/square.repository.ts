@@ -52,6 +52,14 @@ export class SquareRepository extends BaseRepository {
     return response.invoice;
   }
 
+  /** The payment that settled an invoice, found through the invoice's order. */
+  async getInvoicePaymentId(invoiceId: string) {
+    const invoice = await this.getInvoiceById(invoiceId);
+    if (!invoice?.orderId) return undefined;
+    const order = await this.getOrderById(invoice.orderId);
+    return order?.tenders?.[0]?.id;
+  }
+
   async cancelInvoice(invoiceId: string) {
     const invoice = await this.getInvoiceById(invoiceId);
     if (!invoice) {

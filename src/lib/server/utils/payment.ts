@@ -19,6 +19,8 @@ export class PaymentDeclinedError extends PaymentError {
 }
 
 /** A hold leaves the money on the card until `capture`; a charge takes it straight away. */
+const PAYMENT_CHANGED_MESSAGE = 'This payment changed while it was being canceled. Try again.';
+
 const CHARGE_MODE = {
   HOLD: { autocomplete: false, expectedStatus: SQUARE_PAYMENT_STATUS.APPROVED },
   CHARGE: { autocomplete: true, expectedStatus: SQUARE_PAYMENT_STATUS.COMPLETED },
@@ -36,13 +38,20 @@ export type PaymentRepositories = {
   settingsRepository: SettingsRepository;
 };
 
-/** Cancels any Square invoice a pre-Orion payment was sent as. */
+/**
+ * Cancels an unpaid bill, and any Square invoice a pre-Orion payment was sent as. Only cancels
+ * from the status the caller read, so a checkout that started charging since then wins.
+ */
 export async function cancelPayment(repos: PaymentRepositories, payment: Payment) {
   if (payment.status === PAYMENT_STATUS.CANCELED) return payment;
-  if (payment.squareInvoiceId && payment.status !== PAYMENT_STATUS.PAID) {
+  const canceled = await repos.paymentRepository.transition(payment.id, payment.status, {
+    status: PAYMENT_STATUS.CANCELED,
+  });
+  if (!canceled) throw new PaymentStateError(PAYMENT_CHANGED_MESSAGE);
+  if (payment.squareInvoiceId) {
     await repos.squareRepository.cancelInvoice(payment.squareInvoiceId);
   }
-  return await repos.paymentRepository.update(payment.id, { status: PAYMENT_STATUS.CANCELED });
+  return canceled;
 }
 
 /**
@@ -113,15 +122,43 @@ export async function chargePayment(
   });
 }
 
+/** The Square payment that took the money, including one made by paying a pre-Orion invoice. */
+async function squarePaymentIdFor(repos: PaymentRepositories, payment: Payment) {
+  if (payment.squarePaymentId || !payment.squareInvoiceId) return payment.squarePaymentId;
+  const paymentId = await repos.squareRepository.getInvoicePaymentId(payment.squareInvoiceId);
+  if (!paymentId) {
+    throw new PaymentStateError(
+      'Could not find the Square payment for this invoice. Refund it in Square instead.',
+    );
+  }
+  return paymentId;
+}
+
+/**
+ * Marks the payment refunded before refunding in Square, so two cancels cannot both refund it.
+ * A refund Square refuses puts the payment back to paid.
+ */
 export async function refundPayment(repos: PaymentRepositories, payment: Payment) {
   if (payment.status !== PAYMENT_STATUS.PAID) return false;
-  if (payment.squarePaymentId && payment.total > 0) {
-    await repos.squareRepository.refundPayment(payment.squarePaymentId, payment.total);
-  }
-  await repos.paymentRepository.update(payment.id, {
+  const squarePaymentId = payment.total > 0 ? await squarePaymentIdFor(repos, payment) : null;
+
+  const claimed = await repos.paymentRepository.transition(payment.id, PAYMENT_STATUS.PAID, {
     status: PAYMENT_STATUS.REFUNDED,
     refundedDate: DateTime.now(),
   });
+  if (!claimed) return false;
+
+  if (squarePaymentId) {
+    try {
+      await repos.squareRepository.refundPayment(squarePaymentId, payment.total);
+    } catch (error) {
+      await repos.paymentRepository.transition(payment.id, PAYMENT_STATUS.REFUNDED, {
+        status: PAYMENT_STATUS.PAID,
+        refundedDate: null,
+      });
+      throw error;
+    }
+  }
   return true;
 }
 
