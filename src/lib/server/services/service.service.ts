@@ -164,7 +164,7 @@ export class ServiceService extends BaseService {
       throw new ServiceRequestError('This request has nothing to pay.');
     }
 
-    await this.mailgunGateway.sendTemplate(request.email, SENDERS.foundry, 'payment_reminder', {
+    await this.resendGateway.sendTemplate(request.email, SENDERS.foundry, 'payment_reminder', {
       customerName: request.customerName,
       itemName: serviceName,
       total: centsToDollars(payment.total),

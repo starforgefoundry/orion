@@ -105,7 +105,7 @@ export class PrintRequestService extends BaseService {
       throw new NotFoundError('Print request not found');
     }
 
-    await this.mailgunGateway.sendTemplate(request.email, SENDERS.print, 'print_pickup', {
+    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'print_pickup', {
       projectName: request.projectName,
       paymentNote: pickupPaymentNote(request.payment),
       statusURL: printRequestStatusUrl(request.id),
@@ -118,7 +118,7 @@ export class PrintRequestService extends BaseService {
       throw new Error('Print request not found');
     }
 
-    await this.mailgunGateway.sendTemplate(request.email, SENDERS.print, 'print_submitted', {
+    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'print_submitted', {
       customerName: request.customerName,
       projectName: request.projectName,
       statusURL: printRequestStatusUrl(request.id),

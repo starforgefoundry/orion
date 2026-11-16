@@ -36,7 +36,7 @@ describe(ClassService.name, () => {
     }
 
     beforeEach(() => {
-      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
     });
 
@@ -58,7 +58,7 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledExactlyOnceWith(
+      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledExactlyOnceWith(
         'customer@example.com',
         {
           from: 'Starforge Classes <classes@starforgefoundry.com>',
@@ -86,7 +86,7 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
     });
 
     it('skips bookings made inside the reminder window', async () => {
@@ -96,7 +96,7 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
     });
 
     it('keeps going when one reminder fails', async () => {
@@ -104,7 +104,7 @@ describe(ClassService.name, () => {
         candidate(NOW.plus({ hours: 20 }), NOW.minus({ days: 3 }), 'fails'),
         candidate(NOW.plus({ hours: 21 }), NOW.minus({ days: 3 }), 'sends'),
       ]);
-      mocks.mailgunGateway.sendTemplate.mockRejectedValueOnce(new Error('mailgun down'));
+      mocks.resendGateway.sendTemplate.mockRejectedValueOnce(new Error('resend down'));
 
       await sut.sendDueReminders(NOW);
 

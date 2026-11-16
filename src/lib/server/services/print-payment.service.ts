@@ -137,7 +137,7 @@ export class PrintPaymentService extends BaseService {
   }
 
   private async sendQuoteEmail(request: PrintRequestDto, total: number) {
-    await this.mailgunGateway.sendTemplate(request.email, SENDERS.print, 'print_quote', {
+    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'print_quote', {
       customerName: request.customerName,
       projectName: request.projectName,
       quotePrice: centsToDollars(total),
@@ -146,7 +146,7 @@ export class PrintPaymentService extends BaseService {
   }
 
   private async sendPaymentEmail(request: PrintRequestDto, total: number) {
-    await this.mailgunGateway.sendTemplate(request.email, SENDERS.print, 'print_payment', {
+    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'print_payment', {
       customerName: request.customerName,
       projectName: request.projectName,
       total: centsToDollars(total),
@@ -162,7 +162,7 @@ export class PrintPaymentService extends BaseService {
       throw new PrintPaymentError('This print request has nothing to pay');
     }
 
-    await this.mailgunGateway.sendTemplate(request.email, SENDERS.print, 'payment_reminder', {
+    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'payment_reminder', {
       customerName: request.customerName,
       itemName: request.projectName,
       total: centsToDollars(payment.total),

@@ -317,11 +317,11 @@ describe(ServiceService.name, () => {
   describe('sendPaymentReminder', () => {
     it('emails the customer a link to pay the bill', async () => {
       stubRequest(PRICED);
-      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
 
       await sut.sendPaymentReminder(REQUEST_ID);
 
-      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         SENDERS.foundry,
         'payment_reminder',
@@ -341,7 +341,7 @@ describe(ServiceService.name, () => {
       stubRequest(payment);
 
       await expect(sut.sendPaymentReminder(REQUEST_ID)).rejects.toBeInstanceOf(ServiceRequestError);
-      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
     });
   });
 

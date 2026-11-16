@@ -1,4 +1,4 @@
-import { MailgunRateLimitError } from '$lib/server/gateways/mailgun.gateway';
+import { ResendRateLimitError } from '$lib/server/gateways/resend.gateway';
 import { SPACE_ZONE } from '$lib/utils/space';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { factory } from '$test/factory';
@@ -269,7 +269,7 @@ describe(OrganizationService.name, () => {
       mocks.paymentRepository.save.mockImplementation(async (data) =>
         factory.payment({ id: 'balance-1', total: data.bill.total }),
       );
-      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
     });
 
     it('saves a pending balance payment and emails the organization a pay link', async () => {
@@ -287,7 +287,7 @@ describe(OrganizationService.name, () => {
         }),
         organizationId: organization.id,
       });
-      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
         'charge@org.com',
         expect.anything(),
         'organization_balance',
@@ -318,7 +318,7 @@ describe(OrganizationService.name, () => {
         'No outstanding balance to charge',
       );
       expect(mocks.paymentRepository.save).not.toHaveBeenCalled();
-      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
     });
   });
 
@@ -420,7 +420,7 @@ describe(OrganizationService.name, () => {
 
     it('keeps the membership when the onboarding email fails', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
-      mocks.memberNotificationGateway.sendOnboarding.mockRejectedValue(new Error('mailgun'));
+      mocks.memberNotificationGateway.sendOnboarding.mockRejectedValue(new Error('resend'));
 
       const result = await sut.addOrganizationMembers({
         organizationId: organization.id,
@@ -448,10 +448,10 @@ describe(OrganizationService.name, () => {
         );
       }
 
-      it('waits out the Mailgun rate limit and resends', async () => {
+      it('waits out the Resend rate limit and resends', async () => {
         vi.useFakeTimers();
         mocks.memberNotificationGateway.sendOnboarding.mockRejectedValueOnce(
-          new MailgunRateLimitError('limit', DateTime.now().plus({ minutes: 2 })),
+          new ResendRateLimitError('limit', DateTime.now().plus({ minutes: 2 })),
         );
 
         await sut.addOrganizationMembers({ organizationId: organization.id, lines });
@@ -464,7 +464,7 @@ describe(OrganizationService.name, () => {
 
       it('moves on to the next member after a non rate limit failure', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
-        mocks.memberNotificationGateway.sendOnboarding.mockRejectedValueOnce(new Error('mailgun'));
+        mocks.memberNotificationGateway.sendOnboarding.mockRejectedValueOnce(new Error('resend'));
 
         await sut.addOrganizationMembers({ organizationId: organization.id, lines });
 

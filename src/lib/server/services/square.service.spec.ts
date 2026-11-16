@@ -244,7 +244,7 @@ describe(SquareService.name, () => {
 
       it('does not fail the webhook when onboarding fails', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
-        mocks.memberNotificationGateway.sendOnboarding.mockRejectedValue(new Error('Mailgun down'));
+        mocks.memberNotificationGateway.sendOnboarding.mockRejectedValue(new Error('Resend down'));
 
         await expect(sut.processWebhook(subscriptionWebhook())).resolves.toEqual({
           success: true,
@@ -356,9 +356,7 @@ describe(SquareService.name, () => {
 
       it('still sends the other passes when one email fails', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
-        mocks.memberNotificationGateway.sendDayPass.mockRejectedValueOnce(
-          new Error('Mailgun down'),
-        );
+        mocks.memberNotificationGateway.sendDayPass.mockRejectedValueOnce(new Error('Resend down'));
 
         await expect(sut.processWebhook(paymentWebhook)).resolves.toEqual({ success: true });
         expect(mocks.memberNotificationGateway.sendDayPass).toHaveBeenCalledTimes(2);

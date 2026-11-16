@@ -4,7 +4,7 @@ import {
   type MemberEmailTrigger,
 } from '$lib/utils/member-enums';
 import type { DayPass, Member } from '$lib/server/db/schema';
-import type { MailgunGateway } from '$lib/server/gateways/mailgun.gateway';
+import type { ResendGateway } from '$lib/server/gateways/resend.gateway';
 import type { MemberEmailRepository } from '$lib/server/repositories/member-email.repository';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import { onboardingUrl, passLinks } from '$lib/server/utils/member-links';
@@ -35,12 +35,12 @@ const ONBOARDING_INTRO: Record<MemberEmailTrigger, string> = {
 /** Emails members their passes and records each send. */
 export class MemberNotificationGateway {
   constructor(
-    private readonly mailgunGateway: MailgunGateway,
+    private readonly resendGateway: ResendGateway,
     private readonly memberEmailRepository: MemberEmailRepository,
   ) {}
 
   async sendOnboarding(member: Member, trigger: MemberEmailTrigger): Promise<void> {
-    await this.mailgunGateway.sendTemplate(
+    await this.resendGateway.sendTemplate(
       member.email,
       SENDERS.members,
       ONBOARDING_TEMPLATE[trigger],
@@ -54,7 +54,7 @@ export class MemberNotificationGateway {
   }
 
   async sendDayPass(member: Member, dayPass: DayPass): Promise<void> {
-    await this.mailgunGateway.sendTemplate(member.email, SENDERS.members, DAY_PASS_TEMPLATE, {
+    await this.resendGateway.sendTemplate(member.email, SENDERS.members, DAY_PASS_TEMPLATE, {
       memberName: member.name,
       ...passLinks(dayPass),
     });

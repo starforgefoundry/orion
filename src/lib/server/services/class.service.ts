@@ -509,16 +509,11 @@ export class ClassService extends BaseService {
       throw new Error('Booking not found');
     }
 
-    await this.mailgunGateway.sendTemplate(
-      booking.customerEmail,
-      SENDERS.classes,
-      'class_booking',
-      {
-        ...bookingEmailVariables(booking, booking.instance, booking.catalog),
-        classDuration: booking.instance.durationMinutes.toString(),
-        amountPaid: centsToDollars(amountPaid(booking.payment)),
-      },
-    );
+    await this.resendGateway.sendTemplate(booking.customerEmail, SENDERS.classes, 'class_booking', {
+      ...bookingEmailVariables(booking, booking.instance, booking.catalog),
+      classDuration: booking.instance.durationMinutes.toString(),
+      amountPaid: centsToDollars(amountPaid(booking.payment)),
+    });
   }
 
   async sendDueReminders(now: DateTime = DateTime.now()) {
@@ -537,7 +532,7 @@ export class ClassService extends BaseService {
     await forEachSettled(
       due,
       async ({ booking, instance, catalog }) => {
-        await this.mailgunGateway.sendTemplate(
+        await this.resendGateway.sendTemplate(
           booking.customerEmail,
           SENDERS.classes,
           'class_reminder',

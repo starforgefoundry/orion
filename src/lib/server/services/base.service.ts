@@ -1,5 +1,5 @@
 import { PaymentGateway } from '$lib/server/gateways/payment.gateway';
-import { MailgunGateway } from '$lib/server/gateways/mailgun.gateway';
+import { ResendGateway } from '$lib/server/gateways/resend.gateway';
 import { MemberNotificationGateway } from '$lib/server/gateways/member-notification.gateway';
 import { BambuddyRepository } from '$lib/server/repositories/bambuddy.repository';
 import { BillingCodeRepository } from '$lib/server/repositories/billing-code.repository';
@@ -38,7 +38,6 @@ export const REPOSITORIES = {
   emailTemplateRepository: EmailTemplateRepository,
   googleCalendarRepository: GoogleCalendarRepository,
   inventoryRepository: InventoryRepository,
-  mailgunGateway: MailgunGateway,
   memberEmailRepository: MemberEmailRepository,
   memberNotificationGateway: MemberNotificationGateway,
   memberRepository: MemberRepository,
@@ -52,6 +51,7 @@ export const REPOSITORIES = {
   printMaterialsRepository: PrintMaterialsRepository,
   printRequestCommentRepository: PrintRequestCommentRepository,
   printRequestRepository: PrintRequestRepository,
+  resendGateway: ResendGateway,
   serviceRepository: ServiceRepository,
   settingsRepository: SettingsRepository,
   squareRepository: SquareRepository,
@@ -66,9 +66,9 @@ type RepositoryKey = keyof ServiceRepositories;
 
 /** Entries built from other entries, so they share the same instances as the service. */
 const COMPOSED: { [K in RepositoryKey]?: (r: ServiceRepositories) => ServiceRepositories[K] } = {
-  mailgunGateway: (r) => new MailgunGateway(r.emailTemplateRepository),
+  resendGateway: (r) => new ResendGateway(r.emailTemplateRepository),
   memberNotificationGateway: (r) =>
-    new MemberNotificationGateway(r.mailgunGateway, r.memberEmailRepository),
+    new MemberNotificationGateway(r.resendGateway, r.memberEmailRepository),
   paymentGateway: (r) =>
     new PaymentGateway(r.paymentRepository, r.squareRepository, r.settingsRepository),
 };
