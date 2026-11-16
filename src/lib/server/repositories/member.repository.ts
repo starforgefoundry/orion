@@ -1,4 +1,5 @@
 import { schema } from '$lib/server/db/schema';
+import { paginate } from '$lib/server/db/pagination';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import {
   ACCESS_BASIS,
@@ -296,12 +297,7 @@ export class MemberRepository extends BaseRepository {
     );
     const direction = filter.direction === SORT_DIRECTION.DESC ? desc : asc;
 
-    const [[{ total }], data] = await Promise.all([
-      this.db
-        .select({ total: count() })
-        .from(schema.member)
-        .leftJoin(onboarding, eq(onboarding.memberId, schema.member.id))
-        .where(where),
+    return await paginate(
       this.db
         .select({ member: schema.member, lastOnboardingSentDate: onboarding.lastSentDate })
         .from(schema.member)
@@ -312,18 +308,14 @@ export class MemberRepository extends BaseRepository {
           asc(schema.member.name),
           asc(schema.member.email),
         )
-        .limit(filter.pageSize)
-        .offset((filter.page - 1) * filter.pageSize),
-    ]);
-    return {
-      data,
-      pagination: {
-        total,
-        page: filter.page,
-        pageSize: filter.pageSize,
-        totalPages: Math.ceil(total / filter.pageSize),
-      },
-    };
+        .$dynamic(),
+      this.db
+        .select({ total: count() })
+        .from(schema.member)
+        .leftJoin(onboarding, eq(onboarding.memberId, schema.member.id))
+        .where(where),
+      filter,
+    );
   }
 
   async getLatestWaiver(memberId: string) {

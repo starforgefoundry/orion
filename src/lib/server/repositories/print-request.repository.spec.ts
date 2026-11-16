@@ -28,7 +28,7 @@ describeWithDatabase('PrintRequestRepository.search', () => {
     const byName = await addRequest('Bracket', 'Robin', 2);
     await addRequest('Vase', 'Grace', 3);
 
-    const { data } = await repository.search({ query: 'rob' });
+    const { data } = await repository.search({ query: 'rob', page: 1, pageSize: 25 });
 
     expect(data.map(({ id }) => id)).toEqual([byProject.id, byName.id]);
   });
@@ -37,7 +37,7 @@ describeWithDatabase('PrintRequestRepository.search', () => {
     const older = await addRequest('Vase', 'Grace', 3);
     const newer = await addRequest('Robot Arm', 'Ada', 1);
 
-    const { data } = await repository.search({ query: '  ' });
+    const { data } = await repository.search({ query: '  ', page: 1, pageSize: 25 });
 
     expect(data.map(({ id }) => id)).toEqual([newer.id, older.id]);
   });

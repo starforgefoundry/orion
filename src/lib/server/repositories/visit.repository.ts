@@ -1,5 +1,6 @@
 import { VISIT_OUTCOME } from '$lib/utils/member-enums';
 import { schema, type DayPass, type Visit } from '$lib/server/db/schema';
+import { paginate, type PageRequest } from '$lib/server/db/pagination';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { count, desc, eq } from 'drizzle-orm';
 
@@ -32,32 +33,30 @@ export class VisitRepository extends BaseRepository {
     });
   }
 
-  async listByMember(memberId: string, page: number, pageSize: number) {
+  async listByMember(memberId: string, request: PageRequest) {
     const where = eq(schema.visit.memberId, memberId);
-    const [[{ total }], data] = await Promise.all([
-      this.db.select({ total: count() }).from(schema.visit).where(where),
+    return await paginate(
       this.db
         .select()
         .from(schema.visit)
         .where(where)
         .orderBy(desc(schema.visit.scannedDate))
-        .limit(pageSize)
-        .offset((page - 1) * pageSize),
-    ]);
-    return { data, pagination: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) } };
+        .$dynamic(),
+      this.db.select({ total: count() }).from(schema.visit).where(where),
+      request,
+    );
   }
 
-  async listRecent(page: number, pageSize: number) {
-    const [[{ total }], data] = await Promise.all([
-      this.db.select({ total: count() }).from(schema.visit),
+  async listRecent(request: PageRequest) {
+    return await paginate(
       this.db
         .select({ visit: schema.visit, member: schema.member })
         .from(schema.visit)
         .innerJoin(schema.member, eq(schema.member.id, schema.visit.memberId))
         .orderBy(desc(schema.visit.scannedDate))
-        .limit(pageSize)
-        .offset((page - 1) * pageSize),
-    ]);
-    return { data, pagination: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) } };
+        .$dynamic(),
+      this.db.select({ total: count() }).from(schema.visit),
+      request,
+    );
   }
 }

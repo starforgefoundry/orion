@@ -1,3 +1,4 @@
+import { pageFields } from '$lib/remotes/dtos/pagination.dto';
 import * as v from 'valibot';
 
 export const submitWaiverDto = v.object({
@@ -14,8 +15,7 @@ export type SubmitWaiverDto = v.InferOutput<typeof submitWaiverDto>;
 
 export const searchWaiversDto = v.object({
   query: v.optional(v.string(), ''),
-  page: v.optional(v.number(), 1),
-  pageSize: v.optional(v.number(), 25),
+  ...pageFields(),
 });
 
-export type SearchWaiversDto = v.InferInput<typeof searchWaiversDto>;
+export type SearchWaiversDto = v.InferOutput<typeof searchWaiversDto>;

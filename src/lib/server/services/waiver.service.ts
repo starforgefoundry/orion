@@ -10,11 +10,7 @@ export class WaiverService extends BaseService {
   }
 
   async getWaivers(dto: SearchWaiversDto) {
-    return await this.waiverRepository.getAll({
-      query: dto.query ?? '',
-      page: dto.page ?? 1,
-      pageSize: dto.pageSize ?? 25,
-    });
+    return await this.waiverRepository.getAll(dto);
   }
 
   async getWaiverById(id: string) {

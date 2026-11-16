@@ -49,13 +49,5 @@ describe(WaiverService.name, () => {
         pageSize: 10,
       });
     });
-
-    it('lists every waiver from the first page when no search is given', async () => {
-      await sut.getWaivers({});
-
-      expect(mocks.waiverRepository.getAll).toHaveBeenCalledWith(
-        expect.objectContaining({ query: '', page: 1 }),
-      );
-    });
   });
 });

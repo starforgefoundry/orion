@@ -58,11 +58,11 @@ export class MemberService extends BaseService {
   }
 
   async listMemberVisits(dto: MemberVisitsDto) {
-    return await this.visitRepository.listByMember(dto.memberId, dto.page, dto.pageSize);
+    return await this.visitRepository.listByMember(dto.memberId, dto);
   }
 
   async listRecentVisits(dto: RecentVisitsDto) {
-    return await this.visitRepository.listRecent(dto.page, dto.pageSize);
+    return await this.visitRepository.listRecent(dto);
   }
 
   /** A refund also ends access right away; otherwise access lasts through the paid period. */
