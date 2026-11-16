@@ -2,7 +2,10 @@ import { SPACE_ZONE, spaceDate } from '$lib/utils/space';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
+import { refundPayment } from '$lib/server/utils/payment';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/server/utils/payment', { spy: true });
 import { ClassService } from './class.service';
 
 const PAYMENT_ID = 'payment-1';
@@ -190,15 +193,15 @@ describe(ClassService.name, () => {
         factory.classBookingWithPayment({ id: 'book-1' }, payment),
         factory.classBookingWithPayment({ id: 'book-2' }, null),
       ]);
-      mocks.paymentGateway.refund.mockResolvedValue(true);
+      vi.mocked(refundPayment).mockResolvedValue(true);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
       mocks.classRepository.updateInstance.mockResolvedValue(factory.classInstance());
 
       const result = await sut.cancelInstance({ instanceId: 'inst-1', mode: 'single' });
 
       expect(result.canceledCount).toBe(1);
-      expect(mocks.paymentGateway.refund).toHaveBeenCalledTimes(1);
-      expect(mocks.paymentGateway.refund).toHaveBeenCalledWith(payment);
+      expect(refundPayment).toHaveBeenCalledTimes(1);
+      expect(refundPayment).toHaveBeenCalledWith(sut, payment);
       expect(mocks.classRepository.updateBooking).toHaveBeenCalledTimes(2);
       expect(mocks.classRepository.updateInstance).toHaveBeenCalledWith('inst-1', {
         status: 'canceled',
@@ -244,7 +247,7 @@ describe(ClassService.name, () => {
           factory.paidPayment({ id: PAYMENT_ID, total: 5000 }),
         ),
       ]);
-      mocks.paymentGateway.refund.mockRejectedValue(new Error('Square error'));
+      vi.mocked(refundPayment).mockRejectedValue(new Error('Square error'));
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
       mocks.classRepository.updateInstance.mockResolvedValue(factory.classInstance());
 

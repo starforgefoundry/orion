@@ -1,33 +1,16 @@
 import { env } from '$env/dynamic/private';
 import { HTTP_STATUS } from '$lib/http';
-import type { EmailTemplateRepository } from '$lib/server/repositories/email-template.repository';
+import { BaseRepository } from '$lib/server/repositories/base.repository';
 import type { EmailSender } from '$lib/server/utils/email-templates/senders';
-import {
-  renderHtmlTemplate,
-  renderTemplate,
-  type EmailTemplateKey,
-  type Templates,
-} from '$lib/utils/email-templates';
 import { DateTime } from 'luxon';
 
 const RESEND_EMAILS_URL = 'https://api.resend.com/emails';
 const RETRY_AFTER_HEADER = 'retry-after';
 
-/** Sends the stored email templates through Resend. */
-export class ResendGateway {
-  constructor(private readonly emailTemplateRepository: EmailTemplateRepository) {}
+export type Email = { to: string; sender: EmailSender; subject: string; html: string };
 
-  async sendTemplate<T extends EmailTemplateKey>(
-    to: string,
-    sender: EmailSender,
-    template: T,
-    variables: Templates[T],
-  ) {
-    const content = await this.emailTemplateRepository.get(template);
-    if (!content) {
-      throw new Error(`Email template "${template}" not found`);
-    }
-
+export class ResendRepository extends BaseRepository {
+  async send({ to, sender, subject, html }: Email) {
     const response = await fetch(RESEND_EMAILS_URL, {
       method: 'POST',
       headers: {
@@ -38,8 +21,8 @@ export class ResendGateway {
         from: sender.from,
         to: [to],
         reply_to: sender.replyTo,
-        subject: renderTemplate(content.subject, variables),
-        html: renderHtmlTemplate(content.body, variables),
+        subject,
+        html,
       }),
     });
 

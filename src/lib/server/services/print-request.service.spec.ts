@@ -7,7 +7,12 @@ import {
 import { factory } from '$test/factory';
 import type { PrintRequestDetail } from '$test/factory/print-request';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
+import { cancelPayment } from '$lib/server/utils/payment';
+import { sendTemplate } from '$lib/server/utils/email';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/server/utils/payment', { spy: true });
+vi.mock('$lib/server/utils/email', { spy: true });
 
 const WEBHOOK_URL = 'https://discord.com/api/webhooks/test';
 
@@ -39,7 +44,7 @@ describe(PrintRequestService.name, () => {
       mocks.printRequestRepository.getById.mockResolvedValue(
         factory.printRequestDetail({ id: printRequest.id }),
       );
-      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined);
+      vi.mocked(sendTemplate).mockResolvedValue(undefined);
       stubSettings(mocks.settingsRepository, printRequestSettings(''));
     }
 
@@ -144,7 +149,7 @@ describe(PrintRequestService.name, () => {
       );
       mocks.printFilesRepository.uploadFiles.mockResolvedValue(undefined);
       mocks.printRequestRepository.getById.mockResolvedValue(request);
-      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined);
+      vi.mocked(sendTemplate).mockResolvedValue(undefined);
       stubSettings(mocks.settingsRepository, printRequestSettings(WEBHOOK_URL));
       mocks.discordRepository.notify.mockResolvedValue(undefined);
     }
@@ -269,12 +274,13 @@ describe(PrintRequestService.name, () => {
         projectName: 'Completed Project',
       });
       mocks.printRequestRepository.getById.mockResolvedValue(request);
-      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined);
+      vi.mocked(sendTemplate).mockResolvedValue(undefined);
 
       await sut.sendPickupNotification(request.id);
 
       expect(mocks.printRequestRepository.getById).toHaveBeenCalledWith(request.id);
-      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(sendTemplate).toHaveBeenCalledWith(
+        sut,
         'customer@example.com',
         expect.objectContaining({ from: expect.stringContaining('Starforge 3D Prints') }),
         'print_pickup',
@@ -296,11 +302,11 @@ describe(PrintRequestService.name, () => {
       const updated = [factory.printRequest({ id: request.id })];
       mocks.printRequestRepository.getById.mockResolvedValue(request);
       mocks.printRequestRepository.update.mockResolvedValue(updated);
-      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined);
+      vi.mocked(sendTemplate).mockResolvedValue(undefined);
       if (payment) {
         mocks.paymentRepository.getById.mockResolvedValue(payment);
         mocks.paymentRepository.markPaid.mockResolvedValue(payment);
-        mocks.paymentGateway.cancel.mockResolvedValue(payment);
+        vi.mocked(cancelPayment).mockResolvedValue(payment);
       }
       return updated;
     }
@@ -368,7 +374,7 @@ describe(PrintRequestService.name, () => {
       const result = await sut.updatePrintRequestStatus(request.id, { status: 'canceled' });
 
       expect(mocks.paymentRepository.getById).toHaveBeenCalledWith(payment.id);
-      expect(mocks.paymentGateway.cancel).toHaveBeenCalledWith(payment);
+      expect(cancelPayment).toHaveBeenCalledWith(sut, payment);
       expect(result).toEqual(updated);
     });
 
@@ -379,7 +385,7 @@ describe(PrintRequestService.name, () => {
       await sut.updatePrintRequestStatus(request.id, { status: 'canceled' });
 
       expect(mocks.paymentRepository.getById).not.toHaveBeenCalled();
-      expect(mocks.paymentGateway.cancel).not.toHaveBeenCalled();
+      expect(cancelPayment).not.toHaveBeenCalled();
     });
 
     it('should update status without setting completion date for other statuses', async () => {
@@ -404,7 +410,8 @@ describe(PrintRequestService.name, () => {
       await sut.updatePrintRequestStatus(request.id, { status: 'done' });
 
       await vi.waitFor(() =>
-        expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
+        expect(sendTemplate).toHaveBeenCalledWith(
+          sut,
           request.email,
           expect.anything(),
           'print_pickup',
@@ -424,7 +431,7 @@ describe(PrintRequestService.name, () => {
         status: 'done',
       });
       expect(mocks.paymentRepository.markPaid).not.toHaveBeenCalled();
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
   });
 });

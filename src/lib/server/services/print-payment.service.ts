@@ -12,7 +12,9 @@ import { PaymentError } from '$lib/server/repositories/payment.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { sendTemplate } from '$lib/server/utils/email';
 import { printQueueUrl, printRequestStatusUrl } from '$lib/server/utils/payment-links';
+import { chargePayment } from '$lib/server/utils/payment';
 import {
   canSendPaymentReminder,
   centsToDollars,
@@ -137,7 +139,7 @@ export class PrintPaymentService extends BaseService {
   }
 
   private async sendQuoteEmail(request: PrintRequestDto, total: number) {
-    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'print_quote', {
+    await sendTemplate(this, request.email, SENDERS.print, 'print_quote', {
       customerName: request.customerName,
       projectName: request.projectName,
       quotePrice: centsToDollars(total),
@@ -146,7 +148,7 @@ export class PrintPaymentService extends BaseService {
   }
 
   private async sendPaymentEmail(request: PrintRequestDto, total: number) {
-    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'print_payment', {
+    await sendTemplate(this, request.email, SENDERS.print, 'print_payment', {
       customerName: request.customerName,
       projectName: request.projectName,
       total: centsToDollars(total),
@@ -162,7 +164,7 @@ export class PrintPaymentService extends BaseService {
       throw new PrintPaymentError('This print request has nothing to pay');
     }
 
-    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'payment_reminder', {
+    await sendTemplate(this, request.email, SENDERS.print, 'payment_reminder', {
       customerName: request.customerName,
       itemName: request.projectName,
       total: centsToDollars(payment.total),
@@ -233,7 +235,7 @@ export class PrintPaymentService extends BaseService {
 
     try {
       if (!sourceId) throw new PrintPaymentError('Pay for this quote to approve it');
-      return await this.paymentGateway.pay(approved, sourceId);
+      return await chargePayment(this, approved, sourceId);
     } catch (error) {
       await this.paymentRepository.reopenQuote(approved.id);
       throw error;
@@ -269,7 +271,7 @@ export class PrintPaymentService extends BaseService {
       throw new PrintPaymentError('This print request cannot be paid here');
     }
 
-    return await this.paymentGateway.pay(payment, dto.sourceId);
+    return await chargePayment(this, payment, dto.sourceId);
   }
 }
 

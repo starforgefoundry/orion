@@ -23,6 +23,7 @@ import type { GoogleCalendarEventInput } from '$lib/server/repositories/google-c
 import { ConflictError, NotFoundError, UserError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { sendTemplate } from '$lib/server/utils/email';
 import {
   buildBill,
   amountPaid,
@@ -34,6 +35,7 @@ import {
 import { SPACE_ZONE, spaceDate } from '$lib/utils/space';
 import { classBookingUrl, passLinks } from '$lib/server/utils/member-links';
 import { bookWithPayment } from '$lib/server/utils/paid-booking';
+import { refundPayment } from '$lib/server/utils/payment';
 import {
   CANCEL_INSTANCE_MODE,
   CLASS_BOOKING_STATUS,
@@ -119,7 +121,7 @@ function requireBookable<T extends Pick<ClassInstance, 'status' | 'date' | 'star
 export class ClassService extends BaseService {
   private async refund(booking: PaidBooking) {
     if (!booking.payment) return;
-    await this.paymentGateway.refund(booking.payment);
+    await refundPayment(this, booking.payment);
   }
 
   // ── Catalog ──
@@ -312,7 +314,7 @@ export class ClassService extends BaseService {
 
     const formattedDate = classStartsAt(instance).toFormat(CLASS_SHORT_DATE_FORMAT);
     const { booking } = await bookWithPayment(
-      this.paymentGateway,
+      this,
       {
         type: PAYMENT_TYPE.CLASS_BOOKING,
         status: PAYMENT_STATUS.PENDING,
@@ -509,7 +511,7 @@ export class ClassService extends BaseService {
       throw new Error('Booking not found');
     }
 
-    await this.resendGateway.sendTemplate(booking.customerEmail, SENDERS.classes, 'class_booking', {
+    await sendTemplate(this, booking.customerEmail, SENDERS.classes, 'class_booking', {
       ...bookingEmailVariables(booking, booking.instance, booking.catalog),
       classDuration: booking.instance.durationMinutes.toString(),
       amountPaid: centsToDollars(amountPaid(booking.payment)),
@@ -532,7 +534,8 @@ export class ClassService extends BaseService {
     await forEachSettled(
       due,
       async ({ booking, instance, catalog }) => {
-        await this.resendGateway.sendTemplate(
+        await sendTemplate(
+          this,
           booking.customerEmail,
           SENDERS.classes,
           'class_reminder',

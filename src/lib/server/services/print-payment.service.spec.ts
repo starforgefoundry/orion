@@ -4,7 +4,12 @@ import { factory } from '$test/factory';
 import type { PrintRequestDetail } from '$test/factory/print-request';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
+import { chargePayment } from '$lib/server/utils/payment';
+import { sendTemplate } from '$lib/server/utils/email';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/server/utils/payment', { spy: true });
+vi.mock('$lib/server/utils/email', { spy: true });
 import { PrintPaymentError, PrintPaymentService } from './print-payment.service';
 
 const REQUEST_ID = 'request-1';
@@ -64,7 +69,7 @@ describe(PrintPaymentService.name, () => {
     mocks.printRequestRepository.update.mockResolvedValue([]);
     mocks.billingCodeRepository.getByCode.mockResolvedValue(undefined as never);
     mocks.memberRepository.hasMembership.mockResolvedValue(false);
-    mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
+    vi.mocked(sendTemplate).mockResolvedValue(undefined as never);
     mocks.squareRepository.cancelInvoice.mockResolvedValue(undefined as never);
     mocks.paymentRepository.save.mockImplementation(async (data, id) =>
       factory.savedPayment(data, {
@@ -79,7 +84,7 @@ describe(PrintPaymentService.name, () => {
       ...quote,
       status: PAYMENT_STATUS.PENDING,
     }));
-    mocks.paymentGateway.pay.mockImplementation(async (pending) => ({
+    vi.mocked(chargePayment).mockImplementation(async (_repos, pending) => ({
       ...pending,
       status: PAYMENT_STATUS.PAID,
     }));
@@ -122,7 +127,8 @@ describe(PrintPaymentService.name, () => {
     it('emails the customer a link to pay', async () => {
       await sut.upsertPayment(dto);
 
-      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(sendTemplate).toHaveBeenCalledWith(
+        sut,
         'jane@example.com',
         expect.objectContaining({ replyTo: PRINT_EMAIL }),
         'print_payment',
@@ -152,7 +158,8 @@ describe(PrintPaymentService.name, () => {
       await sut.upsertPayment(dto);
 
       expect(savedPayment().status).toBe(PAYMENT_STATUS.QUOTE);
-      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(sendTemplate).toHaveBeenCalledWith(
+        sut,
         'jane@example.com',
         expect.anything(),
         'print_quote',
@@ -182,13 +189,13 @@ describe(PrintPaymentService.name, () => {
         organizationId: ORGANIZATION.id,
         bill: { discounts: [], total: 1200 },
       });
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
 
     it('does not ask for a card when nothing is owed', async () => {
       await sut.upsertPayment({ ...dto, materialCost: 0, buildPlates: 1 });
 
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
 
     it('cancels the Square invoice of a payment made before Orion billing', async () => {
@@ -273,7 +280,8 @@ describe(PrintPaymentService.name, () => {
       });
 
       expect(approved?.status).toBe(PAYMENT_STATUS.PAID);
-      expect(mocks.paymentGateway.pay).toHaveBeenCalledWith(
+      expect(chargePayment).toHaveBeenCalledWith(
+        sut,
         expect.objectContaining({ id: PAYMENT_ID, status: PAYMENT_STATUS.PENDING }),
         'cnon:ok',
       );
@@ -296,7 +304,7 @@ describe(PrintPaymentService.name, () => {
       await expect(sut.respondToQuote({ id: REQUEST_ID, approve: true })).rejects.toThrow(
         'Pay for this quote',
       );
-      expect(mocks.paymentGateway.pay).not.toHaveBeenCalled();
+      expect(chargePayment).not.toHaveBeenCalled();
       expect(mocks.paymentRepository.reopenQuote).toHaveBeenCalledWith(PAYMENT_ID);
     });
 
@@ -318,7 +326,7 @@ describe(PrintPaymentService.name, () => {
     });
 
     it('keeps the quote open when the charge fails', async () => {
-      mocks.paymentGateway.pay.mockRejectedValue(new Error('declined'));
+      vi.mocked(chargePayment).mockRejectedValue(new Error('declined'));
 
       await expect(
         sut.respondToQuote({ id: REQUEST_ID, approve: true, sourceId: 'cnon:bad' }),
@@ -338,7 +346,7 @@ describe(PrintPaymentService.name, () => {
       const approved = await sut.respondToQuote({ id: REQUEST_ID, approve: true });
 
       expect(approved?.status).toBe(PAYMENT_STATUS.PENDING);
-      expect(mocks.paymentGateway.pay).not.toHaveBeenCalled();
+      expect(chargePayment).not.toHaveBeenCalled();
     });
 
     it('cancels the request and its quote when the customer declines', async () => {
@@ -381,7 +389,8 @@ describe(PrintPaymentService.name, () => {
 
       await sut.sendPaymentReminder(REQUEST_ID);
 
-      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(sendTemplate).toHaveBeenCalledWith(
+        sut,
         'jane@example.com',
         expect.objectContaining({ replyTo: PRINT_EMAIL }),
         'payment_reminder',
@@ -402,7 +411,7 @@ describe(PrintPaymentService.name, () => {
       mocks.printRequestRepository.getById.mockResolvedValue(printRequest({ payment: existing }));
 
       await expect(sut.sendPaymentReminder(REQUEST_ID)).rejects.toThrow(PrintPaymentError);
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
   });
 
@@ -412,7 +421,8 @@ describe(PrintPaymentService.name, () => {
 
       await sut.payPrintRequest({ id: REQUEST_ID, sourceId: 'cnon:ok' });
 
-      expect(mocks.paymentGateway.pay).toHaveBeenCalledWith(
+      expect(chargePayment).toHaveBeenCalledWith(
+        sut,
         expect.objectContaining({ id: PAYMENT_ID }),
         'cnon:ok',
       );
@@ -429,7 +439,7 @@ describe(PrintPaymentService.name, () => {
       await expect(sut.payPrintRequest({ id: REQUEST_ID, sourceId: 'cnon:ok' })).rejects.toThrow(
         PrintPaymentError,
       );
-      expect(mocks.paymentGateway.pay).not.toHaveBeenCalled();
+      expect(chargePayment).not.toHaveBeenCalled();
     });
   });
 });

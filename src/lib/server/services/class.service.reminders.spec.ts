@@ -2,7 +2,10 @@ import { SPACE_ZONE } from '$lib/utils/space';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { sendTemplate } from '$lib/server/utils/email';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/server/utils/email', { spy: true });
 import { ClassService } from './class.service';
 
 const NOW = DateTime.fromISO('2026-10-12T09:00', { zone: SPACE_ZONE });
@@ -36,7 +39,7 @@ describe(ClassService.name, () => {
     }
 
     beforeEach(() => {
-      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
+      vi.mocked(sendTemplate).mockResolvedValue(undefined as never);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
     });
 
@@ -58,7 +61,8 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledExactlyOnceWith(
+      expect(sendTemplate).toHaveBeenCalledExactlyOnceWith(
+        sut,
         'customer@example.com',
         {
           from: 'Starforge Classes <classes@starforgefoundry.com>',
@@ -86,7 +90,7 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
 
     it('skips bookings made inside the reminder window', async () => {
@@ -96,7 +100,7 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
 
     it('keeps going when one reminder fails', async () => {
@@ -104,7 +108,7 @@ describe(ClassService.name, () => {
         candidate(NOW.plus({ hours: 20 }), NOW.minus({ days: 3 }), 'fails'),
         candidate(NOW.plus({ hours: 21 }), NOW.minus({ days: 3 }), 'sends'),
       ]);
-      mocks.resendGateway.sendTemplate.mockRejectedValueOnce(new Error('resend down'));
+      vi.mocked(sendTemplate).mockRejectedValueOnce(new Error('resend down'));
 
       await sut.sendDueReminders(NOW);
 

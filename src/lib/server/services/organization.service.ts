@@ -8,12 +8,14 @@ import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization-charges.
 import { NotFoundError, UserError } from '$lib/errors';
 import { MEMBER_EMAIL_TRIGGER } from '$lib/utils/member-enums';
 import type { Member, Payment } from '$lib/server/db/schema';
-import { ResendRateLimitError } from '$lib/server/gateways/resend.gateway';
+import { ResendRateLimitError } from '$lib/server/repositories/resend.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { accessEndOfDay } from '$lib/server/utils/member-access';
 import { parseMemberLines, type ParsedMemberLine } from '$lib/server/utils/member-lines';
+import { sendOnboarding } from '$lib/server/utils/member-notification';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { sendTemplate } from '$lib/server/utils/email';
 import { paymentLink, payUrl } from '$lib/server/utils/payment-links';
 import {
   buildBill,
@@ -160,10 +162,7 @@ export class OrganizationService extends BaseService {
 
   private async sendOrganizationOnboarding(member: Member, attemptsLeft: number): Promise<void> {
     try {
-      await this.memberNotificationGateway.sendOnboarding(
-        member,
-        MEMBER_EMAIL_TRIGGER.ORGANIZATION,
-      );
+      await sendOnboarding(this, member, MEMBER_EMAIL_TRIGGER.ORGANIZATION);
     } catch (error) {
       if (!(error instanceof ResendRateLimitError) || attemptsLeft <= 1) throw error;
       await sleep(Math.max(error.retryAt.diffNow().toMillis(), 0));
@@ -201,16 +200,11 @@ export class OrganizationService extends BaseService {
       organizationId: organization.id,
     });
 
-    await this.resendGateway.sendTemplate(
-      organization.email,
-      SENDERS.foundry,
-      'organization_balance',
-      {
-        organizationName: organization.name,
-        total: centsToDollars(payment.total),
-        paymentUrl: payUrl(payment),
-      },
-    );
+    await sendTemplate(this, organization.email, SENDERS.foundry, 'organization_balance', {
+      organizationName: organization.name,
+      total: centsToDollars(payment.total),
+      paymentUrl: payUrl(payment),
+    });
 
     return payment;
   }

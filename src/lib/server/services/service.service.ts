@@ -8,7 +8,9 @@ import { NotFoundError, UserError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
 import type { Service } from '$lib/server/db/schema';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { sendTemplate } from '$lib/server/utils/email';
 import { payUrl } from '$lib/server/utils/payment-links';
+import { cancelPayment } from '$lib/server/utils/payment';
 import { fileUrl } from '$lib/server/utils/storage';
 import {
   buildBill,
@@ -153,7 +155,7 @@ export class ServiceService extends BaseService {
       if (!isCancelable(payment)) {
         throw new ServiceRequestError('Only unpaid requests can be canceled.');
       }
-      await this.paymentGateway.cancel(payment);
+      await cancelPayment(this, payment);
     }
     return await this.serviceRepository.updateRequest(id, { status });
   }
@@ -164,7 +166,7 @@ export class ServiceService extends BaseService {
       throw new ServiceRequestError('This request has nothing to pay.');
     }
 
-    await this.resendGateway.sendTemplate(request.email, SENDERS.foundry, 'payment_reminder', {
+    await sendTemplate(this, request.email, SENDERS.foundry, 'payment_reminder', {
       customerName: request.customerName,
       itemName: serviceName,
       total: centsToDollars(payment.total),

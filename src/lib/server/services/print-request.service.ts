@@ -11,7 +11,9 @@ import { DISCORD_COLOR } from '$lib/server/repositories/discord.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { sendTemplate } from '$lib/server/utils/email';
 import { printQueueUrl, printRequestStatusUrl } from '$lib/server/utils/payment-links';
+import { cancelPayment } from '$lib/server/utils/payment';
 import { PAYMENT_STATUS, quoteRequiresCard } from '$lib/utils/billing';
 import { PRINT_REQUEST_STATUS, printSubmissionProblem } from '$lib/utils/print-request';
 import { DateTime } from 'luxon';
@@ -86,7 +88,7 @@ export class PrintRequestService extends BaseService {
       updates.completionDate = DateTime.now();
 
       if (payment) {
-        await this.paymentGateway.cancel(payment);
+        await cancelPayment(this, payment);
       }
     }
 
@@ -105,7 +107,7 @@ export class PrintRequestService extends BaseService {
       throw new NotFoundError('Print request not found');
     }
 
-    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'print_pickup', {
+    await sendTemplate(this, request.email, SENDERS.print, 'print_pickup', {
       projectName: request.projectName,
       paymentNote: pickupPaymentNote(request.payment),
       statusURL: printRequestStatusUrl(request.id),
@@ -118,7 +120,7 @@ export class PrintRequestService extends BaseService {
       throw new Error('Print request not found');
     }
 
-    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'print_submitted', {
+    await sendTemplate(this, request.email, SENDERS.print, 'print_submitted', {
       customerName: request.customerName,
       projectName: request.projectName,
       statusURL: printRequestStatusUrl(request.id),

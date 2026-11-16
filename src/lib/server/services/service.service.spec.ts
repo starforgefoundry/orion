@@ -11,7 +11,12 @@ import {
 } from '$lib/utils/services';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { cancelPayment } from '$lib/server/utils/payment';
+import { sendTemplate } from '$lib/server/utils/email';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/server/utils/payment', { spy: true });
+vi.mock('$lib/server/utils/email', { spy: true });
 
 const FILE_FIELD = factory.serviceField({ id: 'design', label: 'Design', type: 'file' });
 const MATERIAL_FIELD = factory.serviceField({
@@ -255,14 +260,14 @@ describe(ServiceService.name, () => {
 
     it('cancels an unpaid payment with the request', async () => {
       const { payment } = stubRequest();
-      mocks.paymentGateway.cancel.mockResolvedValue({
+      vi.mocked(cancelPayment).mockResolvedValue({
         ...payment,
         status: PAYMENT_STATUS.CANCELED,
       });
 
       await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED });
 
-      expect(mocks.paymentGateway.cancel).toHaveBeenCalledWith(payment);
+      expect(cancelPayment).toHaveBeenCalledWith(sut, payment);
       expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith(REQUEST_ID, {
         status: SERVICE_REQUEST_STATUS.CANCELED,
       });
@@ -276,21 +281,21 @@ describe(ServiceService.name, () => {
         await expect(
           sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED }),
         ).rejects.toThrow(new ServiceRequestError('Only unpaid requests can be canceled.'));
-        expect(mocks.paymentGateway.cancel).not.toHaveBeenCalled();
+        expect(cancelPayment).not.toHaveBeenCalled();
         expect(mocks.serviceRepository.updateRequest).not.toHaveBeenCalled();
       },
     );
 
     it('cancels a free request that was settled at submit', async () => {
       const { payment } = stubRequest({ status: PAYMENT_STATUS.PAID, total: 0 });
-      mocks.paymentGateway.cancel.mockResolvedValue({
+      vi.mocked(cancelPayment).mockResolvedValue({
         ...payment,
         status: PAYMENT_STATUS.CANCELED,
       });
 
       await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED });
 
-      expect(mocks.paymentGateway.cancel).toHaveBeenCalledWith(payment);
+      expect(cancelPayment).toHaveBeenCalledWith(sut, payment);
       expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith(REQUEST_ID, {
         status: SERVICE_REQUEST_STATUS.CANCELED,
       });
@@ -301,7 +306,7 @@ describe(ServiceService.name, () => {
 
       await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED });
 
-      expect(mocks.paymentGateway.cancel).not.toHaveBeenCalled();
+      expect(cancelPayment).not.toHaveBeenCalled();
     });
 
     it('does not reopen a request whose payment was canceled', async () => {
@@ -317,11 +322,12 @@ describe(ServiceService.name, () => {
   describe('sendPaymentReminder', () => {
     it('emails the customer a link to pay the bill', async () => {
       stubRequest(PRICED);
-      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
+      vi.mocked(sendTemplate).mockResolvedValue(undefined as never);
 
       await sut.sendPaymentReminder(REQUEST_ID);
 
-      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(sendTemplate).toHaveBeenCalledWith(
+        sut,
         'jane@example.com',
         SENDERS.foundry,
         'payment_reminder',
@@ -341,7 +347,7 @@ describe(ServiceService.name, () => {
       stubRequest(payment);
 
       await expect(sut.sendPaymentReminder(REQUEST_ID)).rejects.toBeInstanceOf(ServiceRequestError);
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
   });
 

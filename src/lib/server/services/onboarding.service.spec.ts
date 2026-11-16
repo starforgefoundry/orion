@@ -3,7 +3,10 @@ import { factory } from '$test/factory';
 import { memberAccessContext, organizationAccess } from '$test/factory/member-access';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
+import { sendOnboarding } from '$lib/server/utils/member-notification';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/server/utils/member-notification', { spy: true });
 import { OnboardingService, PASS_EMAIL_COOLDOWN } from './onboarding.service';
 
 const MEMBER = factory.member({
@@ -35,7 +38,7 @@ describe(OnboardingService.name, () => {
     mocks.memberRepository.getAccessContextByEmail.mockResolvedValue(ACTIVE_CONTEXT);
     mocks.waiverRepository.submit.mockResolvedValue(factory.waiver({ memberId: MEMBER.id }));
     mocks.memberEmailRepository.listByMember.mockResolvedValue([]);
-    mocks.memberNotificationGateway.sendOnboarding.mockResolvedValue(undefined);
+    vi.mocked(sendOnboarding).mockResolvedValue(undefined);
   });
 
   describe('getOnboarding', () => {
@@ -105,10 +108,7 @@ describe(OnboardingService.name, () => {
     it('sends onboarding to a member with access', async () => {
       await sut.requestOnboardingEmail('sam@example.com');
 
-      expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(
-        MEMBER,
-        'self_service',
-      );
+      expect(sendOnboarding).toHaveBeenCalledWith(sut, MEMBER, 'self_service');
     });
 
     it('sends nothing for an unknown email', async () => {
@@ -116,7 +116,7 @@ describe(OnboardingService.name, () => {
 
       await sut.requestOnboardingEmail('nobody@example.com');
 
-      expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
+      expect(sendOnboarding).not.toHaveBeenCalled();
     });
 
     it('sends nothing to a member without access', async () => {
@@ -127,7 +127,7 @@ describe(OnboardingService.name, () => {
 
       await sut.requestOnboardingEmail('sam@example.com');
 
-      expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
+      expect(sendOnboarding).not.toHaveBeenCalled();
     });
 
     it('sends onboarding to an organization member whose organization grants no access', async () => {
@@ -139,10 +139,7 @@ describe(OnboardingService.name, () => {
 
       await sut.requestOnboardingEmail('sam@example.com');
 
-      expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(
-        MEMBER,
-        'self_service',
-      );
+      expect(sendOnboarding).toHaveBeenCalledWith(sut, MEMBER, 'self_service');
     });
 
     it('sends nothing when an onboarding email went out within the cooldown', async () => {
@@ -155,7 +152,7 @@ describe(OnboardingService.name, () => {
 
       await sut.requestOnboardingEmail('sam@example.com');
 
-      expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
+      expect(sendOnboarding).not.toHaveBeenCalled();
     });
 
     it('sends again once the cooldown has passed', async () => {
@@ -168,7 +165,7 @@ describe(OnboardingService.name, () => {
 
       await sut.requestOnboardingEmail('sam@example.com');
 
-      expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalled();
+      expect(sendOnboarding).toHaveBeenCalled();
     });
   });
 });

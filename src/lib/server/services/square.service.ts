@@ -14,6 +14,7 @@ import {
   SQUARE_PAYMENT_STATUS,
   type SquareWebhook,
 } from '$lib/server/utils/square';
+import { sendDayPass, sendOnboarding } from '$lib/server/utils/member-notification';
 import { PAYMENT_STATUS } from '$lib/utils/billing';
 import { DateTime } from 'luxon';
 import type { Order, Payment, Subscription } from 'square';
@@ -217,7 +218,7 @@ export class SquareService extends BaseService {
     );
     for (const dayPass of created) {
       try {
-        await this.memberNotificationGateway.sendDayPass(member, dayPass);
+        await sendDayPass(this, member, dayPass);
       } catch (error) {
         console.error(`Failed to send day pass ${dayPass.id} to member ${member.id}:`, error);
       }
@@ -251,7 +252,7 @@ export class SquareService extends BaseService {
 
   private async sendOnboarding(member: Member, trigger: MemberEmailTrigger) {
     try {
-      await this.memberNotificationGateway.sendOnboarding(member, trigger);
+      await sendOnboarding(this, member, trigger);
     } catch (error) {
       console.error(`Failed to send ${trigger} onboarding email to member ${member.id}:`, error);
     }

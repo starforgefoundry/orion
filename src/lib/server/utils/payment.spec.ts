@@ -10,7 +10,15 @@ import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { factory } from '$test/factory';
 import { automock, stubSettings } from '$test/utils';
 import { beforeEach, describe, expect, it, type Mocked } from 'vitest';
-import { PaymentDeclinedError, PaymentGateway } from './payment.gateway';
+import {
+  authorizePayment,
+  cancelPayment,
+  capturePayment,
+  chargePayment,
+  PaymentDeclinedError,
+  refundPayment,
+  type PaymentRepositories,
+} from './payment';
 
 const BILL = {
   lineItems: [
@@ -41,10 +49,10 @@ function storedPayment(overrides: Partial<Payment> = {}) {
   });
 }
 
-describe(PaymentGateway.name, () => {
+describe('payment', () => {
   let payments: Mocked<PaymentRepository>;
   let square: Mocked<SquareRepository>;
-  let gateway: PaymentGateway;
+  let repos: PaymentRepositories;
 
   beforeEach(() => {
     payments = automock(PaymentRepository);
@@ -67,12 +75,12 @@ describe(PaymentGateway.name, () => {
     square.cancelInvoice.mockResolvedValue(undefined);
     const settings = automock(SettingsRepository);
     stubSettings(settings, { printRequestSquare: { locationId: 'location-1' } });
-    gateway = new PaymentGateway(payments, square, settings);
+    repos = { paymentRepository: payments, squareRepository: square, settingsRepository: settings };
   });
 
-  describe('pay', () => {
+  describe(chargePayment.name, () => {
     it('charges the card for an order that matches the bill', async () => {
-      const paid = await gateway.pay(storedPayment(), 'card-token');
+      const paid = await chargePayment(repos, storedPayment(), 'card-token');
 
       expect(square.createOrder.mock.calls[0][0].order).toMatchObject({
         locationId: 'location-1',
@@ -107,7 +115,7 @@ describe(PaymentGateway.name, () => {
     it('reports a declined card and puts the bill back to pending', async () => {
       square.createPayment.mockRejectedValue(new Error('CARD_DECLINED'));
 
-      await expect(gateway.pay(storedPayment(), 'card-token')).rejects.toThrow(
+      await expect(chargePayment(repos, storedPayment(), 'card-token')).rejects.toThrow(
         PaymentDeclinedError,
       );
       expect(payments.transition).toHaveBeenLastCalledWith('payment-1', PAYMENT_STATUS.PROCESSING, {
@@ -118,14 +126,18 @@ describe(PaymentGateway.name, () => {
     it('refuses a bill whose line items do not add up to its total', async () => {
       payments.transition.mockResolvedValueOnce(storedPayment({ total: 999 }));
 
-      await expect(gateway.pay(storedPayment(), 'card-token')).rejects.toThrow('do not add up');
+      await expect(chargePayment(repos, storedPayment(), 'card-token')).rejects.toThrow(
+        'do not add up',
+      );
       expect(square.createPayment).not.toHaveBeenCalled();
     });
 
     it('refuses a bill another caller already claimed', async () => {
       payments.transition.mockResolvedValue(undefined as never);
 
-      await expect(gateway.pay(storedPayment(), 'card-token')).rejects.toThrow(PaymentStateError);
+      await expect(chargePayment(repos, storedPayment(), 'card-token')).rejects.toThrow(
+        PaymentStateError,
+      );
       expect(square.createPayment).not.toHaveBeenCalled();
     });
 
@@ -137,20 +149,20 @@ describe(PaymentGateway.name, () => {
       });
       payments.transition.mockResolvedValueOnce(repriced);
 
-      await gateway.pay(storedPayment(), 'card-token');
+      await chargePayment(repos, storedPayment(), 'card-token');
 
       expect(square.createPayment.mock.calls[0][0].amountMoney?.amount).toBe(500n);
     });
   });
 
-  describe('authorize and capture', () => {
+  describe('authorizePayment and capturePayment', () => {
     beforeEach(() => {
       payments.save.mockResolvedValue(storedPayment());
       payments.markPaid.mockResolvedValue(storedPayment({ status: PAYMENT_STATUS.PAID }));
     });
 
     it('holds the card, then takes the money on capture', async () => {
-      const held = await gateway.authorize(NEW_PAYMENT, 'card-token');
+      const held = await authorizePayment(repos, NEW_PAYMENT, 'card-token');
 
       expect(square.createPayment.mock.calls[0][0].autocomplete).toBe(false);
       expect(held).toMatchObject({
@@ -158,7 +170,7 @@ describe(PaymentGateway.name, () => {
         squarePaymentId: 'square-payment-1',
       });
 
-      const captured = await gateway.capture(held);
+      const captured = await capturePayment(repos, held);
 
       expect(square.completePayment).toHaveBeenCalledWith('square-payment-1');
       expect(captured.status).toBe(PAYMENT_STATUS.PAID);
@@ -167,7 +179,7 @@ describe(PaymentGateway.name, () => {
     it('does not charge a bill for nothing', async () => {
       payments.save.mockResolvedValue(storedPayment({ status: PAYMENT_STATUS.PAID, total: 0 }));
 
-      const held = await gateway.authorize(NEW_PAYMENT, 'card-token');
+      const held = await authorizePayment(repos, NEW_PAYMENT, 'card-token');
 
       expect(held.status).toBe(PAYMENT_STATUS.PAID);
       expect(square.createPayment).not.toHaveBeenCalled();
@@ -176,7 +188,7 @@ describe(PaymentGateway.name, () => {
     it('cancels the payment when the card is declined', async () => {
       square.createPayment.mockResolvedValue({ id: 'square-payment-1', status: 'FAILED' });
 
-      await expect(gateway.authorize(NEW_PAYMENT, 'card-token')).rejects.toThrow(
+      await expect(authorizePayment(repos, NEW_PAYMENT, 'card-token')).rejects.toThrow(
         PaymentDeclinedError,
       );
       expect(payments.update).toHaveBeenCalledWith('payment-1', {
@@ -188,7 +200,7 @@ describe(PaymentGateway.name, () => {
       square.completePayment.mockRejectedValue(new Error('expired'));
 
       await expect(
-        gateway.capture(storedPayment({ squarePaymentId: 'square-payment-1' })),
+        capturePayment(repos, storedPayment({ squarePaymentId: 'square-payment-1' })),
       ).rejects.toThrow(PaymentDeclinedError);
       expect(square.cancelPayment).toHaveBeenCalledWith('square-payment-1');
       expect(payments.update).toHaveBeenCalledWith('payment-1', {
@@ -197,14 +209,14 @@ describe(PaymentGateway.name, () => {
     });
   });
 
-  describe('refund', () => {
+  describe(refundPayment.name, () => {
     it('refunds the full amount and marks the payment refunded', async () => {
       const paid = storedPayment({
         status: PAYMENT_STATUS.PAID,
         squarePaymentId: 'square-payment-1',
       });
 
-      expect(await gateway.refund(paid)).toBe(true);
+      expect(await refundPayment(repos, paid)).toBe(true);
       expect(square.refundPayment).toHaveBeenCalledWith('square-payment-1', 1080);
       expect(payments.update).toHaveBeenCalledWith(
         'payment-1',
@@ -213,15 +225,15 @@ describe(PaymentGateway.name, () => {
     });
 
     it('does nothing for a payment that was never paid', async () => {
-      expect(await gateway.refund(storedPayment())).toBe(false);
+      expect(await refundPayment(repos, storedPayment())).toBe(false);
       expect(square.refundPayment).not.toHaveBeenCalled();
       expect(payments.update).not.toHaveBeenCalled();
     });
   });
 
-  describe('cancel', () => {
+  describe(cancelPayment.name, () => {
     it('cancels the Square invoice of a payment made before Orion billing', async () => {
-      await gateway.cancel(storedPayment({ squareInvoiceId: 'invoice-1' }));
+      await cancelPayment(repos, storedPayment({ squareInvoiceId: 'invoice-1' }));
 
       expect(square.cancelInvoice).toHaveBeenCalledWith('invoice-1');
       expect(payments.update).toHaveBeenCalledWith('payment-1', {

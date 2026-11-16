@@ -1,12 +1,22 @@
 import type { ClassBooking, ClassInstance, Payment } from '$lib/server/db/schema';
 import { UserError } from '$lib/errors';
-import { PaymentDeclinedError } from '$lib/server/gateways/payment.gateway';
 import { SPACE_ZONE, spaceDate } from '$lib/utils/space';
 import { PAYMENT_STATUS } from '$lib/utils/billing';
 import { factory } from '$test/factory';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
+import {
+  authorizePayment,
+  capturePayment,
+  PaymentDeclinedError,
+  refundPayment,
+  voidPayment,
+} from '$lib/server/utils/payment';
+import { sendTemplate } from '$lib/server/utils/email';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/server/utils/payment', { spy: true });
+vi.mock('$lib/server/utils/email', { spy: true });
 import { ClassService } from './class.service';
 
 const PAYMENT_ID = 'payment-1';
@@ -53,8 +63,8 @@ describe(ClassService.name, () => {
       mocks.classRepository.getConfirmedBookingCount.mockResolvedValue(0);
       stubSettings(mocks.settingsRepository, { classSettings: { discordWebhookUrl: '' } });
       mocks.discordRepository.notify.mockResolvedValue(undefined);
-      mocks.paymentGateway.authorize.mockResolvedValue(authorized);
-      mocks.paymentGateway.capture.mockResolvedValue(
+      vi.mocked(authorizePayment).mockResolvedValue(authorized);
+      vi.mocked(capturePayment).mockResolvedValue(
         factory.paidPayment({ id: PAYMENT_ID, total: 5000 }),
       );
       mocks.memberRepository.customerColumns.mockImplementation(async (customer) => ({
@@ -64,7 +74,7 @@ describe(ClassService.name, () => {
         customerPhone: customer.customerPhone,
       }));
       mocks.classRepository.createBooking.mockResolvedValue(booking);
-      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
+      vi.mocked(sendTemplate).mockResolvedValue(undefined as never);
       mocks.classRepository.getBookingById.mockResolvedValue(
         factory.classBookingDetail(
           { ...booking, customerName: dto.customerName, customerEmail: dto.customerEmail },
@@ -79,7 +89,8 @@ describe(ClassService.name, () => {
       const result = await sut.bookClass(dto, NOW);
 
       expect(result).toEqual(booking);
-      expect(mocks.paymentGateway.authorize).toHaveBeenCalledWith(
+      expect(authorizePayment).toHaveBeenCalledWith(
+        sut,
         expect.objectContaining({
           type: 'class_booking',
           customer: { name: 'Jane Doe', email: 'jane@test.com' },
@@ -101,7 +112,7 @@ describe(ClassService.name, () => {
         status: 'confirmed',
         quantity: 1,
       });
-      expect(mocks.paymentGateway.capture).toHaveBeenCalledWith(authorized);
+      expect(capturePayment).toHaveBeenCalledWith(sut, authorized);
     });
 
     it('should throw when instance not found', async () => {
@@ -133,14 +144,14 @@ describe(ClassService.name, () => {
     });
 
     it('should throw when the card is declined', async () => {
-      mocks.paymentGateway.authorize.mockRejectedValue(new PaymentDeclinedError());
+      vi.mocked(authorizePayment).mockRejectedValue(new PaymentDeclinedError());
 
       await expect(sut.bookClass(dto, NOW)).rejects.toThrow('Payment failed');
       expect(mocks.classRepository.createBooking).not.toHaveBeenCalled();
     });
 
     it('should cancel the booking when the capture fails', async () => {
-      mocks.paymentGateway.capture.mockRejectedValue(new PaymentDeclinedError());
+      vi.mocked(capturePayment).mockRejectedValue(new PaymentDeclinedError());
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
       await expect(sut.bookClass(dto, NOW)).rejects.toThrow('Payment failed');
@@ -154,7 +165,7 @@ describe(ClassService.name, () => {
         .mockResolvedValueOnce(0)
         .mockResolvedValueOnce(11);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
-      mocks.paymentGateway.void.mockResolvedValue(
+      vi.mocked(voidPayment).mockResolvedValue(
         factory.payment({ ...authorized, status: PAYMENT_STATUS.CANCELED }),
       );
 
@@ -162,8 +173,8 @@ describe(ClassService.name, () => {
       expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
         status: 'canceled',
       });
-      expect(mocks.paymentGateway.void).toHaveBeenCalledWith(authorized);
-      expect(mocks.paymentGateway.capture).not.toHaveBeenCalled();
+      expect(voidPayment).toHaveBeenCalledWith(sut, authorized);
+      expect(capturePayment).not.toHaveBeenCalled();
     });
   });
 
@@ -172,13 +183,13 @@ describe(ClassService.name, () => {
       const payment = factory.paidPayment({ id: PAYMENT_ID, total: 5000 });
       const booking = factory.classBookingDetail({ id: 'book-1', status: 'confirmed' }, payment);
       mocks.classRepository.getBookingByToken.mockResolvedValue(booking);
-      mocks.paymentGateway.refund.mockResolvedValue(true);
+      vi.mocked(refundPayment).mockResolvedValue(true);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
       const result = await sut.cancelBooking({ bookingToken: 'tok-abc' }, NOW);
 
       expect(result).toEqual({ success: true, instanceId: booking.instanceId });
-      expect(mocks.paymentGateway.refund).toHaveBeenCalledWith(payment);
+      expect(refundPayment).toHaveBeenCalledWith(sut, payment);
       expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
         status: 'canceled',
       });
@@ -192,7 +203,7 @@ describe(ClassService.name, () => {
 
       await sut.cancelBooking({ bookingToken: 'tok-abc' }, NOW);
 
-      expect(mocks.paymentGateway.refund).not.toHaveBeenCalled();
+      expect(refundPayment).not.toHaveBeenCalled();
       expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
         status: 'canceled',
       });
@@ -212,7 +223,7 @@ describe(ClassService.name, () => {
       await expect(sut.cancelBooking({ bookingToken: 'tok-abc' }, justAfterStart)).rejects.toThrow(
         'already started',
       );
-      expect(mocks.paymentGateway.refund).not.toHaveBeenCalled();
+      expect(refundPayment).not.toHaveBeenCalled();
       expect(mocks.classRepository.updateBooking).not.toHaveBeenCalled();
     });
 
@@ -240,13 +251,13 @@ describe(ClassService.name, () => {
       const payment = factory.paidPayment({ id: PAYMENT_ID, total: 3000 });
       const booking = factory.classBookingDetail({ id: 'book-1', status: 'confirmed' }, payment);
       mocks.classRepository.getBookingById.mockResolvedValue(booking);
-      mocks.paymentGateway.refund.mockResolvedValue(true);
+      vi.mocked(refundPayment).mockResolvedValue(true);
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
 
       const result = await sut.cancelBookingStaff({ bookingId: 'book-1' });
 
       expect(result).toEqual({ success: true, instanceId: booking.instanceId });
-      expect(mocks.paymentGateway.refund).toHaveBeenCalledWith(payment);
+      expect(refundPayment).toHaveBeenCalledWith(sut, payment);
     });
 
     it('lets staff cancel a class that already started', async () => {
@@ -337,8 +348,8 @@ describe(ClassService.name, () => {
         instanceId: TARGET_ID,
         reminderSentDate: null,
       });
-      expect(mocks.paymentGateway.authorize).not.toHaveBeenCalled();
-      expect(mocks.paymentGateway.refund).not.toHaveBeenCalled();
+      expect(authorizePayment).not.toHaveBeenCalled();
+      expect(refundPayment).not.toHaveBeenCalled();
     });
 
     it('should throw when booking not found', async () => {
@@ -428,7 +439,7 @@ describe(ClassService.name, () => {
         instanceId: SOURCE_ID,
         reminderSentDate,
       });
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
 
     describe('confirmation email', () => {
@@ -461,12 +472,13 @@ describe(ClassService.name, () => {
       });
 
       it('should resend the confirmation for the moved booking', async () => {
-        mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
+        vi.mocked(sendTemplate).mockResolvedValue(undefined as never);
 
         await sut.rescheduleBooking(dto, NOW);
 
         await vi.waitFor(() =>
-          expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledExactlyOnceWith(
+          expect(sendTemplate).toHaveBeenCalledExactlyOnceWith(
+            sut,
             'jane@test.com',
             {
               from: 'Starforge Classes <classes@starforgefoundry.com>',
@@ -487,13 +499,13 @@ describe(ClassService.name, () => {
       });
 
       it('should keep the move when the email fails', async () => {
-        mocks.resendGateway.sendTemplate.mockRejectedValue(new Error('Resend down'));
+        vi.mocked(sendTemplate).mockRejectedValue(new Error('Resend down'));
 
         await expect(sut.rescheduleBooking(dto, NOW)).resolves.toMatchObject({
           previousInstanceId: SOURCE_ID,
         });
 
-        await vi.waitFor(() => expect(mocks.resendGateway.sendTemplate).toHaveBeenCalled());
+        await vi.waitFor(() => expect(sendTemplate).toHaveBeenCalled());
         expect(mocks.classRepository.updateBooking).toHaveBeenCalledExactlyOnceWith('book-1', {
           instanceId: TARGET_ID,
           reminderSentDate: null,

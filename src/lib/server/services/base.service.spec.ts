@@ -2,32 +2,19 @@ import { EmailTemplateRepository } from '$lib/server/repositories/email-template
 import { BaseService, REPOSITORIES } from '$lib/server/services/base.service';
 import { describe, expect, it } from 'vitest';
 
-class TestService extends BaseService {
-  dependencyOf(key: 'resendGateway') {
-    return (this[key] as unknown as { emailTemplateRepository: unknown }).emailTemplateRepository;
-  }
-}
-
 describe(BaseService.name, () => {
   it('gives the service one instance of every registered repository', () => {
-    const service = new TestService();
+    const service = new BaseService();
 
     for (const [key, Repository] of Object.entries(REPOSITORIES)) {
       expect(service[key as keyof typeof REPOSITORIES]).toBeInstanceOf(Repository);
     }
   });
 
-  it('builds composed repositories from the same instances the service uses', () => {
-    const service = new TestService();
-
-    expect(service.dependencyOf('resendGateway')).toBe(service.emailTemplateRepository);
-  });
-
-  it('composes with an injected repository', () => {
+  it('uses an injected repository instead of building one', () => {
     const emailTemplateRepository = new EmailTemplateRepository();
-    const service = new TestService({ emailTemplateRepository });
+    const service = new BaseService({ emailTemplateRepository });
 
     expect(service.emailTemplateRepository).toBe(emailTemplateRepository);
-    expect(service.dependencyOf('resendGateway')).toBe(emailTemplateRepository);
   });
 });

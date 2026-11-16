@@ -15,9 +15,11 @@ import type { CarBayBooking, CarBayClosure, Payment } from '$lib/server/db/schem
 import type { CarBayBookingWithPayment } from '$lib/server/repositories/car-bay.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { sendTemplate } from '$lib/server/utils/email';
 import { forEachSettled, runInBackground } from '$lib/server/utils/background';
 import { carBayBookingUrl, passLinks } from '$lib/server/utils/member-links';
 import { bookWithPayment } from '$lib/server/utils/paid-booking';
+import { refundPayment } from '$lib/server/utils/payment';
 import { paymentLink, payUrl } from '$lib/server/utils/payment-links';
 import {
   amountPaid,
@@ -237,7 +239,7 @@ export class CarBayService extends BaseService {
     ]);
 
     const { booking, payment } = await bookWithPayment(
-      this.paymentGateway,
+      this,
       {
         type: PAYMENT_TYPE.CAR_BAY_BOOKING,
         status: PAYMENT_STATUS.PENDING,
@@ -299,7 +301,7 @@ export class CarBayService extends BaseService {
 
   private async refund(booking: CarBayBookingWithPayment) {
     if (!booking.payment) return false;
-    return await this.paymentGateway.refund(booking.payment);
+    return await refundPayment(this, booking.payment);
   }
 
   private requireConfirmed(booking: CarBayBookingWithPayment | null): CarBayBookingWithPayment {
@@ -347,17 +349,12 @@ export class CarBayService extends BaseService {
     });
     await this.carBayRepository.createOverrun(booking.id, payment.id);
 
-    await this.resendGateway.sendTemplate(
-      booking.customerEmail,
-      SENDERS.carBay,
-      'car_bay_overrun',
-      {
-        customerName: booking.customerName,
-        bookingEndDate: booking.endAt.setZone(SPACE_ZONE).toFormat('MMMM d'),
-        total: centsToDollars(payment.total),
-        paymentUrl: payUrl(payment),
-      },
-    );
+    await sendTemplate(this, booking.customerEmail, SENDERS.carBay, 'car_bay_overrun', {
+      customerName: booking.customerName,
+      bookingEndDate: booking.endAt.setZone(SPACE_ZONE).toFormat('MMMM d'),
+      total: centsToDollars(payment.total),
+      paymentUrl: payUrl(payment),
+    });
 
     return payment;
   }
@@ -373,18 +370,13 @@ export class CarBayService extends BaseService {
     await forEachSettled(
       due,
       async (booking) => {
-        await this.resendGateway.sendTemplate(
-          booking.customerEmail,
-          SENDERS.carBay,
-          'car_bay_reminder',
-          {
-            customerName: booking.customerName,
-            tierName: CAR_BAY_TIER_NAMES[booking.tier],
-            bookingWhen: formatPeriod(booking),
-            bookingUrl: carBayBookingUrl(booking),
-            ...passLinks(booking),
-          },
-        );
+        await sendTemplate(this, booking.customerEmail, SENDERS.carBay, 'car_bay_reminder', {
+          customerName: booking.customerName,
+          tierName: CAR_BAY_TIER_NAMES[booking.tier],
+          bookingWhen: formatPeriod(booking),
+          bookingUrl: carBayBookingUrl(booking),
+          ...passLinks(booking),
+        });
         await this.carBayRepository.update(booking.id, { reminderSentDate: now });
       },
       (booking) => `send car bay reminder for booking ${booking.id}`,
@@ -396,21 +388,16 @@ export class CarBayService extends BaseService {
     payment: Payment | null,
     policy: CarBayPolicy,
   ) {
-    await this.resendGateway.sendTemplate(
-      booking.customerEmail,
-      SENDERS.carBay,
-      'car_bay_booking',
-      {
-        customerName: booking.customerName,
-        tierName: CAR_BAY_TIER_NAMES[booking.tier],
-        bookingWhen: formatPeriod(booking),
-        amountPaid: centsToDollars(amountPaid(payment)),
-        refundCutoffHours: policy.refundCutoffHours.toString(),
-        storageDays: policy.storageDays.toString(),
-        bookingUrl: carBayBookingUrl(booking),
-        ...passLinks(booking),
-      },
-    );
+    await sendTemplate(this, booking.customerEmail, SENDERS.carBay, 'car_bay_booking', {
+      customerName: booking.customerName,
+      tierName: CAR_BAY_TIER_NAMES[booking.tier],
+      bookingWhen: formatPeriod(booking),
+      amountPaid: centsToDollars(amountPaid(payment)),
+      refundCutoffHours: policy.refundCutoffHours.toString(),
+      storageDays: policy.storageDays.toString(),
+      bookingUrl: carBayBookingUrl(booking),
+      ...passLinks(booking),
+    });
   }
 }
 

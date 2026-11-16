@@ -1,6 +1,3 @@
-import { PaymentGateway } from '$lib/server/gateways/payment.gateway';
-import { ResendGateway } from '$lib/server/gateways/resend.gateway';
-import { MemberNotificationGateway } from '$lib/server/gateways/member-notification.gateway';
 import { BambuddyRepository } from '$lib/server/repositories/bambuddy.repository';
 import { BillingCodeRepository } from '$lib/server/repositories/billing-code.repository';
 import { CarBayRepository } from '$lib/server/repositories/car-bay.repository';
@@ -21,6 +18,7 @@ import { PrintFilesRepository } from '$lib/server/repositories/print-files.repos
 import { PrintMaterialsRepository } from '$lib/server/repositories/print-materials.repository';
 import { PrintRequestRepository } from '$lib/server/repositories/print-request.repository';
 import { PrintRequestCommentRepository } from '$lib/server/repositories/print-request-comment.repository';
+import { ResendRepository } from '$lib/server/repositories/resend.repository';
 import { ServiceRepository } from '$lib/server/repositories/service.repository';
 import { SettingsRepository } from '$lib/server/repositories/settings.repository';
 import { SquareRepository } from '$lib/server/repositories/square.repository';
@@ -39,19 +37,17 @@ export const REPOSITORIES = {
   googleCalendarRepository: GoogleCalendarRepository,
   inventoryRepository: InventoryRepository,
   memberEmailRepository: MemberEmailRepository,
-  memberNotificationGateway: MemberNotificationGateway,
   memberRepository: MemberRepository,
   memberSubscriptionRepository: MemberSubscriptionRepository,
   organizationMemberRepository: OrganizationMemberRepository,
   organizationRepository: OrganizationRepository,
   passRepository: PassRepository,
-  paymentGateway: PaymentGateway,
   paymentRepository: PaymentRepository,
   printFilesRepository: PrintFilesRepository,
   printMaterialsRepository: PrintMaterialsRepository,
   printRequestCommentRepository: PrintRequestCommentRepository,
   printRequestRepository: PrintRequestRepository,
-  resendGateway: ResendGateway,
+  resendRepository: ResendRepository,
   serviceRepository: ServiceRepository,
   settingsRepository: SettingsRepository,
   squareRepository: SquareRepository,
@@ -64,30 +60,12 @@ type Registry = typeof REPOSITORIES;
 export type ServiceRepositories = { [K in keyof Registry]: InstanceType<Registry[K]> };
 type RepositoryKey = keyof ServiceRepositories;
 
-/** Entries built from other entries, so they share the same instances as the service. */
-const COMPOSED: { [K in RepositoryKey]?: (r: ServiceRepositories) => ServiceRepositories[K] } = {
-  resendGateway: (r) => new ResendGateway(r.emailTemplateRepository),
-  memberNotificationGateway: (r) =>
-    new MemberNotificationGateway(r.resendGateway, r.memberEmailRepository),
-  paymentGateway: (r) =>
-    new PaymentGateway(r.paymentRepository, r.squareRepository, r.settingsRepository),
-};
-
 function buildRepositories(overrides: Partial<ServiceRepositories>) {
-  const built: Partial<ServiceRepositories> = { ...overrides };
-  const repositories = {} as ServiceRepositories;
-
-  function resolve<K extends RepositoryKey>(key: K): ServiceRepositories[K] {
-    const compose = COMPOSED[key];
-    const Repository = REPOSITORIES[key] as unknown as new () => ServiceRepositories[K];
-    built[key] ??= compose ? compose(repositories) : new Repository();
-    return built[key]!;
-  }
-
-  for (const key of Object.keys(REPOSITORIES) as RepositoryKey[]) {
-    Object.defineProperty(repositories, key, { get: () => resolve(key), enumerable: true });
-  }
-  return { ...repositories };
+  const entries = (Object.keys(REPOSITORIES) as RepositoryKey[]).map((key) => {
+    const Repository = REPOSITORIES[key] as new () => ServiceRepositories[RepositoryKey];
+    return [key, overrides[key] ?? new Repository()];
+  });
+  return Object.fromEntries(entries) as ServiceRepositories;
 }
 
 // The registry above declares one field per repository on every service.
