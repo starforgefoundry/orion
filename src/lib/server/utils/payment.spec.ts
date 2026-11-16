@@ -329,8 +329,19 @@ describe('payment', () => {
 
     it('does not cancel a payment checkout claimed since it was read', async () => {
       payments.transition.mockResolvedValue(undefined as never);
+      payments.getById.mockResolvedValue(storedPayment({ status: PAYMENT_STATUS.PROCESSING }));
 
       await expect(cancelPayment(repos, storedPayment())).rejects.toThrow(PaymentStateError);
+    });
+
+    it('accepts the invoice webhook canceling the payment before it does', async () => {
+      const canceled = storedPayment({ status: PAYMENT_STATUS.CANCELED });
+      payments.transition.mockResolvedValue(undefined as never);
+      payments.getById.mockResolvedValue(canceled);
+
+      expect(await cancelPayment(repos, storedPayment({ squareInvoiceId: 'invoice-1' }))).toBe(
+        canceled,
+      );
     });
   });
 });

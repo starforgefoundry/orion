@@ -52,8 +52,12 @@ export async function cancelPayment(repos: PaymentRepositories, payment: Payment
   const canceled = await repos.paymentRepository.transition(payment.id, payment.status, {
     status: PAYMENT_STATUS.CANCELED,
   });
-  if (!canceled) throw new PaymentStateError(PAYMENT_CHANGED_MESSAGE);
-  return canceled;
+  if (canceled) return canceled;
+
+  // Square's invoice.canceled webhook can land before this update does.
+  const current = await repos.paymentRepository.getById(payment.id);
+  if (current?.status === PAYMENT_STATUS.CANCELED) return current;
+  throw new PaymentStateError(PAYMENT_CHANGED_MESSAGE);
 }
 
 /**
