@@ -118,6 +118,16 @@ function requireBookable<T extends Pick<ClassInstance, 'status' | 'date' | 'star
   return scheduled;
 }
 
+/** Bookings refunded before the failure stay canceled, so canceling again picks up where it stopped. */
+export class ClassRefundError extends UserError {
+  constructor(customerName: string, options?: ErrorOptions) {
+    super(
+      `Could not refund ${customerName}, so the class was not canceled. Try canceling again.`,
+      options,
+    );
+  }
+}
+
 export class ClassService extends BaseService {
   private async refund(booking: PaidBooking) {
     if (!booking.payment) return;
@@ -254,13 +264,9 @@ export class ClassService extends BaseService {
     const bookings = await this.classRepository.getConfirmedBookingsForInstance(instanceId);
 
     for (const booking of bookings) {
-      if (booking.payment) {
-        try {
-          await this.refund(booking);
-        } catch (err) {
-          console.error(`Failed to refund booking ${booking.id}:`, err);
-        }
-      }
+      await this.refund(booking).catch((error) => {
+        throw new ClassRefundError(booking.customerName, { cause: error });
+      });
       await this.cancelBookingRow(booking);
     }
 

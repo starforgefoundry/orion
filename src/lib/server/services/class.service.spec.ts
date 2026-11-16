@@ -6,7 +6,7 @@ import { refundPayment } from '$lib/server/utils/payment';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/server/utils/payment', { spy: true });
-import { ClassService } from './class.service';
+import { ClassRefundError, ClassService } from './class.service';
 
 const PAYMENT_ID = 'payment-1';
 const NOW = DateTime.fromISO('2026-10-12T09:00', { zone: SPACE_ZONE });
@@ -237,29 +237,32 @@ describe(ClassService.name, () => {
       );
     });
 
-    it('should handle refund failure gracefully and still cancel', async () => {
+    it('stops and keeps the class scheduled when a refund fails', async () => {
       mocks.classRepository.getInstanceById.mockResolvedValue(
         factory.classInstanceDetail({ id: 'inst-1', date: '2099-06-15' }),
       );
-      mocks.classRepository.getConfirmedBookingsForInstance.mockResolvedValue([
-        factory.classBookingWithPayment(
-          { id: 'book-1' },
-          factory.paidPayment({ id: PAYMENT_ID, total: 5000 }),
-        ),
-      ]);
-      vi.mocked(refundPayment).mockRejectedValue(new Error('Square error'));
+      const refunded = factory.classBookingWithPayment(
+        { id: 'book-1' },
+        factory.paidPayment({ id: 'payment-1', total: 5000 }),
+      );
+      const failing = factory.classBookingWithPayment(
+        { id: 'book-2', customerName: 'Ada' },
+        factory.paidPayment({ id: 'payment-2', total: 5000 }),
+      );
+      mocks.classRepository.getConfirmedBookingsForInstance.mockResolvedValue([refunded, failing]);
+      vi.mocked(refundPayment)
+        .mockResolvedValueOnce(true)
+        .mockRejectedValueOnce(new Error('Square error'));
       mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
-      mocks.classRepository.updateInstance.mockResolvedValue(factory.classInstance());
 
-      const result = await sut.cancelInstance({ instanceId: 'inst-1', mode: 'single' });
+      await expect(sut.cancelInstance({ instanceId: 'inst-1', mode: 'single' })).rejects.toThrow(
+        ClassRefundError,
+      );
 
-      expect(result.canceledCount).toBe(1);
-      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('book-1', {
+      expect(mocks.classRepository.updateBooking).toHaveBeenCalledExactlyOnceWith('book-1', {
         status: 'canceled',
       });
-      expect(mocks.classRepository.updateInstance).toHaveBeenCalledWith('inst-1', {
-        status: 'canceled',
-      });
+      expect(mocks.classRepository.updateInstance).not.toHaveBeenCalled();
     });
   });
 
