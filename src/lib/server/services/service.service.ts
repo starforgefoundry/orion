@@ -10,7 +10,12 @@ import type { Payment, Service, ServiceRequest } from '$lib/server/db/schema';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import { sendTemplate } from '$lib/server/utils/email';
 import { payUrl } from '$lib/server/utils/payment-links';
-import { runInBackground } from '$lib/server/utils/background';
+import { forEachSettled, runInBackground } from '$lib/server/utils/background';
+import { sendOnce } from '$lib/server/utils/reminders';
+import {
+  SERVICE_REMINDER,
+  type ServiceReminder,
+} from '$lib/server/repositories/service.repository';
 import {
   readyPaymentNote,
   releasePayment,
@@ -18,7 +23,13 @@ import {
   type WorkOrder,
 } from '$lib/server/utils/work-order';
 import { fileUrl } from '$lib/server/utils/storage';
-import { buildBill, PAYMENT_STATUS, PAYMENT_TYPE, type PaymentStatus } from '$lib/utils/billing';
+import {
+  buildBill,
+  canSendPaymentReminder,
+  PAYMENT_STATUS,
+  PAYMENT_TYPE,
+  type PaymentStatus,
+} from '$lib/utils/billing';
 import {
   answersProblem,
   formAnswers,
@@ -29,12 +40,14 @@ import {
   SERVICE_REQUEST_STATUS,
   type ServiceAnswers,
 } from '$lib/utils/services';
-import { DateTime } from 'luxon';
+import { DateTime, Duration } from 'luxon';
 import { posix } from 'node:path';
 
 const SERVICE_NOT_FOUND_MESSAGE = 'Service not found';
 const REQUEST_NOT_FOUND_MESSAGE = 'Service request not found';
 const CLOSED_PAYMENT_STATUSES: PaymentStatus[] = [PAYMENT_STATUS.CANCELED, PAYMENT_STATUS.REFUNDED];
+const PICKUP_REMINDER_DELAY = Duration.fromObject({ days: 3 });
+const PAYMENT_REMINDER_DELAY = Duration.fromObject({ days: 3 });
 
 /** One line for the service, so the checkout page names what is being paid for. */
 function serviceBill(service: Pick<Service, 'name'>, price: number) {
@@ -212,6 +225,39 @@ export class ServiceService extends BaseService {
   async sendPaymentReminder(id: string) {
     const { request, serviceName, payment } = await this.requireRequest(id);
     await sendPaymentReminder(this, workOrder(request, serviceName, payment), payment);
+  }
+
+  /** Nudges customers about requests left waiting for pickup or payment. */
+  async sendDueReminders(now: DateTime = DateTime.now()) {
+    const [pickups, payments] = await Promise.all([
+      this.serviceRepository.getPickupReminderCandidates(now.minus(PICKUP_REMINDER_DELAY)),
+      this.serviceRepository.getPaymentReminderCandidates(now.minus(PAYMENT_REMINDER_DELAY)),
+    ]);
+
+    await forEachSettled(
+      pickups,
+      ({ request, serviceName, payment }) =>
+        sendOnce(this.reminderClaim(request.id, SERVICE_REMINDER.PICKUP, now), () =>
+          this.emailReady(workOrder(request, serviceName, payment), payment),
+        ),
+      ({ request }) => `send pickup reminder for service request ${request.id}`,
+    );
+
+    await forEachSettled(
+      payments.filter(({ payment }) => canSendPaymentReminder(payment)),
+      ({ request, serviceName, payment }) =>
+        sendOnce(this.reminderClaim(request.id, SERVICE_REMINDER.PAYMENT, now), () =>
+          sendPaymentReminder(this, workOrder(request, serviceName, payment), payment),
+        ),
+      ({ request }) => `send payment reminder for service request ${request.id}`,
+    );
+  }
+
+  private reminderClaim(requestId: string, reminder: ServiceReminder, now: DateTime) {
+    return {
+      claim: () => this.serviceRepository.claimReminder(requestId, reminder, now),
+      release: () => this.serviceRepository.releaseReminder(requestId, reminder),
+    };
   }
 
   /** Sets a variable request's price. The customer then pays it at /pay/[id]. */

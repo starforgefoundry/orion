@@ -1,6 +1,7 @@
 import { NotFoundError } from '$lib/errors';
 import type { SubmitServiceRequestDto } from '$lib/remotes/dtos/service.dto';
 import type { Payment } from '$lib/server/db/schema';
+import { SERVICE_REMINDER } from '$lib/server/repositories/service.repository';
 import { ServiceRequestError, ServiceService } from '$lib/server/services/service.service';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
@@ -367,6 +368,89 @@ describe(ServiceService.name, () => {
         sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.SUBMITTED }),
       ).rejects.toBeInstanceOf(ServiceRequestError);
       expect(mocks.serviceRepository.updateRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sendDueReminders', () => {
+    const NOW = DateTime.fromISO('2026-10-17T08:00Z');
+
+    function reminderRow(payment: Partial<Payment>, status: ServiceRequestStatus) {
+      return {
+        request: factory.serviceRequest({ id: REQUEST_ID, paymentId: PAYMENT_ID, status }),
+        serviceName: 'Laser Engraving',
+        pricingMode: SERVICE_PRICING.VARIABLE,
+        payment: factory.payment({
+          id: PAYMENT_ID,
+          type: PAYMENT_TYPE.SERVICE_REQUEST,
+          ...payment,
+        }),
+      };
+    }
+
+    beforeEach(() => {
+      vi.mocked(sendTemplate).mockResolvedValue();
+      mocks.serviceRepository.getPickupReminderCandidates.mockResolvedValue([]);
+      mocks.serviceRepository.getPaymentReminderCandidates.mockResolvedValue([]);
+      mocks.serviceRepository.claimReminder.mockResolvedValue(true);
+    });
+
+    it('reminds about requests waiting three days for pickup', async () => {
+      mocks.serviceRepository.getPickupReminderCandidates.mockResolvedValue([
+        reminderRow({ status: PAYMENT_STATUS.PAID }, SERVICE_REQUEST_STATUS.DONE),
+      ]);
+
+      await sut.sendDueReminders(NOW);
+
+      expect(mocks.serviceRepository.getPickupReminderCandidates).toHaveBeenCalledWith(
+        NOW.minus({ days: 3 }),
+      );
+      expect(mocks.serviceRepository.claimReminder).toHaveBeenCalledWith(
+        REQUEST_ID,
+        SERVICE_REMINDER.PICKUP,
+        NOW,
+      );
+      expect(sendTemplate).toHaveBeenCalledWith(
+        sut,
+        'jane@example.com',
+        SENDERS.foundry,
+        'service_ready',
+        expect.anything(),
+      );
+    });
+
+    it('reminds about bills unpaid for three days', async () => {
+      mocks.serviceRepository.getPaymentReminderCandidates.mockResolvedValue([
+        reminderRow(PRICED, SERVICE_REQUEST_STATUS.IN_PROGRESS),
+      ]);
+
+      await sut.sendDueReminders(NOW);
+
+      expect(mocks.serviceRepository.getPaymentReminderCandidates).toHaveBeenCalledWith(
+        NOW.minus({ days: 3 }),
+      );
+      expect(mocks.serviceRepository.claimReminder).toHaveBeenCalledWith(
+        REQUEST_ID,
+        SERVICE_REMINDER.PAYMENT,
+        NOW,
+      );
+      expect(sendTemplate).toHaveBeenCalledWith(
+        sut,
+        'jane@example.com',
+        SENDERS.foundry,
+        'payment_reminder',
+        expect.anything(),
+      );
+    });
+
+    it('skips bills the customer cannot pay online', async () => {
+      mocks.serviceRepository.getPaymentReminderCandidates.mockResolvedValue([
+        reminderRow({ ...PRICED, squareInvoiceId: 'inv-1' }, SERVICE_REQUEST_STATUS.IN_PROGRESS),
+      ]);
+
+      await sut.sendDueReminders(NOW);
+
+      expect(mocks.serviceRepository.claimReminder).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
   });
 

@@ -3,6 +3,7 @@ import { env } from '$env/dynamic/private';
 import { devLoginUser } from '$lib/server/auth/staff';
 import { carBayService } from '$lib/server/services/car-bay.service';
 import { classService } from '$lib/server/services/class.service';
+import { serviceService } from '$lib/server/services/service.service';
 import { settingsService } from '$lib/server/services/settings.service';
 import { NEW_MEMBER_ONBOARDING, squareService } from '$lib/server/services/square.service';
 import { runEvery, runInBackground } from '$lib/server/utils/background';
@@ -30,6 +31,7 @@ export const init: ServerInit = () => {
 
   runEvery(REMINDER_INTERVAL_MS, 'send car bay reminders', () => carBayService.sendDueReminders());
   runEvery(REMINDER_INTERVAL_MS, 'send class reminders', () => classService.sendDueReminders());
+  runEvery(REMINDER_INTERVAL_MS, 'send service reminders', () => serviceService.sendDueReminders());
 
   if (dev) return;
   scheduleDaily(NIGHTLY_SYNC_HOUR, SPACE_ZONE, 'nightly Square subscription sync', async () => {

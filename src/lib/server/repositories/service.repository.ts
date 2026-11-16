@@ -1,8 +1,24 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { saveFile } from '$lib/server/utils/storage';
-import { storageFileName } from '$lib/utils/services';
-import { desc, eq, type InferInsertModel } from 'drizzle-orm';
+import { PAYMENT_STATUS } from '$lib/utils/billing';
+import type { EnumValue } from '$lib/utils/enum';
+import { SERVICE_REQUEST_STATUS, storageFileName } from '$lib/utils/services';
+import { and, desc, eq, inArray, isNull, lte, type InferInsertModel } from 'drizzle-orm';
+import type { DateTime } from 'luxon';
+
+/** Each automatic reminder a request gets, named by the column that records it was sent. */
+export const SERVICE_REMINDER = {
+  PICKUP: 'pickupReminderSentDate',
+  PAYMENT: 'paymentReminderSentDate',
+} as const;
+export type ServiceReminder = EnumValue<typeof SERVICE_REMINDER>;
+
+const OPEN_STATUSES = [
+  SERVICE_REQUEST_STATUS.SUBMITTED,
+  SERVICE_REQUEST_STATUS.IN_PROGRESS,
+  SERVICE_REQUEST_STATUS.DONE,
+];
 
 export class ServiceRepository extends BaseRepository {
   // ── Catalog ──
@@ -79,6 +95,46 @@ export class ServiceRepository extends BaseRepository {
 
   async getRequests() {
     return await this.selectRequests().orderBy(desc(schema.serviceRequest.submissionDate));
+  }
+
+  /** Requests that have waited for pickup since before `doneBefore`, not yet reminded. */
+  async getPickupReminderCandidates(doneBefore: DateTime) {
+    return await this.selectRequests().where(
+      and(
+        eq(schema.serviceRequest.status, SERVICE_REQUEST_STATUS.DONE),
+        lte(schema.serviceRequest.completionDate, doneBefore),
+        isNull(schema.serviceRequest.pickupReminderSentDate),
+      ),
+    );
+  }
+
+  /** Open requests whose bill was issued before `issuedBefore` and is unpaid, not yet reminded. */
+  async getPaymentReminderCandidates(issuedBefore: DateTime) {
+    return await this.selectRequests().where(
+      and(
+        inArray(schema.serviceRequest.status, OPEN_STATUSES),
+        eq(schema.payment.status, PAYMENT_STATUS.PENDING),
+        lte(schema.payment.issuedDate, issuedBefore),
+        isNull(schema.serviceRequest.paymentReminderSentDate),
+      ),
+    );
+  }
+
+  /** Marks the reminder sent unless another sweep already did. */
+  async claimReminder(requestId: string, reminder: ServiceReminder, now: DateTime) {
+    const claimed = await this.db
+      .update(schema.serviceRequest)
+      .set({ [reminder]: now })
+      .where(and(eq(schema.serviceRequest.id, requestId), isNull(schema.serviceRequest[reminder])))
+      .returning({ id: schema.serviceRequest.id });
+    return claimed.length > 0;
+  }
+
+  async releaseReminder(requestId: string, reminder: ServiceReminder) {
+    await this.db
+      .update(schema.serviceRequest)
+      .set({ [reminder]: null })
+      .where(eq(schema.serviceRequest.id, requestId));
   }
 
   async uploadRequestFile(requestId: string, fieldId: string, file: File) {

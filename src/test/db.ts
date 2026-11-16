@@ -59,6 +59,8 @@ export function rowInserter(database: TestDatabase) {
     carBayClosure: inserter(schema.carBayClosure, factory.carBayClosure),
     printMaterial: inserter(schema.printMaterial, factory.printMaterial),
     printRequest: inserter(schema.printRequest, factory.printRequest),
+    service: inserter(schema.service, factory.service),
+    serviceRequest: inserter(schema.serviceRequest, factory.serviceRequest),
   };
 }
 
