@@ -18,8 +18,8 @@ import {
   genericFilamentId,
   nozzleTemps,
   toTrayColor,
-} from '$lib/utils/bambu-filament';
-import { byChromaticOrder } from '$lib/utils/color-order';
+} from '$lib/server/utils/bambu-filament';
+import { byChromaticOrder } from '$lib/server/utils/color-order';
 
 // Bambuddy's colour inventory says "Bambu Lab" where its filament table says "Bambu".
 const VENDOR_ALIASES: Record<string, string> = { 'Bambu Lab': 'Bambu' };

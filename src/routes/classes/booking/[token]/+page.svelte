@@ -12,7 +12,7 @@
   import { formatTime } from '$lib/frontend/utils';
   import { cancelBooking, getBookingByToken } from '$lib/remotes/endpoints/class.remote';
   import { formatCents } from '$lib/utils/billing';
-  import { calendarLinks } from '$lib/utils/calendar-links';
+  import { calendarLinks } from '$lib/frontend/calendar-links';
   import {
     CLASS_BOOKING_STATUS,
     CLASS_DATE_FORMAT,

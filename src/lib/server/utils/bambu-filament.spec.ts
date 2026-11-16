@@ -3,7 +3,7 @@ import {
   genericFilamentId,
   nozzleTemps,
   toTrayColor,
-} from '$lib/utils/bambu-filament';
+} from '$lib/server/utils/bambu-filament';
 import { describe, expect, it } from 'vitest';
 
 describe('baseMaterial', () => {
