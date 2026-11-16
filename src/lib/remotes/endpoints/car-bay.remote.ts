@@ -11,7 +11,7 @@ import {
   staffCancelCarBayBookingDto,
   staffCloseCarBayDto,
 } from '$lib/remotes/dtos/car-bay.dto';
-import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
+import { exposeUserErrors, staffOnly, verifyAuth } from '$lib/server/remote-utils';
 import { carBayService } from '$lib/server/services/car-bay.service';
 import * as v from 'valibot';
 
@@ -59,18 +59,12 @@ export const cancelCarBayBooking = command(
 
 export const getCarBayStaffSchedule = query(
   carBayRangeDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-    return await carBayService.getStaffSchedule(dto.from, dto.to);
-  }),
+  staffOnly((dto) => carBayService.getStaffSchedule(dto.from, dto.to)),
 );
 
 export const getCarBayBookingDetail = query(
   v.string(),
-  exposeUserErrors(async (id) => {
-    verifyAuth();
-    return await carBayService.getBookingDetail(id);
-  }),
+  staffOnly((id) => carBayService.getBookingDetail(id)),
 );
 
 export const staffBookCarBay = command(
@@ -83,8 +77,7 @@ export const staffBookCarBay = command(
 
 export const staffCancelCarBayBooking = command(
   staffCancelCarBayBookingDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await carBayService.staffCancel(dto);
     await getCarBayBookingDetail(dto.bookingId).refresh();
     return result;
@@ -93,8 +86,7 @@ export const staffCancelCarBayBooking = command(
 
 export const markCarBayNoShow = command(
   carBayBookingIdDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await carBayService.markNoShow(dto.bookingId);
     await getCarBayBookingDetail(dto.bookingId).refresh();
     return result;
@@ -103,8 +95,7 @@ export const markCarBayNoShow = command(
 
 export const sendCarBayOverrunInvoice = command(
   sendCarBayOverrunInvoiceDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await carBayService.sendOverrunInvoice(dto);
     await getCarBayBookingDetail(dto.bookingId).refresh();
     return result;
@@ -121,8 +112,5 @@ export const staffCloseCarBay = command(
 
 export const reopenCarBay = command(
   carBayClosureIdDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-    return await carBayService.reopen(dto.closureId);
-  }),
+  staffOnly((dto) => carBayService.reopen(dto.closureId)),
 );

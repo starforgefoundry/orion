@@ -10,45 +10,26 @@ import {
   printPricingSettingsDto,
   printRequestSquareSettings,
 } from '$lib/remotes/dtos/settings.dto';
-import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
+import { exposeUserErrors, staffOnly } from '$lib/server/remote-utils';
 import { settingsService } from '$lib/server/services/settings.service';
 
 export const getPublicPrintRequestForm = query(
   exposeUserErrors(() => settingsService.getPublicPrintRequestForm()),
 );
 
-export const getPrintRequestSettings = query(
-  exposeUserErrors(() => {
-    verifyAuth();
-    return settingsService.get('printRequest');
-  }),
-);
+export const getPrintRequestSettings = query(staffOnly(() => settingsService.get('printRequest')));
 
-export const getBambuddySettings = query(
-  exposeUserErrors(() => {
-    verifyAuth();
-    return settingsService.getBambuddySettings();
-  }),
-);
+export const getBambuddySettings = query(staffOnly(() => settingsService.getBambuddySettings()));
 
-export const getBambuddyStatus = query(
-  exposeUserErrors(() => {
-    verifyAuth();
-    return settingsService.getBambuddyStatus();
-  }),
-);
+export const getBambuddyStatus = query(staffOnly(() => settingsService.getBambuddyStatus()));
 
 export const getPrintRequestSquareSettings = query(
-  exposeUserErrors(() => {
-    verifyAuth();
-    return settingsService.get('printRequestSquare');
-  }),
+  staffOnly(() => settingsService.get('printRequestSquare')),
 );
 
 export const printRequestSettingsForm = form(
   printRequestSettings,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const response = await settingsService.setPrintRequestSettings(dto);
     getPrintRequestSettings().refresh();
 
@@ -58,8 +39,7 @@ export const printRequestSettingsForm = form(
 
 export const printRequestSquareSettingsForm = form(
   printRequestSquareSettings,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const response = await settingsService.set('printRequestSquare', dto);
     getPrintRequestSquareSettings().refresh();
 
@@ -69,8 +49,7 @@ export const printRequestSquareSettingsForm = form(
 
 export const bambuddySettingsForm = form(
   bambuddySettings,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const response = await settingsService.setBambuddySettings(dto);
     await getBambuddySettings().refresh();
     await getBambuddyStatus().refresh();
@@ -79,17 +58,11 @@ export const bambuddySettingsForm = form(
   }),
 );
 
-export const getClassSettings = query(
-  exposeUserErrors(() => {
-    verifyAuth();
-    return settingsService.get('classSettings');
-  }),
-);
+export const getClassSettings = query(staffOnly(() => settingsService.get('classSettings')));
 
 export const classSettingsForm = form(
   classSettingsDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const response = await settingsService.set('classSettings', dto);
     getClassSettings().refresh();
 
@@ -101,8 +74,7 @@ export const getCarBayRates = query(exposeUserErrors(() => settingsService.get('
 
 export const setCarBayRates = command(
   carBayRatesDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const response = await settingsService.set('carBayRates', dto);
     getCarBayRates().refresh();
 
@@ -114,8 +86,7 @@ export const getCarBayPolicy = query(exposeUserErrors(() => settingsService.get(
 
 export const setCarBayPolicy = command(
   carBayPolicyDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const response = await settingsService.set('carBayPolicy', dto);
     getCarBayPolicy().refresh();
 
@@ -129,8 +100,7 @@ export const getCarBayAvailability = query(
 
 export const setCarBayAvailability = command(
   carBayAvailabilityDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const response = await settingsService.set('carBayAvailability', dto);
     getCarBayAvailability().refresh();
 
@@ -138,17 +108,11 @@ export const setCarBayAvailability = command(
   }),
 );
 
-export const getMemberSquareSettings = query(
-  exposeUserErrors(() => {
-    verifyAuth();
-    return settingsService.get('memberSquare');
-  }),
-);
+export const getMemberSquareSettings = query(staffOnly(() => settingsService.get('memberSquare')));
 
 export const memberSquareSettingsForm = form(
   memberSquareSettingsDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const response = await settingsService.set('memberSquare', dto);
     getMemberSquareSettings().refresh();
 
@@ -156,17 +120,11 @@ export const memberSquareSettingsForm = form(
   }),
 );
 
-export const getPrintPricing = query(
-  exposeUserErrors(() => {
-    verifyAuth();
-    return settingsService.get('printPricing');
-  }),
-);
+export const getPrintPricing = query(staffOnly(() => settingsService.get('printPricing')));
 
 export const printPricingSettingsForm = form(
   printPricingSettingsDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const response = await settingsService.set('printPricing', dto);
     getPrintPricing().refresh();
 

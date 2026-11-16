@@ -10,18 +10,13 @@ import {
   rescheduleBookingDto,
   upsertCatalogDto,
 } from '$lib/remotes/dtos/class.dto';
-import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
+import { exposeUserErrors, staffOnly, verifyAuth } from '$lib/server/remote-utils';
 import { classService } from '$lib/server/services/class.service';
 import * as v from 'valibot';
 
 // ── Staff: Catalog ──
 
-export const getCatalogs = query(
-  exposeUserErrors(async () => {
-    verifyAuth();
-    return await classService.getAllCatalogs();
-  }),
-);
+export const getCatalogs = query(staffOnly(() => classService.getAllCatalogs()));
 
 export const getCatalogById = query(
   v.string(),
@@ -32,8 +27,7 @@ export const getCatalogById = query(
 
 export const upsertCatalogForm = form(
   upsertCatalogDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await classService.upsertCatalog(dto);
     await getCatalogs().refresh();
     return result;
@@ -42,25 +36,16 @@ export const upsertCatalogForm = form(
 
 // ── Staff: Instance ──
 
-export const getAllInstances = query(
-  exposeUserErrors(async () => {
-    verifyAuth();
-    return await classService.getAllInstances();
-  }),
-);
+export const getAllInstances = query(staffOnly(() => classService.getAllInstances()));
 
 export const getInstanceDetail = query(
   v.string(),
-  exposeUserErrors(async (instanceId: string) => {
-    verifyAuth();
-    return await classService.getInstanceDetail(instanceId);
-  }),
+  staffOnly((instanceId: string) => classService.getInstanceDetail(instanceId)),
 );
 
 export const generateInstances = command(
   generateInstancesDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await classService.generateInstances(dto);
     await getAllInstances().refresh();
     return result;
@@ -69,8 +54,7 @@ export const generateInstances = command(
 
 export const createInstance = command(
   createInstanceDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await classService.createInstance(dto);
     await getAllInstances().refresh();
     return result;
@@ -79,8 +63,7 @@ export const createInstance = command(
 
 export const cancelInstance = command(
   cancelInstanceDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await classService.cancelInstance(dto);
     await getAllInstances().refresh();
     await getInstanceDetail(dto.instanceId).refresh();
@@ -90,8 +73,7 @@ export const cancelInstance = command(
 
 export const cancelBookingStaff = command(
   cancelBookingStaffDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await classService.cancelBookingStaff(dto);
     await getAllInstances().refresh();
     await getInstanceDetail(result.instanceId).refresh();
@@ -101,8 +83,7 @@ export const cancelBookingStaff = command(
 
 export const rescheduleBookingStaff = command(
   rescheduleBookingDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await classService.rescheduleBooking(dto);
     await getAllInstances().refresh();
     await getInstanceDetail(result.previousInstanceId).refresh();
@@ -113,20 +94,14 @@ export const rescheduleBookingStaff = command(
 
 export const manualBookClass = command(
   manualBookClassDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await classService.manualBookClass(dto);
     await getAllInstances().refresh();
     return result;
   }),
 );
 
-export const getStaffUsers = query(
-  exposeUserErrors(async () => {
-    verifyAuth();
-    return await classService.getStaffUsers();
-  }),
-);
+export const getStaffUsers = query(staffOnly(() => classService.getStaffUsers()));
 
 export const getMyCalendarLink = query(
   exposeUserErrors(async () => {

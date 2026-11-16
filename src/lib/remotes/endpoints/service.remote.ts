@@ -5,40 +5,28 @@ import {
   updateServiceRequestStatusDto,
   upsertServiceDto,
 } from '$lib/remotes/dtos/service.dto';
-import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
+import { exposeUserErrors, staffOnly } from '$lib/server/remote-utils';
 import { serviceService } from '$lib/server/services/service.service';
 import * as v from 'valibot';
 
 // ── Staff ──
 
-export const getServices = query(
-  exposeUserErrors(async () => {
-    verifyAuth();
-    return await serviceService.getAllServices();
-  }),
-);
+export const getServices = query(staffOnly(() => serviceService.getAllServices()));
 
 export const upsertService = command(
   upsertServiceDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await serviceService.upsertService(dto);
     await getServices().refresh();
     return result;
   }),
 );
 
-export const getServiceRequests = query(
-  exposeUserErrors(async () => {
-    verifyAuth();
-    return await serviceService.getRequests();
-  }),
-);
+export const getServiceRequests = query(staffOnly(() => serviceService.getRequests()));
 
 export const updateServiceRequestStatus = command(
   updateServiceRequestStatusDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await serviceService.updateRequestStatus(dto);
     await getServiceRequests().refresh();
     return result;
@@ -47,8 +35,7 @@ export const updateServiceRequestStatus = command(
 
 export const priceServiceRequest = command(
   priceServiceRequestDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await serviceService.priceRequest(dto);
     await getServiceRequests().refresh();
     return result;
@@ -57,8 +44,7 @@ export const priceServiceRequest = command(
 
 export const sendServicePaymentReminder = command(
   v.string(),
-  exposeUserErrors(async (id: string) => {
-    verifyAuth();
+  staffOnly(async (id: string) => {
     await serviceService.sendPaymentReminder(id);
   }),
 );

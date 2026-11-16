@@ -30,3 +30,13 @@ export function exposeUserErrors<Args extends unknown[], Result>(
     }
   };
 }
+
+/** A remote handler only signed-in staff may call. */
+export function staffOnly<Args extends unknown[], Result>(
+  handler: (...args: Args) => Result | Promise<Result>,
+) {
+  return exposeUserErrors(async (...args: Args) => {
+    verifyAuth();
+    return await handler(...args);
+  });
+}

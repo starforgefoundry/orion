@@ -7,29 +7,20 @@ import {
   updateOrganizationDto,
 } from '$lib/remotes/dtos/organization.dto';
 import { createOrgChargeDto } from '$lib/remotes/dtos/organization-charges.dto';
-import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
+import { staffOnly } from '$lib/server/remote-utils';
 import { organizationService } from '$lib/server/services/organization.service';
 import * as v from 'valibot';
 
-export const getOrganizations = query(
-  exposeUserErrors(async () => {
-    verifyAuth();
-    return await organizationService.getOrganizations();
-  }),
-);
+export const getOrganizations = query(staffOnly(() => organizationService.getOrganizations()));
 
 export const getOrganizationDetail = query(
   v.object({ id: v.string() }),
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-    return await organizationService.getOrganizationDetail(dto.id);
-  }),
+  staffOnly((dto) => organizationService.getOrganizationDetail(dto.id)),
 );
 
 export const createOrganizationForm = form(
   createOrganizationDto,
-  exposeUserErrors(async (data) => {
-    verifyAuth();
+  staffOnly(async (data) => {
     const organization = await organizationService.createOrganization(data);
     await getOrganizations().refresh();
     return organization;
@@ -38,8 +29,7 @@ export const createOrganizationForm = form(
 
 export const updateOrganization = command(
   updateOrganizationDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const { id, ...updates } = dto;
     const organization = await organizationService.updateOrganization(id, updates);
     await getOrganizations().refresh();
@@ -49,8 +39,7 @@ export const updateOrganization = command(
 
 export const archiveOrganization = command(
   v.object({ id: v.string() }),
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     await organizationService.archiveOrganization(dto.id);
     await getOrganizations().refresh();
   }),
@@ -58,8 +47,7 @@ export const archiveOrganization = command(
 
 export const chargeOrganizationBalance = command(
   chargeOrganizationBalanceDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const payment = await organizationService.chargeBalance(dto);
     await getOrganizationDetail({ id: dto.organizationId }).refresh();
     return payment;
@@ -68,8 +56,7 @@ export const chargeOrganizationBalance = command(
 
 export const createOrganizationChargeForm = form(
   createOrgChargeDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const charge = await organizationService.createCharge(dto);
     await getOrganizationDetail({ id: dto.organizationId }).refresh();
     return charge;
@@ -78,16 +65,12 @@ export const createOrganizationChargeForm = form(
 
 export const getOrganizationMembers = query(
   v.string(),
-  exposeUserErrors(async (organizationId) => {
-    verifyAuth();
-    return await organizationService.listOrganizationMembers(organizationId);
-  }),
+  staffOnly((organizationId) => organizationService.listOrganizationMembers(organizationId)),
 );
 
 export const addOrganizationMembers = command(
   addOrganizationMembersDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     const result = await organizationService.addOrganizationMembers(dto);
     await getOrganizationMembers(dto.organizationId).refresh();
     return result;
@@ -96,8 +79,7 @@ export const addOrganizationMembers = command(
 
 export const removeOrganizationMembers = command(
   removeOrganizationMembersDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
+  staffOnly(async (dto) => {
     await organizationService.removeOrganizationMembers(dto.organizationId, dto.membershipIds);
     await getOrganizationMembers(dto.organizationId).refresh();
   }),
