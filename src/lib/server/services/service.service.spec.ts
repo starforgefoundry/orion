@@ -2,7 +2,6 @@ import { NotFoundError } from '$lib/errors';
 import type { SubmitServiceRequestDto } from '$lib/remotes/dtos/service.dto';
 import type { Payment } from '$lib/server/db/schema';
 import { ServiceRequestError, ServiceService } from '$lib/server/services/service.service';
-import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import {
   SERVICE_PRICING,
@@ -311,37 +310,6 @@ describe(ServiceService.name, () => {
         sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.SUBMITTED }),
       ).rejects.toBeInstanceOf(ServiceRequestError);
       expect(mocks.serviceRepository.updateRequest).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('sendPaymentReminder', () => {
-    it('emails the customer a link to pay the bill', async () => {
-      stubRequest(PRICED);
-      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
-
-      await sut.sendPaymentReminder(REQUEST_ID);
-
-      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
-        'jane@example.com',
-        SENDERS.foundry,
-        'payment_reminder',
-        {
-          customerName: 'Jane Doe',
-          itemName: 'Laser Engraving',
-          total: '60.00',
-          paymentUrl: `https://orion.example.com/pay/${PAYMENT_ID}`,
-        },
-      );
-    });
-
-    it.each([
-      ['is still awaiting a quote', {}],
-      ['is paid', { ...PRICED, status: PAYMENT_STATUS.PAID }],
-    ])('refuses to remind about a bill that %s', async (_, payment) => {
-      stubRequest(payment);
-
-      await expect(sut.sendPaymentReminder(REQUEST_ID)).rejects.toBeInstanceOf(ServiceRequestError);
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
     });
   });
 

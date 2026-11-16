@@ -1,4 +1,4 @@
-import { command, form, query } from '$app/server';
+import { form, query } from '$app/server';
 import { createPaymentDto } from '$lib/remotes/dtos/print-payment.dto';
 import { getPrintRequestById, getPrintRequests } from '$lib/remotes/endpoints/print-request.remote';
 import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
@@ -13,14 +13,6 @@ export const getPricingInfo = query(
   exposeUserErrors(async (dto) => {
     verifyAuth();
     return await printPaymentService.getPricingInfo(dto.customerEmail, dto.billingCode);
-  }),
-);
-
-export const sendPrintPaymentReminder = command(
-  v.string(),
-  exposeUserErrors(async (printRequestId: string) => {
-    verifyAuth();
-    await printPaymentService.sendPaymentReminder(printRequestId);
   }),
 );
 

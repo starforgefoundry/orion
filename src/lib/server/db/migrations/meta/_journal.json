@@ -68,8 +68,8 @@
     {
       "idx": 9,
       "version": "7",
-      "when": 1794707261952,
-      "tag": "0009_payment_reminder_template",
+      "when": 1794797873125,
+      "tag": "0009_remove_payment_reminder_template",
       "breakpoints": true
     }
   ]

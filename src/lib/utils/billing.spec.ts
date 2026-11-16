@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   amountPaid,
   buildBill,
-  canSendPaymentReminder,
   initialStatus,
   isPayableOnline,
   lineItemsTotal,
@@ -123,33 +122,5 @@ describe('quoteRequiresCard', () => {
     ['is billed to an organization', { organizationId: 'org' }],
   ])('approves a quote that %s without a card', (_, overrides) => {
     expect(quoteRequiresCard({ ...QUOTE, ...overrides })).toBe(false);
-  });
-});
-
-describe('canSendPaymentReminder', () => {
-  const PENDING = {
-    type: PAYMENT_TYPE.PRINT_REQUEST,
-    status: PAYMENT_STATUS.PENDING,
-    organizationId: null,
-    squareInvoiceId: null,
-    total: 1000,
-  };
-
-  it.each([
-    ['is pending', {}],
-    ['is a quote', { status: PAYMENT_STATUS.QUOTE }],
-  ])('reminds about a bill that %s', (_, overrides) => {
-    expect(canSendPaymentReminder({ ...PENDING, ...overrides })).toBe(true);
-  });
-
-  it.each([
-    ['is paid', { status: PAYMENT_STATUS.PAID }],
-    ['is processing', { status: PAYMENT_STATUS.PROCESSING }],
-    ['is canceled', { status: PAYMENT_STATUS.CANCELED }],
-    ['costs nothing', { total: 0 }],
-    ['is billed to an organization', { organizationId: 'org' }],
-    ['was sent as a Square invoice', { squareInvoiceId: 'inv-1' }],
-  ])('does not remind about a bill that %s', (_, overrides) => {
-    expect(canSendPaymentReminder({ ...PENDING, ...overrides })).toBe(false);
   });
 });
