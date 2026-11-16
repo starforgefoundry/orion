@@ -7,39 +7,28 @@ import {
   type CarBayRates,
 } from '$lib/utils/car-bay';
 import { DEFAULT_PRINT_PRICING, type PrintPricing } from '$lib/utils/print-pricing';
+import type {
+  bambuddySettings,
+  carBayAvailabilityDto,
+  classSettingsDto,
+  memberSquareSettingsDto,
+  printRequestSettings,
+  printRequestSquareSettings,
+} from '$lib/remotes/dtos/settings.dto';
 import { eq } from 'drizzle-orm';
+import type * as v from 'valibot';
 
 export type SettingsMap = {
-  printRequest: {
-    isOpen: boolean;
-    announcement: string;
-    announcementUntil: string;
-    maxUploadMB: number;
-    allowedFileTypes: string;
-    discordWebhookUrl: string;
-  };
-  printRequestSquare: {
-    locationId: string;
-  };
+  printRequest: v.InferOutput<typeof printRequestSettings>;
+  printRequestSquare: v.InferOutput<typeof printRequestSquareSettings>;
   printPricing: PrintPricing;
-  classSettings: {
-    discordWebhookUrl: string;
-  };
-  bambuddy: {
-    serverUrl: string;
-    apiKey: string;
-  };
+  classSettings: v.InferOutput<typeof classSettingsDto>;
+  bambuddy: v.InferOutput<typeof bambuddySettings>;
   carBayRates: CarBayRates;
   carBayPolicy: CarBayPolicy;
-  carBayAvailability: {
-    isOpen: boolean;
-  };
-  memberSquare: {
-    dayPassItemVariationIds: string[];
-  };
-  kiosk: {
-    deviceToken: string;
-  };
+  carBayAvailability: v.InferOutput<typeof carBayAvailabilityDto>;
+  memberSquare: v.InferOutput<typeof memberSquareSettingsDto>;
+  kiosk: { deviceToken: string };
 };
 
 const defaults: SettingsMap = {

@@ -1,3 +1,4 @@
+import type { MemberSearchFilter } from '$lib/remotes/dtos/member.dto';
 import { schema } from '$lib/server/db/schema';
 import { paginate } from '$lib/server/db/pagination';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
@@ -10,9 +11,7 @@ import {
   SUBSCRIPTION_STATUS,
   WAIVER_FILTER,
   type AccessBasis,
-  type MemberSort,
   type OnboardingFilter,
-  type SortDirection,
   type WaiverFilter,
 } from '$lib/utils/member-enums';
 import { hasMembership, type MemberAccessContext } from '$lib/server/utils/member-access';
@@ -41,18 +40,6 @@ export type CustomerDetails = {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
-};
-
-/** An empty filter list leaves that filter off. */
-export type MemberSearchFilter = {
-  query: string;
-  access: AccessBasis[];
-  waiver: WaiverFilter[];
-  onboarding: OnboardingFilter[];
-  sort: MemberSort;
-  direction: SortDirection;
-  page: number;
-  pageSize: number;
 };
 
 export function normalizeEmail(email: string) {

@@ -1,13 +1,12 @@
 // Relative imports: the database schema and seed script load this file outside SvelteKit.
 import { buildBill, type Bill, type BillingLineItem } from './billing.ts';
+import type { printPricingSettingsDto } from '../remotes/dtos/settings.dto.ts';
+import type * as v from 'valibot';
 
 const MATERIAL_LINE_ITEM = '3D Print Material';
 
 /** Amounts are in cents. */
-export type PrintPricing = {
-  additionalBuildPlatePrice: number;
-  memberDiscountPercent: number;
-};
+export type PrintPricing = v.InferOutput<typeof printPricingSettingsDto>;
 
 export const DEFAULT_PRINT_PRICING: PrintPricing = {
   additionalBuildPlatePrice: 0,
