@@ -53,3 +53,27 @@ describeWithDatabase('PrintRequestRepository.search', () => {
     expect(pagination).toEqual({ total: 3, page: 2, pageSize: 1, totalPages: 3 });
   });
 });
+
+describeWithDatabase('PrintRequestRepository.getById', () => {
+  const database = useTestDatabase('print_request');
+  let repository: PrintRequestRepository;
+
+  beforeEach(() => {
+    repository = new PrintRequestRepository(database.db);
+  });
+
+  it('returns nothing for an unknown request', async () => {
+    expect(await repository.getById(crypto.randomUUID())).toBeUndefined();
+  });
+
+  it('returns the request with its material', async () => {
+    const { id: material } = await database.insert.printMaterial();
+    const request = await database.insert.printRequest({ material });
+
+    expect(await repository.getById(request.id)).toMatchObject({
+      id: request.id,
+      material: { id: material },
+      files: [],
+    });
+  });
+});

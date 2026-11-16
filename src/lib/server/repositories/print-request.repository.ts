@@ -117,18 +117,18 @@ export class PrintRequestRepository extends BaseRepository {
       )
       .leftJoin(schema.billingCode, eq(schema.printRequest.billingCode, schema.billingCode.code))
       .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
-      .orderBy(desc(schema.printRequest.submissionDate))
       .where(eq(schema.printRequest.id, id));
 
-    return result
-      ? {
-          ...result[0].print_request,
-          organization: result[0].organization,
-          payment: result[0].payment,
-          material: result[0].print_material,
-          files: result.map((r) => r.print_request_file).filter((f) => f !== null),
-        }
-      : undefined;
+    const [first] = result;
+    if (!first) return undefined;
+
+    return {
+      ...first.print_request,
+      organization: first.organization,
+      payment: first.payment,
+      material: first.print_material,
+      files: result.map((r) => r.print_request_file).filter((f) => f !== null),
+    };
   }
 
   async update(id: string, updates: Partial<PrintRequest>) {
