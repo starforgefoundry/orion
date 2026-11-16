@@ -17,7 +17,6 @@
   import { DESKTOP_BREAKPOINT, IsMobile } from '$lib/hooks/is-mobile.svelte';
   import { CENTS_PER_DOLLAR, formatCents } from '$lib/utils/billing';
   import { SERVICE_FIELD_TYPE, type ServiceRequestStatus } from '$lib/utils/services';
-  import BellIcon from '@lucide/svelte/icons/bell';
   import CheckIcon from '@lucide/svelte/icons/check';
   import ClipboardListIcon from '@lucide/svelte/icons/clipboard-list';
   import DownloadIcon from '@lucide/svelte/icons/download';
@@ -51,26 +50,14 @@
 </script>
 
 {#snippet footer()}
-  {#if detail.canCancel}
-    <Button
-      variant="ghost"
-      class="text-destructive hover:text-destructive sm:mr-auto"
-      onclick={() => detail.cancel()}
-    >
-      <XIcon />
-      Cancel Request
-    </Button>
-  {/if}
-  {#if detail.canSendPaymentReminder}
-    <Button
-      variant="outline"
-      disabled={detail.sendingPaymentReminder}
-      onclick={() => detail.sendPaymentReminder()}
-    >
-      {#if detail.sendingPaymentReminder}<Spinner />{:else}<BellIcon />{/if}
-      Send Payment Reminder
-    </Button>
-  {/if}
+  <Button
+    variant="ghost"
+    class="text-destructive hover:text-destructive sm:mr-auto"
+    onclick={() => detail.cancel()}
+  >
+    <XIcon />
+    Cancel Request
+  </Button>
 {/snippet}
 
 <Modal
@@ -79,7 +66,7 @@
   size="xl"
   icon={ClipboardListIcon}
   onClose={() => detail.close()}
-  footer={detail.hasFooterActions ? footer : undefined}
+  footer={detail.canCancel ? footer : undefined}
   class="flex flex-col gap-4 max-lg:px-3 lg:p-5"
 >
   {#snippet headerActions()}

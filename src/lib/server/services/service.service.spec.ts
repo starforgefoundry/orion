@@ -1,7 +1,6 @@
 import { NotFoundError } from '$lib/errors';
 import type { SubmitServiceRequestDto } from '$lib/remotes/dtos/service.dto';
 import type { Payment } from '$lib/server/db/schema';
-import { SERVICE_REMINDER } from '$lib/server/repositories/service.repository';
 import { ServiceRequestError, ServiceService } from '$lib/server/services/service.service';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
@@ -390,8 +389,7 @@ describe(ServiceService.name, () => {
     beforeEach(() => {
       vi.mocked(sendTemplate).mockResolvedValue();
       mocks.serviceRepository.getPickupReminderCandidates.mockResolvedValue([]);
-      mocks.serviceRepository.getPaymentReminderCandidates.mockResolvedValue([]);
-      mocks.serviceRepository.claimReminder.mockResolvedValue(true);
+      mocks.serviceRepository.claimPickupReminder.mockResolvedValue(true);
     });
 
     it('reminds about requests waiting three days for pickup', async () => {
@@ -404,11 +402,7 @@ describe(ServiceService.name, () => {
       expect(mocks.serviceRepository.getPickupReminderCandidates).toHaveBeenCalledWith(
         NOW.minus({ days: 3 }),
       );
-      expect(mocks.serviceRepository.claimReminder).toHaveBeenCalledWith(
-        REQUEST_ID,
-        SERVICE_REMINDER.PICKUP,
-        NOW,
-      );
+      expect(mocks.serviceRepository.claimPickupReminder).toHaveBeenCalledWith(REQUEST_ID, NOW);
       expect(sendTemplate).toHaveBeenCalledWith(
         sut,
         'jane@example.com',
@@ -418,38 +412,14 @@ describe(ServiceService.name, () => {
       );
     });
 
-    it('reminds about bills unpaid for three days', async () => {
-      mocks.serviceRepository.getPaymentReminderCandidates.mockResolvedValue([
-        reminderRow(PRICED, SERVICE_REQUEST_STATUS.IN_PROGRESS),
+    it('skips a reminder another sweep already sent', async () => {
+      mocks.serviceRepository.getPickupReminderCandidates.mockResolvedValue([
+        reminderRow({ status: PAYMENT_STATUS.PAID }, SERVICE_REQUEST_STATUS.DONE),
       ]);
+      mocks.serviceRepository.claimPickupReminder.mockResolvedValue(false);
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.serviceRepository.getPaymentReminderCandidates).toHaveBeenCalledWith(
-        NOW.minus({ days: 3 }),
-      );
-      expect(mocks.serviceRepository.claimReminder).toHaveBeenCalledWith(
-        REQUEST_ID,
-        SERVICE_REMINDER.PAYMENT,
-        NOW,
-      );
-      expect(sendTemplate).toHaveBeenCalledWith(
-        sut,
-        'jane@example.com',
-        SENDERS.foundry,
-        'payment_reminder',
-        expect.anything(),
-      );
-    });
-
-    it('skips bills the customer cannot pay online', async () => {
-      mocks.serviceRepository.getPaymentReminderCandidates.mockResolvedValue([
-        reminderRow({ ...PRICED, squareInvoiceId: 'inv-1' }, SERVICE_REQUEST_STATUS.IN_PROGRESS),
-      ]);
-
-      await sut.sendDueReminders(NOW);
-
-      expect(mocks.serviceRepository.claimReminder).not.toHaveBeenCalled();
       expect(sendTemplate).not.toHaveBeenCalled();
     });
   });
@@ -474,38 +444,6 @@ describe(ServiceService.name, () => {
       stubRequest(PRICED, SERVICE_REQUEST_STATUS.IN_PROGRESS);
 
       await expect(sut.sendReadyEmail(REQUEST_ID)).rejects.toBeInstanceOf(ServiceRequestError);
-      expect(sendTemplate).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('sendPaymentReminder', () => {
-    it('emails the customer a link to pay the bill', async () => {
-      stubRequest(PRICED);
-      vi.mocked(sendTemplate).mockResolvedValue(undefined as never);
-
-      await sut.sendPaymentReminder(REQUEST_ID);
-
-      expect(sendTemplate).toHaveBeenCalledWith(
-        sut,
-        'jane@example.com',
-        SENDERS.foundry,
-        'payment_reminder',
-        {
-          customerName: 'Jane Doe',
-          itemName: 'Laser Engraving',
-          total: '60.00',
-          paymentUrl: `https://orion.example.com/pay/${PAYMENT_ID}`,
-        },
-      );
-    });
-
-    it.each([
-      ['is still awaiting a quote', {}],
-      ['is paid', { ...PRICED, status: PAYMENT_STATUS.PAID }],
-    ])('refuses to remind about a bill that %s', async (_, payment) => {
-      stubRequest(payment);
-
-      await expect(sut.sendPaymentReminder(REQUEST_ID)).rejects.toBeInstanceOf(WorkOrderError);
       expect(sendTemplate).not.toHaveBeenCalled();
     });
   });

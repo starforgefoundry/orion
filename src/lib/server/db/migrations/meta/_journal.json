@@ -68,22 +68,15 @@
     {
       "idx": 9,
       "version": "7",
-      "when": 1794707261952,
-      "tag": "0009_payment_reminder_template",
+      "when": 1794797873125,
+      "tag": "0009_remove_payment_reminder_template",
       "breakpoints": true
     },
     {
       "idx": 10,
       "version": "7",
-      "when": 1794799840200,
+      "when": 1794802828861,
       "tag": "0010_service_completion",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1794801478965,
-      "tag": "0011_service_reminders",
       "breakpoints": true
     }
   ]

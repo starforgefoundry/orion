@@ -1,14 +1,8 @@
 import { UserError } from '$lib/errors';
 import type { Payment } from '$lib/server/db/schema';
-import { sendTemplate, type EmailRepositories } from '$lib/server/utils/email';
 import type { EmailSender } from '$lib/server/utils/email-templates/senders';
 import { cancelPayment, refundPayment, type PaymentRepositories } from '$lib/server/utils/payment';
-import {
-  canReleasePayment,
-  canSendPaymentReminder,
-  centsToDollars,
-  PAYMENT_STATUS,
-} from '$lib/utils/billing';
+import { canReleasePayment, PAYMENT_STATUS } from '$lib/utils/billing';
 
 /** Who a print or service request is for, and where its emails link to. */
 export type WorkOrder = {
@@ -35,23 +29,6 @@ export async function releasePayment(repos: PaymentRepositories, payment: Paymen
   } else {
     await cancelPayment(repos, payment);
   }
-}
-
-export async function sendPaymentReminder(
-  repos: EmailRepositories,
-  order: WorkOrder,
-  payment: Payment,
-) {
-  if (!canSendPaymentReminder(payment)) {
-    throw new WorkOrderError('This request has nothing to pay.');
-  }
-
-  await sendTemplate(repos, order.email, order.sender, 'payment_reminder', {
-    customerName: order.customerName,
-    itemName: order.itemName,
-    total: centsToDollars(payment.total),
-    paymentUrl: order.link,
-  });
 }
 
 /** Tells the customer whether they still owe anything when their request is ready. */

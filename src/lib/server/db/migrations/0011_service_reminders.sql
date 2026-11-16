@@ -1,2 +1,0 @@
-ALTER TABLE "service_request" ADD COLUMN "pickup_reminder_sent_date" timestamp(3) with time zone;--> statement-breakpoint
-ALTER TABLE "service_request" ADD COLUMN "payment_reminder_sent_date" timestamp(3) with time zone;

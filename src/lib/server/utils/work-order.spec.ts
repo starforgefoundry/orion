@@ -1,28 +1,12 @@
-import { sendTemplate, type EmailRepositories } from '$lib/server/utils/email';
 import { cancelPayment, refundPayment, type PaymentRepositories } from '$lib/server/utils/payment';
 import { PAYMENT_STATUS } from '$lib/utils/billing';
 import { factory } from '$test/factory';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  readyPaymentNote,
-  releasePayment,
-  sendPaymentReminder,
-  WorkOrderError,
-  type WorkOrder,
-} from './work-order';
+import { readyPaymentNote, releasePayment, WorkOrderError } from './work-order';
 
 vi.mock('$lib/server/utils/payment', { spy: true });
-vi.mock('$lib/server/utils/email', { spy: true });
 
-const repos = {} as PaymentRepositories & EmailRepositories;
-
-const ORDER: WorkOrder = {
-  email: 'ada@example.com',
-  customerName: 'Ada',
-  itemName: 'Laser Cutting',
-  sender: { from: 'Starforge <hi@example.com>', replyTo: 'hi@example.com' },
-  link: 'https://orion.example.com/pay/payment-1',
-};
+const repos = {} as PaymentRepositories;
 
 describe(releasePayment.name, () => {
   it('refunds a paid bill', async () => {
@@ -59,38 +43,6 @@ describe(releasePayment.name, () => {
       expect(refundPayment).not.toHaveBeenCalled();
     },
   );
-});
-
-describe(sendPaymentReminder.name, () => {
-  it('emails what is owed and where to pay', async () => {
-    vi.mocked(sendTemplate).mockResolvedValue();
-
-    await sendPaymentReminder(
-      repos,
-      ORDER,
-      factory.payment({ status: PAYMENT_STATUS.PENDING, total: 1250 }),
-    );
-
-    expect(sendTemplate).toHaveBeenCalledWith(
-      repos,
-      'ada@example.com',
-      ORDER.sender,
-      'payment_reminder',
-      {
-        customerName: 'Ada',
-        itemName: 'Laser Cutting',
-        total: '12.50',
-        paymentUrl: ORDER.link,
-      },
-    );
-  });
-
-  it('refuses when there is nothing to pay', async () => {
-    await expect(sendPaymentReminder(repos, ORDER, factory.paidPayment())).rejects.toThrow(
-      WorkOrderError,
-    );
-    expect(sendTemplate).not.toHaveBeenCalled();
-  });
 });
 
 describe(readyPaymentNote.name, () => {

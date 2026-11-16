@@ -49,13 +49,6 @@ export const sendServiceReadyEmail = command(
   }),
 );
 
-export const sendServicePaymentReminder = command(
-  v.string(),
-  staffOnly(async (id: string) => {
-    await serviceService.sendPaymentReminder(id);
-  }),
-);
-
 // ── Public ──
 
 export const getEnabledServices = query(

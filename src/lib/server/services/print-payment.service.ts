@@ -15,7 +15,6 @@ import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import { sendTemplate } from '$lib/server/utils/email';
 import { printQueueUrl, printRequestStatusUrl } from '$lib/server/utils/payment-links';
 import { chargePayment } from '$lib/server/utils/payment';
-import { sendPaymentReminder } from '$lib/server/utils/work-order';
 import {
   centsToDollars,
   formatCents,
@@ -154,24 +153,6 @@ export class PrintPaymentService extends BaseService {
       total: centsToDollars(total),
       paymentURL: printRequestStatusUrl(request.id),
     });
-  }
-
-  async sendPaymentReminder(id: string) {
-    const request = await this.printRequestRepository.getById(id);
-    if (!request) throw new NotFoundError('Print request not found');
-    if (!request.payment) throw new PrintPaymentError('This print request has nothing to pay');
-
-    await sendPaymentReminder(
-      this,
-      {
-        email: request.email,
-        customerName: request.customerName,
-        itemName: request.projectName,
-        sender: SENDERS.print,
-        link: printRequestStatusUrl(request.id),
-      },
-      request.payment,
-    );
   }
 
   /** Changing the group code moves who pays, so any unpaid bill is rebuilt and resent. */

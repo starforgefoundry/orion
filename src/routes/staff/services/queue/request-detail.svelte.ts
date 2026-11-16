@@ -1,12 +1,8 @@
 import type { EnumValue } from '$lib/utils/enum';
 import { goto } from '$app/navigation';
 import { submitWithToast } from '$lib/frontend/form-submit';
-import {
-  getServiceRequests,
-  priceServiceRequest,
-  sendServicePaymentReminder,
-} from '$lib/remotes/endpoints/service.remote';
-import { canReleasePayment, canSendPaymentReminder, PAYMENT_STATUS } from '$lib/utils/billing';
+import { getServiceRequests, priceServiceRequest } from '$lib/remotes/endpoints/service.remote';
+import { canReleasePayment, PAYMENT_STATUS } from '$lib/utils/billing';
 import {
   awaitingQuote,
   canQuote,
@@ -25,7 +21,6 @@ export class ServiceRequestDetail {
   /** Typed quote in cents; until staff type one the field shows the current price. */
   quoteDraft = $state<number>();
   savingQuote = $state(false);
-  sendingPaymentReminder = $state(false);
 
   // The staff list already holds every request, so the modal reads its row from there.
   readonly query = getServiceRequests();
@@ -98,14 +93,6 @@ export class ServiceRequestDetail {
     );
   }
 
-  get canSendPaymentReminder() {
-    return this.canChangeStatus && !!this.row && canSendPaymentReminder(this.row.payment);
-  }
-
-  get hasFooterActions() {
-    return this.canCancel || this.canSendPaymentReminder;
-  }
-
   close() {
     goto('?', { replaceState: true, noScroll: true, keepFocus: true });
     this.onClose();
@@ -120,15 +107,6 @@ export class ServiceRequestDetail {
     );
     this.savingQuote = false;
     if (saved) this.quoteDraft = undefined;
-  }
-
-  async sendPaymentReminder() {
-    this.sendingPaymentReminder = true;
-    await submitWithToast(() => sendServicePaymentReminder(this.requestId), {
-      success: 'Payment reminder sent',
-      error: 'Failed to send payment reminder',
-    });
-    this.sendingPaymentReminder = false;
   }
 
   async changeStatus(status: ServiceRequestStatus) {

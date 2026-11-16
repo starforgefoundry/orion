@@ -676,7 +676,6 @@ export const serviceRequest = pgTable('service_request', {
   status: text('status', { enum: enumValues(SERVICE_REQUEST_STATUS) }).notNull(),
   completionDate: luxonTimestamp('completion_date'),
   pickupReminderSentDate: luxonTimestamp('pickup_reminder_sent_date'),
-  paymentReminderSentDate: luxonTimestamp('payment_reminder_sent_date'),
 });
 
 export type ServiceRequest = InferSelectModel<typeof serviceRequest>;

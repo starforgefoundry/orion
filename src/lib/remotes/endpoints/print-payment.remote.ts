@@ -1,4 +1,4 @@
-import { command, form, query } from '$app/server';
+import { form, query } from '$app/server';
 import { createPaymentDto } from '$lib/remotes/dtos/print-payment.dto';
 import { getPrintRequestById, getPrintRequests } from '$lib/remotes/endpoints/print-request.remote';
 import { staffOnly } from '$lib/server/remote-utils';
@@ -11,13 +11,6 @@ export const getPricingInfo = query(
     billingCode: v.optional(v.string()),
   }),
   staffOnly((dto) => printPaymentService.getPricingInfo(dto.customerEmail, dto.billingCode)),
-);
-
-export const sendPrintPaymentReminder = command(
-  v.string(),
-  staffOnly(async (printRequestId: string) => {
-    await printPaymentService.sendPaymentReminder(printRequestId);
-  }),
 );
 
 export const upsertPaymentForm = form(

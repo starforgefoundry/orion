@@ -115,10 +115,3 @@ const RELEASABLE_STATUSES: PaymentStatus[] = [
 export function canReleasePayment(payment: { status: PaymentStatus }) {
   return RELEASABLE_STATUSES.includes(payment.status);
 }
-
-const REMINDABLE_STATUSES: PaymentStatus[] = [PAYMENT_STATUS.QUOTE, PAYMENT_STATUS.PENDING];
-
-/** Only a bill the customer still owes and can pay online is worth a reminder. */
-export function canSendPaymentReminder(payment: OnlinePayment & { total: number }) {
-  return REMINDABLE_STATUSES.includes(payment.status) && quoteRequiresCard(payment);
-}

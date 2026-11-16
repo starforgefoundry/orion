@@ -241,20 +241,6 @@ export const EMAIL_TEMPLATE_DEFINITIONS = {
       paymentUrl: PAYMENT_URL,
     },
   },
-  payment_reminder: {
-    name: 'Payment Reminder',
-    description: 'Sent when staff remind a customer to pay for a print or service request.',
-    group: EMAIL_TEMPLATE_GROUP.PAYMENTS,
-    variables: {
-      customerName: CUSTOMER_NAME,
-      itemName: {
-        description: 'Print project or service the payment is for',
-        example: 'Robot Arm',
-      },
-      total: DOLLARS_DUE,
-      paymentUrl: PAYMENT_URL,
-    },
-  },
   car_bay_overrun: {
     name: 'Car Bay Overrun Payment',
     description: 'Sent when staff bill a car bay booking for staying past its end time.',
