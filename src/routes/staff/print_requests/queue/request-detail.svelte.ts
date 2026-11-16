@@ -1,5 +1,5 @@
 import { goto } from '$app/navigation';
-import { errorDescription, submitWithToast } from '$lib/frontend/form-submit';
+import { errorDescription } from '$lib/frontend/form-submit';
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
 import {
   getPrintRequestById,
@@ -7,8 +7,7 @@ import {
   getPrintRequestDownloadUrl,
   updatePrintRequestDiscount,
 } from '$lib/remotes/endpoints/print-request.remote';
-import { sendPrintPaymentReminder } from '$lib/remotes/endpoints/print-payment.remote';
-import { canSendPaymentReminder, PAYMENT_STATUS } from '$lib/utils/billing';
+import { PAYMENT_STATUS } from '$lib/utils/billing';
 import { toast } from 'svelte-sonner';
 import CustomerEditModal from './CustomerEditModal.svelte';
 import DiscountCodeModal from './DiscountCodeModal.svelte';
@@ -38,7 +37,6 @@ const SQUARE_INVOICE_URL = 'https://app.squareup.com/dashboard/invoices/';
 export class RequestDetail {
   activeTab = $state<RequestDetailTab>(REQUEST_DETAIL_TABS.DETAILS);
   updatingStatus = $state(false);
-  sendingPaymentReminder = $state(false);
   readonly quantities = new QuantityEditor();
 
   readonly query = $derived(getPrintRequestById(this.requestId));
@@ -127,15 +125,6 @@ export class RequestDetail {
     return !!this.request && isAwaitingPayment(this.request);
   }
 
-  get canSendPaymentReminder() {
-    const request = this.request;
-    return (
-      !!request?.payment &&
-      request.status !== STATUS.CANCELED &&
-      canSendPaymentReminder(request.payment)
-    );
-  }
-
   get quoteNotice() {
     const request = this.request;
     if (!request?.isQuote || request.status === STATUS.CANCELED) return undefined;
@@ -159,7 +148,6 @@ export class RequestDetail {
       this.canCancel ||
       this.canEditPayment ||
       this.canCreatePayment ||
-      this.canSendPaymentReminder ||
       this.readyForPickup ||
       this.pickedUp
     );
@@ -191,15 +179,6 @@ export class RequestDetail {
 
   async sendPickupReminder() {
     await sendPickupEmail(this.requestId);
-  }
-
-  async sendPaymentReminder() {
-    this.sendingPaymentReminder = true;
-    await submitWithToast(() => sendPrintPaymentReminder(this.requestId), {
-      success: 'Payment reminder sent',
-      error: 'Failed to send payment reminder',
-    });
-    this.sendingPaymentReminder = false;
   }
 
   editQuantities() {

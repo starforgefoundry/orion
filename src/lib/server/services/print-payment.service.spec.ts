@@ -372,40 +372,6 @@ describe(PrintPaymentService.name, () => {
     });
   });
 
-  describe('sendPaymentReminder', () => {
-    it.each([
-      ['a bill', payment()],
-      ['a quote', payment({ status: PAYMENT_STATUS.QUOTE })],
-    ])('emails the customer a link to pay %s', async (_, existing) => {
-      mocks.printRequestRepository.getById.mockResolvedValue(printRequest({ payment: existing }));
-
-      await sut.sendPaymentReminder(REQUEST_ID);
-
-      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
-        'jane@example.com',
-        expect.objectContaining({ replyTo: PRINT_EMAIL }),
-        'payment_reminder',
-        {
-          customerName: 'Jane Doe',
-          itemName: 'Robot Arm',
-          total: '10.00',
-          paymentUrl: STATUS_URL,
-        },
-      );
-    });
-
-    it.each([
-      ['no bill', null],
-      ['a paid bill', payment({ status: PAYMENT_STATUS.PAID })],
-      ['an organization bill', payment({ organizationId: ORGANIZATION.id })],
-    ])('refuses to remind about %s', async (_, existing) => {
-      mocks.printRequestRepository.getById.mockResolvedValue(printRequest({ payment: existing }));
-
-      await expect(sut.sendPaymentReminder(REQUEST_ID)).rejects.toThrow(PrintPaymentError);
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
-    });
-  });
-
   describe('payPrintRequest', () => {
     it('charges the card for an unpaid bill', async () => {
       mocks.printRequestRepository.getById.mockResolvedValue(printRequest({ payment: payment() }));

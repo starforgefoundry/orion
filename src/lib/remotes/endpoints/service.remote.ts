@@ -55,14 +55,6 @@ export const priceServiceRequest = command(
   }),
 );
 
-export const sendServicePaymentReminder = command(
-  v.string(),
-  exposeUserErrors(async (id: string) => {
-    verifyAuth();
-    await serviceService.sendPaymentReminder(id);
-  }),
-);
-
 // ── Public ──
 
 export const getEnabledServices = query(

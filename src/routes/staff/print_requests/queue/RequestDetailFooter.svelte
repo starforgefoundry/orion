@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button';
   import { Spinner } from '$lib/components/ui/spinner';
-  import BellIcon from '@lucide/svelte/icons/bell';
   import DollarSignIcon from '@lucide/svelte/icons/dollar-sign';
   import MailIcon from '@lucide/svelte/icons/mail';
   import PackageCheckIcon from '@lucide/svelte/icons/package-check';
@@ -29,16 +28,6 @@
     <Button variant="outline" onclick={() => detail.sendPickupReminder()}>
       <MailIcon />
       Send Pickup Reminder
-    </Button>
-  {/if}
-  {#if detail.canSendPaymentReminder}
-    <Button
-      variant="outline"
-      disabled={detail.sendingPaymentReminder}
-      onclick={() => detail.sendPaymentReminder()}
-    >
-      {#if detail.sendingPaymentReminder}<Spinner />{:else}<BellIcon />{/if}
-      Send Payment Reminder
     </Button>
   {/if}
   {#if detail.canEditPayment || detail.canCreatePayment}

@@ -104,10 +104,3 @@ export function isPayableOnline(payment: OnlinePayment) {
 export function quoteRequiresCard(quote: OnlinePayment & { total: number }) {
   return quote.total > 0 && isPayableOnline({ ...quote, status: PAYMENT_STATUS.PENDING });
 }
-
-const REMINDABLE_STATUSES: PaymentStatus[] = [PAYMENT_STATUS.QUOTE, PAYMENT_STATUS.PENDING];
-
-/** Only a bill the customer still owes and can pay online is worth a reminder. */
-export function canSendPaymentReminder(payment: OnlinePayment & { total: number }) {
-  return REMINDABLE_STATUSES.includes(payment.status) && quoteRequiresCard(payment);
-}
