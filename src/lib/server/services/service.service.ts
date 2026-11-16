@@ -6,13 +6,18 @@ import type {
 } from '$lib/remotes/dtos/service.dto';
 import { NotFoundError, UserError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
-import type { Service } from '$lib/server/db/schema';
+import type { Payment, Service, ServiceRequest } from '$lib/server/db/schema';
+import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { sendTemplate } from '$lib/server/utils/email';
+import { payUrl } from '$lib/server/utils/payment-links';
+import { forEachSettled, runInBackground } from '$lib/server/utils/background';
+import { sendOnce } from '$lib/server/utils/reminders';
+import { readyPaymentNote, releasePayment, type WorkOrder } from '$lib/server/utils/work-order';
 import { fileUrl } from '$lib/server/utils/storage';
-import { buildBill, PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
+import { buildBill, PAYMENT_STATUS, PAYMENT_TYPE, type PaymentStatus } from '$lib/utils/billing';
 import {
   answersProblem,
   formAnswers,
-  isCancelable,
   isUnpaid,
   quoteRequired,
   SERVICE_FIELD_TYPE,
@@ -20,14 +25,31 @@ import {
   SERVICE_REQUEST_STATUS,
   type ServiceAnswers,
 } from '$lib/utils/services';
+import { DateTime, Duration } from 'luxon';
 import { posix } from 'node:path';
 
 const SERVICE_NOT_FOUND_MESSAGE = 'Service not found';
 const REQUEST_NOT_FOUND_MESSAGE = 'Service request not found';
+const CLOSED_PAYMENT_STATUSES: PaymentStatus[] = [PAYMENT_STATUS.CANCELED, PAYMENT_STATUS.REFUNDED];
+const PICKUP_REMINDER_DELAY = Duration.fromObject({ days: 3 });
 
 /** One line for the service, so the checkout page names what is being paid for. */
 function serviceBill(service: Pick<Service, 'name'>, price: number) {
   return buildBill([{ name: service.name, quantity: 1, unitAmount: price }]);
+}
+
+function workOrder(
+  request: Pick<ServiceRequest, 'email' | 'customerName'>,
+  serviceName: string,
+  payment: Payment,
+): WorkOrder {
+  return {
+    email: request.email,
+    customerName: request.customerName,
+    itemName: serviceName,
+    sender: SENDERS.foundry,
+    link: payUrl(payment),
+  };
 }
 
 export class ServiceRequestError extends UserError {}
@@ -133,21 +155,76 @@ export class ServiceService extends BaseService {
   }
 
   async updateRequestStatus({ id, status }: UpdateServiceRequestStatusDto) {
-    const { request, payment } = await this.requireRequest(id);
+    const { request, serviceName, payment } = await this.requireRequest(id);
     if (quoteRequired(payment, status)) {
       throw new ServiceRequestError('Send a quote before starting work.');
     }
-    // A canceled bill cannot be paid again, so the request stays canceled.
-    if (status !== request.status && payment.status === PAYMENT_STATUS.CANCELED) {
+    // A canceled or refunded bill cannot be paid again, so the request can only end up canceled.
+    const isReopening = status !== request.status && status !== SERVICE_REQUEST_STATUS.CANCELED;
+    if (isReopening && CLOSED_PAYMENT_STATUSES.includes(payment.status)) {
       throw new ServiceRequestError('This request was canceled and cannot be reopened.');
     }
-    if (status === SERVICE_REQUEST_STATUS.CANCELED && request.status !== status) {
-      if (!isCancelable(payment)) {
-        throw new ServiceRequestError('Only unpaid requests can be canceled.');
-      }
-      await this.paymentGateway.cancel(payment);
+    if (status === request.status) return request;
+
+    if (status === SERVICE_REQUEST_STATUS.PICKED_UP && payment.status !== PAYMENT_STATUS.PAID) {
+      throw new ServiceRequestError('Collect payment before marking it picked up.');
     }
+    if (status === SERVICE_REQUEST_STATUS.CANCELED) {
+      await releasePayment(this, payment);
+    }
+
+    const isUndoingPickup = request.status === SERVICE_REQUEST_STATUS.PICKED_UP;
+    if (status === SERVICE_REQUEST_STATUS.DONE && !isUndoingPickup) {
+      const updated = await this.serviceRepository.updateRequest(id, {
+        status,
+        completionDate: DateTime.now(),
+      });
+      runInBackground(
+        this.emailReady(workOrder(request, serviceName, payment), payment),
+        'send service ready email',
+      );
+      return updated;
+    }
+
     return await this.serviceRepository.updateRequest(id, { status });
+  }
+
+  /** Reminds the customer that a finished request is waiting for pickup. */
+  async sendReadyEmail(id: string) {
+    const { request, serviceName, payment } = await this.requireRequest(id);
+    if (request.status !== SERVICE_REQUEST_STATUS.DONE) {
+      throw new ServiceRequestError('Only finished requests are ready for pickup.');
+    }
+    await this.emailReady(workOrder(request, serviceName, payment), payment);
+  }
+
+  private async emailReady(order: WorkOrder, payment: Payment) {
+    await sendTemplate(this, order.email, order.sender, 'service_ready', {
+      customerName: order.customerName,
+      serviceName: order.itemName,
+      paymentNote: readyPaymentNote(payment),
+      paymentUrl: order.link,
+    });
+  }
+
+  /** Re-sends the ready email for requests left waiting for pickup. It also says what is owed. */
+  async sendDueReminders(now: DateTime = DateTime.now()) {
+    const pickups = await this.serviceRepository.getPickupReminderCandidates(
+      now.minus(PICKUP_REMINDER_DELAY),
+    );
+
+    await forEachSettled(
+      pickups,
+      ({ request, serviceName, payment }) =>
+        sendOnce(
+          {
+            claim: () => this.serviceRepository.claimPickupReminder(request.id, now),
+            release: () => this.serviceRepository.releasePickupReminder(request.id),
+          },
+          () => this.emailReady(workOrder(request, serviceName, payment), payment),
+        ),
+      ({ request }) => `send pickup reminder for service request ${request.id}`,
+    );
   }
 
   /** Sets a variable request's price. The customer then pays it at /pay/[id]. */

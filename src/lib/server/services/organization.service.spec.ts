@@ -1,10 +1,15 @@
-import { ResendRateLimitError } from '$lib/server/gateways/resend.gateway';
+import { ResendRateLimitError } from '$lib/server/repositories/resend.repository';
 import { SPACE_ZONE } from '$lib/utils/space';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
+import { sendTemplate } from '$lib/server/utils/email';
+import { sendOnboarding } from '$lib/server/utils/member-notification';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/server/utils/email', { spy: true });
+vi.mock('$lib/server/utils/member-notification', { spy: true });
 import {
   ORGANIZATION_NOT_FOUND,
   OrganizationService,
@@ -269,7 +274,7 @@ describe(OrganizationService.name, () => {
       mocks.paymentRepository.save.mockImplementation(async (data) =>
         factory.payment({ id: 'balance-1', total: data.bill.total }),
       );
-      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
+      vi.mocked(sendTemplate).mockResolvedValue(undefined as never);
     });
 
     it('saves a pending balance payment and emails the organization a pay link', async () => {
@@ -287,7 +292,8 @@ describe(OrganizationService.name, () => {
         }),
         organizationId: organization.id,
       });
-      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(sendTemplate).toHaveBeenCalledWith(
+        sut,
         'charge@org.com',
         expect.anything(),
         'organization_balance',
@@ -318,7 +324,7 @@ describe(OrganizationService.name, () => {
         'No outstanding balance to charge',
       );
       expect(mocks.paymentRepository.save).not.toHaveBeenCalled();
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
   });
 
@@ -368,7 +374,7 @@ describe(OrganizationService.name, () => {
       mocks.organizationMemberRepository.add.mockImplementation(async (organizationId, memberId) =>
         factory.organizationMember({ id: `membership-${memberId}`, organizationId, memberId }),
       );
-      mocks.memberNotificationGateway.sendOnboarding.mockResolvedValue(undefined);
+      vi.mocked(sendOnboarding).mockResolvedValue(undefined);
     });
 
     it('adds each parsed member and sends onboarding', async () => {
@@ -383,7 +389,8 @@ describe(OrganizationService.name, () => {
         'id-ada@example.com',
       );
       await vi.waitFor(() =>
-        expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(
+        expect(sendOnboarding).toHaveBeenCalledWith(
+          sut,
           expect.objectContaining({ id: 'id-grace@example.com' }),
           'organization',
         ),
@@ -403,7 +410,7 @@ describe(OrganizationService.name, () => {
         lines: 'Ada <ada@example.com>',
       });
 
-      expect(mocks.memberNotificationGateway.sendOnboarding).not.toHaveBeenCalled();
+      expect(sendOnboarding).not.toHaveBeenCalled();
       expect(result.alreadyMembers).toHaveLength(1);
       expect(result.added).toEqual([]);
     });
@@ -420,7 +427,7 @@ describe(OrganizationService.name, () => {
 
     it('keeps the membership when the onboarding email fails', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
-      mocks.memberNotificationGateway.sendOnboarding.mockRejectedValue(new Error('resend'));
+      vi.mocked(sendOnboarding).mockRejectedValue(new Error('resend'));
 
       const result = await sut.addOrganizationMembers({
         organizationId: organization.id,
@@ -443,28 +450,39 @@ describe(OrganizationService.name, () => {
       const lines = 'Ada <ada@example.com>\nGrace <grace@example.com>';
 
       function sentEmails() {
-        return mocks.memberNotificationGateway.sendOnboarding.mock.calls.map(
-          ([member]) => member.email,
-        );
+        return vi.mocked(sendOnboarding).mock.calls.map(([, member]) => member.email);
       }
 
       it('waits out the Resend rate limit and resends', async () => {
         vi.useFakeTimers();
-        mocks.memberNotificationGateway.sendOnboarding.mockRejectedValueOnce(
+        vi.mocked(sendOnboarding).mockRejectedValueOnce(
           new ResendRateLimitError('limit', DateTime.now().plus({ minutes: 2 })),
         );
 
         await sut.addOrganizationMembers({ organizationId: organization.id, lines });
         await vi.advanceTimersByTimeAsync(60_000);
-        expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledTimes(1);
+        expect(sendOnboarding).toHaveBeenCalledTimes(1);
 
         await vi.advanceTimersByTimeAsync(60_000);
         expect(sentEmails()).toEqual(['ada@example.com', 'ada@example.com', 'grace@example.com']);
       });
 
+      it('gives up on a member when Resend asks to wait too long', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(sendOnboarding).mockRejectedValueOnce(
+          new ResendRateLimitError('limit', DateTime.now().plus({ days: 1 })),
+        );
+
+        await sut.addOrganizationMembers({ organizationId: organization.id, lines });
+
+        await vi.waitFor(() =>
+          expect(sentEmails()).toEqual(['ada@example.com', 'grace@example.com']),
+        );
+      });
+
       it('moves on to the next member after a non rate limit failure', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
-        mocks.memberNotificationGateway.sendOnboarding.mockRejectedValueOnce(new Error('resend'));
+        vi.mocked(sendOnboarding).mockRejectedValueOnce(new Error('resend'));
 
         await sut.addOrganizationMembers({ organizationId: organization.id, lines });
 

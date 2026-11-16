@@ -1,4 +1,4 @@
-import { byChromaticOrder, hexToHsl } from '$lib/utils/color-order';
+import { byChromaticOrder, hexToHsl } from '$lib/server/utils/color-order';
 import { describe, expect, it } from 'vitest';
 
 function order(hexes: string[]) {

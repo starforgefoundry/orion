@@ -8,7 +8,8 @@
   import Pagination from '$lib/frontend/components/Pagination.svelte';
   import StatusBadge from '$lib/frontend/components/StatusBadge.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
-  import { enumValues, ACCESS_BASIS } from '$lib/utils/member-enums';
+  import { enumValues } from '$lib/utils/enum';
+  import { ACCESS_BASIS } from '$lib/utils/member-enums';
   import { MEMBER_SORT, ONBOARDING_FILTER } from '$lib/utils/member-enums';
   import type { MemberSort } from '$lib/utils/member-enums';
   import MailIcon from '@lucide/svelte/icons/mail';

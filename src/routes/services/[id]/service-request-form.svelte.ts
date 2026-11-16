@@ -1,3 +1,4 @@
+import type { EnumValue } from '$lib/utils/enum';
 import { submitServiceRequestDto } from '$lib/remotes/dtos/service.dto';
 import type { submitServiceRequestForm } from '$lib/remotes/endpoints/service.remote';
 import { fileProblem, type ServiceField } from '$lib/utils/services';
@@ -5,7 +6,7 @@ import { toast } from 'svelte-sonner';
 import * as v from 'valibot';
 
 export const STEPS = { CONTACT: 'contact', DETAILS: 'details' } as const;
-export type Step = (typeof STEPS)[keyof typeof STEPS];
+export type Step = EnumValue<typeof STEPS>;
 
 type RequestForm = ReturnType<typeof submitServiceRequestForm.for>;
 

@@ -1,16 +1,14 @@
 <script lang="ts">
   import { formatCents } from '$lib/utils/billing';
-  import { goto } from '$app/navigation';
   import * as Table from '$lib/components/ui/table';
   import Pagination from '$lib/frontend/components/Pagination.svelte';
   import StatusIndicator from './StatusIndicator.svelte';
   import TextInput from '$lib/frontend/components/form/TextInput.svelte';
   import { DebouncedSearch } from '$lib/frontend/debounced-search.svelte';
-  import { modalManager } from '$lib/frontend/modal-manager.svelte';
   import { pollQuery } from '$lib/frontend/poll-query.svelte';
   import { searchPrintRequests } from '$lib/remotes/endpoints/print-request.remote';
   import SearchIcon from '@lucide/svelte/icons/search';
-  import RequestDetailModal from './RequestDetailModal.svelte';
+  import { openRequest } from './open-request';
   import { PAYMENT_STATUS_DISPLAY } from '$lib/frontend/payment-status';
   import { REQUEST_STATUS_DISPLAY } from './utils';
 
@@ -22,11 +20,6 @@
   let pagination = $derived(printsRequest.current?.pagination);
 
   pollQuery(() => printsRequest);
-
-  function openRequest(requestId: string) {
-    goto(`?id=${requestId}`, { replaceState: true, noScroll: true, keepFocus: true });
-    modalManager.show(RequestDetailModal, { requestId });
-  }
 
   function handleRowKeydown(event: KeyboardEvent, requestId: string) {
     if (event.key !== 'Enter' && event.key !== ' ') return;

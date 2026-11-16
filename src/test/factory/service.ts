@@ -39,6 +39,8 @@ export function serviceRequest(overrides: Partial<ServiceRequest> = {}): Service
     answers: {},
     paymentId: newId(),
     status: SERVICE_REQUEST_STATUS.SUBMITTED,
+    completionDate: null,
+    pickupReminderSentDate: null,
     ...overrides,
   };
 }

@@ -1,7 +1,7 @@
+import { enumValues } from '../../utils/enum';
 import { sql, type InferSelectModel } from 'drizzle-orm';
 import { boolean, foreignKey, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 import {
-  enumValues,
   MEMBER_EMAIL_TRIGGER,
   MEMBER_EMAIL_TYPE,
   SUBSCRIPTION_STATUS,
@@ -674,6 +674,8 @@ export const serviceRequest = pgTable('service_request', {
     .notNull()
     .references(() => payment.id),
   status: text('status', { enum: enumValues(SERVICE_REQUEST_STATUS) }).notNull(),
+  completionDate: luxonTimestamp('completion_date'),
+  pickupReminderSentDate: luxonTimestamp('pickup_reminder_sent_date'),
 });
 
 export type ServiceRequest = InferSelectModel<typeof serviceRequest>;

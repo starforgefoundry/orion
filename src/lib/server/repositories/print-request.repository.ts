@@ -1,10 +1,8 @@
 import { schema, type PrintRequest } from '$lib/server/db/schema';
+import { paginate, type PageRequest } from '$lib/server/db/pagination';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { PRINT_REQUEST_STATUS } from '$lib/utils/print-request';
 import { count, desc, eq, ilike, or } from 'drizzle-orm';
-
-const DEFAULT_PAGE = 1;
-const DEFAULT_PAGE_SIZE = 25;
 
 export type NewPrintRequest = {
   customer: { name: string; email: string };
@@ -15,7 +13,7 @@ export type NewPrintRequest = {
   billingCode?: string;
 };
 
-export type PrintRequestSearch = { query: string; page?: number; pageSize?: number };
+export type PrintRequestSearch = PageRequest & { query: string };
 
 export class PrintRequestRepository extends BaseRepository {
   async submit(dto: NewPrintRequest) {
@@ -52,9 +50,7 @@ export class PrintRequestRepository extends BaseRepository {
   }
 
   async search(dto: PrintRequestSearch) {
-    const pageSize = dto.pageSize ?? DEFAULT_PAGE_SIZE;
-    const currentPage = dto.page ?? DEFAULT_PAGE;
-    const whereClause =
+    const where =
       dto.query.trim() !== ''
         ? or(
             ilike(schema.printRequest.projectName, `%${dto.query}%`),
@@ -63,45 +59,30 @@ export class PrintRequestRepository extends BaseRepository {
           )
         : undefined;
 
-    // Get total count
-    const totalResult = await this.db
-      .select({ count: count() })
-      .from(schema.printRequest)
-      .where(whereClause)
-      .execute();
-
-    const total = totalResult[0]?.count ?? 0;
-
-    // Get paginated results
-    const results = await this.db
-      .select()
-      .from(schema.printRequest)
-      .innerJoin(schema.printMaterial, eq(schema.printRequest.material, schema.printMaterial.id))
-      .leftJoin(schema.payment, eq(schema.printRequest.paymentId, schema.payment.id))
-      .leftJoin(schema.billingCode, eq(schema.printRequest.billingCode, schema.billingCode.code))
-      .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
-      .where(whereClause)
-      .orderBy(desc(schema.printRequest.submissionDate))
-      .limit(pageSize)
-      .offset((currentPage - 1) * pageSize)
-      .execute();
-
-    const data = results.map(({ print_request, print_material, payment }) => ({
-      ...print_request,
-      material: print_material,
-      payment: payment,
-    }));
-
-    const totalPages = Math.ceil(total / pageSize);
+    const { data, pagination } = await paginate(
+      this.db
+        .select({
+          print_request: schema.printRequest,
+          print_material: schema.printMaterial,
+          payment: schema.payment,
+        })
+        .from(schema.printRequest)
+        .innerJoin(schema.printMaterial, eq(schema.printRequest.material, schema.printMaterial.id))
+        .leftJoin(schema.payment, eq(schema.printRequest.paymentId, schema.payment.id))
+        .where(where)
+        .orderBy(desc(schema.printRequest.submissionDate))
+        .$dynamic(),
+      this.db.select({ total: count() }).from(schema.printRequest).where(where),
+      dto,
+    );
 
     return {
-      data,
-      pagination: {
-        total,
-        page: currentPage,
-        pageSize,
-        totalPages,
-      },
+      data: data.map(({ print_request, print_material, payment }) => ({
+        ...print_request,
+        material: print_material,
+        payment,
+      })),
+      pagination,
     };
   }
 
@@ -117,18 +98,18 @@ export class PrintRequestRepository extends BaseRepository {
       )
       .leftJoin(schema.billingCode, eq(schema.printRequest.billingCode, schema.billingCode.code))
       .leftJoin(schema.organization, eq(schema.billingCode.organizationId, schema.organization.id))
-      .orderBy(desc(schema.printRequest.submissionDate))
       .where(eq(schema.printRequest.id, id));
 
-    return result
-      ? {
-          ...result[0].print_request,
-          organization: result[0].organization,
-          payment: result[0].payment,
-          material: result[0].print_material,
-          files: result.map((r) => r.print_request_file).filter((f) => f !== null),
-        }
-      : undefined;
+    const [first] = result;
+    if (!first) return undefined;
+
+    return {
+      ...first.print_request,
+      organization: first.organization,
+      payment: first.payment,
+      material: first.print_material,
+      files: result.map((r) => r.print_request_file).filter((f) => f !== null),
+    };
   }
 
   async update(id: string, updates: Partial<PrintRequest>) {

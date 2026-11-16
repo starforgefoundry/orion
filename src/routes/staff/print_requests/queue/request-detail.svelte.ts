@@ -1,3 +1,4 @@
+import type { EnumValue } from '$lib/utils/enum';
 import { goto } from '$app/navigation';
 import { errorDescription } from '$lib/frontend/form-submit';
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
@@ -7,7 +8,7 @@ import {
   getPrintRequestDownloadUrl,
   updatePrintRequestDiscount,
 } from '$lib/remotes/endpoints/print-request.remote';
-import { PAYMENT_STATUS } from '$lib/utils/billing';
+import { canReleasePayment, PAYMENT_STATUS } from '$lib/utils/billing';
 import { toast } from 'svelte-sonner';
 import CustomerEditModal from './CustomerEditModal.svelte';
 import DiscountCodeModal from './DiscountCodeModal.svelte';
@@ -28,7 +29,7 @@ export const REQUEST_DETAIL_TABS = {
   FILES: 'files',
   COMMENTS: 'comments',
 } as const;
-export type RequestDetailTab = (typeof REQUEST_DETAIL_TABS)[keyof typeof REQUEST_DETAIL_TABS];
+export type RequestDetailTab = EnumValue<typeof REQUEST_DETAIL_TABS>;
 
 export const BILLING_TYPE = { QUOTE: 'Quote', PAYMENT: 'Payment' } as const;
 
@@ -109,7 +110,7 @@ export class RequestDetail {
       !!request &&
       !isClosed(request) &&
       request.status !== STATUS.DONE &&
-      request.payment?.status !== PAYMENT_STATUS.PAID
+      (!request.payment || canReleasePayment(request.payment))
     );
   }
 

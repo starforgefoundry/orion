@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { forEachSettled } from './background';
+import { forEachSettled, runEvery } from './background';
 
 describe(forEachSettled.name, () => {
   afterEach(() => {
@@ -17,5 +17,28 @@ describe(forEachSettled.name, () => {
 
     expect(action.mock.calls.map(([item]) => item)).toEqual(['a', 'b', 'c']);
     expect(logged).toHaveBeenCalledExactlyOnceWith('Failed to send b:', failure);
+  });
+});
+
+describe(runEvery.name, () => {
+  const INTERVAL_MS = 1000;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('skips a tick while the previous run is still going', async () => {
+    vi.useFakeTimers();
+    let finish = () => {};
+    const task = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+    const timer = runEvery(INTERVAL_MS, 'test task', task);
+
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3);
+    expect(task).toHaveBeenCalledOnce();
+
+    finish();
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS);
+    expect(task).toHaveBeenCalledTimes(2);
+    clearInterval(timer);
   });
 });

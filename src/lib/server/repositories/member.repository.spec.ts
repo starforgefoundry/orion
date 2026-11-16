@@ -1,3 +1,5 @@
+import { enumValues } from '$lib/utils/enum';
+import type { MemberSearchFilter } from '$lib/remotes/dtos/member.dto';
 import {
   ACCESS_BASIS,
   MEMBER_EMAIL_TRIGGER,
@@ -6,7 +8,6 @@ import {
   ONBOARDING_FILTER,
   SORT_DIRECTION,
   SUBSCRIPTION_STATUS,
-  enumValues,
 } from '$lib/utils/member-enums';
 import type { Organization, OrganizationMember } from '$lib/server/db/schema';
 import { resolveAccess } from '$lib/server/utils/member-access';
@@ -14,7 +15,7 @@ import { spaceDate } from '$lib/utils/space';
 import { describeWithDatabase, useTestDatabase } from '$test/db';
 import { DateTime } from 'luxon';
 import { beforeEach, expect, it } from 'vitest';
-import { MemberRepository, type MemberSearchFilter } from './member.repository';
+import { MemberRepository } from './member.repository';
 
 const PAGE_SIZE = 100;
 

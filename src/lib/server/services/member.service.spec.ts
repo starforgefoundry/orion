@@ -4,7 +4,10 @@ import { factory } from '$test/factory';
 import { memberAccessContext, organizationAccess } from '$test/factory/member-access';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { sendOnboarding } from '$lib/server/utils/member-notification';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/server/utils/member-notification', { spy: true });
 import { MEMBER_NOT_FOUND, MemberService, SUBSCRIPTION_NOT_FOUND } from './member.service';
 
 const member = factory.member({ name: 'Ada' });
@@ -180,11 +183,11 @@ describe(MemberService.name, () => {
   describe('resendOnboarding', () => {
     it('sends onboarding with the manual trigger', async () => {
       mocks.memberRepository.getById.mockResolvedValue(member);
-      mocks.memberNotificationGateway.sendOnboarding.mockResolvedValue(undefined);
+      vi.mocked(sendOnboarding).mockResolvedValue(undefined);
 
       await sut.resendOnboarding(member.id);
 
-      expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(member, 'manual');
+      expect(sendOnboarding).toHaveBeenCalledWith(sut, member, 'manual');
     });
 
     it('throws when the member does not exist', async () => {
@@ -198,13 +201,13 @@ describe(MemberService.name, () => {
     it('keeps sending after one email fails and reports who failed', async () => {
       const other = factory.member({ name: 'Grace' });
       mocks.memberRepository.getByIds.mockResolvedValue([member, other]);
-      mocks.memberNotificationGateway.sendOnboarding
+      vi.mocked(sendOnboarding)
         .mockRejectedValueOnce(new Error('resend down'))
         .mockResolvedValueOnce(undefined);
 
       const result = await sut.sendOnboardings([member.id, other.id]);
 
-      expect(mocks.memberNotificationGateway.sendOnboarding).toHaveBeenCalledWith(other, 'manual');
+      expect(sendOnboarding).toHaveBeenCalledWith(sut, other, 'manual');
       expect(result).toEqual({ sent: ['Grace'], failed: ['Ada'] });
     });
   });

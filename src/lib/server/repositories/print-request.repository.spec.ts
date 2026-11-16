@@ -28,7 +28,7 @@ describeWithDatabase('PrintRequestRepository.search', () => {
     const byName = await addRequest('Bracket', 'Robin', 2);
     await addRequest('Vase', 'Grace', 3);
 
-    const { data } = await repository.search({ query: 'rob' });
+    const { data } = await repository.search({ query: 'rob', page: 1, pageSize: 25 });
 
     expect(data.map(({ id }) => id)).toEqual([byProject.id, byName.id]);
   });
@@ -37,7 +37,7 @@ describeWithDatabase('PrintRequestRepository.search', () => {
     const older = await addRequest('Vase', 'Grace', 3);
     const newer = await addRequest('Robot Arm', 'Ada', 1);
 
-    const { data } = await repository.search({ query: '  ' });
+    const { data } = await repository.search({ query: '  ', page: 1, pageSize: 25 });
 
     expect(data.map(({ id }) => id)).toEqual([newer.id, older.id]);
   });
@@ -51,5 +51,29 @@ describeWithDatabase('PrintRequestRepository.search', () => {
 
     expect(data.map(({ id }) => id)).toEqual([second.id]);
     expect(pagination).toEqual({ total: 3, page: 2, pageSize: 1, totalPages: 3 });
+  });
+});
+
+describeWithDatabase('PrintRequestRepository.getById', () => {
+  const database = useTestDatabase('print_request');
+  let repository: PrintRequestRepository;
+
+  beforeEach(() => {
+    repository = new PrintRequestRepository(database.db);
+  });
+
+  it('returns nothing for an unknown request', async () => {
+    expect(await repository.getById(crypto.randomUUID())).toBeUndefined();
+  });
+
+  it('returns the request with its material', async () => {
+    const { id: material } = await database.insert.printMaterial();
+    const request = await database.insert.printRequest({ material });
+
+    expect(await repository.getById(request.id)).toMatchObject({
+      id: request.id,
+      material: { id: material },
+      files: [],
+    });
   });
 });

@@ -1,5 +1,6 @@
+import { pageFields } from '$lib/remotes/dtos/pagination.dto';
 import type { Payment, PrintMaterial, PrintRequest, PrintRequestFile } from '$lib/server/db/schema';
-import { enumValues } from '$lib/utils/member-enums';
+import { enumValues } from '$lib/utils/enum';
 import { PRINT_REQUEST_STATUS } from '$lib/utils/print-request';
 import * as v from 'valibot';
 
@@ -97,11 +98,10 @@ export type AddPrintRequestCommentDto = v.InferInput<typeof addPrintRequestComme
 
 export const searchPrintRequestsDto = v.object({
   query: v.string(),
-  page: v.optional(v.number(), 1),
-  pageSize: v.optional(v.number(), 25),
+  ...pageFields(),
 });
 
-export type SearchPrintRequestsDto = v.InferInput<typeof searchPrintRequestsDto>;
+export type SearchPrintRequestsDto = v.InferOutput<typeof searchPrintRequestsDto>;
 
 export type PrintRequestDto = Omit<PrintRequest, 'material'> & {
   payment: Payment | null;

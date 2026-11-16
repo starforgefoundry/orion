@@ -1,3 +1,4 @@
+import type { EnumValue } from '$lib/utils/enum';
 import { KIOSK_CHECK_IN_STATUS, type KioskCheckInResult } from '$lib/remotes/dtos/kiosk.dto';
 import { checkInKiosk } from '$lib/remotes/endpoints/kiosk.remote';
 import { isHttpError } from '@sveltejs/kit';
@@ -21,7 +22,7 @@ export const KIOSK_SCREEN = {
 
 const FORM_SCREENS = new Set<KioskScreen>([KIOSK_SCREEN.WAIVER, KIOSK_SCREEN.PASS_EMAIL]);
 
-export type KioskScreen = (typeof KIOSK_SCREEN)[keyof typeof KIOSK_SCREEN];
+export type KioskScreen = EnumValue<typeof KIOSK_SCREEN>;
 
 export const KIOSK_ERROR = 'error';
 

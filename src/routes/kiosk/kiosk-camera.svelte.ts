@@ -1,4 +1,4 @@
-import { cameraTuning, type CameraTuningCapabilities } from '$lib/utils/kiosk-camera';
+import { cameraTuning, type CameraTuningCapabilities } from '$lib/frontend/kiosk-camera';
 
 export const CAMERA_RETRY_MS = 10_000;
 

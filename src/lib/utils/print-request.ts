@@ -1,5 +1,5 @@
 // Relative imports: the database schema and seed script load this file outside SvelteKit.
-import type { EnumValue } from './member-enums.ts';
+import type { EnumValue } from './enum.ts';
 
 export const PRINT_REQUEST_STATUS = {
   IN_QUEUE: 'in_queue',

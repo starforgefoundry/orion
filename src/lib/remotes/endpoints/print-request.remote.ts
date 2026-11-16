@@ -10,7 +10,7 @@ import {
   updatePrintRequestStatusDto,
 } from '$lib/remotes/dtos/print-request.dto';
 import { payPaymentDto } from '$lib/remotes/dtos/payment.dto';
-import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
+import { exposeUserErrors, staffOnly, verifyAuth } from '$lib/server/remote-utils';
 import { printFilesService } from '$lib/server/services/print-files.service';
 import { printPaymentService } from '$lib/server/services/print-payment.service';
 import { printRequestService } from '$lib/server/services/print-request.service';
@@ -24,27 +24,16 @@ export const submitPrintRequestForm = form(
   }),
 );
 
-export const getPrintRequests = query(
-  exposeUserErrors(async () => {
-    verifyAuth();
-    return await printRequestService.getPrintRequests();
-  }),
-);
+export const getPrintRequests = query(staffOnly(() => printRequestService.getPrintRequests()));
 
 export const searchPrintRequests = query(
   searchPrintRequestsDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-    return await printRequestService.searchPrintRequests(dto);
-  }),
+  staffOnly((dto) => printRequestService.searchPrintRequests(dto)),
 );
 
 export const getPrintRequestById = query(
   v.string(),
-  exposeUserErrors(async (id: string) => {
-    verifyAuth();
-    return await printRequestService.getPrintRequestById(id);
-  }),
+  staffOnly((id: string) => printRequestService.getPrintRequestById(id)),
 );
 
 export const getPrintRequestStatus = query(
@@ -74,9 +63,7 @@ export const payPrintRequest = command(
 
 export const updatePrintRequest = command(
   v.intersect([updatePrintRequestDto, v.object({ id: v.string() })]),
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-
+  staffOnly(async (dto) => {
     const { id, ...updates } = dto;
     const response = await printRequestService.updatePrintRequest(id, updates);
 
@@ -89,9 +76,7 @@ export const updatePrintRequest = command(
 
 export const updatePrintRequestDiscount = command(
   v.intersect([updatePrintRequestDiscountDto, v.object({ id: v.string() })]),
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-
+  staffOnly(async (dto) => {
     const { id, ...updates } = dto;
     const response = await printPaymentService.updatePrintRequestDiscount(id, updates);
 
@@ -104,9 +89,7 @@ export const updatePrintRequestDiscount = command(
 
 export const updatePrintRequestStatus = command(
   v.intersect([updatePrintRequestStatusDto, v.object({ id: v.string() })]),
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-
+  staffOnly(async (dto) => {
     const { id, ...updates } = dto;
     const response = await printRequestService.updatePrintRequestStatus(id, updates);
     await getPrintRequests().refresh();
@@ -117,9 +100,7 @@ export const updatePrintRequestStatus = command(
 
 export const updatePartQuantity = command(
   v.intersect([v.object({ id: v.string() }), updatePartQuantityDto]),
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-
+  staffOnly(async (dto) => {
     const { id, ...update } = dto;
     const response = await printRequestService.updatePartQuantity(update);
 
@@ -132,18 +113,14 @@ export const updatePartQuantity = command(
 
 export const getPrintRequestDownloadUrl = query(
   v.string(),
-  exposeUserErrors(async (printRequestId: string) => {
-    verifyAuth();
-
+  staffOnly(async (printRequestId: string) => {
     return printFilesService.getDownloadUrl(printRequestId);
   }),
 );
 
 export const getPrintRequestComments = query(
   v.string(),
-  exposeUserErrors(async (printRequestId: string) => {
-    verifyAuth();
-
+  staffOnly(async (printRequestId: string) => {
     return await printRequestCommentService.getForRequest(printRequestId);
   }),
 );
@@ -162,9 +139,7 @@ export const addPrintRequestCommentForm = form(
 
 export const sendPickupNotification = command(
   v.string(),
-  exposeUserErrors(async (printRequestId: string) => {
-    verifyAuth();
-
+  staffOnly(async (printRequestId: string) => {
     return await printRequestService.sendPickupNotification(printRequestId);
   }),
 );

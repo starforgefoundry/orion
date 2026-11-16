@@ -20,6 +20,7 @@
   import CalendarIcon from '@lucide/svelte/icons/calendar';
   import CarIcon from '@lucide/svelte/icons/car';
   import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
+  import ConciergeBellIcon from '@lucide/svelte/icons/concierge-bell';
   import CreditCardIcon from '@lucide/svelte/icons/credit-card';
   import Printer3dIcon from '@lucide/svelte/icons/printer-3d';
   import TabletIcon from '@lucide/svelte/icons/tablet';
@@ -46,6 +47,7 @@
     CLASSES: 'classes',
     CAR_BAY: 'car-bay',
     MEMBERS: 'members',
+    SERVICES: 'services',
     KIOSK: 'kiosk',
   } as const;
   type SectionId = (typeof SECTIONS)[keyof typeof SECTIONS];
@@ -107,6 +109,16 @@
       emailTemplates: {
         group: EMAIL_TEMPLATE_GROUP.MEMBERS,
         description: 'Emails sent to members to set up their pass.',
+      },
+    },
+    {
+      id: SECTIONS.SERVICES,
+      title: 'Services',
+      description: 'Emails for service requests.',
+      icon: ConciergeBellIcon,
+      emailTemplates: {
+        group: EMAIL_TEMPLATE_GROUP.SERVICES,
+        description: 'Emails sent to customers as their service request moves along.',
       },
     },
     {

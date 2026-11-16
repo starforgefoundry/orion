@@ -71,6 +71,13 @@
       "when": 1794797873125,
       "tag": "0009_remove_payment_reminder_template",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794802828861,
+      "tag": "0010_service_completion",
+      "breakpoints": true
     }
   ]
 }

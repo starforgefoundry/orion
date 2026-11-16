@@ -2,7 +2,10 @@ import { SPACE_ZONE } from '$lib/utils/space';
 import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import { DateTime } from 'luxon';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { sendTemplate } from '$lib/server/utils/email';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/server/utils/email', { spy: true });
 import { ClassService } from './class.service';
 
 const NOW = DateTime.fromISO('2026-10-12T09:00', { zone: SPACE_ZONE });
@@ -36,8 +39,9 @@ describe(ClassService.name, () => {
     }
 
     beforeEach(() => {
-      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
-      mocks.classRepository.updateBooking.mockResolvedValue(factory.classBooking());
+      vi.mocked(sendTemplate).mockResolvedValue(undefined as never);
+      mocks.classRepository.claimReminder.mockResolvedValue(true);
+      mocks.classRepository.releaseReminder.mockResolvedValue();
     });
 
     it('looks at classes from today through tomorrow', async () => {
@@ -58,7 +62,8 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledExactlyOnceWith(
+      expect(sendTemplate).toHaveBeenCalledExactlyOnceWith(
+        sut,
         'customer@example.com',
         {
           from: 'Starforge Classes <classes@starforgefoundry.com>',
@@ -73,9 +78,7 @@ describe(ClassService.name, () => {
           passQrImageUrl: 'https://orion.example.com/api/pass/pass-due/qr',
         }),
       );
-      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('due', {
-        reminderSentDate: NOW,
-      });
+      expect(mocks.classRepository.claimReminder).toHaveBeenCalledWith('due', NOW);
     });
 
     it('skips classes that already started or are more than 24 hours out', async () => {
@@ -86,7 +89,7 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
 
     it('skips bookings made inside the reminder window', async () => {
@@ -96,7 +99,7 @@ describe(ClassService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(sendTemplate).not.toHaveBeenCalled();
     });
 
     it('keeps going when one reminder fails', async () => {
@@ -104,17 +107,12 @@ describe(ClassService.name, () => {
         candidate(NOW.plus({ hours: 20 }), NOW.minus({ days: 3 }), 'fails'),
         candidate(NOW.plus({ hours: 21 }), NOW.minus({ days: 3 }), 'sends'),
       ]);
-      mocks.resendGateway.sendTemplate.mockRejectedValueOnce(new Error('resend down'));
+      vi.mocked(sendTemplate).mockRejectedValueOnce(new Error('resend down'));
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.classRepository.updateBooking).not.toHaveBeenCalledWith(
-        'fails',
-        expect.anything(),
-      );
-      expect(mocks.classRepository.updateBooking).toHaveBeenCalledWith('sends', {
-        reminderSentDate: NOW,
-      });
+      expect(mocks.classRepository.releaseReminder).toHaveBeenCalledExactlyOnceWith('fails');
+      expect(sendTemplate).toHaveBeenCalledTimes(2);
     });
   });
 });

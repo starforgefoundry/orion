@@ -1,4 +1,5 @@
 import { schema, type Waiver } from '$lib/server/db/schema';
+import { paginate, type PageRequest } from '$lib/server/db/pagination';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { fileUrl, saveFile } from '$lib/server/utils/storage';
 import { spaceDate } from '$lib/utils/space';
@@ -36,8 +37,8 @@ export class WaiverRepository extends BaseRepository {
     return waiver;
   }
 
-  async getAll(dto: { query: string; page: number; pageSize: number }) {
-    const whereClause =
+  async getAll(dto: PageRequest & { query: string }) {
+    const where =
       dto.query.trim() !== ''
         ? or(
             ilike(schema.waiver.name, `%${dto.query}%`),
@@ -45,33 +46,20 @@ export class WaiverRepository extends BaseRepository {
           )
         : undefined;
 
-    const totalResult = await this.db
-      .select({ count: count() })
-      .from(schema.waiver)
-      .where(whereClause)
-      .execute();
-
-    const total = totalResult[0]?.count ?? 0;
-
-    const results = await this.db
-      .select()
-      .from(schema.waiver)
-      .where(whereClause)
-      .orderBy(desc(schema.waiver.signedDate), asc(schema.waiver.name))
-      .limit(dto.pageSize)
-      .offset((dto.page - 1) * dto.pageSize)
-      .execute();
-
-    const totalPages = Math.ceil(total / dto.pageSize);
+    const { data, pagination } = await paginate(
+      this.db
+        .select()
+        .from(schema.waiver)
+        .where(where)
+        .orderBy(desc(schema.waiver.signedDate), asc(schema.waiver.name))
+        .$dynamic(),
+      this.db.select({ total: count() }).from(schema.waiver).where(where),
+      dto,
+    );
 
     return {
-      data: results.map((w) => ({ ...w, signatureUrl: fileUrl(w.signatureUrl) })),
-      pagination: {
-        total,
-        page: dto.page,
-        pageSize: dto.pageSize,
-        totalPages,
-      },
+      data: data.map((w) => ({ ...w, signatureUrl: fileUrl(w.signatureUrl) })),
+      pagination,
     };
   }
 

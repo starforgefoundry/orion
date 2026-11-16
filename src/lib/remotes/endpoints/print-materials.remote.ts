@@ -5,21 +5,14 @@ import {
   updateAMSDto,
   updatePrintMaterialDto,
 } from '$lib/remotes/dtos/print-materials.dto';
-import { exposeUserErrors, verifyAuth } from '$lib/server/remote-utils';
+import { staffOnly } from '$lib/server/remote-utils';
 import { printMaterialsService } from '$lib/server/services/print-materials.service';
 
-export const getPrintMaterials = query(
-  exposeUserErrors(async () => {
-    verifyAuth();
-    return await printMaterialsService.getMaterials();
-  }),
-);
+export const getPrintMaterials = query(staffOnly(() => printMaterialsService.getMaterials()));
 
 export const createPrintMaterial = command(
   createPrintMaterialDto,
-  exposeUserErrors(async (data) => {
-    verifyAuth();
-
+  staffOnly(async (data) => {
     const material = await printMaterialsService.createMaterial(data);
     await getPrintMaterials().refresh();
 
@@ -29,9 +22,7 @@ export const createPrintMaterial = command(
 
 export const updatePrintMaterial = command(
   updatePrintMaterialDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-
+  staffOnly(async (dto) => {
     const { id, ...updates } = dto;
 
     const response = await printMaterialsService.updateMaterial(id, updates);
@@ -43,9 +34,7 @@ export const updatePrintMaterial = command(
 
 export const setMaterialSetup = command(
   setMaterialSetupDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-
+  staffOnly(async (dto) => {
     const response = await printMaterialsService.setSetup(dto);
     await getPrintMaterials().refresh();
 
@@ -54,17 +43,12 @@ export const setMaterialSetup = command(
 );
 
 export const getFilamentCatalog = query(
-  exposeUserErrors(async () => {
-    verifyAuth();
-    return await printMaterialsService.getFilamentCatalog();
-  }),
+  staffOnly(() => printMaterialsService.getFilamentCatalog()),
 );
 
 export const updateAMSForPrinter = command(
   updateAMSDto,
-  exposeUserErrors(async (dto) => {
-    verifyAuth();
-
+  staffOnly(async (dto) => {
     const { printer_id, ...updates } = dto;
 
     return await printMaterialsService.updateAMS(printer_id, updates);

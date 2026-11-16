@@ -1,4 +1,4 @@
-import { enumValues } from '$lib/utils/member-enums';
+import { enumValues } from '$lib/utils/enum';
 import {
   answerProblem,
   fileUploadLimitMB,

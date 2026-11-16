@@ -4,8 +4,8 @@ import {
   type MemberEmailTrigger,
 } from '$lib/utils/member-enums';
 import type { DayPass, Member } from '$lib/server/db/schema';
-import type { ResendGateway } from '$lib/server/gateways/resend.gateway';
 import type { MemberEmailRepository } from '$lib/server/repositories/member-email.repository';
+import { sendTemplate, type EmailRepositories } from '$lib/server/utils/email';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import { onboardingUrl, passLinks } from '$lib/server/utils/member-links';
 import type { EmailTemplateKey } from '$lib/utils/email-templates';
@@ -32,36 +32,36 @@ const ONBOARDING_INTRO: Record<MemberEmailTrigger, string> = {
   [MEMBER_EMAIL_TRIGGER.SELF_SERVICE]: 'Here is the member pass link you asked for.',
 };
 
-/** Emails members their passes and records each send. */
-export class MemberNotificationGateway {
-  constructor(
-    private readonly resendGateway: ResendGateway,
-    private readonly memberEmailRepository: MemberEmailRepository,
-  ) {}
+export type MemberNotificationRepositories = EmailRepositories & {
+  memberEmailRepository: MemberEmailRepository;
+};
 
-  async sendOnboarding(member: Member, trigger: MemberEmailTrigger): Promise<void> {
-    await this.resendGateway.sendTemplate(
-      member.email,
-      SENDERS.members,
-      ONBOARDING_TEMPLATE[trigger],
-      {
-        memberName: member.name,
-        introMessage: ONBOARDING_INTRO[trigger],
-        onboardingUrl: onboardingUrl(member),
-      },
-    );
-    await this.memberEmailRepository.log(member.id, MEMBER_EMAIL_TYPE.ONBOARDING, trigger);
-  }
+/** Emails a member their pass setup link and records the send. */
+export async function sendOnboarding(
+  repos: MemberNotificationRepositories,
+  member: Member,
+  trigger: MemberEmailTrigger,
+): Promise<void> {
+  await sendTemplate(repos, member.email, SENDERS.members, ONBOARDING_TEMPLATE[trigger], {
+    memberName: member.name,
+    introMessage: ONBOARDING_INTRO[trigger],
+    onboardingUrl: onboardingUrl(member),
+  });
+  await repos.memberEmailRepository.log(member.id, MEMBER_EMAIL_TYPE.ONBOARDING, trigger);
+}
 
-  async sendDayPass(member: Member, dayPass: DayPass): Promise<void> {
-    await this.resendGateway.sendTemplate(member.email, SENDERS.members, DAY_PASS_TEMPLATE, {
-      memberName: member.name,
-      ...passLinks(dayPass),
-    });
-    await this.memberEmailRepository.log(
-      member.id,
-      MEMBER_EMAIL_TYPE.DAY_PASS,
-      MEMBER_EMAIL_TRIGGER.DAY_PASS,
-    );
-  }
+export async function sendDayPass(
+  repos: MemberNotificationRepositories,
+  member: Member,
+  dayPass: DayPass,
+): Promise<void> {
+  await sendTemplate(repos, member.email, SENDERS.members, DAY_PASS_TEMPLATE, {
+    memberName: member.name,
+    ...passLinks(dayPass),
+  });
+  await repos.memberEmailRepository.log(
+    member.id,
+    MEMBER_EMAIL_TYPE.DAY_PASS,
+    MEMBER_EMAIL_TRIGGER.DAY_PASS,
+  );
 }

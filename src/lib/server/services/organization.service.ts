@@ -8,12 +8,14 @@ import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization-charges.
 import { NotFoundError, UserError } from '$lib/errors';
 import { MEMBER_EMAIL_TRIGGER } from '$lib/utils/member-enums';
 import type { Member, Payment } from '$lib/server/db/schema';
-import { ResendRateLimitError } from '$lib/server/gateways/resend.gateway';
+import { ResendRateLimitError } from '$lib/server/repositories/resend.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { accessEndOfDay } from '$lib/server/utils/member-access';
 import { parseMemberLines, type ParsedMemberLine } from '$lib/server/utils/member-lines';
+import { sendOnboarding } from '$lib/server/utils/member-notification';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { sendTemplate } from '$lib/server/utils/email';
 import { paymentLink, payUrl } from '$lib/server/utils/payment-links';
 import {
   buildBill,
@@ -22,12 +24,14 @@ import {
   PAYMENT_TYPE,
   type PaymentStatus,
 } from '$lib/utils/billing';
+import { DateTime } from 'luxon';
 
 export const ORGANIZATION_NOT_FOUND = 'Organization not found';
 export const ORGANIZATION_CHARGE_TYPE = { PRINT: 'print', CHARGE: 'charge' } as const;
 /** Staff charges are billed as soon as they are added. */
 const CHARGED_STATUS = 'charged';
-const MAX_RATE_LIMIT_ATTEMPTS = 5;
+/** How long one member's email may wait on Resend's rate limit before it is skipped. */
+const RATE_LIMIT_PATIENCE = { minutes: 10 };
 const BALANCE_LINE_ITEM_NAME = 'Organization Balance Payment';
 const OWED_STATUSES = new Set<PaymentStatus>([
   PAYMENT_STATUS.PENDING,
@@ -151,23 +155,20 @@ export class OrganizationService extends BaseService {
   private async sendOrganizationOnboardings(members: Member[]) {
     for (const member of members) {
       try {
-        await this.sendOrganizationOnboarding(member, MAX_RATE_LIMIT_ATTEMPTS);
+        await this.sendOrganizationOnboarding(member, DateTime.now().plus(RATE_LIMIT_PATIENCE));
       } catch (error) {
         console.error(`Onboarding email failed for ${member.email}`, error);
       }
     }
   }
 
-  private async sendOrganizationOnboarding(member: Member, attemptsLeft: number): Promise<void> {
+  private async sendOrganizationOnboarding(member: Member, giveUpAt: DateTime): Promise<void> {
     try {
-      await this.memberNotificationGateway.sendOnboarding(
-        member,
-        MEMBER_EMAIL_TRIGGER.ORGANIZATION,
-      );
+      await sendOnboarding(this, member, MEMBER_EMAIL_TRIGGER.ORGANIZATION);
     } catch (error) {
-      if (!(error instanceof ResendRateLimitError) || attemptsLeft <= 1) throw error;
+      if (!(error instanceof ResendRateLimitError) || error.retryAt > giveUpAt) throw error;
       await sleep(Math.max(error.retryAt.diffNow().toMillis(), 0));
-      await this.sendOrganizationOnboarding(member, attemptsLeft - 1);
+      await this.sendOrganizationOnboarding(member, giveUpAt);
     }
   }
 
@@ -201,16 +202,11 @@ export class OrganizationService extends BaseService {
       organizationId: organization.id,
     });
 
-    await this.resendGateway.sendTemplate(
-      organization.email,
-      SENDERS.foundry,
-      'organization_balance',
-      {
-        organizationName: organization.name,
-        total: centsToDollars(payment.total),
-        paymentUrl: payUrl(payment),
-      },
-    );
+    await sendTemplate(this, organization.email, SENDERS.foundry, 'organization_balance', {
+      organizationName: organization.name,
+      total: centsToDollars(payment.total),
+      paymentUrl: payUrl(payment),
+    });
 
     return payment;
   }

@@ -1,8 +1,9 @@
 import { schema } from '$lib/server/db/schema';
 import { BaseRepository } from '$lib/server/repositories/base.repository';
 import { saveFile } from '$lib/server/utils/storage';
-import { storageFileName } from '$lib/utils/services';
-import { desc, eq, type InferInsertModel } from 'drizzle-orm';
+import { SERVICE_REQUEST_STATUS, storageFileName } from '$lib/utils/services';
+import { and, desc, eq, isNull, lte, type InferInsertModel } from 'drizzle-orm';
+import type { DateTime } from 'luxon';
 
 export class ServiceRepository extends BaseRepository {
   // ── Catalog ──
@@ -79,6 +80,39 @@ export class ServiceRepository extends BaseRepository {
 
   async getRequests() {
     return await this.selectRequests().orderBy(desc(schema.serviceRequest.submissionDate));
+  }
+
+  /** Requests that have waited for pickup since before `doneBefore`, not yet reminded. */
+  async getPickupReminderCandidates(doneBefore: DateTime) {
+    return await this.selectRequests().where(
+      and(
+        eq(schema.serviceRequest.status, SERVICE_REQUEST_STATUS.DONE),
+        lte(schema.serviceRequest.completionDate, doneBefore),
+        isNull(schema.serviceRequest.pickupReminderSentDate),
+      ),
+    );
+  }
+
+  /** Marks the pickup reminder sent unless another sweep already did. */
+  async claimPickupReminder(requestId: string, now: DateTime) {
+    const claimed = await this.db
+      .update(schema.serviceRequest)
+      .set({ pickupReminderSentDate: now })
+      .where(
+        and(
+          eq(schema.serviceRequest.id, requestId),
+          isNull(schema.serviceRequest.pickupReminderSentDate),
+        ),
+      )
+      .returning({ id: schema.serviceRequest.id });
+    return claimed.length > 0;
+  }
+
+  async releasePickupReminder(requestId: string) {
+    await this.db
+      .update(schema.serviceRequest)
+      .set({ pickupReminderSentDate: null })
+      .where(eq(schema.serviceRequest.id, requestId));
   }
 
   async uploadRequestFile(requestId: string, fieldId: string, file: File) {

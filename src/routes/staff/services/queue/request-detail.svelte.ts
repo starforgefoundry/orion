@@ -1,19 +1,20 @@
+import type { EnumValue } from '$lib/utils/enum';
 import { goto } from '$app/navigation';
 import { submitWithToast } from '$lib/frontend/form-submit';
 import { getServiceRequests, priceServiceRequest } from '$lib/remotes/endpoints/service.remote';
+import { canReleasePayment, PAYMENT_STATUS } from '$lib/utils/billing';
 import {
   awaitingQuote,
   canQuote,
-  isCancelable,
   quoteRequired,
   type ServiceRequestStatus,
 } from '$lib/utils/services';
 import { toast } from 'svelte-sonner';
 import { cancelRequest, changeStatus } from './request-actions';
-import { BOARD_STATUSES, REQUEST_STATUS_DISPLAY, STATUS } from './utils';
+import { REQUEST_STATUS_DISPLAY, STATUS, WORK_STATUSES } from './utils';
 
 export const REQUEST_DETAIL_TABS = { DETAILS: 'details', CUSTOMER: 'customer' } as const;
-export type RequestDetailTab = (typeof REQUEST_DETAIL_TABS)[keyof typeof REQUEST_DETAIL_TABS];
+export type RequestDetailTab = EnumValue<typeof REQUEST_DETAIL_TABS>;
 
 export class ServiceRequestDetail {
   activeTab = $state<RequestDetailTab>(REQUEST_DETAIL_TABS.DETAILS);
@@ -72,18 +73,24 @@ export class ServiceRequestDetail {
 
   get statusOptions() {
     const row = this.row;
-    return BOARD_STATUSES.filter((status) => !row || !quoteRequired(row.payment, status)).map(
-      (status) => ({ value: status, label: REQUEST_STATUS_DISPLAY[status].label }),
-    );
+    const isPaid = row?.payment.status === PAYMENT_STATUS.PAID;
+    return WORK_STATUSES.filter((status) => !row || !quoteRequired(row.payment, status))
+      .filter((status) => status !== STATUS.PICKED_UP || isPaid)
+      .map((status) => ({ value: status, label: REQUEST_STATUS_DISPLAY[status].label }));
   }
 
   get canChangeStatus() {
     return !!this.row && this.row.request.status !== STATUS.CANCELED;
   }
 
-  /** The server only cancels unpaid requests, so the button follows the same rule. */
+  /** A card being charged must finish before the request can be canceled. */
   get canCancel() {
-    return this.canChangeStatus && !!this.row && isCancelable(this.row.payment);
+    return (
+      this.canChangeStatus &&
+      !!this.row &&
+      this.row.request.status !== STATUS.PICKED_UP &&
+      canReleasePayment(this.row.payment)
+    );
   }
 
   close() {

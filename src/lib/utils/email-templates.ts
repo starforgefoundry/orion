@@ -1,11 +1,14 @@
+import type { EnumValue } from './enum.ts';
+
 export const EMAIL_TEMPLATE_GROUP = {
   PRINTING: 'printing',
   CLASSES: 'classes',
   CAR_BAY: 'car_bay',
   MEMBERS: 'members',
   PAYMENTS: 'payments',
+  SERVICES: 'services',
 } as const;
-export type EmailTemplateGroup = (typeof EMAIL_TEMPLATE_GROUP)[keyof typeof EMAIL_TEMPLATE_GROUP];
+export type EmailTemplateGroup = EnumValue<typeof EMAIL_TEMPLATE_GROUP>;
 
 /** `example` fills the variable in the settings preview. */
 export type TemplateVariable = { description: string; example: string };
@@ -131,6 +134,20 @@ export const EMAIL_TEMPLATE_DEFINITIONS = {
         example: 'Your print has been paid for.',
       },
       statusURL: PRINT_STATUS_URL,
+    },
+  },
+  service_ready: {
+    name: 'Service Ready',
+    description: 'Sent when staff mark a service request as done.',
+    group: EMAIL_TEMPLATE_GROUP.SERVICES,
+    variables: {
+      customerName: CUSTOMER_NAME,
+      serviceName: { description: 'Name of the service requested', example: 'Laser Cutting' },
+      paymentNote: {
+        description: 'A sentence about payment: paid or still due',
+        example: 'You can see your request and its cost breakdown here:',
+      },
+      paymentUrl: PAYMENT_URL,
     },
   },
   class_booking: {

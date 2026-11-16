@@ -1,3 +1,4 @@
+import type { EnumValue } from '$lib/utils/enum';
 import { submitWithToast } from '$lib/frontend/form-submit';
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
 import {
@@ -18,7 +19,7 @@ export const ORGANIZATION_TABS = {
   MEMBERS: 'members',
   GROUP_CODES: 'group_codes',
 } as const;
-export type OrganizationTab = (typeof ORGANIZATION_TABS)[keyof typeof ORGANIZATION_TABS];
+export type OrganizationTab = EnumValue<typeof ORGANIZATION_TABS>;
 
 export const CHARGES_PER_PAGE = 10;
 

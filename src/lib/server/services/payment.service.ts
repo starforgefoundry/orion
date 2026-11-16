@@ -2,6 +2,7 @@ import { env } from '$env/dynamic/private';
 import type { PayPaymentDto } from '$lib/remotes/dtos/payment.dto';
 import type { Payment } from '$lib/server/db/schema';
 import { PaymentStateError } from '$lib/server/repositories/payment.repository';
+import { chargePayment } from '$lib/server/utils/payment';
 import { BaseService } from '$lib/server/services/base.service';
 import { squareWebSdkUrl } from '$lib/server/utils/square';
 import { isPayableOnline, PAYMENT_TYPE, type PaymentType } from '$lib/utils/billing';
@@ -55,7 +56,7 @@ export class PaymentService extends BaseService {
       throw new PaymentStateError('This payment cannot be paid online');
     }
 
-    return toCheckout(await this.paymentGateway.pay(payment, dto.sourceId));
+    return toCheckout(await chargePayment(this, payment, dto.sourceId));
   }
 }
 

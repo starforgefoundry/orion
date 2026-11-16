@@ -18,3 +18,18 @@ export async function forEachSettled<T>(
     }
   }
 }
+
+/** Runs `task` every `intervalMs`, skipping a tick while the previous run is still going. */
+export function runEvery(intervalMs: number, label: string, task: () => Promise<unknown>) {
+  let running: Promise<unknown> | null = null;
+  const timer = setInterval(() => {
+    if (running) return;
+    running = task()
+      .catch((error) => console.error(`Background task failed (${label}):`, error))
+      .finally(() => {
+        running = null;
+      });
+  }, intervalMs);
+  timer.unref();
+  return timer;
+}

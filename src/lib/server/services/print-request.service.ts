@@ -5,26 +5,18 @@ import type {
   UpdatePrintRequestDto,
   UpdatePrintRequestStatusDto,
 } from '$lib/remotes/dtos/print-request.dto';
-import type { Payment, PrintRequest } from '$lib/server/db/schema';
+import type { PrintRequest } from '$lib/server/db/schema';
 import { NotFoundError, UserError } from '$lib/errors';
 import { DISCORD_COLOR } from '$lib/server/repositories/discord.repository';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
+import { sendTemplate } from '$lib/server/utils/email';
 import { printQueueUrl, printRequestStatusUrl } from '$lib/server/utils/payment-links';
-import { PAYMENT_STATUS, quoteRequiresCard } from '$lib/utils/billing';
+import { readyPaymentNote, releasePayment } from '$lib/server/utils/work-order';
+import { quoteRequiresCard } from '$lib/utils/billing';
 import { PRINT_REQUEST_STATUS, printSubmissionProblem } from '$lib/utils/print-request';
 import { DateTime } from 'luxon';
-
-function pickupPaymentNote(payment: Payment | null) {
-  if (payment?.organizationId) {
-    return 'This print is billed to your organization, so there is nothing for you to pay. You can check on it here:';
-  }
-  if (payment?.status === PAYMENT_STATUS.PENDING) {
-    return 'Please pay before you pick it up. You can see the cost breakdown and pay here:';
-  }
-  return 'You can see your print request and its cost breakdown here:';
-}
 
 export class PrintSubmissionError extends UserError {}
 
@@ -85,9 +77,7 @@ export class PrintRequestService extends BaseService {
     if (dto.status === PRINT_REQUEST_STATUS.CANCELED) {
       updates.completionDate = DateTime.now();
 
-      if (payment) {
-        await this.paymentGateway.cancel(payment);
-      }
+      if (payment) await releasePayment(this, payment);
     }
 
     const updated = await this.printRequestRepository.update(id, updates);
@@ -105,9 +95,9 @@ export class PrintRequestService extends BaseService {
       throw new NotFoundError('Print request not found');
     }
 
-    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'print_pickup', {
+    await sendTemplate(this, request.email, SENDERS.print, 'print_pickup', {
       projectName: request.projectName,
-      paymentNote: pickupPaymentNote(request.payment),
+      paymentNote: readyPaymentNote(request.payment),
       statusURL: printRequestStatusUrl(request.id),
     });
   }
@@ -118,7 +108,7 @@ export class PrintRequestService extends BaseService {
       throw new Error('Print request not found');
     }
 
-    await this.resendGateway.sendTemplate(request.email, SENDERS.print, 'print_submitted', {
+    await sendTemplate(this, request.email, SENDERS.print, 'print_submitted', {
       customerName: request.customerName,
       projectName: request.projectName,
       statusURL: printRequestStatusUrl(request.id),

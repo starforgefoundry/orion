@@ -74,10 +74,10 @@ describe(RequestDetail.name, () => {
     expect(detail.hasFooterActions).toBe(false);
   });
 
-  it('only cancels open, unpaid requests', () => {
+  it('cancels open requests, paid or not', () => {
     expect(detailFor({}).detail.canCancel).toBe(true);
+    expect(detailFor({ payment: PAYMENT_STATUS.PAID }).detail.canCancel).toBe(true);
     expect(detailFor({ status: PRINT_REQUEST_STATUS.DONE }).detail.canCancel).toBe(false);
-    expect(detailFor({ payment: PAYMENT_STATUS.PAID }).detail.canCancel).toBe(false);
   });
 
   it('asks for a quote before one is sent', () => {

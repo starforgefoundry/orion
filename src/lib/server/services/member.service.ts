@@ -8,6 +8,7 @@ import { ACCESS_BASIS, MEMBER_EMAIL_TRIGGER, VISIT_SOURCE } from '$lib/utils/mem
 import { NotFoundError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
 import { resolveAccess } from '$lib/server/utils/member-access';
+import { sendOnboarding } from '$lib/server/utils/member-notification';
 import { spaceDate } from '$lib/utils/space';
 import { DateTime } from 'luxon';
 
@@ -57,11 +58,11 @@ export class MemberService extends BaseService {
   }
 
   async listMemberVisits(dto: MemberVisitsDto) {
-    return await this.visitRepository.listByMember(dto.memberId, dto.page, dto.pageSize);
+    return await this.visitRepository.listByMember(dto.memberId, dto);
   }
 
   async listRecentVisits(dto: RecentVisitsDto) {
-    return await this.visitRepository.listRecent(dto.page, dto.pageSize);
+    return await this.visitRepository.listRecent(dto);
   }
 
   /** A refund also ends access right away; otherwise access lasts through the paid period. */
@@ -85,16 +86,14 @@ export class MemberService extends BaseService {
   async resendOnboarding(memberId: string) {
     const member = await this.memberRepository.getById(memberId);
     if (!member) throw new NotFoundError(MEMBER_NOT_FOUND);
-    await this.memberNotificationGateway.sendOnboarding(member, MEMBER_EMAIL_TRIGGER.MANUAL);
+    await sendOnboarding(this, member, MEMBER_EMAIL_TRIGGER.MANUAL);
   }
 
   /** One failed email does not stop the rest; failures come back by member name. */
   async sendOnboardings(memberIds: string[]) {
     const members = await this.memberRepository.getByIds(memberIds);
     const results = await Promise.allSettled(
-      members.map((member) =>
-        this.memberNotificationGateway.sendOnboarding(member, MEMBER_EMAIL_TRIGGER.MANUAL),
-      ),
+      members.map((member) => sendOnboarding(this, member, MEMBER_EMAIL_TRIGGER.MANUAL)),
     );
     const failed = members.filter((_, index) => results[index].status === 'rejected');
     return {

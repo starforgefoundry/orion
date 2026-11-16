@@ -1,7 +1,7 @@
 export const CENTS_PER_DOLLAR = 100;
 const PERCENT = 100;
 
-type EnumValue<T> = T[keyof T];
+import type { EnumValue } from './enum.ts';
 
 export const PAYMENT_TYPE = {
   PRINT_REQUEST: 'print_request',
@@ -103,4 +103,15 @@ export function isPayableOnline(payment: OnlinePayment) {
 /** A quote the customer will owe money on is only approved by paying it. */
 export function quoteRequiresCard(quote: OnlinePayment & { total: number }) {
   return quote.total > 0 && isPayableOnline({ ...quote, status: PAYMENT_STATUS.PENDING });
+}
+
+const RELEASABLE_STATUSES: PaymentStatus[] = [
+  PAYMENT_STATUS.QUOTE,
+  PAYMENT_STATUS.PENDING,
+  PAYMENT_STATUS.PAID,
+];
+
+/** Unpaid bills are canceled and paid ones refunded. A card being charged must finish first. */
+export function canReleasePayment(payment: { status: PaymentStatus }) {
+  return RELEASABLE_STATUSES.includes(payment.status);
 }

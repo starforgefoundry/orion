@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   amountPaid,
   buildBill,
+  canReleasePayment,
   initialStatus,
   isPayableOnline,
   lineItemsTotal,
@@ -123,4 +124,19 @@ describe('quoteRequiresCard', () => {
   ])('approves a quote that %s without a card', (_, overrides) => {
     expect(quoteRequiresCard({ ...QUOTE, ...overrides })).toBe(false);
   });
+});
+describe('canReleasePayment', () => {
+  it.each([PAYMENT_STATUS.QUOTE, PAYMENT_STATUS.PENDING, PAYMENT_STATUS.PAID])(
+    'releases a %s payment',
+    (status) => {
+      expect(canReleasePayment({ status })).toBe(true);
+    },
+  );
+
+  it.each([PAYMENT_STATUS.PROCESSING, PAYMENT_STATUS.CANCELED, PAYMENT_STATUS.REFUNDED])(
+    'does not release a %s payment',
+    (status) => {
+      expect(canReleasePayment({ status })).toBe(false);
+    },
+  );
 });

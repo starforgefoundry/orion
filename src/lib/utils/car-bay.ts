@@ -2,7 +2,10 @@
 import { UserError } from '../errors.ts';
 import { SPACE_ZONE, spaceDate } from './space.ts';
 import { CENTS_PER_DOLLAR, type BillingLineItem } from './billing.ts';
+import type { EnumValue } from './enum.ts';
+import type { carBayPolicyDto, carBayRatesDto } from '../remotes/dtos/settings.dto.ts';
 import { DateTime } from 'luxon';
+import type * as v from 'valibot';
 
 const WEEKEND_DAYS = [6, 7];
 
@@ -12,7 +15,7 @@ export const CAR_BAY_TIER = {
   FULL_DAY: 'full_day',
 } as const;
 
-export type CarBayTier = (typeof CAR_BAY_TIER)[keyof typeof CAR_BAY_TIER];
+export type CarBayTier = EnumValue<typeof CAR_BAY_TIER>;
 
 export const CAR_BAY_TIER_NAMES: Record<CarBayTier, string> = {
   [CAR_BAY_TIER.QUICK_JOB]: 'Quick Job',
@@ -31,7 +34,7 @@ export const CAR_BAY_BOOKER = {
   CUSTOMER: { enforceHorizon: true },
   STAFF: { enforceHorizon: false },
 } as const;
-export type CarBayBooker = (typeof CAR_BAY_BOOKER)[keyof typeof CAR_BAY_BOOKER];
+export type CarBayBooker = EnumValue<typeof CAR_BAY_BOOKER>;
 type BookingOptions = { enforceHorizon: boolean };
 
 export const CAR_BAY_OVERRUN = {
@@ -40,20 +43,7 @@ export const CAR_BAY_OVERRUN = {
 } as const;
 
 /** Hours are on a 24 hour clock in Central time. */
-export type CarBayPolicy = {
-  weekdayOpenHour: number;
-  weekendOpenHour: number;
-  weekdayCloseHour: number;
-  weekendCloseHour: number;
-  quickJobMinutes: number;
-  hourlyMinHours: number;
-  fullDayMaxDays: number;
-  bufferMinutes: number;
-  publicHorizonDays: number;
-  refundCutoffHours: number;
-  reminderLeadHours: number;
-  storageDays: number;
-};
+export type CarBayPolicy = v.InferOutput<typeof carBayPolicyDto>;
 
 export const DEFAULT_CAR_BAY_POLICY: CarBayPolicy = {
   weekdayOpenHour: 16,
@@ -70,17 +60,9 @@ export const DEFAULT_CAR_BAY_POLICY: CarBayPolicy = {
   storageDays: 3,
 };
 
-export type PricePair = { member: number; nonMember: number };
-
 /** All amounts are in cents. */
-export type CarBayRates = {
-  quickJob: PricePair;
-  hourly: PricePair;
-  fullDayWeekday: PricePair;
-  fullDayWeekend: PricePair;
-  overrunHourly: PricePair;
-  overnightFee: PricePair;
-};
+export type CarBayRates = v.InferOutput<typeof carBayRatesDto>;
+export type PricePair = CarBayRates[keyof CarBayRates];
 
 export const DEFAULT_CAR_BAY_RATES: CarBayRates = {
   quickJob: { member: 1200, nonMember: 1800 },

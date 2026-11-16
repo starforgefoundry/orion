@@ -122,6 +122,25 @@ export class CarBayRepository extends BaseRepository {
       );
   }
 
+  /** Marks the reminder sent unless another sweep already did. */
+  async claimReminder(bookingId: string, now: DateTime) {
+    const claimed = await this.db
+      .update(schema.carBayBooking)
+      .set({ reminderSentDate: now })
+      .where(
+        and(eq(schema.carBayBooking.id, bookingId), isNull(schema.carBayBooking.reminderSentDate)),
+      )
+      .returning({ id: schema.carBayBooking.id });
+    return claimed.length > 0;
+  }
+
+  async releaseReminder(bookingId: string) {
+    await this.db
+      .update(schema.carBayBooking)
+      .set({ reminderSentDate: null })
+      .where(eq(schema.carBayBooking.id, bookingId));
+  }
+
   async createOverrun(bookingId: string, paymentId: string) {
     const [overrun] = await this.db
       .insert(schema.carBayOverrun)

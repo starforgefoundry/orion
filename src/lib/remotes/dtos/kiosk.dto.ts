@@ -1,5 +1,6 @@
 import { submitWaiverDto } from '$lib/remotes/dtos/waiver.dto';
-import { VISIT_BASIS, type EnumValue, type VisitBasis } from '$lib/utils/member-enums';
+import type { EnumValue } from '$lib/utils/enum';
+import { VISIT_BASIS, type VisitBasis } from '$lib/utils/member-enums';
 import * as v from 'valibot';
 
 export const KIOSK_CHECK_IN_STATUS = {

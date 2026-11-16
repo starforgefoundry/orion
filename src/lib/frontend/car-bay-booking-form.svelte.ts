@@ -1,3 +1,4 @@
+import type { EnumValue } from '$lib/utils/enum';
 import {
   CAR_BAY_TIER,
   bookingLineItems,
@@ -22,7 +23,7 @@ type BookingFormContext = {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const CHECKOUT_STEPS = { DETAILS: 'details', PAYMENT: 'payment' } as const;
-export type CheckoutStep = (typeof CHECKOUT_STEPS)[keyof typeof CHECKOUT_STEPS];
+export type CheckoutStep = EnumValue<typeof CHECKOUT_STEPS>;
 
 type BookingFormStart = { tier: CarBayTier; date: string; startHour: number };
 

@@ -3,7 +3,10 @@ import { PaymentStateError } from '$lib/server/repositories/payment.repository';
 import { PAYMENT_STATUS, PAYMENT_TYPE } from '$lib/utils/billing';
 import { factory } from '$test/factory';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
+import { chargePayment } from '$lib/server/utils/payment';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/server/utils/payment', { spy: true });
 import { PaymentService } from './payment.service';
 
 const PAYMENT_ID = 'payment-1';
@@ -24,7 +27,7 @@ describe(PaymentService.name, () => {
   beforeEach(() => {
     ({ sut, mocks } = newTestService(PaymentService));
     mocks.paymentRepository.getById.mockResolvedValue(storedPayment());
-    mocks.paymentGateway.pay.mockImplementation(async (payment) => ({
+    vi.mocked(chargePayment).mockImplementation(async (_repos, payment) => ({
       ...payment,
       status: PAYMENT_STATUS.PAID,
     }));
@@ -73,6 +76,6 @@ describe(PaymentService.name, () => {
     await expect(sut.pay({ id: PAYMENT_ID, sourceId: 'card-token' })).rejects.toThrow(
       PaymentStateError,
     );
-    expect(mocks.paymentGateway.pay).not.toHaveBeenCalled();
+    expect(chargePayment).not.toHaveBeenCalled();
   });
 });

@@ -52,6 +52,14 @@ export class SquareRepository extends BaseRepository {
     return response.invoice;
   }
 
+  /** The payment that settled an invoice, found through the invoice's order. */
+  async getInvoicePaymentId(invoiceId: string) {
+    const invoice = await this.getInvoiceById(invoiceId);
+    if (!invoice?.orderId) return undefined;
+    const order = await this.getOrderById(invoice.orderId);
+    return order?.tenders?.[0]?.id;
+  }
+
   async cancelInvoice(invoiceId: string) {
     const invoice = await this.getInvoiceById(invoiceId);
     if (!invoice) {
@@ -122,10 +130,10 @@ export class SquareRepository extends BaseRepository {
     return response.payment;
   }
 
-  async refundPayment(paymentId: string, amountCents: number) {
+  async refundPayment(paymentId: string, amountCents: number, idempotencyKey: string) {
     const response = await this.square.refunds.refundPayment({
       paymentId,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey,
       amountMoney: {
         amount: BigInt(amountCents),
         currency: SQUARE_CURRENCY,

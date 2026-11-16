@@ -1,3 +1,4 @@
+import type { EnumValue } from '$lib/utils/enum';
 import { submitWithToast } from '$lib/frontend/form-submit';
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
 import { updateEmailTemplate } from '$lib/remotes/endpoints/email-template.remote';
@@ -15,7 +16,7 @@ export const TEMPLATE_FIELD = {
   SUBJECT: 'subject',
   BODY: 'body',
 } as const;
-export type TemplateField = (typeof TEMPLATE_FIELD)[keyof typeof TEMPLATE_FIELD];
+export type TemplateField = EnumValue<typeof TEMPLATE_FIELD>;
 
 type TextField = HTMLInputElement | HTMLTextAreaElement;
 
