@@ -107,12 +107,7 @@ export class RequestDetail {
 
   get canCancel() {
     const request = this.request;
-    return (
-      !!request &&
-      !isClosed(request) &&
-      request.status !== STATUS.DONE &&
-      request.payment?.status !== PAYMENT_STATUS.PAID
-    );
+    return !!request && !isClosed(request) && request.status !== STATUS.DONE;
   }
 
   get readyForPickup() {

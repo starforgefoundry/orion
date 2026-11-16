@@ -87,7 +87,10 @@ export async function unmarkPickedUp(request: RequestSummary) {
 export async function cancelRequest(request: RequestSummary) {
   const confirmed = await modalManager.confirm({
     title: 'Cancel Print Request',
-    prompt: 'Are you sure you want to cancel this print request? This action cannot be undone.',
+    prompt:
+      request.payment?.status === PAYMENT_STATUS.PAID
+        ? 'Are you sure you want to cancel this print request? The payment will be refunded. This action cannot be undone.'
+        : 'Are you sure you want to cancel this print request? This action cannot be undone.',
     confirmText: 'Cancel Request',
     cancelText: 'Keep Request',
     variant: 'destructive',

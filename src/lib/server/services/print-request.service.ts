@@ -13,7 +13,7 @@ import { runInBackground } from '$lib/server/utils/background';
 import { SENDERS } from '$lib/server/utils/email-templates/senders';
 import { sendTemplate } from '$lib/server/utils/email';
 import { printQueueUrl, printRequestStatusUrl } from '$lib/server/utils/payment-links';
-import { cancelPayment } from '$lib/server/utils/payment';
+import { cancelPayment, refundPayment } from '$lib/server/utils/payment';
 import { PAYMENT_STATUS, quoteRequiresCard } from '$lib/utils/billing';
 import { PRINT_REQUEST_STATUS, printSubmissionProblem } from '$lib/utils/print-request';
 import { DateTime } from 'luxon';
@@ -87,7 +87,9 @@ export class PrintRequestService extends BaseService {
     if (dto.status === PRINT_REQUEST_STATUS.CANCELED) {
       updates.completionDate = DateTime.now();
 
-      if (payment) {
+      if (payment?.status === PAYMENT_STATUS.PAID) {
+        await refundPayment(this, payment);
+      } else if (payment) {
         await cancelPayment(this, payment);
       }
     }

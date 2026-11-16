@@ -7,7 +7,7 @@ import {
 import { factory } from '$test/factory';
 import type { PrintRequestDetail } from '$test/factory/print-request';
 import { newTestService, stubSettings, type ServiceMocks } from '$test/utils';
-import { cancelPayment } from '$lib/server/utils/payment';
+import { cancelPayment, refundPayment } from '$lib/server/utils/payment';
 import { sendTemplate } from '$lib/server/utils/email';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -376,6 +376,18 @@ describe(PrintRequestService.name, () => {
       expect(mocks.paymentRepository.getById).toHaveBeenCalledWith(payment.id);
       expect(cancelPayment).toHaveBeenCalledWith(sut, payment);
       expect(result).toEqual(updated);
+    });
+
+    it('refunds a paid payment instead of only canceling it', async () => {
+      const payment = factory.paidPayment();
+      const request = factory.printRequestDetail({ status: 'in_queue', paymentId: payment.id });
+      stubStatusUpdate(request, payment);
+      vi.mocked(refundPayment).mockResolvedValue(true);
+
+      await sut.updatePrintRequestStatus(request.id, { status: 'canceled' });
+
+      expect(refundPayment).toHaveBeenCalledWith(sut, payment);
+      expect(cancelPayment).not.toHaveBeenCalled();
     });
 
     it('should not cancel a payment when status is canceled but no payment exists', async () => {
