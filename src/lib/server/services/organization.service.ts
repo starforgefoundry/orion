@@ -8,7 +8,7 @@ import type { CreateOrgChargeDto } from '$lib/remotes/dtos/organization-charges.
 import { NotFoundError, UserError } from '$lib/errors';
 import { MEMBER_EMAIL_TRIGGER } from '$lib/utils/member-enums';
 import type { Member, Payment } from '$lib/server/db/schema';
-import { MailgunRateLimitError } from '$lib/server/gateways/mailgun.gateway';
+import { ResendRateLimitError } from '$lib/server/gateways/resend.gateway';
 import { BaseService } from '$lib/server/services/base.service';
 import { runInBackground } from '$lib/server/utils/background';
 import { accessEndOfDay } from '$lib/server/utils/member-access';
@@ -147,7 +147,7 @@ export class OrganizationService extends BaseService {
     return { added, alreadyMembers, errors };
   }
 
-  /** Bulk adds can exceed Mailgun's send limit, so wait out the limit instead of dropping emails. */
+  /** Bulk adds can exceed Resend's send limit, so wait out the limit instead of dropping emails. */
   private async sendOrganizationOnboardings(members: Member[]) {
     for (const member of members) {
       try {
@@ -165,7 +165,7 @@ export class OrganizationService extends BaseService {
         MEMBER_EMAIL_TRIGGER.ORGANIZATION,
       );
     } catch (error) {
-      if (!(error instanceof MailgunRateLimitError) || attemptsLeft <= 1) throw error;
+      if (!(error instanceof ResendRateLimitError) || attemptsLeft <= 1) throw error;
       await sleep(Math.max(error.retryAt.diffNow().toMillis(), 0));
       await this.sendOrganizationOnboarding(member, attemptsLeft - 1);
     }
@@ -201,7 +201,7 @@ export class OrganizationService extends BaseService {
       organizationId: organization.id,
     });
 
-    await this.mailgunGateway.sendTemplate(
+    await this.resendGateway.sendTemplate(
       organization.email,
       SENDERS.foundry,
       'organization_balance',

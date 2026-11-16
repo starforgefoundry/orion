@@ -64,7 +64,7 @@ describe(PrintPaymentService.name, () => {
     mocks.printRequestRepository.update.mockResolvedValue([]);
     mocks.billingCodeRepository.getByCode.mockResolvedValue(undefined as never);
     mocks.memberRepository.hasMembership.mockResolvedValue(false);
-    mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
+    mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
     mocks.squareRepository.cancelInvoice.mockResolvedValue(undefined as never);
     mocks.paymentRepository.save.mockImplementation(async (data, id) =>
       factory.savedPayment(data, {
@@ -122,7 +122,7 @@ describe(PrintPaymentService.name, () => {
     it('emails the customer a link to pay', async () => {
       await sut.upsertPayment(dto);
 
-      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         expect.objectContaining({ replyTo: PRINT_EMAIL }),
         'print_payment',
@@ -152,7 +152,7 @@ describe(PrintPaymentService.name, () => {
       await sut.upsertPayment(dto);
 
       expect(savedPayment().status).toBe(PAYMENT_STATUS.QUOTE);
-      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         expect.anything(),
         'print_quote',
@@ -182,13 +182,13 @@ describe(PrintPaymentService.name, () => {
         organizationId: ORGANIZATION.id,
         bill: { discounts: [], total: 1200 },
       });
-      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
     });
 
     it('does not ask for a card when nothing is owed', async () => {
       await sut.upsertPayment({ ...dto, materialCost: 0, buildPlates: 1 });
 
-      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
     });
 
     it('cancels the Square invoice of a payment made before Orion billing', async () => {
@@ -381,7 +381,7 @@ describe(PrintPaymentService.name, () => {
 
       await sut.sendPaymentReminder(REQUEST_ID);
 
-      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         expect.objectContaining({ replyTo: PRINT_EMAIL }),
         'payment_reminder',
@@ -402,7 +402,7 @@ describe(PrintPaymentService.name, () => {
       mocks.printRequestRepository.getById.mockResolvedValue(printRequest({ payment: existing }));
 
       await expect(sut.sendPaymentReminder(REQUEST_ID)).rejects.toThrow(PrintPaymentError);
-      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
     });
   });
 

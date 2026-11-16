@@ -95,7 +95,7 @@ describe(CarBayService.name, () => {
     mocks.carBayRepository.create.mockImplementation(async (data) =>
       bookingRow(data as Partial<CarBayBooking>),
     );
-    mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
+    mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
   }
 
   beforeEach(() => {
@@ -247,7 +247,7 @@ describe(CarBayService.name, () => {
       const booking = await sut.book(dto, NOW);
 
       await vi.waitFor(() =>
-        expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
+        expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
           'jane@example.com',
           expect.anything(),
           'car_bay_booking',
@@ -435,7 +435,7 @@ describe(CarBayService.name, () => {
       mocks.carBayRepository.createOverrun.mockImplementation(async (bookingId, paymentId) =>
         factory.carBayOverrun({ bookingId, paymentId }),
       );
-      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
     });
 
     it('asks the customer to pay at the booking membership rate', async () => {
@@ -455,7 +455,7 @@ describe(CarBayService.name, () => {
         }),
       );
       expect(mocks.carBayRepository.createOverrun).toHaveBeenCalledWith('booking-1', payment.id);
-      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         expect.anything(),
         'car_bay_overrun',
@@ -478,7 +478,7 @@ describe(CarBayService.name, () => {
 
   describe('sendDueReminders', () => {
     beforeEach(() => {
-      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
       mocks.carBayRepository.update.mockImplementation(async (id, updates) =>
         bookingRow({ id, ...(updates as Partial<CarBayBooking>) }),
       );
@@ -490,7 +490,7 @@ describe(CarBayService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledWith(
+      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledWith(
         'jane@example.com',
         expect.anything(),
         'car_bay_reminder',
@@ -509,7 +509,7 @@ describe(CarBayService.name, () => {
 
       await sut.sendDueReminders(NOW);
 
-      expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledTimes(1);
+      expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledTimes(1);
       expect(mocks.carBayRepository.update).toHaveBeenCalledWith('early', {
         reminderSentDate: NOW,
       });

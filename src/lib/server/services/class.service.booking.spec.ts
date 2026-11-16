@@ -64,7 +64,7 @@ describe(ClassService.name, () => {
         customerPhone: customer.customerPhone,
       }));
       mocks.classRepository.createBooking.mockResolvedValue(booking);
-      mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
+      mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
       mocks.classRepository.getBookingById.mockResolvedValue(
         factory.classBookingDetail(
           { ...booking, customerName: dto.customerName, customerEmail: dto.customerEmail },
@@ -428,7 +428,7 @@ describe(ClassService.name, () => {
         instanceId: SOURCE_ID,
         reminderSentDate,
       });
-      expect(mocks.mailgunGateway.sendTemplate).not.toHaveBeenCalled();
+      expect(mocks.resendGateway.sendTemplate).not.toHaveBeenCalled();
     });
 
     describe('confirmation email', () => {
@@ -461,12 +461,12 @@ describe(ClassService.name, () => {
       });
 
       it('should resend the confirmation for the moved booking', async () => {
-        mocks.mailgunGateway.sendTemplate.mockResolvedValue(undefined as never);
+        mocks.resendGateway.sendTemplate.mockResolvedValue(undefined as never);
 
         await sut.rescheduleBooking(dto, NOW);
 
         await vi.waitFor(() =>
-          expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalledExactlyOnceWith(
+          expect(mocks.resendGateway.sendTemplate).toHaveBeenCalledExactlyOnceWith(
             'jane@test.com',
             {
               from: 'Starforge Classes <classes@starforgefoundry.com>',
@@ -487,13 +487,13 @@ describe(ClassService.name, () => {
       });
 
       it('should keep the move when the email fails', async () => {
-        mocks.mailgunGateway.sendTemplate.mockRejectedValue(new Error('Mailgun down'));
+        mocks.resendGateway.sendTemplate.mockRejectedValue(new Error('Resend down'));
 
         await expect(sut.rescheduleBooking(dto, NOW)).resolves.toMatchObject({
           previousInstanceId: SOURCE_ID,
         });
 
-        await vi.waitFor(() => expect(mocks.mailgunGateway.sendTemplate).toHaveBeenCalled());
+        await vi.waitFor(() => expect(mocks.resendGateway.sendTemplate).toHaveBeenCalled());
         expect(mocks.classRepository.updateBooking).toHaveBeenCalledExactlyOnceWith('book-1', {
           instanceId: TARGET_ID,
           reminderSentDate: null,

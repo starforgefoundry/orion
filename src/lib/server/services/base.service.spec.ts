@@ -3,7 +3,7 @@ import { BaseService, REPOSITORIES } from '$lib/server/services/base.service';
 import { describe, expect, it } from 'vitest';
 
 class TestService extends BaseService {
-  dependencyOf(key: 'mailgunGateway') {
+  dependencyOf(key: 'resendGateway') {
     return (this[key] as unknown as { emailTemplateRepository: unknown }).emailTemplateRepository;
   }
 }
@@ -20,7 +20,7 @@ describe(BaseService.name, () => {
   it('builds composed repositories from the same instances the service uses', () => {
     const service = new TestService();
 
-    expect(service.dependencyOf('mailgunGateway')).toBe(service.emailTemplateRepository);
+    expect(service.dependencyOf('resendGateway')).toBe(service.emailTemplateRepository);
   });
 
   it('composes with an injected repository', () => {
@@ -28,6 +28,6 @@ describe(BaseService.name, () => {
     const service = new TestService({ emailTemplateRepository });
 
     expect(service.emailTemplateRepository).toBe(emailTemplateRepository);
-    expect(service.dependencyOf('mailgunGateway')).toBe(emailTemplateRepository);
+    expect(service.dependencyOf('resendGateway')).toBe(emailTemplateRepository);
   });
 });

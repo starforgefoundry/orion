@@ -199,7 +199,7 @@ describe(MemberService.name, () => {
       const other = factory.member({ name: 'Grace' });
       mocks.memberRepository.getByIds.mockResolvedValue([member, other]);
       mocks.memberNotificationGateway.sendOnboarding
-        .mockRejectedValueOnce(new Error('mailgun down'))
+        .mockRejectedValueOnce(new Error('resend down'))
         .mockResolvedValueOnce(undefined);
 
       const result = await sut.sendOnboardings([member.id, other.id]);

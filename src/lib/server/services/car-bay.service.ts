@@ -347,7 +347,7 @@ export class CarBayService extends BaseService {
     });
     await this.carBayRepository.createOverrun(booking.id, payment.id);
 
-    await this.mailgunGateway.sendTemplate(
+    await this.resendGateway.sendTemplate(
       booking.customerEmail,
       SENDERS.carBay,
       'car_bay_overrun',
@@ -373,7 +373,7 @@ export class CarBayService extends BaseService {
     await forEachSettled(
       due,
       async (booking) => {
-        await this.mailgunGateway.sendTemplate(
+        await this.resendGateway.sendTemplate(
           booking.customerEmail,
           SENDERS.carBay,
           'car_bay_reminder',
@@ -396,7 +396,7 @@ export class CarBayService extends BaseService {
     payment: Payment | null,
     policy: CarBayPolicy,
   ) {
-    await this.mailgunGateway.sendTemplate(
+    await this.resendGateway.sendTemplate(
       booking.customerEmail,
       SENDERS.carBay,
       'car_bay_booking',
