@@ -360,6 +360,17 @@ describe(ServiceService.name, () => {
       expect(cancelPayment).not.toHaveBeenCalled();
     });
 
+    it('finishes canceling a request whose payment is already canceled', async () => {
+      stubRequest({ status: PAYMENT_STATUS.CANCELED }, SERVICE_REQUEST_STATUS.IN_PROGRESS);
+
+      await sut.updateRequestStatus({ id: REQUEST_ID, status: SERVICE_REQUEST_STATUS.CANCELED });
+
+      expect(cancelPayment).not.toHaveBeenCalled();
+      expect(mocks.serviceRepository.updateRequest).toHaveBeenCalledWith(REQUEST_ID, {
+        status: SERVICE_REQUEST_STATUS.CANCELED,
+      });
+    });
+
     it('does not reopen a request whose payment was canceled', async () => {
       stubRequest({ status: PAYMENT_STATUS.CANCELED }, SERVICE_REQUEST_STATUS.CANCELED);
 

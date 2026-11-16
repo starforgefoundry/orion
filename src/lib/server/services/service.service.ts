@@ -159,8 +159,9 @@ export class ServiceService extends BaseService {
     if (quoteRequired(payment, status)) {
       throw new ServiceRequestError('Send a quote before starting work.');
     }
-    // A canceled or refunded bill cannot be paid again, so the request stays canceled.
-    if (status !== request.status && CLOSED_PAYMENT_STATUSES.includes(payment.status)) {
+    // A canceled or refunded bill cannot be paid again, so the request can only end up canceled.
+    const isReopening = status !== request.status && status !== SERVICE_REQUEST_STATUS.CANCELED;
+    if (isReopening && CLOSED_PAYMENT_STATUSES.includes(payment.status)) {
       throw new ServiceRequestError('This request was canceled and cannot be reopened.');
     }
     if (status === request.status) return request;
