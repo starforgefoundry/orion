@@ -467,6 +467,19 @@ describe(OrganizationService.name, () => {
         expect(sentEmails()).toEqual(['ada@example.com', 'ada@example.com', 'grace@example.com']);
       });
 
+      it('gives up on a member when Resend asks to wait too long', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(sendOnboarding).mockRejectedValueOnce(
+          new ResendRateLimitError('limit', DateTime.now().plus({ days: 1 })),
+        );
+
+        await sut.addOrganizationMembers({ organizationId: organization.id, lines });
+
+        await vi.waitFor(() =>
+          expect(sentEmails()).toEqual(['ada@example.com', 'grace@example.com']),
+        );
+      });
+
       it('moves on to the next member after a non rate limit failure', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.mocked(sendOnboarding).mockRejectedValueOnce(new Error('resend'));
