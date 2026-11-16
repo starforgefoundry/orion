@@ -1,3 +1,4 @@
+import { enumValues } from '$lib/utils/enum';
 import type { MemberSearchFilter } from '$lib/remotes/dtos/member.dto';
 import {
   ACCESS_BASIS,
@@ -7,7 +8,6 @@ import {
   ONBOARDING_FILTER,
   SORT_DIRECTION,
   SUBSCRIPTION_STATUS,
-  enumValues,
 } from '$lib/utils/member-enums';
 import type { Organization, OrganizationMember } from '$lib/server/db/schema';
 import { resolveAccess } from '$lib/server/utils/member-access';

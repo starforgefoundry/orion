@@ -1,5 +1,5 @@
 import type { ClassInstance, User } from '$lib/server/db/schema';
-import { enumValues } from '$lib/utils/member-enums';
+import { enumValues } from '$lib/utils/enum';
 import { CANCEL_INSTANCE_MODE } from '$lib/utils/classes';
 import * as v from 'valibot';
 

@@ -2,6 +2,7 @@
 import { UserError } from '../errors.ts';
 import { SPACE_ZONE, spaceDate } from './space.ts';
 import { CENTS_PER_DOLLAR, type BillingLineItem } from './billing.ts';
+import type { EnumValue } from './enum.ts';
 import type { carBayPolicyDto, carBayRatesDto } from '../remotes/dtos/settings.dto.ts';
 import { DateTime } from 'luxon';
 import type * as v from 'valibot';
@@ -14,7 +15,7 @@ export const CAR_BAY_TIER = {
   FULL_DAY: 'full_day',
 } as const;
 
-export type CarBayTier = (typeof CAR_BAY_TIER)[keyof typeof CAR_BAY_TIER];
+export type CarBayTier = EnumValue<typeof CAR_BAY_TIER>;
 
 export const CAR_BAY_TIER_NAMES: Record<CarBayTier, string> = {
   [CAR_BAY_TIER.QUICK_JOB]: 'Quick Job',
@@ -33,7 +34,7 @@ export const CAR_BAY_BOOKER = {
   CUSTOMER: { enforceHorizon: true },
   STAFF: { enforceHorizon: false },
 } as const;
-export type CarBayBooker = (typeof CAR_BAY_BOOKER)[keyof typeof CAR_BAY_BOOKER];
+export type CarBayBooker = EnumValue<typeof CAR_BAY_BOOKER>;
 type BookingOptions = { enforceHorizon: boolean };
 
 export const CAR_BAY_OVERRUN = {

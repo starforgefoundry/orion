@@ -1,6 +1,6 @@
+import { enumValues } from '$lib/utils/enum';
 import {
   ACCESS_BASIS,
-  enumValues,
   MEMBER_SORT,
   ONBOARDING_FILTER,
   SORT_DIRECTION,

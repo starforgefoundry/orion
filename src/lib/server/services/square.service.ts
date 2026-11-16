@@ -1,7 +1,7 @@
+import type { EnumValue } from '$lib/utils/enum';
 import {
   MEMBER_EMAIL_TRIGGER,
   SUBSCRIPTION_STATUS,
-  type EnumValue,
   type MemberEmailTrigger,
 } from '$lib/utils/member-enums';
 import type { Member, MemberSubscription } from '$lib/server/db/schema';
@@ -42,8 +42,7 @@ export const SUBSCRIPTION_SYNC_RESULT = {
   SKIPPED: 'skipped',
 } as const;
 
-export type SubscriptionSyncResult =
-  (typeof SUBSCRIPTION_SYNC_RESULT)[keyof typeof SUBSCRIPTION_SYNC_RESULT];
+export type SubscriptionSyncResult = EnumValue<typeof SUBSCRIPTION_SYNC_RESULT>;
 
 /** Whether members created by a subscription sync get the welcome email. */
 export const NEW_MEMBER_ONBOARDING = { SEND: 'send', SKIP: 'skip' } as const;

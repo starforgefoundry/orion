@@ -1,3 +1,4 @@
+import type { EnumValue } from '$lib/utils/enum';
 import { goto } from '$app/navigation';
 import type { PrintRequestFileDto } from '$lib/remotes/dtos/print-request.dto';
 import { submitPrintRequestForm } from '$lib/remotes/endpoints/print-request.remote';
@@ -5,7 +6,7 @@ import { BYTES_PER_MB } from '$lib/utils/print-request';
 import { toast } from 'svelte-sonner';
 
 export const STEPS = { CONTACT: 'contact', PROJECT: 'project' } as const;
-export type Step = (typeof STEPS)[keyof typeof STEPS];
+export type Step = EnumValue<typeof STEPS>;
 
 const PERCENT = 100;
 const HTTP_OK = 200;

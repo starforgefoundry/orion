@@ -1,6 +1,6 @@
 // Relative imports: the database schema loads this file outside SvelteKit.
 import { PAYMENT_STATUS, type PaymentStatus } from './billing.ts';
-import type { EnumValue } from './member-enums.ts';
+import type { EnumValue } from './enum.ts';
 import { BYTES_PER_MB, fileExtension } from './print-request.ts';
 
 export const SERVICE_PRICING = { FIXED: 'fixed', VARIABLE: 'variable' } as const;

@@ -1,3 +1,4 @@
+import type { EnumValue } from '$lib/utils/enum';
 import { goto } from '$app/navigation';
 import { errorDescription, submitWithToast } from '$lib/frontend/form-submit';
 import { modalManager } from '$lib/frontend/modal-manager.svelte';
@@ -29,7 +30,7 @@ export const REQUEST_DETAIL_TABS = {
   FILES: 'files',
   COMMENTS: 'comments',
 } as const;
-export type RequestDetailTab = (typeof REQUEST_DETAIL_TABS)[keyof typeof REQUEST_DETAIL_TABS];
+export type RequestDetailTab = EnumValue<typeof REQUEST_DETAIL_TABS>;
 
 export const BILLING_TYPE = { QUOTE: 'Quote', PAYMENT: 'Payment' } as const;
 

@@ -1,7 +1,7 @@
+import { enumValues } from '../../utils/enum';
 import { sql, type InferSelectModel } from 'drizzle-orm';
 import { boolean, foreignKey, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 import {
-  enumValues,
   MEMBER_EMAIL_TRIGGER,
   MEMBER_EMAIL_TYPE,
   SUBSCRIPTION_STATUS,

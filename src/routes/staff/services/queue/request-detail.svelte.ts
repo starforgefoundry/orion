@@ -1,3 +1,4 @@
+import type { EnumValue } from '$lib/utils/enum';
 import { goto } from '$app/navigation';
 import { submitWithToast } from '$lib/frontend/form-submit';
 import {
@@ -18,7 +19,7 @@ import { cancelRequest, changeStatus } from './request-actions';
 import { BOARD_STATUSES, REQUEST_STATUS_DISPLAY, STATUS } from './utils';
 
 export const REQUEST_DETAIL_TABS = { DETAILS: 'details', CUSTOMER: 'customer' } as const;
-export type RequestDetailTab = (typeof REQUEST_DETAIL_TABS)[keyof typeof REQUEST_DETAIL_TABS];
+export type RequestDetailTab = EnumValue<typeof REQUEST_DETAIL_TABS>;
 
 export class ServiceRequestDetail {
   activeTab = $state<RequestDetailTab>(REQUEST_DETAIL_TABS.DETAILS);

@@ -1,3 +1,5 @@
+import type { EnumValue } from './enum.ts';
+
 export const EMAIL_TEMPLATE_GROUP = {
   PRINTING: 'printing',
   CLASSES: 'classes',
@@ -5,7 +7,7 @@ export const EMAIL_TEMPLATE_GROUP = {
   MEMBERS: 'members',
   PAYMENTS: 'payments',
 } as const;
-export type EmailTemplateGroup = (typeof EMAIL_TEMPLATE_GROUP)[keyof typeof EMAIL_TEMPLATE_GROUP];
+export type EmailTemplateGroup = EnumValue<typeof EMAIL_TEMPLATE_GROUP>;
 
 /** `example` fills the variable in the settings preview. */
 export type TemplateVariable = { description: string; example: string };

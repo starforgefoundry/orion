@@ -1,7 +1,7 @@
 export const CENTS_PER_DOLLAR = 100;
 const PERCENT = 100;
 
-type EnumValue<T> = T[keyof T];
+import type { EnumValue } from './enum.ts';
 
 export const PAYMENT_TYPE = {
   PRINT_REQUEST: 'print_request',

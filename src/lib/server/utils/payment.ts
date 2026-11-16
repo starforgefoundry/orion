@@ -1,3 +1,4 @@
+import type { EnumValue } from '$lib/utils/enum';
 import type { Payment } from '$lib/server/db/schema';
 import {
   PaymentError,
@@ -23,7 +24,7 @@ const CHARGE_MODE = {
   CHARGE: { autocomplete: true, expectedStatus: SQUARE_PAYMENT_STATUS.COMPLETED },
 } as const;
 
-type ChargeMode = (typeof CHARGE_MODE)[keyof typeof CHARGE_MODE];
+type ChargeMode = EnumValue<typeof CHARGE_MODE>;
 
 function discountTotal(payment: Pick<Payment, 'discounts'>) {
   return payment.discounts.reduce((total, discount) => total + discount.amount, 0);
