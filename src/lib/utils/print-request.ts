@@ -19,6 +19,7 @@ export const PRINT_SUBMISSION_PROBLEM = {
   TOO_MANY_FILES: `Attach at most ${MAX_PRINT_REQUEST_FILES} files.`,
   TOO_LARGE: 'The files are larger than the upload limit.',
   FILE_TYPE: 'One or more files have a type we do not accept.',
+  DUPLICATE_NAME: 'Two or more files have the same name. Rename them so each name is unique.',
 } as const;
 
 type SubmissionSettings = { isOpen: boolean; maxUploadMB: number; allowedFileTypes: string };
@@ -36,6 +37,19 @@ export function fileExtension(filename: string) {
   return dot === -1 ? '' : filename.slice(dot + 1).toLowerCase();
 }
 
+function filenameKey(filename: string) {
+  return filename.toLowerCase();
+}
+
+export function isSameFilename(a: string, b: string) {
+  return filenameKey(a) === filenameKey(b);
+}
+
+function hasDuplicateFilenames(files: SubmittedFile[]) {
+  const names = files.map(({ filename }) => filenameKey(filename));
+  return new Set(names).size !== names.length;
+}
+
 export function printSubmissionProblem(settings: SubmissionSettings, files: SubmittedFile[]) {
   if (!settings.isOpen) return PRINT_SUBMISSION_PROBLEM.CLOSED;
   if (files.length === 0) return PRINT_SUBMISSION_PROBLEM.NO_FILES;
@@ -48,4 +62,6 @@ export function printSubmissionProblem(settings: SubmissionSettings, files: Subm
   if (files.some(({ filename }) => !extensions.includes(fileExtension(filename)))) {
     return PRINT_SUBMISSION_PROBLEM.FILE_TYPE;
   }
+
+  if (hasDuplicateFilenames(files)) return PRINT_SUBMISSION_PROBLEM.DUPLICATE_NAME;
 }

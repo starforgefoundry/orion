@@ -2,7 +2,7 @@ import type { EnumValue } from '$lib/utils/enum';
 import { goto } from '$app/navigation';
 import type { PrintRequestFileDto } from '$lib/remotes/dtos/print-request.dto';
 import { submitPrintRequestForm } from '$lib/remotes/endpoints/print-request.remote';
-import { BYTES_PER_MB } from '$lib/utils/print-request';
+import { BYTES_PER_MB, isSameFilename } from '$lib/utils/print-request';
 import { toast } from 'svelte-sonner';
 
 export const STEPS = { CONTACT: 'contact', PROJECT: 'project' } as const;
@@ -62,6 +62,10 @@ export class PrintRequestForm {
   }
 
   addFile(file: File) {
+    if (this.files.some((entry) => isSameFilename(entry.filename, file.name))) {
+      toast.error(`A file named ${file.name} is already attached.`);
+      return;
+    }
     this.files.push({ file, filename: file.name, quantity: 1 });
   }
 
