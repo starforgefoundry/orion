@@ -45,6 +45,12 @@ describe('printSubmissionProblem', () => {
     );
   });
 
+  it('rejects files that share a name, ignoring case', () => {
+    expect(printSubmissionProblem(OPEN, [upload('arm.stl'), upload('ARM.STL')])).toBe(
+      PRINT_SUBMISSION_PROBLEM.DUPLICATE_NAME,
+    );
+  });
+
   it.each(['payload.exe', 'stl', 'arm.stl.html'])('rejects disallowed file %s', (filename) => {
     expect(printSubmissionProblem(OPEN, [upload(filename)])).toBe(
       PRINT_SUBMISSION_PROBLEM.FILE_TYPE,
