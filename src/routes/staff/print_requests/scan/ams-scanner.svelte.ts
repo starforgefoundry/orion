@@ -62,8 +62,6 @@ function outline(code: DetectedBarcode, ctx: CanvasRenderingContext2D) {
 export class AmsScanner {
   loadingCamera = $state(true);
   updating = $state(false);
-  torchOn = $state(false);
-  torchSupported = $state(false);
 
   #tracked = $state<TrackedCode[]>([]);
 
@@ -97,13 +95,8 @@ export class AmsScanner {
     return () => clearInterval(interval);
   }
 
-  cameraOn(capabilities: MediaTrackCapabilities) {
+  cameraOn() {
     this.loadingCamera = false;
-    this.torchSupported = 'torch' in capabilities;
-  }
-
-  toggleTorch() {
-    this.torchOn = !this.torchOn;
   }
 
   /** Records a camera frame's codes and outlines them on the overlay. */

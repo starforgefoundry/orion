@@ -4,8 +4,6 @@
   import PageHeader from '$lib/frontend/components/PageHeader.svelte';
   import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
   import CircleXIcon from '@lucide/svelte/icons/circle-x';
-  import FlashlightIcon from '@lucide/svelte/icons/flashlight';
-  import FlashlightOffIcon from '@lucide/svelte/icons/flashlight-off';
   import { BarqodeStream } from 'barqode';
   import { onMount } from 'svelte';
   import { AMS_SLOT_COUNT, AmsScanner, CAMERA_CONSTRAINTS } from './ams-scanner.svelte';
@@ -23,11 +21,9 @@
 >
   <div class="relative min-h-0 flex-1 overflow-hidden rounded-lg border bg-black">
     <BarqodeStream
-      onCameraOn={(capabilities) => scanner.cameraOn(capabilities)}
+      onCameraOn={() => scanner.cameraOn()}
       track={(codes, ctx) => scanner.track(codes, ctx)}
       constraints={CAMERA_CONSTRAINTS}
-      torch={scanner.torchOn}
-      paused={scanner.updating}
     >
       {#if scanner.loadingCamera}
         <div class="flex h-full items-center justify-center text-white">
@@ -62,18 +58,6 @@
   </div>
 
   <div class="flex shrink-0 gap-2 pb-[env(safe-area-inset-bottom)]">
-    {#if scanner.torchSupported}
-      <Button
-        variant="outline"
-        size="icon-lg"
-        aria-label={scanner.torchOn ? 'Turn light off' : 'Turn light on'}
-        aria-pressed={scanner.torchOn}
-        onclick={() => scanner.toggleTorch()}
-      >
-        {#if scanner.torchOn}<FlashlightIcon />{:else}<FlashlightOffIcon />{/if}
-      </Button>
-    {/if}
-
     <Button
       size="lg"
       class="flex-1"
