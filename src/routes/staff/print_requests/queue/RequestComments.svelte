@@ -63,18 +63,6 @@
     const absoluteUrl = new URL(fileUrl, page.url.origin).href;
     return `orcaslicer://open?file=${encodeURIComponent(absoluteUrl)}`;
   }
-
-  type SubmitParameters = Parameters<Parameters<typeof addPrintRequestCommentForm.enhance>[0]>[0];
-  async function postComment({ submit }: SubmitParameters) {
-    await submit();
-
-    if (addPrintRequestCommentForm.fields.allIssues()) {
-      return;
-    }
-
-    addPrintRequestCommentForm.fields.body.set('');
-    composer.reset();
-  }
 </script>
 
 {#snippet attachmentRow(fileName: string, fileUrl?: string, onRemove?: () => void)}
@@ -148,7 +136,7 @@
   </div>
 
   <form
-    {...addPrintRequestCommentForm.enhance(postComment)}
+    {...addPrintRequestCommentForm.enhance(({ form }) => composer.submit(form, requestId))}
     enctype="multipart/form-data"
     class="flex flex-col gap-2 border-t p-3"
   >
@@ -174,8 +162,10 @@
     {#if composer.attachments.length > 0}
       <div class="flex flex-col gap-1">
         {#each composer.attachments as attachment, index (`${attachment.name}-${index}`)}
-          {@render attachmentRow(attachment.name, undefined, () =>
-            composer.removeAttachment(index),
+          {@render attachmentRow(
+            attachment.name,
+            undefined,
+            composer.submitting ? undefined : () => composer.removeAttachment(index),
           )}
         {/each}
       </div>
@@ -192,9 +182,14 @@
         <PaperclipIcon />
         Attach or drop files
       </Button>
-      <Button type="submit" size="sm" disabled={!canPost || addPrintRequestCommentForm.pending > 0}>
-        {#if addPrintRequestCommentForm.pending > 0}<Spinner />{:else}<SendIcon />{/if}
-        Post
+      <Button type="submit" size="sm" disabled={!canPost || composer.submitting}>
+        {#if composer.submitting}
+          <Spinner />
+          Posting… ({composer.progress}%)
+        {:else}
+          <SendIcon />
+          Post
+        {/if}
       </Button>
     </div>
   </form>

@@ -1,12 +1,40 @@
+import { uploadForm } from '$lib/frontend/upload-form';
 import { MAX_COMMENT_ATTACHMENTS } from '$lib/remotes/dtos/print-request.dto';
+import {
+  addPrintRequestCommentForm,
+  getPrintRequestComments,
+} from '$lib/remotes/endpoints/print-request.remote';
 import { toast } from 'svelte-sonner';
 
 export class CommentComposer {
   attachments = $state<File[]>([]);
   isDragging = $state(false);
   input = $state<HTMLInputElement>();
+  submitting = $state(false);
+  progress = $state(0);
 
-  canAttach = $derived(this.attachments.length < MAX_COMMENT_ATTACHMENTS);
+  canAttach = $derived(!this.submitting && this.attachments.length < MAX_COMMENT_ATTACHMENTS);
+
+  async submit(form: HTMLFormElement, requestId: string) {
+    this.submitting = true;
+    this.progress = 0;
+
+    try {
+      await uploadForm(
+        { method: form.method, action: form.action, body: new FormData(form) },
+        (percent) => (this.progress = percent),
+      );
+    } catch {
+      toast.error('Failed to post comment. Please try again.');
+      this.submitting = false;
+      return;
+    }
+
+    addPrintRequestCommentForm.fields.body.set('');
+    this.reset();
+    await getPrintRequestComments(requestId).refresh();
+    this.submitting = false;
+  }
 
   addFiles(files: Iterable<File>) {
     const picked = Array.from(files);
