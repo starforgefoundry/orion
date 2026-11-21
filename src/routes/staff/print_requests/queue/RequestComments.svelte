@@ -27,7 +27,7 @@
 
   const { requestId }: Props = $props();
 
-  const composer = new CommentComposer();
+  const composer = new CommentComposer(() => requestId);
 
   $effect(() => {
     addPrintRequestCommentForm.fields.attachments.set(composer.attachments);
@@ -39,11 +39,6 @@
   const slicerExtensions = $derived(parseFileExtensions(settings?.allowedFileTypes ?? ''));
 
   initForm(addPrintRequestCommentForm, () => ({ printRequestId: requestId, body: '' }));
-
-  const canPost = $derived(
-    addPrintRequestCommentForm.fields.body.value().trim().length > 0 ||
-      composer.attachments.length > 0,
-  );
 
   function initials(name: string) {
     return name
@@ -136,7 +131,7 @@
   </div>
 
   <form
-    {...addPrintRequestCommentForm.enhance(({ form }) => composer.submit(form, requestId))}
+    {...addPrintRequestCommentForm.enhance(({ form }) => composer.submit(form))}
     enctype="multipart/form-data"
     class="flex flex-col gap-2 border-t p-3"
   >
@@ -157,6 +152,7 @@
       placeholder="Add a note for the rest of the staff…"
       class="min-h-14 resize-none"
       rows={2}
+      readonly={composer.submitting}
     />
 
     {#if composer.attachments.length > 0}
@@ -182,7 +178,7 @@
         <PaperclipIcon />
         Attach or drop files
       </Button>
-      <Button type="submit" size="sm" disabled={!canPost || composer.submitting}>
+      <Button type="submit" size="sm" disabled={!composer.canPost}>
         {#if composer.submitting}
           <Spinner />
           Posting… ({composer.progress}%)
