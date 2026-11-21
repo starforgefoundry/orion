@@ -88,6 +88,27 @@ describe(CommentComposer.name, () => {
     await posting;
   });
 
+  it('swallows file drops while an upload runs so the browser does not open them', async () => {
+    const composer = new CommentComposer(() => REQUEST_ID);
+    const upload = holdUpload();
+    const posting = composer.submit(FORM);
+
+    const dataTransfer = { types: ['Files'], files: [new File(['x'], 'late.png')], dropEffect: '' };
+    const drag = () => ({ dataTransfer, preventDefault: vi.fn() }) as unknown as DragEvent;
+    const over = drag();
+    const drop = drag();
+    composer.handleDragOver(over);
+    composer.handleDrop(drop);
+
+    expect(over.preventDefault).toHaveBeenCalled();
+    expect(drop.preventDefault).toHaveBeenCalled();
+    expect(dataTransfer.dropEffect).toBe('none');
+    expect(composer.attachments).toEqual([]);
+
+    upload.finish();
+    await posting;
+  });
+
   it('keeps the draft of a request opened while the upload ran', async () => {
     const composer = new CommentComposer(() => REQUEST_ID);
     const upload = holdUpload();

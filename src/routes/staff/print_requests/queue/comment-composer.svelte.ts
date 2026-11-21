@@ -101,16 +101,17 @@ export class CommentComposer {
     this.addFiles(picked);
   }
 
+  // File drags are always intercepted, even while locked, so the browser never opens the file.
   handleDragEnter(event: DragEvent) {
-    if (!this.#acceptsDrop(event)) return;
+    if (!hasFiles(event)) return;
     event.preventDefault();
-    this.isDragging = true;
+    this.isDragging = !this.submitting;
   }
 
   handleDragOver(event: DragEvent) {
-    if (!this.#acceptsDrop(event)) return;
+    if (!hasFiles(event)) return;
     event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    if (event.dataTransfer) event.dataTransfer.dropEffect = this.submitting ? 'none' : 'copy';
   }
 
   handleDragLeave(event: DragEvent) {
@@ -120,14 +121,10 @@ export class CommentComposer {
   }
 
   handleDrop(event: DragEvent) {
-    if (!this.#acceptsDrop(event)) return;
+    if (!hasFiles(event)) return;
     event.preventDefault();
     this.isDragging = false;
     this.addFiles(event.dataTransfer?.files ?? []);
-  }
-
-  #acceptsDrop(event: DragEvent) {
-    return hasFiles(event) && !this.submitting;
   }
 
   #setAttachments(files: File[]) {
