@@ -1,14 +1,77 @@
+import { uploadForm } from '$lib/frontend/upload-form';
 import { MAX_COMMENT_ATTACHMENTS } from '$lib/remotes/dtos/print-request.dto';
+import {
+  addPrintRequestCommentForm,
+  getPrintRequestComments,
+} from '$lib/remotes/endpoints/print-request.remote';
+import { SvelteMap } from 'svelte/reactivity';
 import { toast } from 'svelte-sonner';
+
+/** Upload percent per request, shared so a reopened composer sees an upload already running. */
+const uploads = new SvelteMap<string, number>();
 
 export class CommentComposer {
   attachments = $state<File[]>([]);
   isDragging = $state(false);
   input = $state<HTMLInputElement>();
 
-  canAttach = $derived(this.attachments.length < MAX_COMMENT_ATTACHMENTS);
+  #requestId: () => string;
+
+  constructor(requestId: () => string) {
+    this.#requestId = requestId;
+  }
+
+  get submitting() {
+    return uploads.has(this.#requestId());
+  }
+
+  get progress() {
+    return uploads.get(this.#requestId()) ?? 0;
+  }
+
+  get canAttach() {
+    return !this.submitting && this.attachments.length < MAX_COMMENT_ATTACHMENTS;
+  }
+
+  get canPost() {
+    const hasBody = addPrintRequestCommentForm.fields.body.value().trim().length > 0;
+    return !this.submitting && (hasBody || this.attachments.length > 0);
+  }
+
+  async submit(form: HTMLFormElement) {
+    if (!this.canPost) return;
+
+    const requestId = this.#requestId();
+    uploads.set(requestId, 0);
+
+    try {
+      await uploadForm(
+        { method: form.method, action: form.action, body: new FormData(form) },
+        (percent) => uploads.set(requestId, percent),
+      );
+    } catch {
+      toast.error('Failed to post comment. Please try again.');
+      return;
+    } finally {
+      uploads.delete(requestId);
+    }
+
+    // The form is shared across requests, so leave the draft alone if another request is open now.
+    if (addPrintRequestCommentForm.fields.printRequestId.value() === requestId) {
+      addPrintRequestCommentForm.fields.body.set('');
+    }
+    this.reset();
+
+    try {
+      await getPrintRequestComments(requestId).refresh();
+    } catch {
+      toast.warning('Comment posted, but the comment list failed to reload.');
+    }
+  }
 
   addFiles(files: Iterable<File>) {
+    if (this.submitting) return;
+
     const picked = Array.from(files);
     const room = MAX_COMMENT_ATTACHMENTS - this.attachments.length;
 
@@ -38,16 +101,17 @@ export class CommentComposer {
     this.addFiles(picked);
   }
 
+  // File drags are always intercepted, even while locked, so the browser never opens the file.
   handleDragEnter(event: DragEvent) {
     if (!hasFiles(event)) return;
     event.preventDefault();
-    this.isDragging = true;
+    this.isDragging = !this.submitting;
   }
 
   handleDragOver(event: DragEvent) {
     if (!hasFiles(event)) return;
     event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    if (event.dataTransfer) event.dataTransfer.dropEffect = this.submitting ? 'none' : 'copy';
   }
 
   handleDragLeave(event: DragEvent) {

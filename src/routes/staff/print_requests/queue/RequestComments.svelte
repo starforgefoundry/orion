@@ -27,7 +27,7 @@
 
   const { requestId }: Props = $props();
 
-  const composer = new CommentComposer();
+  const composer = new CommentComposer(() => requestId);
 
   $effect(() => {
     addPrintRequestCommentForm.fields.attachments.set(composer.attachments);
@@ -39,11 +39,6 @@
   const slicerExtensions = $derived(parseFileExtensions(settings?.allowedFileTypes ?? ''));
 
   initForm(addPrintRequestCommentForm, () => ({ printRequestId: requestId, body: '' }));
-
-  const canPost = $derived(
-    addPrintRequestCommentForm.fields.body.value().trim().length > 0 ||
-      composer.attachments.length > 0,
-  );
 
   function initials(name: string) {
     return name
@@ -62,18 +57,6 @@
   function slicerUrl(fileUrl: string) {
     const absoluteUrl = new URL(fileUrl, page.url.origin).href;
     return `orcaslicer://open?file=${encodeURIComponent(absoluteUrl)}`;
-  }
-
-  type SubmitParameters = Parameters<Parameters<typeof addPrintRequestCommentForm.enhance>[0]>[0];
-  async function postComment({ submit }: SubmitParameters) {
-    await submit();
-
-    if (addPrintRequestCommentForm.fields.allIssues()) {
-      return;
-    }
-
-    addPrintRequestCommentForm.fields.body.set('');
-    composer.reset();
   }
 </script>
 
@@ -148,7 +131,7 @@
   </div>
 
   <form
-    {...addPrintRequestCommentForm.enhance(postComment)}
+    {...addPrintRequestCommentForm.enhance(({ form }) => composer.submit(form))}
     enctype="multipart/form-data"
     class="flex flex-col gap-2 border-t p-3"
   >
@@ -169,13 +152,16 @@
       placeholder="Add a note for the rest of the staff…"
       class="min-h-14 resize-none"
       rows={2}
+      readonly={composer.submitting}
     />
 
     {#if composer.attachments.length > 0}
       <div class="flex flex-col gap-1">
         {#each composer.attachments as attachment, index (`${attachment.name}-${index}`)}
-          {@render attachmentRow(attachment.name, undefined, () =>
-            composer.removeAttachment(index),
+          {@render attachmentRow(
+            attachment.name,
+            undefined,
+            composer.submitting ? undefined : () => composer.removeAttachment(index),
           )}
         {/each}
       </div>
@@ -192,9 +178,14 @@
         <PaperclipIcon />
         Attach or drop files
       </Button>
-      <Button type="submit" size="sm" disabled={!canPost || addPrintRequestCommentForm.pending > 0}>
-        {#if addPrintRequestCommentForm.pending > 0}<Spinner />{:else}<SendIcon />{/if}
-        Post
+      <Button type="submit" size="sm" disabled={!composer.canPost}>
+        {#if composer.submitting}
+          <Spinner />
+          Posting… ({composer.progress}%)
+        {:else}
+          <SendIcon />
+          Post
+        {/if}
       </Button>
     </div>
   </form>
