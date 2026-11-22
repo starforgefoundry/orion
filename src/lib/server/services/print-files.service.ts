@@ -1,3 +1,4 @@
+import { NotFoundError } from '$lib/errors';
 import { BaseService } from '$lib/server/services/base.service';
 import { signUrl } from '$lib/server/utils/signed-url';
 import JSZip from 'jszip';
@@ -11,11 +12,16 @@ export class PrintFilesService extends BaseService {
   }
 
   async downloadRequestZIP(printRequestId: string) {
+    const request = await this.printRequestRepository.getById(printRequestId);
+    if (!request) {
+      throw new NotFoundError('Print request not found');
+    }
+
     const files = await this.printFilesRepository.openForRequest(printRequestId);
 
     const zip = new JSZip();
     for (const file of files) {
-      zip.file(file.fileName, file.stream);
+      zip.file(`${request.customerName} - ${file.fileName}`, file.stream);
     }
 
     return new Readable().wrap(zip.generateNodeStream({ streamFiles: true }));

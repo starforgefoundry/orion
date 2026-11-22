@@ -1,4 +1,5 @@
 import { verifySignedUrl } from '$lib/server/utils/signed-url';
+import { factory } from '$test/factory';
 import { newTestService, type ServiceMocks } from '$test/utils';
 import JSZip from 'jszip';
 import type { ReadStream } from 'node:fs';
@@ -37,7 +38,13 @@ describe(PrintFilesService.name, () => {
   });
 
   describe('downloadRequestZIP', () => {
-    it('should zip every stored file for the request', async () => {
+    beforeEach(() => {
+      mocks.printRequestRepository.getById.mockResolvedValue(
+        factory.printRequestDetail({ customerName: 'Gabe Smith' }),
+      );
+    });
+
+    it('should zip every stored file prefixed with the customer name', async () => {
       mocks.printFilesRepository.openForRequest.mockResolvedValue([
         storedFile('part1.stl', 'first'),
         storedFile('part2.stl', 'second'),
@@ -46,8 +53,16 @@ describe(PrintFilesService.name, () => {
       const archive = await unzip(await sut.downloadRequestZIP('request-multi'));
 
       expect(mocks.printFilesRepository.openForRequest).toHaveBeenCalledWith('request-multi');
-      expect(await archive.file('part1.stl')?.async('string')).toBe('first');
-      expect(await archive.file('part2.stl')?.async('string')).toBe('second');
+      expect(await archive.file('Gabe Smith - part1.stl')?.async('string')).toBe('first');
+      expect(await archive.file('Gabe Smith - part2.stl')?.async('string')).toBe('second');
+    });
+
+    it('should reject when the request does not exist', async () => {
+      mocks.printRequestRepository.getById.mockResolvedValue(undefined);
+
+      await expect(sut.downloadRequestZIP('request-missing')).rejects.toThrow(
+        'Print request not found',
+      );
     });
 
     it('should produce an empty archive when the request has no files', async () => {
