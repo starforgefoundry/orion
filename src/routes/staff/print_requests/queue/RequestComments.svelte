@@ -17,7 +17,7 @@
   import PaperclipIcon from '@lucide/svelte/icons/paperclip';
   import SendIcon from '@lucide/svelte/icons/send';
   import UploadIcon from '@lucide/svelte/icons/upload';
-  import WrenchIcon from '@lucide/svelte/icons/wrench';
+  import BoxIcon from '@lucide/svelte/icons/box';
   import XIcon from '@lucide/svelte/icons/x';
   import { fuckmeshUrl, opensInFuckmesh } from '$lib/utils/fuckmesh';
   import { formatDateTime } from '$lib/frontend/format';
@@ -93,12 +93,13 @@
       {@const repairUrl = attachmentFuckmeshUrl(fileName, fileUrl)}
       {#if repairUrl}
         <IconButton
-          icon={WrenchIcon}
+          icon={BoxIcon}
           aria-label="Open in Fuckmesh"
           size="icon-sm"
           href={repairUrl}
           target="_blank"
           rel="noopener"
+          class="bg-magenta/15 text-magenta hover:bg-magenta/25 hover:text-magenta dark:hover:bg-magenta/25"
         />
       {/if}
     {/if}
