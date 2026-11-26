@@ -3,7 +3,7 @@ import { fileExtension } from '$lib/utils/print-request';
 
 const DEFAULT_FUCKMESH_URL = 'https://fuckmesh.starforgefoundry.com';
 const DEEPLINK_PARAM = 'url';
-const MODEL_EXTENSIONS = ['stl', 'zip'];
+const MODEL_EXTENSIONS = ['stl', '3mf', 'zip'];
 
 function baseUrl() {
   return new URL(env.PUBLIC_FUCKMESH_URL || DEFAULT_FUCKMESH_URL);

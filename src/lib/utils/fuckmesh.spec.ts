@@ -43,11 +43,14 @@ describe('fuckmeshOrigin', () => {
 });
 
 describe('opensInFuckmesh', () => {
-  it.each(['part.stl', 'PART.STL', 'plate.zip'])('opens %s', (fileName) => {
-    expect(opensInFuckmesh(fileName)).toBe(true);
-  });
+  it.each(['part.stl', 'PART.STL', 'plate.3mf', 'PLATE.3MF', 'plate.zip'])(
+    'opens %s',
+    (fileName) => {
+      expect(opensInFuckmesh(fileName)).toBe(true);
+    },
+  );
 
-  it.each(['part.3mf', 'part.step', 'stl', 'photo.jpg'])('does not open %s', (fileName) => {
+  it.each(['part.step', 'part.stp', 'stl', '3mf', 'photo.jpg'])('does not open %s', (fileName) => {
     expect(opensInFuckmesh(fileName)).toBe(false);
   });
 });

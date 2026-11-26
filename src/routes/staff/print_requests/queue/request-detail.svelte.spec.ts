@@ -156,8 +156,8 @@ describe(RequestDetail.name, () => {
       vi.unstubAllGlobals();
     });
 
-    it('opens the signed request ZIP when the request has an STL', () => {
-      const { detail } = detailFor({ fileNames: ['part.3mf', 'part.stl'] });
+    it('opens the signed request ZIP when the request has a model file', () => {
+      const { detail } = detailFor({ fileNames: ['part.step', 'part.3mf'] });
 
       const url = new URL(detail.fuckmeshUrl!);
 
@@ -165,7 +165,7 @@ describe(RequestDetail.name, () => {
     });
 
     it('is hidden when no file opens in Fuckmesh', () => {
-      const { detail } = detailFor({ fileNames: ['part.3mf', 'part.step'] });
+      const { detail } = detailFor({ fileNames: ['part.step', 'part.stp'] });
 
       expect(detail.fuckmeshUrl).toBeUndefined();
     });
