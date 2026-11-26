@@ -1,4 +1,5 @@
 import { HTTP_STATUS } from '$lib/http';
+import { fuckmeshCorsHeaders } from '$lib/server/utils/cors';
 import { verifySignedUrl } from '$lib/server/utils/signed-url';
 import { InvalidStorageKeyError, openFile, requiresSignature } from '$lib/server/utils/storage';
 import { error, type RequestHandler } from '@sveltejs/kit';
@@ -36,7 +37,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
         'Content-Security-Policy': 'sandbox',
         'X-Content-Type-Options': 'nosniff',
         // Without this, OrcaSlicer names the file after the URL, signature query included.
-        ...(signed && { 'Content-Disposition': contentDisposition(key) }),
+        ...(signed && { 'Content-Disposition': contentDisposition(key), ...fuckmeshCorsHeaders() }),
       },
     });
   } catch (e) {

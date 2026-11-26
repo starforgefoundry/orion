@@ -17,7 +17,9 @@
   import PaperclipIcon from '@lucide/svelte/icons/paperclip';
   import SendIcon from '@lucide/svelte/icons/send';
   import UploadIcon from '@lucide/svelte/icons/upload';
+  import WrenchIcon from '@lucide/svelte/icons/wrench';
   import XIcon from '@lucide/svelte/icons/x';
+  import { fuckmeshUrl, opensInFuckmesh } from '$lib/utils/fuckmesh';
   import { formatDateTime } from '$lib/frontend/format';
   import { CommentComposer } from './comment-composer.svelte';
 
@@ -54,9 +56,16 @@
     return slicerExtensions.includes(extension);
   }
 
+  function absoluteUrl(fileUrl: string) {
+    return new URL(fileUrl, page.url.origin).href;
+  }
+
   function slicerUrl(fileUrl: string) {
-    const absoluteUrl = new URL(fileUrl, page.url.origin).href;
-    return `orcaslicer://open?file=${encodeURIComponent(absoluteUrl)}`;
+    return `orcaslicer://open?file=${encodeURIComponent(absoluteUrl(fileUrl))}`;
+  }
+
+  function attachmentFuckmeshUrl(fileName: string, fileUrl: string) {
+    return opensInFuckmesh(fileName) ? fuckmeshUrl(absoluteUrl(fileUrl)) : undefined;
   }
 </script>
 
@@ -79,6 +88,17 @@
           size="icon-sm"
           href={slicerUrl(fileUrl)}
           class="bg-success/15 text-success hover:bg-success/25 hover:text-success dark:hover:bg-success/25"
+        />
+      {/if}
+      {@const repairUrl = attachmentFuckmeshUrl(fileName, fileUrl)}
+      {#if repairUrl}
+        <IconButton
+          icon={WrenchIcon}
+          aria-label="Open in Fuckmesh"
+          size="icon-sm"
+          href={repairUrl}
+          target="_blank"
+          rel="noopener"
         />
       {/if}
     {/if}

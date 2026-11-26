@@ -9,6 +9,7 @@ import {
   updatePrintRequestDiscount,
 } from '$lib/remotes/endpoints/print-request.remote';
 import { canReleasePayment, PAYMENT_STATUS } from '$lib/utils/billing';
+import { fuckmeshUrl, opensInFuckmesh } from '$lib/utils/fuckmesh';
 import { toast } from 'svelte-sonner';
 import CustomerEditModal from './CustomerEditModal.svelte';
 import DiscountCodeModal from './DiscountCodeModal.svelte';
@@ -72,6 +73,12 @@ export class RequestDetail {
   get slicerUrl() {
     const url = this.downloadUrl;
     return url && `orcaslicer://open?file=${encodeURIComponent(url)}`;
+  }
+
+  get fuckmeshUrl() {
+    const url = this.downloadUrl;
+    const hasModels = this.request?.files.some((file) => opensInFuckmesh(file.fileName));
+    return url && hasModels ? fuckmeshUrl(url) : undefined;
   }
 
   get statusPageUrl() {

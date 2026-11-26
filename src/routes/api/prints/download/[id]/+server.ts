@@ -1,5 +1,6 @@
 import { HTTP_STATUS } from '$lib/http';
 import { printFilesService } from '$lib/server/services/print-files.service';
+import { fuckmeshCorsHeaders } from '$lib/server/utils/cors';
 import { verifySignedUrl } from '$lib/server/utils/signed-url';
 import { error, type RequestHandler } from '@sveltejs/kit';
 import { Readable } from 'node:stream';
@@ -19,6 +20,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
     headers: {
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="print_request_${params.id}.zip"`,
+      ...fuckmeshCorsHeaders(),
     },
   });
 };

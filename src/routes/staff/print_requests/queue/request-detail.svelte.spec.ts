@@ -1,8 +1,11 @@
 import { goto } from '$app/navigation';
-import { getPrintRequestById } from '$lib/remotes/endpoints/print-request.remote';
+import {
+  getPrintRequestById,
+  getPrintRequestDownloadUrl,
+} from '$lib/remotes/endpoints/print-request.remote';
 import { PAYMENT_STATUS, type PaymentStatus } from '$lib/utils/billing';
 import { PRINT_REQUEST_STATUS, type PrintRequestStatus } from '$lib/utils/print-request';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cancelRequest, changeStatus } from './request-actions';
 import { BILLING_TYPE, RequestDetail } from './request-detail.svelte';
 
@@ -31,12 +34,14 @@ type RequestShape = {
   status?: PrintRequestStatus;
   isQuote?: boolean;
   payment?: PaymentStatus;
+  fileNames?: string[];
 };
 
 function detailFor({
   status = PRINT_REQUEST_STATUS.IN_QUEUE,
   isQuote = false,
   payment,
+  fileNames = [],
 }: RequestShape) {
   vi.mocked(getPrintRequestById).mockReturnValue({
     current: {
@@ -44,7 +49,7 @@ function detailFor({
       status,
       isQuote,
       payment: payment ? { status: payment } : null,
-      files: [],
+      files: fileNames.map((fileName) => ({ fileName })),
     },
   } as unknown as ReturnType<typeof getPrintRequestById>);
   const onClose = vi.fn();
@@ -133,5 +138,36 @@ describe(RequestDetail.name, () => {
     await detail.cancel();
 
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  describe('fuckmeshUrl', () => {
+    const ORIGIN = 'https://orion.test';
+    const DOWNLOAD_PATH = `/api/prints/download/${REQUEST_ID}?expires=1&signature=abc`;
+
+    beforeEach(() => {
+      vi.stubEnv('PUBLIC_FUCKMESH_URL', 'https://fuckmesh.example.com');
+      vi.stubGlobal('window', { location: { origin: ORIGIN } });
+      vi.mocked(getPrintRequestDownloadUrl).mockReturnValue({
+        current: DOWNLOAD_PATH,
+      } as unknown as ReturnType<typeof getPrintRequestDownloadUrl>);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('opens the signed request ZIP when the request has an STL', () => {
+      const { detail } = detailFor({ fileNames: ['part.3mf', 'part.stl'] });
+
+      const url = new URL(detail.fuckmeshUrl!);
+
+      expect(url.searchParams.get('url')).toBe(`${ORIGIN}${DOWNLOAD_PATH}`);
+    });
+
+    it('is hidden when no file opens in Fuckmesh', () => {
+      const { detail } = detailFor({ fileNames: ['part.3mf', 'part.step'] });
+
+      expect(detail.fuckmeshUrl).toBeUndefined();
+    });
   });
 });
