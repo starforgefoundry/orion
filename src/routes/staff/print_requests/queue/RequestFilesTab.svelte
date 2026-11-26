@@ -9,6 +9,7 @@
   import FileBoxIcon from '@lucide/svelte/icons/file-box';
   import MonitorUpIcon from '@lucide/svelte/icons/monitor-up';
   import PencilIcon from '@lucide/svelte/icons/pencil';
+  import BoxIcon from '@lucide/svelte/icons/box';
   import type { PrintRequestDetail, RequestDetail } from './request-detail.svelte';
 
   const MIN_QUANTITY = 1;
@@ -35,6 +36,16 @@
         onclick={() => detail.editQuantities()}
       />
       <IconButton icon={DownloadIcon} aria-label="Download files" href={detail.downloadUrl} />
+      {#if detail.fuckmeshUrl}
+        <IconButton
+          icon={BoxIcon}
+          aria-label="Open in Fuckmesh"
+          href={detail.fuckmeshUrl}
+          target="_blank"
+          rel="noopener"
+          class="bg-magenta/15 text-magenta hover:bg-magenta/25 hover:text-magenta dark:hover:bg-magenta/25"
+        />
+      {/if}
       <IconButton
         icon={MonitorUpIcon}
         aria-label="Open in OrcaSlicer"

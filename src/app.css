@@ -13,6 +13,7 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
+  --color-magenta: var(--magenta);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -76,6 +77,7 @@
   --warning-foreground: oklch(0.2 0 0);
   --info: oklch(0.6 0.13 240);
   --info-foreground: oklch(0.985 0 0);
+  --magenta: oklch(0.656 0.235 13.3);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -116,6 +118,7 @@
   --warning-foreground: oklch(0.2 0.03 80);
   --info: oklch(0.75 0.11 230);
   --info-foreground: oklch(0.18 0.03 230);
+  --magenta: oklch(0.656 0.235 13.3);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
